@@ -10,6 +10,7 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **HMAC-SHA256 authentication** with constant-time verification
 - **Anti-replay protection** via 1024-bit sliding window
 - **Random padding** on handshake messages to resist traffic fingerprinting
+- **Camouflage (anti-active-detection)** — TLS-on-TCP wrapping, decoy fallback for probes, configurable ALPN
 - **SOCKS5 proxy interface** (RFC 1928) for application compatibility
 - **HTTP CONNECT proxy** for browsers and HTTP-aware clients
 - **Port forwarding / reverse proxy** — expose local services through the server (frp-style)
@@ -52,6 +53,33 @@ Browser ──HTTP──▶ prisma-dashboard (Next.js) ──REST/WS──▶ pr
 ```
 
 ## Quick Start
+
+### One-Line Install
+
+**Linux (x86_64):**
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**Linux (aarch64):**
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**macOS (Apple Silicon / Intel):**
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-darwin-$(uname -m) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/latest/download/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma.exe"
+```
+
+**Cargo (all platforms):**
+```bash
+cargo install --git https://github.com/Yamimega/prisma.git prisma-cli
+```
 
 ### Prerequisites
 
@@ -209,7 +237,7 @@ The Prisma dashboard provides a real-time web interface for monitoring and manag
 | **Clients** | Client list with enable/disable, add/remove clients at runtime |
 | **Routing** | Visual routing rules editor (domain/IP/port allow/block) |
 | **Logs** | Real-time log stream with level and target filtering |
-| **Settings** | Edit server config, view TLS info, camouflage settings (coming soon) |
+| **Settings** | Edit server config, view TLS info, camouflage status |
 
 **Tech stack:** Next.js 16, shadcn/ui, Recharts, TanStack Query, NextAuth v5
 
@@ -289,6 +317,10 @@ Example: `PRISMA_LOGGING_LEVEL=debug` overrides `logging.level`.
 | `management_api.listen_addr` | string | `"127.0.0.1:9090"` | Management API bind address |
 | `management_api.auth_token` | string | — | Bearer token for API authentication |
 | `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins |
+| `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |
+| `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS |
+| `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
+| `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
 
 ### Client config reference
 
@@ -302,11 +334,42 @@ Example: `PRISMA_LOGGING_LEVEL=debug` overrides `logging.level`.
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
 | `transport` | string | `"quic"` | `quic` / `tcp` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
+| `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP |
+| `tls_server_name` | string? | — | TLS SNI server name (defaults to server_addr hostname) |
+| `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
 | `port_forwards[].name` | string | — | Label for this port forward |
 | `port_forwards[].local_addr` | string | — | Local service address (e.g. `127.0.0.1:3000`) |
 | `port_forwards[].remote_port` | u16 | — | Port to listen on at the server |
 | `logging.level` | string | `"info"` | Log level |
 | `logging.format` | string | `"pretty"` | Log format |
+
+## Camouflage (Anti-Active-Detection)
+
+Prisma supports camouflage to resist active probing by censorship systems like the GFW. Three layers:
+
+1. **TLS-on-TCP** — Wraps the TCP transport in TLS (reuses existing cert/key), making PrismaVeil traffic look like HTTPS
+2. **Decoy fallback** — Non-Prisma connections (HTTP probes, browsers, GFW probes) are reverse-proxied to a configurable decoy website instead of being dropped
+3. **ALPN customization** — QUIC/TLS ALPN protocols are configurable (default `["h2", "http/1.1"]` instead of `"prisma-v1"`)
+
+**Server config:**
+
+```toml
+[camouflage]
+enabled = true
+tls_on_tcp = true
+fallback_addr = "example.com:443"
+alpn_protocols = ["h2", "http/1.1"]
+```
+
+**Client config:**
+
+```toml
+tls_on_tcp = true
+tls_server_name = "example.com"
+alpn_protocols = ["h2", "http/1.1"]
+```
+
+See [Camouflage documentation](./prisma-docs/docs/features/camouflage.md) for detailed setup instructions.
 
 ## Port Forwarding (Reverse Proxy)
 

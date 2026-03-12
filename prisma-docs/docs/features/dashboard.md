@@ -119,7 +119,7 @@ Server configuration editor:
 - **Editable fields** — logging level, logging format, max connections, port forwarding toggle
 - **Read-only fields** — listen addresses (require server restart)
 - **TLS info** — certificate status and file paths
-- **Camouflage** — traffic obfuscation settings (coming soon)
+- **Camouflage** — current camouflage configuration status (read-only)
 
 ## Environment Variables
 

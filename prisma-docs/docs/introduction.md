@@ -15,6 +15,7 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 - **HMAC-SHA256 authentication** with constant-time verification
 - **Anti-replay protection** via 1024-bit sliding window
 - **Random padding** on handshake messages to resist traffic fingerprinting
+- **Camouflage (anti-active-detection)** — TLS-on-TCP wrapping, decoy fallback, configurable ALPN
 - **SOCKS5 proxy interface** (RFC 1928) for application compatibility
 - **HTTP CONNECT proxy** for browsers and HTTP-aware clients
 - **Port forwarding / reverse proxy** — expose local services through the server (frp-style)

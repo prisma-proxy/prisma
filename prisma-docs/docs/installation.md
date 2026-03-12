@@ -14,6 +14,38 @@ cargo install --path prisma-cli
 
 This compiles and installs the `prisma` binary into your Cargo bin directory (usually `~/.cargo/bin/`).
 
+## One-Line Install
+
+**Linux (x86_64):**
+
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**Linux (aarch64):**
+
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**macOS (Apple Silicon / Intel):**
+
+```bash
+curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-darwin-$(uname -m) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/latest/download/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma.exe"
+```
+
+**Cargo (all platforms):**
+
+```bash
+cargo install --git https://github.com/Yamimega/prisma.git prisma-cli
+```
+
 ## Build from source
 
 ```bash

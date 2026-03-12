@@ -28,6 +28,10 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `management_api.listen_addr` | string | `"127.0.0.1:9090"` | Management API bind address |
 | `management_api.auth_token` | string | — | Bearer token for API authentication |
 | `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins for the dashboard |
+| `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |
+| `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS (requires `[tls]` config) |
+| `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
+| `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
 
 ## Full example
 
@@ -65,6 +69,13 @@ enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
 cors_origins = ["http://localhost:3000"]
+
+# Camouflage (anti-active-detection)
+[camouflage]
+enabled = true
+tls_on_tcp = true
+fallback_addr = "example.com:443"
+alpn_protocols = ["h2", "http/1.1"]
 ```
 
 ## Validation rules
@@ -77,6 +88,7 @@ The server config is validated at startup. The following rules are enforced:
 - Each `authorized_clients[].auth_secret` must not be empty and must be valid hex
 - `logging.level` must be one of: `trace`, `debug`, `info`, `warn`, `error`
 - `logging.format` must be one of: `pretty`, `json`
+- `camouflage.tls_on_tcp = true` requires `tls.cert_path` and `tls.key_path` to be set
 
 ## TLS configuration
 
