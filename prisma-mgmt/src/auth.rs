@@ -2,6 +2,7 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
+use subtle::ConstantTimeEq;
 
 /// Bearer token to validate against, stored in request extensions by the router layer.
 #[derive(Clone)]
@@ -29,9 +30,10 @@ pub async fn auth_middleware(request: Request, next: Next) -> Result<Response, S
 
     let provided = auth_header.strip_prefix("Bearer ").unwrap_or("");
 
-    if provided != expected {
-        return Err(StatusCode::UNAUTHORIZED);
+    // Constant-time comparison to prevent timing side-channels
+    if provided.as_bytes().ct_eq(expected.as_bytes()).into() {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
     }
-
-    Ok(next.run(request).await)
 }

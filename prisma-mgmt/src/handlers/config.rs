@@ -47,7 +47,15 @@ pub struct PatchConfigRequest {
 pub async fn patch_config(
     State(state): State<ServerState>,
     Json(req): Json<PatchConfigRequest>,
-) -> StatusCode {
+) -> Result<StatusCode, (StatusCode, String)> {
+    if let Some(ref level) = req.logging_level {
+        prisma_core::config::validation::validate_logging_level(level)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    }
+    if let Some(ref format) = req.logging_format {
+        prisma_core::config::validation::validate_logging_format(format)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    }
     let mut cfg = state.config.write().await;
     if let Some(level) = req.logging_level {
         cfg.logging.level = level;
@@ -61,7 +69,7 @@ pub async fn patch_config(
     if let Some(enabled) = req.port_forwarding_enabled {
         cfg.port_forwarding.enabled = enabled;
     }
-    StatusCode::OK
+    Ok(StatusCode::OK)
 }
 
 #[derive(Serialize)]

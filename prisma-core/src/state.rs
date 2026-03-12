@@ -180,6 +180,10 @@ pub async fn metrics_ticker(state: ServerState) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
     loop {
         interval.tick().await;
+        // Skip snapshot when nobody is listening
+        if state.metrics_tx.receiver_count() == 0 {
+            continue;
+        }
         let snapshot = state.snapshot_metrics();
         let _ = state.metrics_tx.send(snapshot);
     }

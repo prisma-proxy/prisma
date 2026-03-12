@@ -6,8 +6,14 @@ import { createWebSocket } from "@/lib/ws";
 
 const MAX_LOGS = 10000;
 
+let logIdCounter = 0;
+
+export interface LogEntryWithId extends LogEntry {
+  _id: number;
+}
+
 export function useLogs() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntryWithId[]>([]);
   const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
 
   const setFilter = useCallback((filter: { level?: string; target?: string }) => {
@@ -22,9 +28,15 @@ export function useLogs() {
     wsRef.current = createWebSocket<LogEntry>(
       "/api/ws/logs",
       (entry) => {
+        const entryWithId: LogEntryWithId = { ...entry, _id: ++logIdCounter };
         setLogs((prev) => {
-          const next = [...prev, entry];
-          return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
+          if (prev.length >= MAX_LOGS) {
+            // Trim from front, append to end — single slice instead of spread + slice
+            const trimmed = prev.slice(-(MAX_LOGS - 1));
+            trimmed.push(entryWithId);
+            return trimmed;
+          }
+          return [...prev, entryWithId];
         });
       }
     );

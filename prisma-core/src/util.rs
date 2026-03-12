@@ -9,6 +9,11 @@ type HmacSha256 = Hmac<Sha256>;
 
 // --- Hex encoding/decoding ---
 
+/// Encode bytes as a lowercase hex string.
+pub fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 /// Decode a hex string into bytes. Returns `None` if the string has odd length
 /// or contains non-hex characters.
 pub fn hex_decode(s: &str) -> Option<Vec<u8>> {

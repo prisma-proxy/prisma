@@ -6,16 +6,17 @@ use prisma_core::state::{MetricsSnapshot, ServerState};
 
 #[derive(Serialize)]
 pub struct HealthResponse {
-    pub status: String,
+    pub status: &'static str,
     pub uptime_secs: u64,
-    pub version: String,
+    pub version: &'static str,
 }
 
 pub async fn health(State(state): State<ServerState>) -> Json<HealthResponse> {
+    let snapshot = state.snapshot_metrics();
     Json(HealthResponse {
-        status: "ok".to_string(),
-        uptime_secs: state.metrics.started_at.elapsed().as_secs(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        status: "ok",
+        uptime_secs: snapshot.uptime_secs,
+        version: env!("CARGO_PKG_VERSION"),
     })
 }
 

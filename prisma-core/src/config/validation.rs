@@ -91,7 +91,7 @@ pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> 
     Ok(())
 }
 
-fn validate_logging_level(level: &str) -> Result<(), ConfigError> {
+pub fn validate_logging_level(level: &str) -> Result<(), ConfigError> {
     let valid = ["trace", "debug", "info", "warn", "error"];
     if !valid.contains(&level) {
         return Err(ConfigError::ValidationFailed(format!(
@@ -102,7 +102,7 @@ fn validate_logging_level(level: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
-fn validate_logging_format(format: &str) -> Result<(), ConfigError> {
+pub fn validate_logging_format(format: &str) -> Result<(), ConfigError> {
     let valid = ["pretty", "json"];
     if !valid.contains(&format) {
         return Err(ConfigError::ValidationFailed(format!(

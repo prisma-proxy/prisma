@@ -4,7 +4,7 @@ use axum::Json;
 use serde::Serialize;
 use uuid::Uuid;
 
-use prisma_core::state::ServerState;
+use prisma_core::state::{ServerState, SessionMode, Transport};
 
 #[derive(Serialize)]
 pub struct ConnectionResponse {
@@ -12,8 +12,8 @@ pub struct ConnectionResponse {
     pub client_id: Option<Uuid>,
     pub client_name: Option<String>,
     pub peer_addr: String,
-    pub transport: String,
-    pub mode: String,
+    pub transport: Transport,
+    pub mode: SessionMode,
     pub connected_at: String,
     pub bytes_up: u64,
     pub bytes_down: u64,
@@ -28,8 +28,8 @@ pub async fn list(State(state): State<ServerState>) -> Json<Vec<ConnectionRespon
             client_id: c.client_id,
             client_name: c.client_name.clone(),
             peer_addr: c.peer_addr.clone(),
-            transport: format!("{:?}", c.transport),
-            mode: format!("{:?}", c.mode),
+            transport: c.transport,
+            mode: c.mode,
             connected_at: c.connected_at.to_rfc3339(),
             bytes_up: c.bytes_up_val(),
             bytes_down: c.bytes_down_val(),

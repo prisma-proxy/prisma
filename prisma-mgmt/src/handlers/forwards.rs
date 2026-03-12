@@ -1,12 +1,13 @@
 use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
+use uuid::Uuid;
 
 use prisma_core::state::ServerState;
 
 #[derive(Serialize)]
 pub struct ForwardInfo {
-    pub session_id: String,
+    pub session_id: Uuid,
     pub peer_addr: String,
     pub connected_at: String,
     pub bytes_up: u64,
@@ -19,7 +20,7 @@ pub async fn list(State(state): State<ServerState>) -> Json<Vec<ForwardInfo>> {
         .values()
         .filter(|c| c.mode == prisma_core::state::SessionMode::Forward)
         .map(|c| ForwardInfo {
-            session_id: c.session_id.to_string(),
+            session_id: c.session_id,
             peer_addr: c.peer_addr.clone(),
             connected_at: c.connected_at.to_rfc3339(),
             bytes_up: c.bytes_up_val(),

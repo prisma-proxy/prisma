@@ -1,5 +1,7 @@
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::state::LogEntry;
+
 /// Initialize the logging/tracing system.
 ///
 /// `level` is one of: trace, debug, info, warn, error
@@ -24,7 +26,7 @@ pub fn init_logging(level: &str, format: &str) {
 pub fn init_logging_with_broadcast(
     level: &str,
     format: &str,
-    log_tx: tokio::sync::broadcast::Sender<BroadcastLogEntry>,
+    log_tx: tokio::sync::broadcast::Sender<LogEntry>,
 ) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -42,18 +44,9 @@ pub fn init_logging_with_broadcast(
     }
 }
 
-/// A log entry broadcast over the channel.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct BroadcastLogEntry {
-    pub timestamp: chrono::DateTime<chrono::Utc>,
-    pub level: String,
-    pub target: String,
-    pub message: String,
-}
-
 /// Tracing layer that broadcasts log events.
 struct BroadcastLayer {
-    tx: tokio::sync::broadcast::Sender<BroadcastLogEntry>,
+    tx: tokio::sync::broadcast::Sender<LogEntry>,
 }
 
 impl<S> tracing_subscriber::Layer<S> for BroadcastLayer
@@ -65,10 +58,15 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        // Skip all work when nobody is listening
+        if self.tx.receiver_count() == 0 {
+            return;
+        }
+
         let mut visitor = MessageVisitor(String::new());
         event.record(&mut visitor);
 
-        let entry = BroadcastLogEntry {
+        let entry = LogEntry {
             timestamp: chrono::Utc::now(),
             level: event.metadata().level().to_string(),
             target: event.metadata().target().to_string(),

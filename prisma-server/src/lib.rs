@@ -9,7 +9,7 @@ pub mod state;
 use anyhow::Result;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::load_server_config;
-use prisma_core::logging::{init_logging_with_broadcast, BroadcastLogEntry};
+use prisma_core::logging::init_logging_with_broadcast;
 use prisma_core::state::{LogEntry, MetricsSnapshot, ServerState};
 use tracing::info;
 
@@ -22,12 +22,11 @@ pub async fn run(config_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
 
     // Create broadcast channels
-    let (log_tx, _) = tokio::sync::broadcast::channel::<BroadcastLogEntry>(1024);
+    let (log_tx, _) = tokio::sync::broadcast::channel::<LogEntry>(1024);
     let (metrics_tx, _) = tokio::sync::broadcast::channel::<MetricsSnapshot>(256);
-    let (state_log_tx, _) = tokio::sync::broadcast::channel::<LogEntry>(1024);
 
     // Initialize logging with broadcast
-    init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
+    init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx.clone());
 
     info!("Prisma server starting");
     info!(listen = %config.listen_addr, quic_listen = %config.quic_listen_addr);
@@ -37,7 +36,7 @@ pub async fn run(config_path: &str) -> Result<()> {
     );
 
     let auth_inner = AuthStoreInner::from_config(&config.authorized_clients)?;
-    let state = ServerState::new(&config, auth_inner, state_log_tx, metrics_tx);
+    let state = ServerState::new(&config, auth_inner, log_tx, metrics_tx);
     let auth_store = AuthStore::from_inner(state.auth_store.clone());
     let dns_cache = DnsCache::default();
 

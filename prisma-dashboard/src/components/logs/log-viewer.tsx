@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { LogEntry } from "@/lib/types";
+import type { LogEntryWithId } from "@/hooks/use-logs";
 
 interface LogViewerProps {
-  logs: LogEntry[];
+  logs: LogEntryWithId[];
 }
 
 const levelColors: Record<string, string> = {
@@ -61,12 +61,12 @@ export function LogViewer({ logs }: LogViewerProps) {
       ref={containerRef}
       className="overflow-y-auto max-h-[600px] rounded-lg border bg-muted/30 p-2 font-mono text-xs"
     >
-      {logs.map((entry, index) => {
+      {logs.map((entry) => {
         const colorClass =
           levelColors[entry.level] ?? levelColors.DEBUG;
         return (
           <div
-            key={index}
+            key={entry._id}
             className="flex items-start gap-2 px-1 py-0.5 hover:bg-muted/50"
           >
             <span className="shrink-0 text-muted-foreground">

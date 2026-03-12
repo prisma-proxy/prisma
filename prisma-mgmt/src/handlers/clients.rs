@@ -54,7 +54,7 @@ pub async fn create(
     // Generate random auth secret
     let mut secret = [0u8; 32];
     rand::Rng::fill(&mut rand::thread_rng(), &mut secret);
-    let hex: String = secret.iter().map(|b| format!("{:02x}", b)).collect();
+    let hex = prisma_core::util::hex_encode(&secret);
 
     let entry = ClientEntry {
         auth_secret: secret,

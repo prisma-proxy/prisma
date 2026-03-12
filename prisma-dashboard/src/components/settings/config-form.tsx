@@ -21,7 +21,7 @@ interface ConfigFormProps {
 }
 
 const loggingLevels = ["trace", "debug", "info", "warn", "error"];
-const loggingFormats = ["compact", "full", "pretty", "json"];
+const loggingFormats = ["pretty", "json"];
 
 export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
   const [loggingLevel, setLoggingLevel] = useState(config.logging_level);
