@@ -24,6 +24,52 @@ sidebar_position: 1
 | `port_forwarding.enabled` | bool | `false` | 启用端口转发 / 反向代理 |
 | `port_forwarding.port_range_start` | u16 | `1024` | 允许转发的最小端口号 |
 | `port_forwarding.port_range_end` | u16 | `65535` | 允许转发的最大端口号 |
+| `management_api.enabled` | bool | `false` | 启用管理 REST/WS API |
+| `management_api.listen_addr` | string | `"127.0.0.1:9090"` | 管理 API 绑定地址 |
+| `management_api.auth_token` | string | — | API 认证的 Bearer 令牌 |
+| `management_api.cors_origins` | string[] | `[]` | 允许的 CORS 来源（用于外部仪表盘开发） |
+| `management_api.dashboard_dir` | string? | — | 已构建仪表盘静态文件路径 |
+| `padding.min` | u16 | `0` | 每帧最小填充字节数 |
+| `padding.max` | u16 | `256` | 每帧最大填充字节数 |
+| `camouflage.enabled` | bool | `false` | 启用伪装（抗主动探测） |
+| `camouflage.tls_on_tcp` | bool | `false` | 在 TCP 传输外包裹 TLS（需要 `[tls]` 配置） |
+| `camouflage.fallback_addr` | string? | — | 非 Prisma 连接的诱饵服务器地址 |
+| `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN 协议 |
+| `camouflage.h3_cover_site` | string? | — | HTTP/3 伪装上游 URL（代理真实网站） |
+| `camouflage.h3_static_dir` | string? | — | HTTP/3 伪装本地静态文件目录 |
+| `camouflage.salamander_password` | string? | — | Salamander UDP 混淆密码（仅 QUIC） |
+| `cdn.enabled` | bool | `false` | 启用 CDN 传输监听（WS、gRPC、XHTTP） |
+| `cdn.listen_addr` | string | `"0.0.0.0:443"` | CDN 监听绑定地址 |
+| `cdn.tls.cert_path` | string? | — | CDN TLS 证书（如 Cloudflare Origin 证书） |
+| `cdn.tls.key_path` | string? | — | CDN TLS 私钥 |
+| `cdn.ws_tunnel_path` | string | `"/ws-tunnel"` | WebSocket 隧道端点路径 |
+| `cdn.grpc_tunnel_path` | string | `"/tunnel.PrismaTunnel"` | gRPC 隧道服务路径 |
+| `cdn.cover_upstream` | string? | — | 伪装流量的反向代理上游 URL |
+| `cdn.cover_static_dir` | string? | — | 伪装流量的静态文件目录 |
+| `cdn.trusted_proxies` | string[] | `[]` | 受信任的代理 IP 范围（如 Cloudflare CIDR） |
+| `cdn.expose_management_api` | bool | `false` | 通过 CDN 端点暴露管理 API |
+| `cdn.management_api_path` | string | `"/prisma-mgmt"` | CDN 上的管理 API 子路径 |
+| `cdn.xhttp_upload_path` | string | `"/api/v1/upload"` | XHTTP packet-up 上传端点 |
+| `cdn.xhttp_download_path` | string | `"/api/v1/events"` | XHTTP packet-up 下载端点 |
+| `cdn.xhttp_stream_path` | string | `"/api/v1/stream"` | XHTTP stream-one/stream-up 端点 |
+| `cdn.xhttp_mode` | string? | — | XHTTP 模式：`"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `cdn.xhttp_nosse` | bool | `false` | 禁用 XHTTP 下载的 SSE 包装 |
+| `cdn.response_server_header` | string? | — | 覆盖 HTTP `Server` 响应头 |
+| `cdn.padding_header` | bool | `true` | 添加 `X-Padding` 响应头 |
+| `cdn.enable_sse_disguise` | bool | `false` | 以 SSE 格式包装下载流 |
+| `cdn.xhttp_extra_headers` | \[\[k,v\]\] | `[]` | 额外的伪装响应头 |
+| `dns_upstream` | string | `"8.8.8.8:53"` | CMD_DNS_QUERY 转发的上游 DNS 服务器 |
+| `congestion.mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` |
+| `congestion.target_bandwidth` | string? | — | brutal/adaptive 模式的目标带宽（如 `"100mbps"`） |
+| `port_hopping.enabled` | bool | `false` | 启用 QUIC 端口跳变 |
+| `port_hopping.base_port` | u16 | `10000` | 端口范围起始值 |
+| `port_hopping.port_range` | u16 | `50000` | 端口范围数量 |
+| `port_hopping.interval_secs` | u64 | `60` | 端口跳变间隔（秒） |
+| `port_hopping.grace_period_secs` | u64 | `10` | 跳变后旧端口保留时间（秒） |
+| `authorized_clients[].bandwidth_up` | string? | — | 单客户端上传速率限制（如 `"100mbps"`） |
+| `authorized_clients[].bandwidth_down` | string? | — | 单客户端下载速率限制 |
+| `authorized_clients[].quota` | string? | — | 单客户端流量配额（如 `"100GB"`） |
+| `authorized_clients[].quota_period` | string? | — | 配额周期：`"daily"` / `"weekly"` / `"monthly"` |
 
 ## 完整示例
 
@@ -54,6 +100,40 @@ connection_timeout_secs = 300 # 空闲超时时间（秒）
 enabled = true
 port_range_start = 10000
 port_range_end = 20000
+
+# 管理 API + 仪表盘
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "/opt/prisma/dashboard"  # 已构建仪表盘静态文件路径
+
+# 每帧填充
+[padding]
+min = 0
+max = 256
+
+# 伪装（抗主动探测）
+[camouflage]
+enabled = true
+tls_on_tcp = true
+fallback_addr = "example.com:443"
+alpn_protocols = ["h2", "http/1.1"]
+# salamander_password = "shared-obfuscation-key"  # Salamander UDP 混淆（QUIC）
+# h3_cover_site = "https://example.com"           # HTTP/3 伪装覆盖站点
+# h3_static_dir = "/var/www/html"                 # 或提供本地静态文件用于 H3 伪装
+
+# CDN 传输（通过 Cloudflare 的 WebSocket + gRPC + XHTTP）
+# [cdn]
+# enabled = true
+# listen_addr = "0.0.0.0:443"
+# ws_tunnel_path = "/ws-tunnel"
+# grpc_tunnel_path = "/tunnel.PrismaTunnel"
+# cover_upstream = "http://127.0.0.1:3000"        # 反向代理到真实网站
+# trusted_proxies = ["173.245.48.0/20"]            # Cloudflare IP 范围
+# [cdn.tls]
+# cert_path = "origin-cert.pem"
+# key_path = "origin-key.pem"
 ```
 
 ## 验证规则
@@ -66,6 +146,7 @@ port_range_end = 20000
 - 每个 `authorized_clients[].auth_secret` 不能为空且必须是有效的十六进制字符串
 - `logging.level` 必须是以下之一：`trace`、`debug`、`info`、`warn`、`error`
 - `logging.format` 必须是以下之一：`pretty`、`json`
+- `camouflage.tls_on_tcp = true` 需要设置 `tls.cert_path` 和 `tls.key_path`
 
 ## TLS 配置
 
@@ -92,3 +173,19 @@ id = "client-uuid-2"
 auth_secret = "hex-secret-2"
 name = "phone"
 ```
+
+客户端也可以通过[管理 API](/docs/features/management-api)或[仪表盘](/docs/features/dashboard)在运行时管理，无需重启服务器。
+
+## 管理 API 配置
+
+管理 API 默认禁用。启用后，它会启动一个 HTTP 服务器（axum），同时提供 REST 端点和 WebSocket 连接。
+
+:::warning
+`auth_token` 保护所有管理 API 端点。生产环境请使用强随机令牌。
+:::
+
+**绑定地址**：默认 API 监听 `127.0.0.1:9090`（仅本地）。要暴露到网络，请更改 `listen_addr`——但请确保有适当的网络级别访问控制。
+
+**仪表盘**：将 `dashboard_dir` 设置为包含已构建仪表盘静态文件的路径。服务器将在管理 API 地址提供仪表盘服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd prisma-dashboard && npm ci && npm run build` 从源码构建。
+
+**CORS 来源**：仅在仪表盘开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中仪表盘由服务器自身提供时不需要。

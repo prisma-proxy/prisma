@@ -18,11 +18,18 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
 | `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
+| `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
+| `tls_server_name` | string? | — | TLS SNI server name override (defaults to server_addr hostname) |
+| `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
 | `port_forwards[].name` | string | — | Human-readable label for this port forward |
 | `port_forwards[].local_addr` | string | — | Local service address (e.g. `127.0.0.1:3000`) |
 | `port_forwards[].remote_port` | u16 | — | Port to listen on at the server |
 | `logging.level` | string | `"info"` | `trace` / `debug` / `info` / `warn` / `error` |
 | `logging.format` | string | `"pretty"` | `pretty` / `json` |
+| `ws_url` | string? | — | WebSocket server URL (e.g. `wss://domain.com/ws-tunnel`) |
+| `ws_host` | string? | — | Override WebSocket `Host` header |
+| `ws_extra_headers` | \[\[k,v\]\] | `[]` | Extra WebSocket request headers |
+| `grpc_url` | string? | — | gRPC server URL |
 | `xhttp_mode` | string? | — | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
 | `xhttp_upload_url` | string? | — | XHTTP upload URL for packet-up/stream-up |
 | `xhttp_download_url` | string? | — | XHTTP download URL for packet-up |
@@ -52,12 +59,16 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `dns.mode` | string | `"direct"` | DNS mode: `"smart"` / `"fake"` / `"tunnel"` / `"direct"` |
 | `dns.fake_ip_range` | string | `"198.18.0.0/15"` | CIDR range for fake DNS IPs |
 | `dns.upstream` | string | `"8.8.8.8:53"` | Upstream DNS server |
+| `dns.geosite_path` | string? | — | GeoSite database path for smart DNS mode |
+| `dns.dns_listen_addr` | string | `"127.0.0.1:53"` | Local DNS server listen address |
 | `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `port` / `all` |
 | `routing.rules[].value` | string | — | Match value |
 | `routing.rules[].action` | string | `"proxy"` | Action: `"proxy"` / `"direct"` / `"block"` |
 | `tun.enabled` | bool | `false` | Enable TUN mode (system-wide proxy) |
 | `tun.device_name` | string | `"prisma-tun0"` | TUN device name |
 | `tun.mtu` | u16 | `1500` | TUN device MTU |
+| `tun.include_routes` | string[] | `["0.0.0.0/0"]` | Routes to capture in TUN mode |
+| `tun.exclude_routes` | string[] | `[]` | Routes to exclude (server IP auto-excluded) |
 | `tun.dns` | string | `"fake"` | TUN DNS mode: `"fake"` / `"tunnel"` |
 
 ## Full example

@@ -1,0 +1,188 @@
+---
+sidebar_position: 8
+---
+
+# 反检测特性
+
+PrismaVeil v3 包含多层反检测机制，可抵御深度包检测 (DPI)、主动探测和审查系统（如 GFW）的流量分析。
+
+## Salamander UDP 混淆
+
+Salamander 剥离 QUIC 协议头部并对所有 UDP 数据包进行 XOR 混淆，使流量呈现为随机噪声。
+
+### 工作原理
+
+1. 使用 BLAKE3 从共享密码派生密钥流
+2. 发送前对每个出站 UDP 数据包与密钥流进行 XOR 运算
+3. 接收时再次 XOR 以恢复原始 QUIC 数据包
+4. 结果：线路上没有可识别的 QUIC 或 TLS 头部
+
+### 配置
+
+```toml
+# 服务端
+[camouflage]
+salamander_password = "your-shared-obfuscation-password"
+
+# 客户端
+salamander_password = "your-shared-obfuscation-password"
+```
+
+### 使用场景
+
+- 网络屏蔽所有可识别的 QUIC 流量
+- 环境仅白名单已知协议（随机 UDP 仍可能通过）
+
+## 端口跳跃
+
+定期更改 QUIC 连接使用的 UDP 端口，防止基于 IP:端口 的封锁。
+
+### 工作原理
+
+客户端和服务端使用 HMAC-SHA256 计算相同的端口：
+
+```
+current_port = base_port + HMAC-SHA256(auth_secret, epoch)[0..2] % port_range
+epoch = floor(current_time / interval_secs)
+```
+
+过渡期间，宽限期允许在新旧端口上同时接受连接。
+
+### 配置
+
+```toml
+# 服务端
+[port_hopping]
+enabled = true
+base_port = 10000
+port_range = 50000       # 端口范围 10000-60000
+interval_secs = 60       # 每 60 秒跳跃一次
+grace_period_secs = 10   # 双端口窗口期
+
+# 客户端
+[port_hopping]
+enabled = true
+# 客户端自动使用相同参数
+```
+
+## 拥塞控制
+
+三种模式应对不同网络条件：
+
+### Brutal（Hysteria2 风格）
+
+忽略丢包信号，以固定目标速率发送。可克服 ISP 限速。
+
+```toml
+[congestion]
+mode = "brutal"
+target_bandwidth = "100mbps"
+```
+
+### BBR（默认）
+
+Google BBRv2 — 探测带宽和 RTT。与其他流量公平共享。
+
+```toml
+[congestion]
+mode = "bbr"
+```
+
+### 自适应模式
+
+以 BBR 行为启动。检测到故意限速（持续丢包 + 稳定 RTT）时逐渐增加激进性。限速停止时恢复 BBR 行为。
+
+```toml
+[congestion]
+mode = "adaptive"
+target_bandwidth = "100mbps"
+```
+
+## 伪装与回退
+
+非 PrismaVeil 连接会被透明代理到诱饵网站，使服务器对主动探测者而言与普通 Web 服务器无法区分。
+
+```toml
+[camouflage]
+enabled = true
+fallback_addr = "127.0.0.1:8080"   # 要代理到的真实 Web 服务器
+tls_on_tcp = true
+```
+
+## 逐帧填充
+
+在协商范围内为每个加密数据帧添加随机填充，防止基于数据包大小分布的流量分析。
+
+```toml
+[padding]
+min = 0
+max = 256
+```
+
+## DNS 泄露防护
+
+四种 DNS 模式防止 DNS 查询泄露到隧道外：
+
+### 直连模式（默认）
+
+不进行 DNS 处理 — 域名传递到服务端解析。当 SOCKS5/HTTP 代理处理所有流量时是安全的。
+
+### 智能 DNS
+
+被封锁的域名（Google、YouTube、Twitter 等）始终通过隧道路由。其他域名直接解析以提高速度。智能 DNS 还会覆盖直连路由规则 — 被封锁的域名始终走代理。
+
+```toml
+[dns]
+mode = "smart"
+```
+
+### 虚假 DNS（TUN 模式）
+
+从保留地址池（198.18.0.0/15）为所有域名分配虚假 IP。零 DNS 泄露 — 不会有真实 DNS 查询离开设备。当流量到达虚假 IP 时，会查找真实域名并进行代理。
+
+```toml
+[dns]
+mode = "fake"
+fake_ip_range = "198.18.0.0/15"
+```
+
+### 隧道全部 DNS
+
+每个 DNS 查询都通过 CMD_DNS_QUERY 加密并发送到隧道。服务端解析并返回响应。最大化隐私但延迟略高。
+
+```toml
+[dns]
+mode = "tunnel"
+upstream = "8.8.8.8:53"   # 服务端上游 DNS
+```
+
+## TUN 模式（系统全局代理）
+
+通过虚拟网络接口捕获所有系统流量 — 无需逐应用配置代理。游戏、系统服务和所有应用程序都会自动代理。
+
+```toml
+[tun]
+enabled = true
+device_name = "prisma-tun0"
+mtu = 1500
+dns = "fake"   # TUN 模式下使用虚假 DNS
+```
+
+支持所有主要平台：
+- **Linux**：需要 `CAP_NET_ADMIN`（使用 `/dev/net/tun`）
+- **Windows**：使用 Wintun 驱动（Windows 10+ 无需管理员安装）
+- **macOS**：使用 utun 内核接口（需要 root 权限）
+
+## 多传输协议
+
+不同传输协议具有不同的可检测性特征：
+
+| 传输协议 | DPI 抗性 | CDN 兼容 | UDP 支持 |
+|-----------|---------|---------|----------|
+| QUIC + Salamander | 最高 | 否 | 是（原生） |
+| QUIC（标准） | 高 | 否 | 是（原生） |
+| XHTTP (stream-one) | 高 | 是 | TCP 回退 |
+| WebSocket | 中 | 是 | TCP 回退 |
+| gRPC | 中 | 是 | TCP 回退 |
+| TCP + TLS | 中 | 否 | TCP 回退 |
+| TCP（原始） | 低 | 否 | TCP 回退 |

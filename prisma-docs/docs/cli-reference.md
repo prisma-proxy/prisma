@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI Reference
 
-The `prisma` binary provides four subcommands for running the server, client, and generating credentials.
+The `prisma` binary provides nine subcommands for running the server and client, generating credentials, managing configs, and diagnostics.
 
 ## `prisma server`
 
@@ -87,3 +87,106 @@ prisma gen-cert -o /etc/prisma --cn my-server.example.com
 :::warning
 Self-signed certificates are for development only. For production, use a certificate from a trusted CA or Let's Encrypt. When using self-signed certificates, clients must set `skip_cert_verify = true`.
 :::
+
+## `prisma init`
+
+Generate annotated config files with auto-generated keys.
+
+```bash
+prisma init [OPTIONS]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cdn` | — | Include CDN section pre-configured |
+| `--server-only` | — | Generate only server config |
+| `--client-only` | — | Generate only client config |
+| `--force` | — | Overwrite existing files |
+
+By default, generates both `server.toml` and `client.toml` with fresh UUIDs, auth secrets, and comments explaining every option. Use `--cdn` to include a fully annotated CDN transport section.
+
+Example:
+
+```bash
+# Generate both configs with CDN section
+prisma init --cdn
+
+# Generate only the client config, overwriting if it exists
+prisma init --client-only --force
+```
+
+## `prisma validate`
+
+Validate a config file without starting the server or client.
+
+```bash
+prisma validate -c <PATH> [-t <TYPE>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --config <PATH>` | — | Path to config file |
+| `-t, --type <TYPE>` | `server` | Config type: `server` or `client` |
+
+Parses the TOML file and runs all validation rules. Exits with code 0 if valid, or prints errors and exits with a non-zero code.
+
+Example:
+
+```bash
+prisma validate -c server.toml
+prisma validate -c client.toml -t client
+```
+
+## `prisma status`
+
+Query the management API for server status.
+
+```bash
+prisma status [-u <URL>] [-t <TOKEN>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-u, --url <URL>` | `http://127.0.0.1:9090` | Management API URL |
+| `-t, --token <TOKEN>` | — | Auth token for management API |
+
+Connects to the management API and displays server health, uptime, version, and active connection count.
+
+Example:
+
+```bash
+prisma status -u http://127.0.0.1:9090 -t your-auth-token
+```
+
+## `prisma speed-test`
+
+Run a bandwidth measurement against the server.
+
+```bash
+prisma speed-test -s <SERVER> [OPTIONS]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-s, --server <HOST:PORT>` | — | Server address |
+| `-d, --duration <SECS>` | `10` | Test duration in seconds |
+| `--direction <DIR>` | `both` | Direction: `download`, `upload`, or `both` |
+| `-C, --config <PATH>` | `client.toml` | Client config file (for auth credentials) |
+
+Uses the client config to authenticate and establish a tunnel, then measures throughput in the specified direction.
+
+Example:
+
+```bash
+prisma speed-test -s my-server.example.com:8443 -d 15 --direction download
+```
+
+## `prisma version`
+
+Display version information, protocol version, and supported features.
+
+```bash
+prisma version
+```
+
+No flags. Outputs the Prisma version, PrismaVeil protocol version, supported ciphers, supported transports, and feature lists for v2 and v3.

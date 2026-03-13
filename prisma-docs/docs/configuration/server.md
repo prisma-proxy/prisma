@@ -35,6 +35,19 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS (requires `[tls]` config) |
 | `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
 | `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
+| `camouflage.h3_cover_site` | string? | — | Upstream URL for HTTP/3 masquerade cover site |
+| `camouflage.h3_static_dir` | string? | — | Local static files directory for H3 masquerade |
+| `cdn.enabled` | bool | `false` | Enable CDN transport listener (WS, gRPC, XHTTP) |
+| `cdn.listen_addr` | string | `"0.0.0.0:443"` | CDN listener bind address |
+| `cdn.tls.cert_path` | string? | — | CDN TLS certificate (e.g. Cloudflare Origin Certificate) |
+| `cdn.tls.key_path` | string? | — | CDN TLS private key |
+| `cdn.ws_tunnel_path` | string | `"/ws-tunnel"` | WebSocket tunnel endpoint path |
+| `cdn.grpc_tunnel_path` | string | `"/tunnel.PrismaTunnel"` | gRPC tunnel service path |
+| `cdn.cover_upstream` | string? | — | Reverse proxy upstream URL for cover traffic |
+| `cdn.cover_static_dir` | string? | — | Static files directory for cover traffic |
+| `cdn.trusted_proxies` | string[] | `[]` | Trusted proxy IP ranges (e.g. Cloudflare CIDRs) |
+| `cdn.expose_management_api` | bool | `false` | Expose management API through CDN endpoint |
+| `cdn.management_api_path` | string | `"/prisma-mgmt"` | Management API subpath on CDN |
 | `cdn.xhttp_upload_path` | string | `"/api/v1/upload"` | XHTTP packet-up upload endpoint |
 | `cdn.xhttp_download_path` | string | `"/api/v1/events"` | XHTTP packet-up download endpoint |
 | `cdn.xhttp_stream_path` | string | `"/api/v1/stream"` | XHTTP stream-one/stream-up endpoint |
@@ -106,6 +119,21 @@ enabled = true
 tls_on_tcp = true
 fallback_addr = "example.com:443"
 alpn_protocols = ["h2", "http/1.1"]
+# salamander_password = "shared-obfuscation-key"  # Salamander UDP obfuscation (QUIC)
+# h3_cover_site = "https://example.com"           # HTTP/3 masquerade cover site
+# h3_static_dir = "/var/www/html"                 # OR serve local static files for H3
+
+# CDN transport (WebSocket + gRPC + XHTTP through Cloudflare)
+# [cdn]
+# enabled = true
+# listen_addr = "0.0.0.0:443"
+# ws_tunnel_path = "/ws-tunnel"
+# grpc_tunnel_path = "/tunnel.PrismaTunnel"
+# cover_upstream = "http://127.0.0.1:3000"        # Reverse proxy to real website
+# trusted_proxies = ["173.245.48.0/20"]            # Cloudflare IP ranges
+# [cdn.tls]
+# cert_path = "origin-cert.pem"
+# key_path = "origin-key.pem"
 ```
 
 ## Validation rules

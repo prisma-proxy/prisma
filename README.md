@@ -341,10 +341,11 @@ All endpoints require `Authorization: Bearer <auth_token>`.
 | `prisma client` | `-c, --config <PATH>` (default: `client.toml`) | Start the proxy client |
 | `prisma gen-key` | — | Generate a new client UUID + auth secret |
 | `prisma gen-cert` | `-o, --output <DIR>`, `--cn <NAME>` | Generate self-signed TLS certificate |
-| `prisma init` | `--mode server\|client` | Interactive config setup |
-| `prisma validate` | `-c, --config <PATH>` | Validate config without starting |
-| `prisma status` | `-c, --config <PATH>` | Check server connectivity |
-| `prisma speed-test` | `--server`, `--token`, `--duration` | Bandwidth measurement |
+| `prisma init` | `--cdn`, `--server-only`, `--client-only`, `--force` | Generate annotated config files |
+| `prisma validate` | `-c, --config <PATH>`, `-t, --type <server\|client>` | Validate config without starting |
+| `prisma status` | `-u, --url <URL>`, `-t, --token <TOKEN>` | Query management API for server status |
+| `prisma speed-test` | `-s, --server`, `-d, --duration`, `--direction`, `-C, --config` | Bandwidth measurement |
+| `prisma version` | — | Show version, protocol, supported ciphers and transports |
 
 ## Configuration
 
