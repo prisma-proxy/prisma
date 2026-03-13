@@ -4,86 +4,94 @@ sidebar_position: 1
 
 # PrismaVeil 协议
 
-PrismaVeil 是 Prisma 客户端和服务端之间使用的自定义线路协议。它提供认证密钥交换、加密数据传输和多路复用流管理。
+PrismaVeil 是 Prisma 客户端和服务端之间使用的自定义线路协议。它提供认证密钥交换、加密数据传输、多路复用流管理、UDP 中继和前向纠错。
 
-## 握手
+## 协议版本
 
-PrismaVeil 握手是一个四步过程，用于建立经过认证的加密会话：
+| 版本 | 握手 | 特性 |
+|------|------|------|
+| v1 (0x01) | 4 步（2 RTT） | 基本代理、端口转发 |
+| v2 (0x02) | 4 步（2 RTT） | + 逐帧填充、XHTTP 传输、XMUX |
+| **v3 (0x03)** | **2 步（1 RTT）** | + 0-RTT 恢复、PrismaUDP、FEC、DNS、速度测试、拥塞控制、端口跳变、Salamander |
 
-```
-客户端                                    服务端
-  │                                         │
-  │──── ClientHello ──────────────────────▶│  步骤 1
-  │     (version, X25519 pubkey,            │
-  │      timestamp, padding)                │
-  │                                         │
-  │◀──── ServerHello ─────────────────────│  步骤 2
-  │     (X25519 pubkey,                     │
-  │      encrypted challenge, padding)      │
-  │                                         │
-  │  双方：ECDH → BLAKE3 KDF → 会话密钥
-  │                                         │
-  │──── ClientAuth（已加密）──────────────▶│  步骤 3
-  │     (client_id, HMAC-SHA256 token,      │
-  │      cipher suite, challenge response)  │
-  │                                         │
-  │◀──── ServerAccept（已加密）───────────│  步骤 4
-  │     (status, session_id)                │
-  │                                         │
-  │════ 加密数据帧 ═══════════════════════│
+## v3 握手（当前版本）
+
+v3 握手将延迟从 2 RTT（v1/v2）降低到 1 RTT，将认证整合到初始密钥交换中：
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant S as 服务端
+
+    C->>S: ClientInit (version=0x03, flags, X25519 公钥, client_id, 时间戳, cipher_suite, auth_token, 填充)
+    Note over S: ECDH → 初步密钥
+    S->>C: ServerInit [已加密] (状态, session_id, X25519 公钥, 挑战值, 填充范围, 特性, 会话票据, 填充)
+    Note over C: 派生最终会话密钥
+    C->>S: ChallengeResponse [已加密] (BLAKE3(challenge))
+    Note over C,S: 加密数据帧
 ```
 
-### 步骤 1：ClientHello
-
-客户端生成临时 X25519 密钥对，并发送其公钥、协议版本和当前时间戳。
-
-**线路格式：**
+### ClientInit
 
 | 字段 | 大小 | 描述 |
 |------|------|------|
-| `version` | 1 字节 | 协议版本（`0x01`） |
+| `version` | 1 字节 | `0x03` |
+| `flags` | 1 字节 | 位 0: has_0rtt_data，位 1: resumption |
 | `client_ephemeral_pub` | 32 字节 | X25519 临时公钥 |
-| `timestamp` | 8 字节（大端） | Unix 时间戳（秒） |
-| `padding` | 可变 | 随机填充（0-256 字节） |
-
-### 步骤 2：ServerHello
-
-服务端生成自己的临时 X25519 密钥对，通过 ECDH 计算共享密钥，通过 BLAKE3 派生会话密钥，生成 32 字节随机挑战值，使用会话密钥加密后发送其公钥和加密的挑战值。
-
-**线路格式：**
-
-| 字段 | 大小 | 描述 |
-|------|------|------|
-| `server_ephemeral_pub` | 32 字节 | X25519 临时公钥 |
-| `challenge_len` | 2 字节（大端） | 加密挑战值的长度 |
-| `encrypted_challenge` | 可变 | 使用会话密钥加密的挑战值 |
-| `padding` | 可变 | 随机填充（0-256 字节） |
-
-### 步骤 3：ClientAuth（已加密）
-
-客户端同样计算共享密钥并派生相同的会话密钥。解密挑战值，计算挑战值的 BLAKE3 哈希作为响应，生成 HMAC-SHA256 认证令牌，所有内容使用会话密钥加密后发送。
-
-**明文格式（加密前）：**
-
-| 字段 | 大小 | 描述 |
-|------|------|------|
 | `client_id` | 16 字节 | 客户端 UUID |
-| `auth_token` | 32 字节 | HMAC-SHA256(auth_secret, client_id \|\| timestamp) |
+| `timestamp` | 8 字节（大端） | Unix 时间戳（秒） |
 | `cipher_suite` | 1 字节 | `0x01` = ChaCha20-Poly1305，`0x02` = AES-256-GCM |
-| `challenge_response` | 32 字节 | 解密后挑战值的 BLAKE3 哈希 |
+| `auth_token` | 32 字节 | HMAC-SHA256(auth_secret, client_id \|\| timestamp) |
+| `padding` | 可变 | 随机填充（0-256 字节） |
 
-### 步骤 4：ServerAccept（已加密）
-
-服务端验证挑战响应和认证令牌。如果有效，发送加密的接受消息，包含新的会话 UUID。
-
-**明文格式（加密前）：**
+### ServerInit（使用初步密钥加密）
 
 | 字段 | 大小 | 描述 |
 |------|------|------|
 | `status` | 1 字节 | 接受状态码 |
 | `session_id` | 16 字节 | 此会话的 UUID |
+| `server_ephemeral_pub` | 32 字节 | X25519 临时公钥 |
+| `challenge` | 32 字节 | 用于验证的随机挑战值 |
+| `padding_min` | 2 字节（小端） | 协商的最小逐帧填充 |
+| `padding_max` | 2 字节（小端） | 协商的最大逐帧填充 |
+| `server_features` | 4 字节（小端） | 支持的功能位掩码 |
+| `session_ticket_len` | 2 字节 | 会话票据长度 |
+| `session_ticket` | 可变 | 用于 0-RTT 恢复的不透明票据 |
+| `padding` | 可变 | 随机填充 |
 
-**AcceptStatus 值：**
+### 密钥派生（两阶段）
+
+1. **初步密钥**（加密 ServerInit）：`BLAKE3("prisma-v3-preliminary", shared_secret || client_pub || server_pub || timestamp)`
+2. **最终会话密钥**：`BLAKE3("prisma-v3-session", shared_secret || client_pub || server_pub || challenge || timestamp)`
+
+### 0-RTT 会话恢复
+
+后续连接可使用会话票据跳过完整握手：
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant S as 服务端
+
+    C->>S: ClientResume (version=0x03, flags=RESUMPTION, X25519 公钥, 会话票据, 加密的 0-RTT 数据)
+    S->>C: ServerResume
+    Note over C,S: 加密数据帧（已恢复）
+```
+
+抗重放保护：服务端维护已使用会话票据的布隆过滤器。
+
+### 服务端功能位掩码
+
+| 位 | 功能 | 描述 |
+|----|------|------|
+| 0x0001 | UDP_RELAY | PrismaUDP 中继支持 |
+| 0x0002 | FEC | 前向纠错 |
+| 0x0004 | PORT_HOPPING | 端口跳变支持 |
+| 0x0008 | SPEED_TEST | 带宽测试支持 |
+| 0x0010 | DNS_TUNNEL | 加密 DNS 查询 |
+| 0x0020 | BANDWIDTH_LIMIT | 每客户端带宽限制 |
+
+### AcceptStatus 值
 
 | 代码 | 名称 | 描述 |
 |------|------|------|
@@ -91,6 +99,17 @@ PrismaVeil 握手是一个四步过程，用于建立经过认证的加密会话
 | `0x01` | AuthFailed | 凭证无效 |
 | `0x02` | ServerBusy | 已达最大连接数 |
 | `0x03` | VersionMismatch | 不支持的协议版本 |
+| `0x04` | QuotaExceeded | 流量配额已超 |
+
+## 旧版 v1/v2 握手
+
+v1/v2 的 4 步握手仍支持向后兼容：
+
+```
+ClientHello → ServerHello → ClientAuth → ServerAccept   (2 RTT)
+```
+
+详情参见 v1/v2 文档。
 
 ## 加密帧线路格式
 
@@ -104,18 +123,18 @@ nonce 随每个帧一起传输。密文包含 AEAD 认证标签（ChaCha20-Poly1
 
 ## 数据帧明文格式
 
-每个加密帧内部的明文是一个数据帧：
+**v3 格式（2 字节标志位）：**
+
+```
+无填充: [command:1][flags:2 小端][stream_id:4][payload:可变]
+有填充: [command:1][flags:2 小端][stream_id:4][payload_len:2][payload:可变][padding:可变]
+```
+
+**v1/v2 格式（1 字节标志位，向后兼容）：**
 
 ```
 [command:1][flags:1][stream_id:4][payload:可变]
 ```
-
-| 字段 | 大小 | 描述 |
-|------|------|------|
-| `command` | 1 字节 | 命令类型（见下文） |
-| `flags` | 1 字节 | 位标志（见下文） |
-| `stream_id` | 4 字节（大端） | 流多路复用标识符 |
-| `payload` | 可变 | 命令特定数据 |
 
 ## 命令类型
 
@@ -129,18 +148,115 @@ nonce 随每个帧一起传输。密文包含 AEAD 认证标签（ChaCha20-Poly1
 | `0x06` | REGISTER_FORWARD | 客户端 → 服务端 | 远程端口（2 字节）+ 名称 |
 | `0x07` | FORWARD_READY | 服务端 → 客户端 | 远程端口（2 字节）+ 成功标志（1 字节） |
 | `0x08` | FORWARD_CONNECT | 服务端 → 客户端 | 远程端口（2 字节） |
+| `0x09` | UDP_ASSOCIATE | 客户端 → 服务端 | 绑定地址 + 端口（PrismaUDP） |
+| `0x0A` | UDP_DATA | 双向 | 带地址的 UDP 数据报（PrismaUDP） |
+| `0x0B` | SPEED_TEST | 双向 | 方向（1 字节）+ 持续时间（1 字节）+ 数据 |
+| `0x0C` | DNS_QUERY | 客户端 → 服务端 | 查询 ID（2 字节）+ 原始 DNS 查询 |
+| `0x0D` | DNS_RESPONSE | 服务端 → 客户端 | 查询 ID（2 字节）+ 原始 DNS 响应 |
+| `0x0E` | CHALLENGE_RESP | 客户端 → 服务端 | BLAKE3 哈希（32 字节） |
 
-## 标志位
+## 标志位（v3：2 字节，小端序）
 
 | 位 | 名称 | 描述 |
 |----|------|------|
-| `0x01` | PADDED | 帧包含填充 |
+| 0x0001 | PADDED | 帧包含逐帧填充 |
+| 0x0002 | FEC | 前向纠错奇偶校验数据 |
+| 0x0004 | PRIORITY | 高优先级（游戏、VoIP） |
+| 0x0008 | DATAGRAM | 不可靠传输提示 |
+| 0x0010 | COMPRESSED | zstd 压缩载荷 |
+| 0x0020 | 0RTT | 0-RTT 数据的一部分 |
+
+## PrismaUDP
+
+PrismaUDP 是通过加密隧道中继 UDP 流量（游戏、VoIP、DNS）的子协议。
+
+### UDP_ASSOCIATE
+
+客户端发送以请求 UDP 中继会话：
+
+```
+[bind_addr_type:1][bind_addr:可变][bind_port:2]
+```
+
+服务端分配 UDP 套接字并以 FORWARD_READY 响应。
+
+### UDP_DATA
+
+双向数据报中继：
+
+```
+[assoc_id:4][frag:1][addr_type:1][dest_addr:可变][dest_port:2][payload:可变]
+```
+
+### FEC（前向纠错）
+
+可选的 Reed-Solomon 纠删码，用于 UDP 流：
+
+- 可配置：例如 10 个数据分片 + 3 个奇偶分片（30% 开销）
+- 启用 FEC 的数据报使用 FLAG_FEC 并添加 4 字节 FEC 头部：
+
+```
+[fec_group:2 小端][fec_index:1][fec_total:1][payload:可变]
+```
+
+恢复：如果组中接收到任意 `data_shards` 个数据包，即可重建所有原始数据。
+
+### 传输方式
+
+- **通过 QUIC**：使用 QUIC DATAGRAM 扩展（RFC 9221），提供不可靠的低延迟传输
+- **通过 TCP/WS/gRPC/XHTTP**：使用 CMD_UDP_DATA 作为可靠帧（更高延迟的备选方案）
+
+## 拥塞控制
+
+三种可配置模式：
+
+| 模式 | 描述 |
+|------|------|
+| **Brutal** | 固定发送速率，不受丢包影响（Hysteria2 风格）。最适合限速网络。 |
+| **BBR** | Google BBRv2 — 探测带宽和 RTT。适用于正常网络。 |
+| **Adaptive** | 从 BBR 开始，检测人为限速后逐渐提高激进程度。 |
+
+## 抗检测功能
+
+### Salamander UDP 混淆
+
+剥离 QUIC 头部，使用 BLAKE3 派生的密钥流对所有 UDP 数据包进行 XOR 混淆。线路上的流量表现为随机字节。
+
+### HTTP/3 伪装
+
+QUIC 服务端对浏览器返回真实网站。PrismaVeil 客户端通过其初始认证流进行区分。
+
+### 端口跳变
+
+服务端绑定多个 UDP 端口。客户端按基于 HMAC 的确定性计划轮换端口：
+
+```
+current_port = base_port + HMAC-SHA256(shared_secret, epoch)[0..2] % port_range
+```
+
+### 逐帧填充
+
+在协商范围内为每个数据帧添加随机填充，防止基于数据包大小的流量分析。
 
 ## 协议常量
 
 | 常量 | 值 | 描述 |
 |------|-----|------|
-| `PROTOCOL_VERSION` | `0x01` | 当前协议版本 |
+| `PROTOCOL_VERSION` | `0x03` | 当前协议版本 |
+| `PROTOCOL_VERSION_V2` | `0x02` | v2 协议（仍接受） |
+| `PROTOCOL_VERSION_V1` | `0x01` | v1 协议（仍接受） |
 | `MAX_FRAME_SIZE` | 16384 | 最大帧大小（字节） |
 | `NONCE_SIZE` | 12 | Nonce 大小（字节） |
 | `MAX_PADDING_SIZE` | 256 | 最大填充大小（字节） |
+| `QUIC_ALPN` | `"prisma-v3"` | QUIC ALPN 协议字符串 |
+| `SESSION_TICKET_KEY_SIZE` | 32 | 票据加密密钥大小 |
+| `SESSION_TICKET_MAX_AGE_SECS` | 86400 | 会话票据有效期（24 小时） |
+
+## 向后兼容
+
+v3 服务端接受 v1、v2 和 v3 客户端：
+
+- **v1 客户端 → v3 服务端**：4 步握手，无填充，ALPN `"prisma-v1"` 被接受
+- **v2 客户端 → v3 服务端**：4 步握手，逐帧填充，ALPN `"prisma-v2"` 被接受
+- **v3 客户端 → v3 服务端**：2 步握手，所有 v3 功能，ALPN `"prisma-v3"`
+- **v3 客户端 → v2 服务端**：如果未收到 v3 ServerInit 则回退到 4 步握手

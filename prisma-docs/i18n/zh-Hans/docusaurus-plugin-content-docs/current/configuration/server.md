@@ -81,7 +81,7 @@ sidebar_position: 1
 
 ## 完整示例
 
-```toml
+```toml title="server.toml"
 listen_addr = "0.0.0.0:8443"
 quic_listen_addr = "0.0.0.0:8443"
 

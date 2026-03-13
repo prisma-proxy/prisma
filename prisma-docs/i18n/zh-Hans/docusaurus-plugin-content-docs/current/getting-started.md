@@ -47,7 +47,7 @@ cargo run -p prisma-cli -- gen-cert --output . --cn prisma-server
 
 创建 `server.toml`：
 
-```toml
+```toml title="server.toml"
 listen_addr = "0.0.0.0:8443"
 quic_listen_addr = "0.0.0.0:8443"
 
@@ -73,7 +73,7 @@ connection_timeout_secs = 300
 
 创建 `client.toml`：
 
-```toml
+```toml title="client.toml"
 socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"
 server_addr = "<服务器IP>:8443"

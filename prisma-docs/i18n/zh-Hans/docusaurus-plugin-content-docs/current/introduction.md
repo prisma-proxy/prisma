@@ -46,22 +46,31 @@ prisma/
 
 作为出站代理使用时，应用程序连接到本地 SOCKS5 或 HTTP CONNECT 接口。客户端使用 PrismaVeil 协议加密流量，并通过 QUIC 或 TCP 发送到服务器，服务器将其转发到目标地址。
 
-```
-应用程序 ──SOCKS5/HTTP──▶ prisma-client ──PrismaVeil/QUIC──▶ prisma-server ──TCP──▶ 目标地址
+```mermaid
+graph LR
+    A[应用程序] -->|SOCKS5 / HTTP| B[prisma-client]
+    B -->|PrismaVeil / QUIC| C[prisma-server]
+    C -->|TCP| D[目标地址]
 ```
 
 ### 数据流 — 端口转发（反向代理）
 
 端口转发允许您通过 Prisma 服务器暴露 NAT/防火墙后面的本地服务。外部连接到达服务器后，通过加密隧道中继到客户端的本地服务。
 
-```
-互联网 ──TCP──▶ prisma-server:port ──PrismaVeil──▶ prisma-client ──TCP──▶ 本地服务
+```mermaid
+graph LR
+    A[互联网] -->|TCP| B["prisma-server:port"]
+    B -->|PrismaVeil| C[prisma-client]
+    C -->|TCP| D[本地服务]
 ```
 
 ### 数据流 — 管理与仪表盘
 
 管理 API 提供实时可观测性和控制。仪表盘通过服务端代理与管理 API 通信，以保护 API 令牌安全。
 
-```
-浏览器 ──HTTP──▶ prisma-dashboard (Next.js) ──REST/WS──▶ prisma-mgmt (axum) ──▶ ServerState
+```mermaid
+graph LR
+    A[浏览器] -->|HTTP| B["prisma-dashboard (Next.js)"]
+    B -->|REST / WS| C["prisma-mgmt (axum)"]
+    C --> D[ServerState]
 ```

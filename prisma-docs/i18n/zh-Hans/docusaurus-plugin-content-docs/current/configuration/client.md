@@ -83,7 +83,7 @@ sidebar_position: 2
 
 ## 完整示例
 
-```toml
+```toml title="client.toml"
 socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"  # 可选，删除此行以禁用 HTTP 代理
 server_addr = "127.0.0.1:8443"

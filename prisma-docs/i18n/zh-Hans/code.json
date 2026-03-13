@@ -2,6 +2,9 @@
   "homepage.getStarted": {
     "message": "快速开始"
   },
+  "homepage.viewGitHub": {
+    "message": "在 GitHub 上查看"
+  },
   "homepage.title": {
     "message": "首页"
   },
@@ -25,5 +28,26 @@
   },
   "homepage.features.portForwarding.description": {
     "message": "通过加密隧道将本地服务暴露到服务器，实现 frp 风格的反向代理。"
+  },
+  "homepage.features.antiDetection.title": {
+    "message": "抗检测"
+  },
+  "homepage.features.antiDetection.description": {
+    "message": "TLS 伪装、诱饵回落、Salamander UDP 混淆和逐帧填充，抵抗流量分析。"
+  },
+  "homepage.features.cdnTransport.title": {
+    "message": "CDN 传输"
+  },
+  "homepage.features.cdnTransport.description": {
+    "message": "WebSocket、gRPC、XHTTP 和 XPorta 传输——通过任何 CDN 代理，与正常流量无法区分。"
+  },
+  "homepage.features.webDashboard.title": {
+    "message": "Web 仪表盘"
+  },
+  "homepage.features.webDashboard.description": {
+    "message": "基于 Next.js 的实时仪表盘，包含指标、客户端管理、日志流和 REST/WebSocket API。"
+  },
+  "homepage.quickStart.title": {
+    "message": "快速上手"
   }
 }
