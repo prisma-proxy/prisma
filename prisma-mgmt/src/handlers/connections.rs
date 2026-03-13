@@ -38,10 +38,7 @@ pub async fn list(State(state): State<ServerState>) -> Json<Vec<ConnectionRespon
     Json(list)
 }
 
-pub async fn disconnect(
-    State(state): State<ServerState>,
-    Path(id): Path<Uuid>,
-) -> StatusCode {
+pub async fn disconnect(State(state): State<ServerState>, Path(id): Path<Uuid>) -> StatusCode {
     let mut conns = state.connections.write().await;
     if conns.remove(&id).is_some() {
         StatusCode::OK

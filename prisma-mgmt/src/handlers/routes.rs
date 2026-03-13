@@ -4,7 +4,7 @@ use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use prisma_core::config::server::{RuleAction, RuleCondition, RoutingRule};
+use prisma_core::config::server::{RoutingRule, RuleAction, RuleCondition};
 use prisma_core::state::ServerState;
 
 #[derive(Deserialize)]
@@ -62,10 +62,7 @@ pub async fn update(
     }
 }
 
-pub async fn remove(
-    State(state): State<ServerState>,
-    Path(id): Path<Uuid>,
-) -> StatusCode {
+pub async fn remove(State(state): State<ServerState>, Path(id): Path<Uuid>) -> StatusCode {
     let mut rules = state.routing_rules.write().await;
     let len_before = rules.len();
     rules.retain(|r| r.id != id);

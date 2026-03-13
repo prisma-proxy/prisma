@@ -4,10 +4,7 @@ use axum::response::Response;
 
 use prisma_core::state::ServerState;
 
-pub async fn ws_logs(
-    ws: WebSocketUpgrade,
-    State(state): State<ServerState>,
-) -> Response {
+pub async fn ws_logs(ws: WebSocketUpgrade, State(state): State<ServerState>) -> Response {
     ws.on_upgrade(move |socket| handle_logs_ws(socket, state))
 }
 

@@ -3,9 +3,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::Utc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tracing::{info, warn};
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::{PortForwardingConfig, RuleAction, RuleCondition};
 use prisma_core::crypto::aead::create_cipher;
@@ -14,6 +11,9 @@ use prisma_core::protocol::handshake::ServerHandshake;
 use prisma_core::protocol::types::*;
 use prisma_core::types::{ProxyAddress, ProxyDestination};
 use prisma_core::util;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tracing::{info, warn};
 
 use prisma_core::state::{ConnectionInfo, ServerState, SessionMode, Transport};
 
@@ -49,8 +49,15 @@ pub async fn handle_tcp_connection(
 
     let (read, write) = stream.into_split();
     run_registered_session(
-        session_keys, read, write, Transport::Tcp, peer_addr,
-        &auth, dns_cache, forward_config, state,
+        session_keys,
+        read,
+        write,
+        Transport::Tcp,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        state,
     )
     .await
 }
@@ -126,17 +133,18 @@ where
 
     let client_auth_buf = util::read_framed(&mut stream).await?;
 
-    let (accept_bytes, session_keys) = match server_state.process_client_auth(&client_auth_buf, &auth) {
-        Ok(result) => result,
-        Err(e) => {
-            state
-                .metrics
-                .handshake_failures
-                .fetch_add(1, Ordering::Relaxed);
-            // Auth failure inside TLS is indistinguishable from a normal HTTPS close
-            return Err(e.into());
-        }
-    };
+    let (accept_bytes, session_keys) =
+        match server_state.process_client_auth(&client_auth_buf, &auth) {
+            Ok(result) => result,
+            Err(e) => {
+                state
+                    .metrics
+                    .handshake_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                // Auth failure inside TLS is indistinguishable from a normal HTTPS close
+                return Err(e.into());
+            }
+        };
 
     util::write_framed(&mut stream, &accept_bytes).await?;
 
@@ -144,8 +152,15 @@ where
 
     let (read, write) = tokio::io::split(stream);
     run_registered_session(
-        session_keys, read, write, Transport::Tcp, peer_addr,
-        &auth, dns_cache, forward_config, state,
+        session_keys,
+        read,
+        write,
+        Transport::Tcp,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        state,
     )
     .await
 }
@@ -173,8 +188,15 @@ pub async fn handle_quic_stream(
     info!(session_id = %session_keys.session_id, "Handshake complete (QUIC)");
 
     run_registered_session(
-        session_keys, recv, send, Transport::Quic, peer_addr,
-        &auth, dns_cache, forward_config, state,
+        session_keys,
+        recv,
+        send,
+        Transport::Quic,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        state,
     )
     .await
 }
@@ -222,9 +244,7 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
 {
     let client_name = auth.client_name(&session_keys.client_id);
-    let display_name = client_name
-        .clone()
-        .unwrap_or_else(|| "unknown".into());
+    let display_name = client_name.clone().unwrap_or_else(|| "unknown".into());
     info!(
         client_id = %session_keys.client_id.0,
         client_name = %display_name,
@@ -398,9 +418,7 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
                 ProxyAddress::Ipv6(_) => false, // simplified
                 ProxyAddress::Domain(_) => false,
             },
-            RuleCondition::PortRange(start, end) => {
-                dest.port >= *start && dest.port <= *end
-            }
+            RuleCondition::PortRange(start, end) => dest.port >= *start && dest.port <= *end,
         };
 
         if matches {
@@ -413,8 +431,7 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
 
 fn domain_glob_match(pattern: &str, domain: &str) -> bool {
     if let Some(suffix) = pattern.strip_prefix("*.") {
-        domain.ends_with(suffix)
-            || domain.eq_ignore_ascii_case(suffix)
+        domain.ends_with(suffix) || domain.eq_ignore_ascii_case(suffix)
     } else {
         domain.eq_ignore_ascii_case(pattern)
     }

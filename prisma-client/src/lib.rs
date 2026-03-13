@@ -27,7 +27,10 @@ pub async fn run(config_path: &str) -> Result<()> {
         info!(http = %http_addr, "HTTP proxy enabled");
     }
     if !config.port_forwards.is_empty() {
-        info!(count = config.port_forwards.len(), "Port forwards configured");
+        info!(
+            count = config.port_forwards.len(),
+            "Port forwards configured"
+        );
     }
 
     let client_id = ClientId::from_uuid(

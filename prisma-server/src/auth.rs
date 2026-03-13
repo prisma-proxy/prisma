@@ -32,10 +32,7 @@ impl AuthStore {
     /// Look up a client's display name by ID.
     pub fn client_name(&self, client_id: &ClientId) -> Option<String> {
         let guard = self.inner.try_read().ok()?;
-        guard
-            .clients
-            .get(&client_id.0)
-            .and_then(|e| e.name.clone())
+        guard.clients.get(&client_id.0).and_then(|e| e.name.clone())
     }
 }
 

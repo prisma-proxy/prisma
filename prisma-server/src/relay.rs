@@ -57,14 +57,20 @@ where
                 break;
             }
             frame_buf.resize(frame_len, 0);
-            if tunnel_read.read_exact(&mut frame_buf[..frame_len]).await.is_err() {
+            if tunnel_read
+                .read_exact(&mut frame_buf[..frame_len])
+                .await
+                .is_err()
+            {
                 break;
             }
 
             // Count upstream bytes (encrypted frame size)
             let frame_bytes = frame_len as u64 + 2;
             bytes_up_t2d.fetch_add(frame_bytes, Ordering::Relaxed);
-            metrics_t2d.total_bytes_up.fetch_add(frame_bytes, Ordering::Relaxed);
+            metrics_t2d
+                .total_bytes_up
+                .fetch_add(frame_bytes, Ordering::Relaxed);
 
             match decrypt_frame(cipher_t2d.as_ref(), &frame_buf[..frame_len]) {
                 Ok((plaintext, nonce)) => {
@@ -90,13 +96,10 @@ where
                                     stream_id: frame.stream_id,
                                 };
                                 let pong_bytes = encode_data_frame(&pong);
-                                let nonce =
-                                    session_keys_ping.lock().await.next_server_nonce();
-                                if let Ok(encrypted) = encrypt_frame(
-                                    cipher_t2d.as_ref(),
-                                    &nonce,
-                                    &pong_bytes,
-                                ) {
+                                let nonce = session_keys_ping.lock().await.next_server_nonce();
+                                if let Ok(encrypted) =
+                                    encrypt_frame(cipher_t2d.as_ref(), &nonce, &pong_bytes)
+                                {
                                     let mut tw = tunnel_write_ping.lock().await;
                                     let len = (encrypted.len() as u16).to_be_bytes();
                                     let _ = tw.write_all(&len).await;
@@ -140,7 +143,9 @@ where
                         Ok(encrypted) => {
                             let enc_len = encrypted.len() as u64 + 2;
                             bytes_down.fetch_add(enc_len, Ordering::Relaxed);
-                            metrics.total_bytes_down.fetch_add(enc_len, Ordering::Relaxed);
+                            metrics
+                                .total_bytes_down
+                                .fetch_add(enc_len, Ordering::Relaxed);
 
                             let mut tw = tunnel_write.lock().await;
                             let len = (encrypted.len() as u16).to_be_bytes();

@@ -59,7 +59,6 @@ pub enum CryptoError {
 
     #[error("decryption failed: {0}")]
     DecryptionFailed(String),
-
 }
 
 #[derive(Debug, Error)]

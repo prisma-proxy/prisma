@@ -78,12 +78,20 @@ pub enum Command {
     Ping(u32),
     Pong(u32),
     /// Client → Server: request the server to listen on `remote_port` and forward traffic back.
-    RegisterForward { remote_port: u16, name: String },
+    RegisterForward {
+        remote_port: u16,
+        name: String,
+    },
     /// Server → Client: acknowledge a port forward registration.
-    ForwardReady { remote_port: u16, success: bool },
+    ForwardReady {
+        remote_port: u16,
+        success: bool,
+    },
     /// Server → Client: a new inbound connection arrived on a forwarded port.
     /// The `stream_id` on the enclosing DataFrame identifies this forwarded connection.
-    ForwardConnect { remote_port: u16 },
+    ForwardConnect {
+        remote_port: u16,
+    },
 }
 
 impl Command {

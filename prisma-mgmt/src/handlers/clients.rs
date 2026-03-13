@@ -91,10 +91,7 @@ pub async fn update(
     }
 }
 
-pub async fn remove(
-    State(state): State<ServerState>,
-    Path(id): Path<Uuid>,
-) -> StatusCode {
+pub async fn remove(State(state): State<ServerState>, Path(id): Path<Uuid>) -> StatusCode {
     let mut store = state.auth_store.write().await;
     if store.clients.remove(&id).is_some() {
         StatusCode::OK

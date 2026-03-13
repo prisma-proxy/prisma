@@ -113,7 +113,9 @@ where
         // Count upstream bytes
         let frame_bytes = frame_len as u64 + 2;
         ctx.bytes_up.fetch_add(frame_bytes, Ordering::Relaxed);
-        ctx.metrics.total_bytes_up.fetch_add(frame_bytes, Ordering::Relaxed);
+        ctx.metrics
+            .total_bytes_up
+            .fetch_add(frame_bytes, Ordering::Relaxed);
 
         let (plaintext, _nonce) = match decrypt_frame(ctx.cipher.as_ref(), &frame_buf[..frame_len])
         {
@@ -149,7 +151,15 @@ async fn dispatch_frame<W: AsyncWrite + Unpin + Send + 'static>(
             if forward_config.is_port_allowed(remote_port) {
                 info!(port = remote_port, name = %name, "Registering port forward");
 
-                send_frame(ctx, Command::ForwardReady { remote_port, success: true }, 0).await?;
+                send_frame(
+                    ctx,
+                    Command::ForwardReady {
+                        remote_port,
+                        success: true,
+                    },
+                    0,
+                )
+                .await?;
 
                 let ctx = ctx.clone();
                 tokio::spawn(async move {
@@ -159,7 +169,15 @@ async fn dispatch_frame<W: AsyncWrite + Unpin + Send + 'static>(
                 });
             } else {
                 warn!(port = remote_port, name = %name, "Port forward denied");
-                send_frame(ctx, Command::ForwardReady { remote_port, success: false }, 0).await?;
+                send_frame(
+                    ctx,
+                    Command::ForwardReady {
+                        remote_port,
+                        success: false,
+                    },
+                    0,
+                )
+                .await?;
             }
         }
         Command::Data(data) => {
@@ -199,8 +217,12 @@ async fn run_forward_listener<W: AsyncWrite + Unpin + Send + 'static>(
         ctx.streams.lock().await.insert(stream_id, tx);
 
         // Notify the client about this new connection
-        if let Err(e) = send_frame(ctx, Command::ForwardConnect { remote_port: port }, stream_id)
-            .await
+        if let Err(e) = send_frame(
+            ctx,
+            Command::ForwardConnect { remote_port: port },
+            stream_id,
+        )
+        .await
         {
             warn!(stream_id, "Failed to send ForwardConnect: {}", e);
             ctx.streams.lock().await.remove(&stream_id);
@@ -281,7 +303,9 @@ async fn send_frame<W: AsyncWrite + Unpin>(
     // Count downstream bytes
     let enc_len = encrypted.len() as u64 + 2;
     ctx.bytes_down.fetch_add(enc_len, Ordering::Relaxed);
-    ctx.metrics.total_bytes_down.fetch_add(enc_len, Ordering::Relaxed);
+    ctx.metrics
+        .total_bytes_down
+        .fetch_add(enc_len, Ordering::Relaxed);
 
     let len = (encrypted.len() as u16).to_be_bytes();
     let mut tw = ctx.tunnel_write.lock().await;

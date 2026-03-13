@@ -27,7 +27,11 @@ pub async fn run(config_path: &str) -> Result<()> {
     let (metrics_tx, _) = tokio::sync::broadcast::channel::<MetricsSnapshot>(256);
 
     // Initialize logging with broadcast
-    init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx.clone());
+    init_logging_with_broadcast(
+        &config.logging.level,
+        &config.logging.format,
+        log_tx.clone(),
+    );
 
     info!("Prisma server starting");
     info!(listen = %config.listen_addr, quic_listen = %config.quic_listen_addr);

@@ -71,7 +71,11 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
                 break;
             }
             frame_buf.resize(frame_len, 0);
-            if tunnel_read.read_exact(&mut frame_buf[..frame_len]).await.is_err() {
+            if tunnel_read
+                .read_exact(&mut frame_buf[..frame_len])
+                .await
+                .is_err()
+            {
                 break;
             }
 

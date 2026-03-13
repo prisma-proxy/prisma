@@ -155,10 +155,7 @@ mod tests {
     #[test]
     fn test_parse_ipv4_target() {
         let dest = parse_connect_target("1.2.3.4:8080").unwrap();
-        assert_eq!(
-            dest.address,
-            ProxyAddress::Ipv4("1.2.3.4".parse().unwrap())
-        );
+        assert_eq!(dest.address, ProxyAddress::Ipv4("1.2.3.4".parse().unwrap()));
         assert_eq!(dest.port, 8080);
     }
 

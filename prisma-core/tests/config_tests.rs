@@ -1,11 +1,7 @@
 use prisma_core::config::{load_client_config, load_server_config};
 
 fn fixture(name: &str) -> String {
-    format!(
-        "{}/tests/fixtures/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    )
+    format!("{}/tests/fixtures/{}", env!("CARGO_MANIFEST_DIR"), name)
 }
 
 #[test]
@@ -13,7 +9,10 @@ fn test_load_valid_server_config() {
     let config = load_server_config(&fixture("valid_server")).unwrap();
     assert_eq!(config.listen_addr, "0.0.0.0:8443");
     assert_eq!(config.authorized_clients.len(), 1);
-    assert_eq!(config.authorized_clients[0].name, Some("test-client".into()));
+    assert_eq!(
+        config.authorized_clients[0].name,
+        Some("test-client".into())
+    );
     assert_eq!(config.logging.level, "debug");
     assert_eq!(config.performance.max_connections, 512);
 }

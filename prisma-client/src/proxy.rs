@@ -40,9 +40,21 @@ impl ProxyContext {
         };
 
         let result = if self.use_quic {
-            connector::connect_quic(&self.server_addr, self.skip_cert_verify, alpn, self.server_name()).await
+            connector::connect_quic(
+                &self.server_addr,
+                self.skip_cert_verify,
+                alpn,
+                self.server_name(),
+            )
+            .await
         } else if self.tls_on_tcp {
-            connector::connect_tcp_tls(&self.server_addr, self.server_name(), self.skip_cert_verify, &self.alpn_protocols).await
+            connector::connect_tcp_tls(
+                &self.server_addr,
+                self.server_name(),
+                self.skip_cert_verify,
+                &self.alpn_protocols,
+            )
+            .await
         } else {
             connector::connect_tcp(&self.server_addr).await
         };

@@ -102,7 +102,8 @@ impl ClientAwaitingServerHello {
         let challenge_response: [u8; 32] = blake3::hash(&challenge).into();
 
         // Compute auth token: HMAC-SHA256(auth_secret, client_id || timestamp)
-        let auth_token = util::compute_auth_token(&self.auth_secret, &self.client_id, self.timestamp);
+        let auth_token =
+            util::compute_auth_token(&self.auth_secret, &self.client_id, self.timestamp);
 
         // Build ClientAuth
         let client_auth = ClientAuth {

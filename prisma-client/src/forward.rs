@@ -38,7 +38,10 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
     let session_keys = accept_state.process_server_accept(&accept_buf)?;
     info!(session_id = %session_keys.session_id, "Forward tunnel established");
 
-    let cipher: Arc<dyn AeadCipher> = Arc::from(create_cipher(session_keys.cipher_suite, &session_keys.session_key));
+    let cipher: Arc<dyn AeadCipher> = Arc::from(create_cipher(
+        session_keys.cipher_suite,
+        &session_keys.session_key,
+    ));
     let (mut tunnel_read, tunnel_write) = tokio::io::split(stream);
     let tunnel_write = Arc::new(Mutex::new(tunnel_write));
     let session_keys = Arc::new(Mutex::new(session_keys));
@@ -121,7 +124,10 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
                 if success {
                     info!(port = remote_port, "Port forward registered successfully");
                 } else {
-                    warn!(port = remote_port, "Port forward registration denied by server");
+                    warn!(
+                        port = remote_port,
+                        "Port forward registration denied by server"
+                    );
                 }
             }
             Command::ForwardConnect { remote_port } => {
@@ -150,10 +156,7 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
                         st.lock().await.remove(&stream_id);
                     });
                 } else {
-                    warn!(
-                        stream_id,
-                        remote_port, "ForwardConnect for unknown port"
-                    );
+                    warn!(stream_id, remote_port, "ForwardConnect for unknown port");
                     let _ = send_frame(
                         &tunnel_write,
                         &session_keys,
