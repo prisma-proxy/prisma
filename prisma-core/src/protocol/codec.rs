@@ -7,7 +7,7 @@ use super::types::*;
 
 // --- Handshake message encoding/decoding ---
 
-/// Encode ClientHello to bytes.
+/// Encode ClientHello to bytes (v1/v2).
 pub fn encode_client_hello(msg: &ClientHello) -> Vec<u8> {
     let mut buf = Vec::with_capacity(1 + 32 + 8 + msg.padding.len());
     buf.push(msg.version);
@@ -17,7 +17,7 @@ pub fn encode_client_hello(msg: &ClientHello) -> Vec<u8> {
     buf
 }
 
-/// Decode ClientHello from bytes.
+/// Decode ClientHello from bytes (v1/v2).
 pub fn decode_client_hello(data: &[u8]) -> Result<ClientHello, ProtocolError> {
     if data.len() < 41 {
         // 1 + 32 + 8
@@ -39,7 +39,7 @@ pub fn decode_client_hello(data: &[u8]) -> Result<ClientHello, ProtocolError> {
     })
 }
 
-/// Encode ServerHello to bytes.
+/// Encode ServerHello to bytes (v1/v2).
 pub fn encode_server_hello(msg: &ServerHello) -> Vec<u8> {
     let mut buf = Vec::with_capacity(32 + 2 + msg.encrypted_challenge.len() + msg.padding.len());
     buf.extend_from_slice(&msg.server_ephemeral_pub);
@@ -49,7 +49,7 @@ pub fn encode_server_hello(msg: &ServerHello) -> Vec<u8> {
     buf
 }
 
-/// Decode ServerHello from bytes.
+/// Decode ServerHello from bytes (v1/v2).
 pub fn decode_server_hello(data: &[u8]) -> Result<ServerHello, ProtocolError> {
     if data.len() < 34 {
         // 32 + 2
@@ -109,15 +109,23 @@ pub fn decode_client_auth(data: &[u8]) -> Result<ClientAuth, ProtocolError> {
     })
 }
 
-/// Encode ServerAccept to bytes.
+/// Encode ServerAccept to bytes (v1/v2).
+/// v2 format: [status:1][session_id:16][padding_min:2][padding_max:2]
+/// v1 format: [status:1][session_id:16]
 pub fn encode_server_accept(msg: &ServerAccept) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 16);
+    let has_padding = msg.padding_range.is_some();
+    let mut buf = Vec::with_capacity(1 + 16 + if has_padding { 4 } else { 0 });
     buf.push(msg.status as u8);
     buf.extend_from_slice(msg.session_id.as_bytes());
+    if let Some(ref pr) = msg.padding_range {
+        buf.extend_from_slice(&pr.min.to_be_bytes());
+        buf.extend_from_slice(&pr.max.to_be_bytes());
+    }
     buf
 }
 
 /// Decode ServerAccept from bytes.
+/// Supports both v1 (17 bytes) and v2 (21 bytes with padding range).
 pub fn decode_server_accept(data: &[u8]) -> Result<ServerAccept, ProtocolError> {
     if data.len() < 17 {
         return Err(ProtocolError::InvalidFrame(
@@ -128,34 +136,330 @@ pub fn decode_server_accept(data: &[u8]) -> Result<ServerAccept, ProtocolError> 
         "Invalid accept status".to_string(),
     ))?;
     let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
-    Ok(ServerAccept { status, session_id })
+    let padding_range = if data.len() >= 21 {
+        let min = u16::from_be_bytes([data[17], data[18]]);
+        let max = u16::from_be_bytes([data[19], data[20]]);
+        Some(crate::types::PaddingRange::new(min, max))
+    } else {
+        None
+    };
+    Ok(ServerAccept {
+        status,
+        session_id,
+        padding_range,
+    })
+}
+
+// --- v3 Handshake message encoding/decoding ---
+
+/// Encode ClientInit to bytes (v3).
+/// Wire format:
+///   [version:1][flags:1][client_ephemeral_pub:32][client_id:16][timestamp:8]
+///   [cipher_suite:1][auth_token:32][padding:var]
+pub fn encode_client_init(msg: &ClientInit) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + 1 + 32 + 16 + 8 + 1 + 32 + msg.padding.len());
+    buf.push(msg.version);
+    buf.push(msg.flags);
+    buf.extend_from_slice(&msg.client_ephemeral_pub);
+    buf.extend_from_slice(msg.client_id.0.as_bytes());
+    buf.extend_from_slice(&msg.timestamp.to_be_bytes());
+    buf.push(msg.cipher_suite as u8);
+    buf.extend_from_slice(&msg.auth_token);
+    buf.extend_from_slice(&msg.padding);
+    buf
+}
+
+/// Decode ClientInit from bytes (v3).
+pub fn decode_client_init(data: &[u8]) -> Result<ClientInit, ProtocolError> {
+    // Minimum: 1+1+32+16+8+1+32 = 91
+    if data.len() < 91 {
+        return Err(ProtocolError::InvalidFrame(
+            "ClientInit too short".to_string(),
+        ));
+    }
+    let version = data[0];
+    let flags = data[1];
+    let mut client_ephemeral_pub = [0u8; 32];
+    client_ephemeral_pub.copy_from_slice(&data[2..34]);
+    let client_id = ClientId(uuid::Uuid::from_bytes(data[34..50].try_into().unwrap()));
+    let timestamp = u64::from_be_bytes(data[50..58].try_into().unwrap());
+    let cipher_suite = CipherSuite::from_u8(data[58])
+        .ok_or(ProtocolError::InvalidCommand(data[58]))?;
+    let mut auth_token = [0u8; 32];
+    auth_token.copy_from_slice(&data[59..91]);
+    let padding = data[91..].to_vec();
+
+    Ok(ClientInit {
+        version,
+        flags,
+        client_ephemeral_pub,
+        client_id,
+        timestamp,
+        cipher_suite,
+        auth_token,
+        padding,
+    })
+}
+
+/// Encode ServerInit to bytes (v3, plaintext — will be encrypted with preliminary key).
+/// Wire format:
+///   [status:1][session_id:16][server_ephemeral_pub:32][challenge:32]
+///   [padding_min:2][padding_max:2][server_features:4]
+///   [session_ticket_len:2][session_ticket:var][padding:var]
+pub fn encode_server_init(msg: &ServerInit) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(
+        1 + 16 + 32 + 32 + 2 + 2 + 4 + 2 + msg.session_ticket.len() + msg.padding.len(),
+    );
+    buf.push(msg.status as u8);
+    buf.extend_from_slice(msg.session_id.as_bytes());
+    buf.extend_from_slice(&msg.server_ephemeral_pub);
+    buf.extend_from_slice(&msg.challenge);
+    buf.extend_from_slice(&msg.padding_min.to_le_bytes());
+    buf.extend_from_slice(&msg.padding_max.to_le_bytes());
+    buf.extend_from_slice(&msg.server_features.to_le_bytes());
+    buf.extend_from_slice(&(msg.session_ticket.len() as u16).to_be_bytes());
+    buf.extend_from_slice(&msg.session_ticket);
+    buf.extend_from_slice(&msg.padding);
+    buf
+}
+
+/// Decode ServerInit from bytes (v3).
+pub fn decode_server_init(data: &[u8]) -> Result<ServerInit, ProtocolError> {
+    // Minimum: 1+16+32+32+2+2+4+2 = 91
+    if data.len() < 91 {
+        return Err(ProtocolError::InvalidFrame(
+            "ServerInit too short".to_string(),
+        ));
+    }
+    let status = AcceptStatus::from_u8(data[0])
+        .ok_or(ProtocolError::InvalidFrame("Invalid ServerInit status".to_string()))?;
+    let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
+    let mut server_ephemeral_pub = [0u8; 32];
+    server_ephemeral_pub.copy_from_slice(&data[17..49]);
+    let mut challenge = [0u8; 32];
+    challenge.copy_from_slice(&data[49..81]);
+    let padding_min = u16::from_le_bytes([data[81], data[82]]);
+    let padding_max = u16::from_le_bytes([data[83], data[84]]);
+    let server_features = u32::from_le_bytes([data[85], data[86], data[87], data[88]]);
+    let ticket_len = u16::from_be_bytes([data[89], data[90]]) as usize;
+    if data.len() < 91 + ticket_len {
+        return Err(ProtocolError::InvalidFrame(
+            "ServerInit ticket truncated".to_string(),
+        ));
+    }
+    let session_ticket = data[91..91 + ticket_len].to_vec();
+    let padding = data[91 + ticket_len..].to_vec();
+
+    Ok(ServerInit {
+        status,
+        session_id,
+        server_ephemeral_pub,
+        challenge,
+        padding_min,
+        padding_max,
+        server_features,
+        session_ticket,
+        padding,
+    })
+}
+
+/// Encode ClientResume to bytes (v3 0-RTT).
+pub fn encode_client_resume(msg: &ClientResume) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(
+        1 + 1 + 32 + 2 + msg.session_ticket.len() + msg.encrypted_0rtt_data.len(),
+    );
+    buf.push(msg.version);
+    buf.push(msg.flags);
+    buf.extend_from_slice(&msg.client_ephemeral_pub);
+    buf.extend_from_slice(&(msg.session_ticket.len() as u16).to_be_bytes());
+    buf.extend_from_slice(&msg.session_ticket);
+    buf.extend_from_slice(&msg.encrypted_0rtt_data);
+    buf
+}
+
+/// Decode ClientResume from bytes (v3 0-RTT).
+pub fn decode_client_resume(data: &[u8]) -> Result<ClientResume, ProtocolError> {
+    // Minimum: 1+1+32+2 = 36
+    if data.len() < 36 {
+        return Err(ProtocolError::InvalidFrame(
+            "ClientResume too short".to_string(),
+        ));
+    }
+    let version = data[0];
+    let flags = data[1];
+    let mut client_ephemeral_pub = [0u8; 32];
+    client_ephemeral_pub.copy_from_slice(&data[2..34]);
+    let ticket_len = u16::from_be_bytes([data[34], data[35]]) as usize;
+    if data.len() < 36 + ticket_len {
+        return Err(ProtocolError::InvalidFrame(
+            "ClientResume ticket truncated".to_string(),
+        ));
+    }
+    let session_ticket = data[36..36 + ticket_len].to_vec();
+    let encrypted_0rtt_data = data[36 + ticket_len..].to_vec();
+
+    Ok(ClientResume {
+        version,
+        flags,
+        client_ephemeral_pub,
+        session_ticket,
+        encrypted_0rtt_data,
+    })
+}
+
+/// Encode SessionTicket to plaintext bytes (server encrypts before sending).
+pub fn encode_session_ticket(ticket: &SessionTicket) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(16 + 32 + 1 + 8 + 2 + 2);
+    buf.extend_from_slice(ticket.client_id.0.as_bytes());
+    buf.extend_from_slice(&ticket.session_key);
+    buf.push(ticket.cipher_suite as u8);
+    buf.extend_from_slice(&ticket.issued_at.to_be_bytes());
+    buf.extend_from_slice(&ticket.padding_range.min.to_be_bytes());
+    buf.extend_from_slice(&ticket.padding_range.max.to_be_bytes());
+    buf
+}
+
+/// Decode SessionTicket from plaintext bytes.
+pub fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError> {
+    // 16+32+1+8+2+2 = 61
+    if data.len() < 61 {
+        return Err(ProtocolError::InvalidFrame(
+            "SessionTicket too short".to_string(),
+        ));
+    }
+    let client_id = ClientId(uuid::Uuid::from_bytes(data[..16].try_into().unwrap()));
+    let mut session_key = [0u8; 32];
+    session_key.copy_from_slice(&data[16..48]);
+    let cipher_suite = CipherSuite::from_u8(data[48])
+        .ok_or(ProtocolError::InvalidCommand(data[48]))?;
+    let issued_at = u64::from_be_bytes(data[49..57].try_into().unwrap());
+    let padding_min = u16::from_be_bytes([data[57], data[58]]);
+    let padding_max = u16::from_be_bytes([data[59], data[60]]);
+
+    Ok(SessionTicket {
+        client_id,
+        session_key,
+        cipher_suite,
+        issued_at,
+        padding_range: crate::types::PaddingRange::new(padding_min, padding_max),
+    })
 }
 
 // --- DataFrame encoding/decoding ---
 
 /// Encode a DataFrame to plaintext bytes.
-/// Format: [cmd:1][flags:1][stream_id:4][payload:var]
+/// v3 format: [cmd:1][flags:2 LE][stream_id:4][payload:var]
+/// v2 padded: [cmd:1][flags:2 LE][stream_id:4][payload_len:2][payload:var][padding:var]
 pub fn encode_data_frame(frame: &DataFrame) -> Vec<u8> {
     let payload = encode_command_payload(&frame.command);
-    let mut buf = Vec::with_capacity(6 + payload.len());
-    buf.push(frame.command.cmd_byte());
-    buf.push(frame.flags);
-    buf.extend_from_slice(&frame.stream_id.to_be_bytes());
-    buf.extend_from_slice(&payload);
+    if frame.flags & FLAG_PADDED != 0 {
+        // Padded format: include payload_len so receiver can split payload from padding
+        let payload_len = payload.len() as u16;
+        let mut buf = Vec::with_capacity(7 + 2 + payload.len());
+        buf.push(frame.command.cmd_byte());
+        buf.extend_from_slice(&frame.flags.to_le_bytes());
+        buf.extend_from_slice(&frame.stream_id.to_be_bytes());
+        buf.extend_from_slice(&payload_len.to_be_bytes());
+        buf.extend_from_slice(&payload);
+        // Padding is appended by the caller after encoding (via encode_data_frame_padded)
+        buf
+    } else {
+        let mut buf = Vec::with_capacity(7 + payload.len());
+        buf.push(frame.command.cmd_byte());
+        buf.extend_from_slice(&frame.flags.to_le_bytes());
+        buf.extend_from_slice(&frame.stream_id.to_be_bytes());
+        buf.extend_from_slice(&payload);
+        buf
+    }
+}
+
+/// Encode a DataFrame with padding appended.
+pub fn encode_data_frame_padded(
+    frame: &DataFrame,
+    padding_range: &crate::types::PaddingRange,
+) -> Vec<u8> {
+    let mut buf = encode_data_frame(frame);
+    if frame.flags & FLAG_PADDED != 0 {
+        let padding = crate::crypto::padding::generate_frame_padding(padding_range);
+        buf.extend_from_slice(&padding);
+    }
     buf
 }
 
 /// Decode a DataFrame from plaintext bytes.
+/// v3 format: [cmd:1][flags:2 LE][stream_id:4][payload:var]
 pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
-    if data.len() < 6 {
+    if data.len() < 7 {
         return Err(ProtocolError::InvalidFrame(
             "DataFrame too short".to_string(),
         ));
     }
     let cmd = data[0];
-    let flags = data[1];
+    let flags = u16::from_le_bytes([data[1], data[2]]);
+    let stream_id = u32::from_be_bytes(data[3..7].try_into().unwrap());
+
+    let payload = if flags & FLAG_PADDED != 0 {
+        // Padded format: [payload_len:2][payload:var][padding:var]
+        if data.len() < 9 {
+            return Err(ProtocolError::InvalidFrame(
+                "Padded DataFrame too short for payload_len".to_string(),
+            ));
+        }
+        let payload_len = u16::from_be_bytes([data[7], data[8]]) as usize;
+        if data.len() < 9 + payload_len {
+            return Err(ProtocolError::InvalidFrame(
+                "Padded DataFrame payload truncated".to_string(),
+            ));
+        }
+        // Strip padding — only return the actual payload
+        &data[9..9 + payload_len]
+    } else {
+        &data[7..]
+    };
+
+    let command = decode_command_payload(cmd, payload)?;
+
+    Ok(DataFrame {
+        command,
+        flags,
+        stream_id,
+    })
+}
+
+/// Decode a v2 DataFrame (1-byte flags) for backward compatibility.
+pub fn decode_data_frame_v2(data: &[u8]) -> Result<DataFrame, ProtocolError> {
+    if data.len() < 6 {
+        return Err(ProtocolError::InvalidFrame(
+            "v2 DataFrame too short".to_string(),
+        ));
+    }
+    let cmd = data[0];
+    let flags_v2 = data[1];
     let stream_id = u32::from_be_bytes(data[2..6].try_into().unwrap());
-    let payload = &data[6..];
+
+    // Convert v2 1-byte flags to v3 2-byte flags
+    let flags: u16 = if flags_v2 & FLAG_PADDED_V2 != 0 {
+        FLAG_PADDED
+    } else {
+        0
+    };
+
+    let payload = if flags & FLAG_PADDED != 0 {
+        if data.len() < 8 {
+            return Err(ProtocolError::InvalidFrame(
+                "v2 Padded DataFrame too short".to_string(),
+            ));
+        }
+        let payload_len = u16::from_be_bytes([data[6], data[7]]) as usize;
+        if data.len() < 8 + payload_len {
+            return Err(ProtocolError::InvalidFrame(
+                "v2 Padded DataFrame payload truncated".to_string(),
+            ));
+        }
+        &data[8..8 + payload_len]
+    } else {
+        &data[6..]
+    };
 
     let command = decode_command_payload(cmd, payload)?;
 
@@ -192,6 +496,59 @@ fn encode_command_payload(cmd: &Command) -> Vec<u8> {
             ]
         }
         Command::ForwardConnect { remote_port } => remote_port.to_be_bytes().to_vec(),
+        // v3 commands
+        Command::UdpAssociate {
+            bind_addr_type,
+            bind_addr,
+            bind_port,
+        } => {
+            let mut buf = Vec::with_capacity(1 + bind_addr.len() + 2);
+            buf.push(*bind_addr_type);
+            buf.extend_from_slice(bind_addr);
+            buf.extend_from_slice(&bind_port.to_be_bytes());
+            buf
+        }
+        Command::UdpData {
+            assoc_id,
+            frag,
+            addr_type,
+            dest_addr,
+            dest_port,
+            payload,
+        } => {
+            let mut buf = Vec::with_capacity(4 + 1 + 1 + dest_addr.len() + 2 + payload.len());
+            buf.extend_from_slice(&assoc_id.to_be_bytes());
+            buf.push(*frag);
+            buf.push(*addr_type);
+            buf.extend_from_slice(dest_addr);
+            buf.extend_from_slice(&dest_port.to_be_bytes());
+            buf.extend_from_slice(payload);
+            buf
+        }
+        Command::SpeedTest {
+            direction,
+            duration_secs,
+            data,
+        } => {
+            let mut buf = Vec::with_capacity(2 + data.len());
+            buf.push(*direction);
+            buf.push(*duration_secs);
+            buf.extend_from_slice(data);
+            buf
+        }
+        Command::DnsQuery { query_id, data } => {
+            let mut buf = Vec::with_capacity(2 + data.len());
+            buf.extend_from_slice(&query_id.to_be_bytes());
+            buf.extend_from_slice(data);
+            buf
+        }
+        Command::DnsResponse { query_id, data } => {
+            let mut buf = Vec::with_capacity(2 + data.len());
+            buf.extend_from_slice(&query_id.to_be_bytes());
+            buf.extend_from_slice(data);
+            buf
+        }
+        Command::ChallengeResponse { hash } => hash.to_vec(),
     }
 }
 
@@ -255,6 +612,112 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             }
             let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
             Ok(Command::ForwardConnect { remote_port })
+        }
+        // v3 commands
+        CMD_UDP_ASSOCIATE => {
+            if payload.len() < 3 {
+                return Err(ProtocolError::InvalidFrame("UdpAssociate too short".into()));
+            }
+            let bind_addr_type = payload[0];
+            let bind_port = u16::from_be_bytes([payload[payload.len() - 2], payload[payload.len() - 1]]);
+            let bind_addr = payload[1..payload.len() - 2].to_vec();
+            Ok(Command::UdpAssociate {
+                bind_addr_type,
+                bind_addr,
+                bind_port,
+            })
+        }
+        CMD_UDP_DATA => {
+            // [assoc_id:4][frag:1][addr_type:1][dest_addr:var][dest_port:2][payload:var]
+            if payload.len() < 8 {
+                return Err(ProtocolError::InvalidFrame("UdpData too short".into()));
+            }
+            let assoc_id = u32::from_be_bytes(payload[..4].try_into().unwrap());
+            let frag = payload[4];
+            let addr_type = payload[5];
+            // Parse variable-length address based on type
+            let (addr_end, dest_addr) = match addr_type {
+                0x01 => {
+                    // IPv4: 4 bytes
+                    if payload.len() < 12 {
+                        return Err(ProtocolError::InvalidFrame("UdpData IPv4 too short".into()));
+                    }
+                    (10, payload[6..10].to_vec())
+                }
+                0x04 => {
+                    // IPv6: 16 bytes
+                    if payload.len() < 24 {
+                        return Err(ProtocolError::InvalidFrame("UdpData IPv6 too short".into()));
+                    }
+                    (22, payload[6..22].to_vec())
+                }
+                0x03 => {
+                    // Domain: [len:1][domain:var]
+                    if payload.len() < 7 {
+                        return Err(ProtocolError::InvalidFrame("UdpData domain too short".into()));
+                    }
+                    let domain_len = payload[6] as usize;
+                    let end = 7 + domain_len;
+                    if payload.len() < end + 2 {
+                        return Err(ProtocolError::InvalidFrame("UdpData domain truncated".into()));
+                    }
+                    (end, payload[6..end].to_vec())
+                }
+                _ => {
+                    return Err(ProtocolError::InvalidAddressType(addr_type));
+                }
+            };
+            if payload.len() < addr_end + 2 {
+                return Err(ProtocolError::InvalidFrame("UdpData dest_port truncated".into()));
+            }
+            let dest_port = u16::from_be_bytes([payload[addr_end], payload[addr_end + 1]]);
+            let udp_payload = payload[addr_end + 2..].to_vec();
+            Ok(Command::UdpData {
+                assoc_id,
+                frag,
+                addr_type,
+                dest_addr,
+                dest_port,
+                payload: udp_payload,
+            })
+        }
+        CMD_SPEED_TEST => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("SpeedTest too short".into()));
+            }
+            Ok(Command::SpeedTest {
+                direction: payload[0],
+                duration_secs: payload[1],
+                data: payload[2..].to_vec(),
+            })
+        }
+        CMD_DNS_QUERY => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("DnsQuery too short".into()));
+            }
+            let query_id = u16::from_be_bytes([payload[0], payload[1]]);
+            Ok(Command::DnsQuery {
+                query_id,
+                data: payload[2..].to_vec(),
+            })
+        }
+        CMD_DNS_RESPONSE => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("DnsResponse too short".into()));
+            }
+            let query_id = u16::from_be_bytes([payload[0], payload[1]]);
+            Ok(Command::DnsResponse {
+                query_id,
+                data: payload[2..].to_vec(),
+            })
+        }
+        CMD_CHALLENGE_RESP => {
+            if payload.len() < 32 {
+                return Err(ProtocolError::InvalidFrame("ChallengeResponse too short".into()));
+            }
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&payload[..32]);
+            Ok(Command::ChallengeResponse { hash })
         }
         _ => Err(ProtocolError::InvalidCommand(cmd)),
     }
@@ -376,12 +839,12 @@ pub fn decrypt_frame(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::PROTOCOL_VERSION;
+    use crate::types::{PROTOCOL_VERSION, PROTOCOL_VERSION_V2};
 
     #[test]
     fn test_client_hello_round_trip() {
         let msg = ClientHello {
-            version: PROTOCOL_VERSION,
+            version: PROTOCOL_VERSION_V2,
             client_ephemeral_pub: [0xAA; 32],
             timestamp: 1234567890,
             padding: vec![0x00, 0x05, 1, 2, 3, 4, 5],
@@ -429,11 +892,131 @@ mod tests {
         let msg = ServerAccept {
             status: AcceptStatus::Ok,
             session_id: uuid::Uuid::nil(),
+            padding_range: None,
         };
         let encoded = encode_server_accept(&msg);
         let decoded = decode_server_accept(&encoded).unwrap();
         assert_eq!(decoded.status, msg.status);
         assert_eq!(decoded.session_id, msg.session_id);
+        assert_eq!(decoded.padding_range, None);
+    }
+
+    #[test]
+    fn test_server_accept_v2_round_trip() {
+        use crate::types::PaddingRange;
+        let msg = ServerAccept {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            padding_range: Some(PaddingRange::new(10, 200)),
+        };
+        let encoded = encode_server_accept(&msg);
+        let decoded = decode_server_accept(&encoded).unwrap();
+        assert_eq!(decoded.status, msg.status);
+        assert_eq!(decoded.session_id, msg.session_id);
+        assert_eq!(decoded.padding_range, Some(PaddingRange::new(10, 200)));
+    }
+
+    #[test]
+    fn test_client_init_round_trip() {
+        let msg = ClientInit {
+            version: PROTOCOL_VERSION,
+            flags: 0,
+            client_ephemeral_pub: [0xAA; 32],
+            client_id: ClientId(uuid::Uuid::nil()),
+            timestamp: 1700000000,
+            cipher_suite: CipherSuite::ChaCha20Poly1305,
+            auth_token: [0xBB; 32],
+            padding: vec![1, 2, 3],
+        };
+        let encoded = encode_client_init(&msg);
+        let decoded = decode_client_init(&encoded).unwrap();
+        assert_eq!(decoded.version, msg.version);
+        assert_eq!(decoded.flags, msg.flags);
+        assert_eq!(decoded.client_ephemeral_pub, msg.client_ephemeral_pub);
+        assert_eq!(decoded.client_id, msg.client_id);
+        assert_eq!(decoded.timestamp, msg.timestamp);
+        assert_eq!(decoded.cipher_suite, msg.cipher_suite);
+        assert_eq!(decoded.auth_token, msg.auth_token);
+        assert_eq!(decoded.padding, msg.padding);
+    }
+
+    #[test]
+    fn test_server_init_round_trip() {
+        let msg = ServerInit {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            server_ephemeral_pub: [0xCC; 32],
+            challenge: [0xDD; 32],
+            padding_min: 10,
+            padding_max: 200,
+            server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
+            session_ticket: vec![1, 2, 3, 4, 5],
+            padding: vec![6, 7, 8],
+        };
+        let encoded = encode_server_init(&msg);
+        let decoded = decode_server_init(&encoded).unwrap();
+        assert_eq!(decoded.status, msg.status);
+        assert_eq!(decoded.session_id, msg.session_id);
+        assert_eq!(decoded.server_ephemeral_pub, msg.server_ephemeral_pub);
+        assert_eq!(decoded.challenge, msg.challenge);
+        assert_eq!(decoded.padding_min, msg.padding_min);
+        assert_eq!(decoded.padding_max, msg.padding_max);
+        assert_eq!(decoded.server_features, msg.server_features);
+        assert_eq!(decoded.session_ticket, msg.session_ticket);
+        assert_eq!(decoded.padding, msg.padding);
+    }
+
+    #[test]
+    fn test_client_resume_round_trip() {
+        let msg = ClientResume {
+            version: PROTOCOL_VERSION,
+            flags: CLIENT_INIT_FLAG_RESUMPTION,
+            client_ephemeral_pub: [0xEE; 32],
+            session_ticket: vec![1, 2, 3, 4, 5],
+            encrypted_0rtt_data: vec![10, 20, 30],
+        };
+        let encoded = encode_client_resume(&msg);
+        let decoded = decode_client_resume(&encoded).unwrap();
+        assert_eq!(decoded.version, msg.version);
+        assert_eq!(decoded.flags, msg.flags);
+        assert_eq!(decoded.client_ephemeral_pub, msg.client_ephemeral_pub);
+        assert_eq!(decoded.session_ticket, msg.session_ticket);
+        assert_eq!(decoded.encrypted_0rtt_data, msg.encrypted_0rtt_data);
+    }
+
+    #[test]
+    fn test_session_ticket_round_trip() {
+        use crate::types::PaddingRange;
+        let ticket = SessionTicket {
+            client_id: ClientId(uuid::Uuid::nil()),
+            session_key: [0xAA; 32],
+            cipher_suite: CipherSuite::Aes256Gcm,
+            issued_at: 1700000000,
+            padding_range: PaddingRange::new(10, 256),
+        };
+        let encoded = encode_session_ticket(&ticket);
+        let decoded = decode_session_ticket(&encoded).unwrap();
+        assert_eq!(decoded.client_id, ticket.client_id);
+        assert_eq!(decoded.session_key, ticket.session_key);
+        assert_eq!(decoded.cipher_suite, ticket.cipher_suite);
+        assert_eq!(decoded.issued_at, ticket.issued_at);
+        assert_eq!(decoded.padding_range, ticket.padding_range);
+    }
+
+    #[test]
+    fn test_padded_data_frame_round_trip() {
+        use crate::types::PaddingRange;
+        let frame = DataFrame {
+            command: Command::Data(vec![1, 2, 3, 4, 5]),
+            flags: FLAG_PADDED,
+            stream_id: 42,
+        };
+        let range = PaddingRange::new(10, 50);
+        let encoded = encode_data_frame_padded(&frame, &range);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+        assert_eq!(decoded.stream_id, frame.stream_id);
     }
 
     #[test]
@@ -507,6 +1090,51 @@ mod tests {
             let decoded = decode_data_frame(&encoded).unwrap();
             assert_eq!(decoded.command, frame.command);
         }
+    }
+
+    #[test]
+    fn test_v3_command_challenge_response_round_trip() {
+        let frame = DataFrame {
+            command: Command::ChallengeResponse { hash: [0xAA; 32] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_v3_command_dns_round_trip() {
+        let frame = DataFrame {
+            command: Command::DnsQuery { query_id: 42, data: vec![1, 2, 3] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+
+        let frame = DataFrame {
+            command: Command::DnsResponse { query_id: 42, data: vec![4, 5, 6] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_v3_command_speed_test_round_trip() {
+        let frame = DataFrame {
+            command: Command::SpeedTest { direction: 0, duration_secs: 10, data: vec![0xFF; 100] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
     }
 
     #[test]

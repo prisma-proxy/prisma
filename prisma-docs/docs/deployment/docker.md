@@ -4,31 +4,33 @@ sidebar_position: 2
 
 # Docker
 
-:::info
-Docker support is planned. This page outlines the intended approach.
-:::
+## Multi-stage build
 
-## Multi-stage build outline
-
-The Docker image will use a multi-stage build to keep the final image minimal:
+The Docker image uses a multi-stage build: Node.js builds the dashboard as static files, Rust builds the server binary, and the final image is a minimal Debian runtime with both.
 
 ```dockerfile
-# Stage 1: Build
-FROM rust:1.82 AS builder
-WORKDIR /app
+FROM node:22-slim AS dashboard
+WORKDIR /dashboard
+COPY prisma-dashboard/package.json prisma-dashboard/package-lock.json ./
+RUN npm ci
+COPY prisma-dashboard/ ./
+RUN npm run build
+
+FROM rust:1-bookworm AS builder
+WORKDIR /src
 COPY . .
 RUN cargo build --release -p prisma-cli
 
-# Stage 2: Runtime
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/prisma /usr/local/bin/prisma
-RUN useradd --system --no-create-home prisma
-USER prisma
+COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
+COPY --from=dashboard /dashboard/out /opt/prisma/dashboard
 ENTRYPOINT ["prisma"]
 ```
 
-## Planned usage
+The built dashboard is placed at `/opt/prisma/dashboard` inside the container. Configure `dashboard_dir` in your server config to serve it.
+
+## Usage
 
 ### Server
 
@@ -37,10 +39,23 @@ docker run -d \
   --name prisma-server \
   -p 8443:8443/tcp \
   -p 8443:8443/udp \
-  -v /path/to/server.toml:/etc/prisma/server.toml:ro \
-  -v /path/to/certs:/etc/prisma/certs:ro \
-  prisma server -c /etc/prisma/server.toml
+  -p 9090:9090/tcp \
+  -v /path/to/server.toml:/config/server.toml:ro \
+  -v /path/to/certs:/config/certs:ro \
+  prisma server -c /config/server.toml
 ```
+
+Example `server.toml` for Docker:
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "0.0.0.0:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "/opt/prisma/dashboard"
+```
+
+Access the dashboard at `http://<host>:9090/`.
 
 ### Client
 
@@ -49,8 +64,8 @@ docker run -d \
   --name prisma-client \
   -p 1080:1080 \
   -p 8080:8080 \
-  -v /path/to/client.toml:/etc/prisma/client.toml:ro \
-  prisma client -c /etc/prisma/client.toml
+  -v /path/to/client.toml:/config/client.toml:ro \
+  prisma client -c /config/client.toml
 ```
 
 ## Docker Compose
@@ -59,12 +74,13 @@ docker run -d \
 services:
   prisma-server:
     build: .
-    command: server -c /etc/prisma/server.toml
+    command: server -c /config/server.toml
     ports:
       - "8443:8443/tcp"
       - "8443:8443/udp"
+      - "9090:9090/tcp"
     volumes:
-      - ./server.toml:/etc/prisma/server.toml:ro
-      - ./certs:/etc/prisma/certs:ro
+      - ./server.toml:/config/server.toml:ro
+      - ./certs:/config/certs:ro
     restart: unless-stopped
 ```

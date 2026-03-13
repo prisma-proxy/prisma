@@ -19,6 +19,21 @@ uuid = { workspace = true }
 webpki-roots = "0.26"
 tokio-rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+http = "1"
+futures-util = { workspace = true }
+tokio-stream = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }
+rand = { workspace = true }
+blake3 = { workspace = true }
+smoltcp = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+wintun = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

@@ -9,17 +9,16 @@ use tracing::{info, warn};
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::ServerConfig;
 
-use prisma_core::state::ServerState;
-
 use crate::auth::AuthStore;
 use crate::camouflage;
 use crate::handler;
+use crate::state::ServerContext;
 
 pub async fn listen(
     config: &ServerConfig,
     auth: AuthStore,
     dns_cache: DnsCache,
-    state: ServerState,
+    ctx: ServerContext,
 ) -> Result<()> {
     let listener = TcpListener::bind(&config.listen_addr).await?;
     let max_conn = config.performance.max_connections as usize;
@@ -53,16 +52,16 @@ pub async fn listen(
                 let auth = auth.clone();
                 let dns = dns_cache.clone();
                 let fwd = config.port_forwarding.clone();
-                let state = state.clone();
+                let ctx = ctx.clone();
                 let tls_acceptor = tls_acceptor.clone();
                 let fallback_addr = fallback_addr.clone();
                 tokio::spawn(async move {
                     info!(peer = %peer_addr, "New TCP connection");
-                    state
+                    ctx.state
                         .metrics
                         .total_connections
                         .fetch_add(1, Ordering::Relaxed);
-                    state
+                    ctx.state
                         .metrics
                         .active_connections
                         .fetch_add(1, Ordering::Relaxed);
@@ -76,7 +75,7 @@ pub async fn listen(
                                     auth,
                                     dns,
                                     fwd,
-                                    state.clone(),
+                                    ctx.clone(),
                                     peer_addr.to_string(),
                                     fallback_addr,
                                 )
@@ -94,7 +93,7 @@ pub async fn listen(
                             auth,
                             dns,
                             fwd,
-                            state.clone(),
+                            ctx.clone(),
                             peer_addr.to_string(),
                             fallback_addr,
                         )
@@ -106,7 +105,7 @@ pub async fn listen(
                             auth,
                             dns,
                             fwd,
-                            state.clone(),
+                            ctx.clone(),
                             peer_addr.to_string(),
                         )
                         .await
@@ -115,7 +114,7 @@ pub async fn listen(
                     if let Err(e) = result {
                         warn!(peer = %peer_addr, error = %e, "Connection handler error");
                     }
-                    state
+                    ctx.state
                         .metrics
                         .active_connections
                         .fetch_sub(1, Ordering::Relaxed);

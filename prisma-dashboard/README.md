@@ -1,41 +1,35 @@
 # Prisma Dashboard
 
-Real-time web dashboard for monitoring and managing the [Prisma](https://github.com/Yamimega/prisma) proxy server.
+Real-time web dashboard for monitoring and managing the [Prisma](https://github.com/Yamimega/prisma) proxy server. Built as a static site and served directly by the Prisma server.
 
-## Prerequisites
-
-- Node.js 18+
-- A running Prisma server with the management API enabled (`management_api.enabled = true`)
-
-## Setup
+## Build
 
 ```bash
-npm install
+npm ci
+npm run build
 ```
 
-Create `.env.local`:
+Static files are output to `out/`. Configure the server to serve them:
 
-```env
-MGMT_API_URL=http://127.0.0.1:9090
-MGMT_API_TOKEN=your-secure-token-here
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your-dashboard-password
-AUTH_SECRET=$(openssl rand -base64 32)
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "./prisma-dashboard/out"
 ```
+
+Then access the dashboard at `http://127.0.0.1:9090/`. Log in using the `auth_token` from your server config.
 
 ## Development
 
 ```bash
+npm install
 npm run dev
 # → http://localhost:3000
 ```
 
-## Production
-
-```bash
-npm run build
-npm start
-```
+During development, the dashboard connects to the management API on the same origin. Start the Prisma server with the management API enabled and configure `cors_origins` if running the dev server on a different port.
 
 ## Pages
 
@@ -50,8 +44,7 @@ npm start
 
 ## Tech Stack
 
-- [Next.js 16](https://nextjs.org/) (App Router + Turbopack)
+- [Next.js 16](https://nextjs.org/) (App Router, static export)
 - [shadcn/ui](https://ui.shadcn.com/) (component library)
 - [Recharts](https://recharts.org/) (traffic charts)
 - [TanStack Query](https://tanstack.com/query) (data fetching)
-- [NextAuth v5](https://authjs.dev/) (authentication)

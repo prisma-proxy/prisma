@@ -1,6 +1,6 @@
 mod auth;
 mod handlers;
-mod router;
+pub mod router;
 mod ws;
 
 use anyhow::Result;

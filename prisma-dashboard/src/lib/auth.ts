@@ -1,30 +1,18 @@
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
+const TOKEN_KEY = "prisma_auth_token";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
-    Credentials({
-      name: "Prisma Admin",
-      credentials: {
-        username: { label: "Username", type: "text" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const adminUser = process.env.ADMIN_USERNAME || "admin";
-        const adminPass = process.env.ADMIN_PASSWORD || "admin";
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(TOKEN_KEY);
+}
 
-        if (
-          credentials?.username === adminUser &&
-          credentials?.password === adminPass
-        ) {
-          return { id: "1", name: "Admin", email: "admin@prisma.local" };
-        }
-        return null;
-      },
-    }),
-  ],
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
-});
+export function setToken(token: string) {
+  sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+export function isAuthenticated(): boolean {
+  return !!getToken();
+}

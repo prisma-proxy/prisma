@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
 import { Input } from "@/components/ui/input";
@@ -10,22 +10,43 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function ClientDetailPage() {
-  const params = useParams<{ id: string }>();
+export default function ClientEditPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12"><p className="text-sm text-muted-foreground">Loading...</p></div>}>
+      <ClientEditInner />
+    </Suspense>
+  );
+}
+
+function ClientEditInner() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") ?? "";
   const router = useRouter();
   const { data: clients, isLoading } = useClients();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
 
-  const client = clients?.find((c) => c.id === params.id);
+  const client = clients?.find((c) => c.id === id);
 
   const [name, setName] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Use local state if set, otherwise fall back to server data
   const currentName = name ?? client?.name ?? "";
   const currentEnabled = enabled ?? client?.enabled ?? true;
+
+  if (!id) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">No client ID specified.</p>
+        <Link href="/dashboard/clients/">
+          <Button variant="outline" size="sm">
+            Back to clients
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -39,7 +60,7 @@ export default function ClientDetailPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">Client not found.</p>
-        <Link href="/dashboard/clients">
+        <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
             Back to clients
           </Button>
@@ -51,7 +72,7 @@ export default function ClientDetailPage() {
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     updateClient.mutate(
-      { id: params.id, data: { name: currentName, enabled: currentEnabled } },
+      { id, data: { name: currentName, enabled: currentEnabled } },
       {
         onSuccess: () => {
           setName(null);
@@ -66,9 +87,9 @@ export default function ClientDetailPage() {
       setConfirmDelete(true);
       return;
     }
-    deleteClient.mutate(params.id, {
+    deleteClient.mutate(id, {
       onSuccess: () => {
-        router.push("/dashboard/clients");
+        router.push("/dashboard/clients/");
       },
     });
   }
@@ -76,7 +97,7 @@ export default function ClientDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/clients">
+        <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
             Back to clients
           </Button>

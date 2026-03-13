@@ -1,13 +1,52 @@
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
 // Protocol constants
-pub const PROTOCOL_VERSION: u8 = 0x01;
+pub const PROTOCOL_VERSION: u8 = 0x03;
+pub const PROTOCOL_VERSION_V2: u8 = 0x02;
+pub const PROTOCOL_VERSION_V1: u8 = 0x01;
 pub const MAX_FRAME_SIZE: usize = 16384;
 pub const NONCE_SIZE: usize = 12;
 pub const MAX_PADDING_SIZE: usize = 256;
+pub const QUIC_ALPN: &str = "prisma-v3";
+pub const QUIC_ALPN_V2: &str = "prisma-v2";
+
+// Session ticket constants
+pub const SESSION_TICKET_KEY_SIZE: usize = 32;
+pub const SESSION_TICKET_MAX_AGE_SECS: u64 = 86400; // 24 hours
+
+/// Configurable padding range for per-frame padding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PaddingRange {
+    pub min: u16,
+    pub max: u16,
+}
+
+impl Default for PaddingRange {
+    fn default() -> Self {
+        DEFAULT_PADDING_RANGE
+    }
+}
+
+impl PaddingRange {
+    pub fn new(min: u16, max: u16) -> Self {
+        Self { min, max }
+    }
+
+    /// Generate a random padding length within this range.
+    pub fn random_in_range(&self) -> usize {
+        if self.max <= self.min {
+            return self.min as usize;
+        }
+        let mut rng = rand::thread_rng();
+        rng.gen_range(self.min..=self.max) as usize
+    }
+}
+
+pub const DEFAULT_PADDING_RANGE: PaddingRange = PaddingRange { min: 0, max: 256 };
 
 /// Unique client identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

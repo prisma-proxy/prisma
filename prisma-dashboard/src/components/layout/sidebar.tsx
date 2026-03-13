@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Clients", href: "/dashboard/clients", icon: Users },
-  { label: "Routing", href: "/dashboard/routing", icon: Route },
-  { label: "Logs", href: "/dashboard/logs", icon: ScrollText },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Overview", href: "/dashboard/", icon: LayoutDashboard },
+  { label: "Clients", href: "/dashboard/clients/", icon: Users },
+  { label: "Routing", href: "/dashboard/routing/", icon: Route },
+  { label: "Logs", href: "/dashboard/logs/", icon: ScrollText },
+  { label: "Settings", href: "/dashboard/settings/", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -29,10 +29,9 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map(({ label, href, icon: Icon }) => {
+          const base = href.replace(/\/$/, "");
           const isActive =
-            href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(href);
+            pathname === base || pathname.startsWith(base + "/");
 
           return (
             <Link

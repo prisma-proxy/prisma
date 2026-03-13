@@ -15,7 +15,7 @@ Add the `[management_api]` section to your `server.toml`:
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-cors_origins = ["http://localhost:3000"]
+dashboard_dir = "/opt/prisma/dashboard"  # optional: serve built dashboard
 ```
 
 ## Authentication

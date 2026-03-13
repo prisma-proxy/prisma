@@ -6,6 +6,7 @@ use axum::response::Response;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 
 use prisma_core::config::server::ManagementApiConfig;
 use prisma_core::state::ServerState;
@@ -72,5 +73,16 @@ pub fn build_router(config: ManagementApiConfig, state: ServerState) -> Router {
             }
         }));
 
-    api.layer(cors).with_state(state)
+    let mut app = api;
+
+    if let Some(ref dir) = config.dashboard_dir {
+        tracing::info!(dashboard_dir = %dir, "Serving dashboard static files");
+        let index_path = std::path::PathBuf::from(dir).join("index.html");
+        let serve_dir = ServeDir::new(dir)
+            .append_index_html_on_directories(true)
+            .fallback(ServeFile::new(&index_path));
+        app = app.fallback_service(serve_dir);
+    }
+
+    app.layer(cors).with_state(state)
 }

@@ -15,7 +15,7 @@ export default function ClientsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Registered Clients</h2>
-        <Link href="/dashboard/clients/new">
+        <Link href="/dashboard/clients/new/">
           <Button>Add Client</Button>
         </Link>
       </div>

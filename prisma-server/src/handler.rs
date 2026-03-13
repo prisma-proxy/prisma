@@ -6,10 +6,11 @@ use chrono::Utc;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::{PortForwardingConfig, RuleAction, RuleCondition};
 use prisma_core::crypto::aead::create_cipher;
+use prisma_core::crypto::kdf::derive_ticket_key;
 use prisma_core::protocol::codec::*;
-use prisma_core::protocol::handshake::ServerHandshake;
+use prisma_core::protocol::handshake::{ServerHandshake, ServerHandshakeV3};
 use prisma_core::protocol::types::*;
-use prisma_core::types::{ProxyAddress, ProxyDestination};
+use prisma_core::types::{PaddingRange, ProxyAddress, ProxyDestination, PROTOCOL_VERSION};
 use prisma_core::util;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -22,6 +23,11 @@ use crate::camouflage;
 use crate::forward;
 use crate::outbound;
 use crate::relay;
+use crate::state::ServerContext;
+use crate::udp_relay;
+
+/// Default server features bitmask.
+const DEFAULT_SERVER_FEATURES: u32 = FEATURE_UDP_RELAY | FEATURE_SPEED_TEST | FEATURE_DNS_TUNNEL;
 
 /// Handle an incoming TCP connection through the PrismaVeil protocol.
 pub async fn handle_tcp_connection(
@@ -29,15 +35,19 @@ pub async fn handle_tcp_connection(
     auth: AuthStore,
     dns_cache: DnsCache,
     forward_config: PortForwardingConfig,
-    state: ServerState,
+    ctx: ServerContext,
     peer_addr: String,
 ) -> Result<()> {
+    let padding_range = {
+        let cfg = ctx.state.config.read().await;
+        PaddingRange::new(cfg.padding.min, cfg.padding.max)
+    };
     let session_keys = {
         let (mut read, mut write) = stream.split();
-        match perform_handshake(&mut read, &mut write, &auth).await {
+        match perform_handshake(&mut read, &mut write, &auth, padding_range, &ctx.state).await {
             Ok(keys) => keys,
             Err(e) => {
-                state
+                ctx.state
                     .metrics
                     .handshake_failures
                     .fetch_add(1, Ordering::Relaxed);
@@ -57,7 +67,7 @@ pub async fn handle_tcp_connection(
         &auth,
         dns_cache,
         forward_config,
-        state,
+        ctx,
     )
     .await
 }
@@ -70,13 +80,14 @@ pub async fn handle_tcp_connection_camouflaged<S>(
     auth: AuthStore,
     dns_cache: DnsCache,
     forward_config: PortForwardingConfig,
-    state: ServerState,
+    ctx: ServerContext,
     peer_addr: String,
     fallback_addr: Option<String>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    let state = &ctx.state;
     // Peek first 3 bytes with a timeout
     let mut peek = [0u8; 3];
     match tokio::time::timeout(
@@ -104,7 +115,7 @@ where
         return Ok(());
     }
 
-    // It looks like Prisma: read the rest of the ClientHello frame
+    // It looks like Prisma: read the rest of the ClientHello/ClientInit frame
     let frame_len = u16::from_be_bytes([peek[0], peek[1]]) as usize;
     let mut client_hello_buf = vec![0u8; frame_len];
     // The first byte after length prefix is peek[2] (version byte)
@@ -113,56 +124,110 @@ where
         stream.read_exact(&mut client_hello_buf[1..]).await?;
     }
 
-    let (server_hello_bytes, server_state) =
-        match ServerHandshake::process_client_hello(&client_hello_buf) {
-            Ok(result) => result,
-            Err(e) => {
-                // Invalid ClientHello — relay to decoy with reconstructed frame
-                warn!(error = %e, "Invalid ClientHello in camouflaged connection");
-                if let Some(ref fallback) = fallback_addr {
-                    let mut frame_bytes = Vec::with_capacity(2 + frame_len);
-                    frame_bytes.extend_from_slice(&peek[0..2]);
-                    frame_bytes.extend_from_slice(&client_hello_buf);
-                    let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
+    let padding_range = {
+        let cfg = state.config.read().await;
+        PaddingRange::new(cfg.padding.min, cfg.padding.max)
+    };
+
+    let version = client_hello_buf[0];
+
+    if version == PROTOCOL_VERSION {
+        // v3 handshake: 2-step ClientInit → ServerInit
+        let ticket_key = derive_ticket_key_from_state(&state).await;
+        let (server_init_bytes, server_state) =
+            match ServerHandshakeV3::process_client_init(
+                &client_hello_buf,
+                padding_range,
+                DEFAULT_SERVER_FEATURES,
+                &ticket_key,
+                &auth,
+            ) {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!(error = %e, "v3 ClientInit processing failed");
+                    state.metrics.handshake_failures.fetch_add(1, Ordering::Relaxed);
+                    if let Some(ref fallback) = fallback_addr {
+                        let mut frame_bytes = Vec::with_capacity(2 + frame_len);
+                        frame_bytes.extend_from_slice(&peek[0..2]);
+                        frame_bytes.extend_from_slice(&client_hello_buf);
+                        let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
+                    }
+                    return Ok(());
                 }
-                return Ok(());
-            }
-        };
+            };
 
-    util::write_framed(&mut stream, &server_hello_bytes).await?;
+        util::write_framed(&mut stream, &server_init_bytes).await?;
 
-    let client_auth_buf = util::read_framed(&mut stream).await?;
+        // v3: handshake is complete after ServerInit. Session keys are ready.
+        // The client's first data frame must be a ChallengeResponse.
+        let session_keys = server_state.into_session_keys();
 
-    let (accept_bytes, session_keys) =
-        match server_state.process_client_auth(&client_auth_buf, &auth) {
-            Ok(result) => result,
-            Err(e) => {
-                state
-                    .metrics
-                    .handshake_failures
-                    .fetch_add(1, Ordering::Relaxed);
-                // Auth failure inside TLS is indistinguishable from a normal HTTPS close
-                return Err(e.into());
-            }
-        };
+        info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged, v3)");
 
-    util::write_framed(&mut stream, &accept_bytes).await?;
+        let (read, write) = tokio::io::split(stream);
+        run_registered_session_v3(
+            session_keys,
+            read,
+            write,
+            Transport::Tcp,
+            peer_addr,
+            &auth,
+            dns_cache,
+            forward_config,
+            ctx,
+        )
+        .await
+    } else {
+        // v1/v2 handshake: 4-step
+        let (server_hello_bytes, server_state) =
+            match ServerHandshake::process_client_hello_with_padding(&client_hello_buf, padding_range) {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!(error = %e, "Invalid ClientHello in camouflaged connection");
+                    if let Some(ref fallback) = fallback_addr {
+                        let mut frame_bytes = Vec::with_capacity(2 + frame_len);
+                        frame_bytes.extend_from_slice(&peek[0..2]);
+                        frame_bytes.extend_from_slice(&client_hello_buf);
+                        let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
+                    }
+                    return Ok(());
+                }
+            };
 
-    info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged)");
+        util::write_framed(&mut stream, &server_hello_bytes).await?;
 
-    let (read, write) = tokio::io::split(stream);
-    run_registered_session(
-        session_keys,
-        read,
-        write,
-        Transport::Tcp,
-        peer_addr,
-        &auth,
-        dns_cache,
-        forward_config,
-        state,
-    )
-    .await
+        let client_auth_buf = util::read_framed(&mut stream).await?;
+
+        let (accept_bytes, session_keys) =
+            match server_state.process_client_auth(&client_auth_buf, &auth) {
+                Ok(result) => result,
+                Err(e) => {
+                    state
+                        .metrics
+                        .handshake_failures
+                        .fetch_add(1, Ordering::Relaxed);
+                    return Err(e.into());
+                }
+            };
+
+        util::write_framed(&mut stream, &accept_bytes).await?;
+
+        info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged)");
+
+        let (read, write) = tokio::io::split(stream);
+        run_registered_session(
+            session_keys,
+            read,
+            write,
+            Transport::Tcp,
+            peer_addr,
+            &auth,
+            dns_cache,
+            forward_config,
+            ctx,
+        )
+        .await
+    }
 }
 
 /// Handle an incoming QUIC bidirectional stream.
@@ -172,40 +237,63 @@ pub async fn handle_quic_stream(
     auth: AuthStore,
     dns_cache: DnsCache,
     forward_config: PortForwardingConfig,
-    state: ServerState,
+    ctx: ServerContext,
     peer_addr: String,
 ) -> Result<()> {
-    let session_keys = match perform_handshake(&mut recv, &mut send, &auth).await {
+    let padding_range = {
+        let cfg = ctx.state.config.read().await;
+        PaddingRange::new(cfg.padding.min, cfg.padding.max)
+    };
+    let session_keys = match perform_handshake(&mut recv, &mut send, &auth, padding_range, &ctx.state).await {
         Ok(keys) => keys,
         Err(e) => {
-            state
+            ctx.state
                 .metrics
                 .handshake_failures
                 .fetch_add(1, Ordering::Relaxed);
             return Err(e);
         }
     };
-    info!(session_id = %session_keys.session_id, "Handshake complete (QUIC)");
 
-    run_registered_session(
-        session_keys,
-        recv,
-        send,
-        Transport::Quic,
-        peer_addr,
-        &auth,
-        dns_cache,
-        forward_config,
-        state,
-    )
-    .await
+    if session_keys.protocol_version == PROTOCOL_VERSION {
+        info!(session_id = %session_keys.session_id, "Handshake complete (QUIC, v3)");
+        run_registered_session_v3(
+            session_keys,
+            recv,
+            send,
+            Transport::Quic,
+            peer_addr,
+            &auth,
+            dns_cache,
+            forward_config,
+            ctx,
+        )
+        .await
+    } else {
+        info!(session_id = %session_keys.session_id, "Handshake complete (QUIC)");
+        run_registered_session(
+            session_keys,
+            recv,
+            send,
+            Transport::Quic,
+            peer_addr,
+            &auth,
+            dns_cache,
+            forward_config,
+            ctx,
+        )
+        .await
+    }
 }
 
 /// Unified handshake over any AsyncRead + AsyncWrite pair.
+/// Detects protocol version and uses appropriate handshake flow.
 async fn perform_handshake<R, W>(
     reader: &mut R,
     writer: &mut W,
     auth: &AuthStore,
+    padding_range: PaddingRange,
+    state: &ServerState,
 ) -> Result<SessionKeys>
 where
     R: AsyncReadExt + Unpin,
@@ -213,21 +301,56 @@ where
 {
     let client_hello_buf = util::read_framed(reader).await?;
 
-    let (server_hello_bytes, server_state) =
-        ServerHandshake::process_client_hello(&client_hello_buf)?;
+    if client_hello_buf.is_empty() {
+        return Err(anyhow::anyhow!("Empty client hello"));
+    }
 
-    util::write_framed(writer, &server_hello_bytes).await?;
+    let version = client_hello_buf[0];
 
-    let client_auth_buf = util::read_framed(reader).await?;
+    if version == PROTOCOL_VERSION {
+        // v3 handshake: 2-step
+        let ticket_key = derive_ticket_key_from_state(state).await;
+        let (server_init_bytes, server_state) = ServerHandshakeV3::process_client_init(
+            &client_hello_buf,
+            padding_range,
+            DEFAULT_SERVER_FEATURES,
+            &ticket_key,
+            auth,
+        )?;
 
-    let (accept_bytes, session_keys) = server_state.process_client_auth(&client_auth_buf, auth)?;
+        util::write_framed(writer, &server_init_bytes).await?;
 
-    util::write_framed(writer, &accept_bytes).await?;
+        Ok(server_state.into_session_keys())
+    } else {
+        // v1/v2 handshake: 4-step
+        let (server_hello_bytes, server_state) =
+            ServerHandshake::process_client_hello_with_padding(&client_hello_buf, padding_range)?;
 
-    Ok(session_keys)
+        util::write_framed(writer, &server_hello_bytes).await?;
+
+        let client_auth_buf = util::read_framed(reader).await?;
+
+        let (accept_bytes, session_keys) = server_state.process_client_auth(&client_auth_buf, auth)?;
+
+        util::write_framed(writer, &accept_bytes).await?;
+
+        Ok(session_keys)
+    }
 }
 
-/// Register a session in state, run it, then clean up on exit.
+/// Derive a ticket key from server state (uses first authorized client's secret as seed).
+async fn derive_ticket_key_from_state(state: &ServerState) -> [u8; 32] {
+    let auth_store = state.auth_store.read().await;
+    // Use a deterministic seed from server config
+    if let Some(entry) = auth_store.clients.values().next() {
+        derive_ticket_key(&entry.auth_secret)
+    } else {
+        // Fallback: all zeros (should not happen in production)
+        [0u8; 32]
+    }
+}
+
+/// Register a session in state, run it, then clean up on exit (v1/v2).
 async fn run_registered_session<R, W>(
     session_keys: SessionKeys,
     read: R,
@@ -237,7 +360,7 @@ async fn run_registered_session<R, W>(
     auth: &AuthStore,
     dns_cache: DnsCache,
     forward_config: PortForwardingConfig,
-    state: ServerState,
+    ctx: ServerContext,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -267,7 +390,7 @@ where
         bytes_down: bytes_down.clone(),
     };
     let session_id = session_keys.session_id;
-    state
+    ctx.state
         .connections
         .write()
         .await
@@ -279,13 +402,13 @@ where
         write,
         dns_cache,
         forward_config,
-        state.clone(),
+        ctx.clone(),
         bytes_up,
         bytes_down,
     )
     .await;
 
-    state.connections.write().await.remove(&session_id);
+    ctx.state.connections.write().await.remove(&session_id);
     match &result {
         Ok(()) => info!(
             session_id = %session_id,
@@ -304,13 +427,92 @@ where
     result
 }
 
-async fn handle_session<R, W>(
+/// Register a v3 session — first data frame must be ChallengeResponse.
+async fn run_registered_session_v3<R, W>(
+    session_keys: SessionKeys,
+    read: R,
+    write: W,
+    transport: Transport,
+    peer_addr: String,
+    auth: &AuthStore,
+    dns_cache: DnsCache,
+    forward_config: PortForwardingConfig,
+    ctx: ServerContext,
+) -> Result<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let client_name = auth.client_name(&session_keys.client_id);
+    let display_name = client_name.clone().unwrap_or_else(|| "unknown".into());
+    info!(
+        client_id = %session_keys.client_id.0,
+        client_name = %display_name,
+        peer = %peer_addr,
+        transport = ?transport,
+        protocol = "v3",
+        "Client connected"
+    );
+
+    let bytes_up = Arc::new(AtomicU64::new(0));
+    let bytes_down = Arc::new(AtomicU64::new(0));
+    let conn_info = ConnectionInfo {
+        session_id: session_keys.session_id,
+        client_id: Some(session_keys.client_id.0),
+        client_name,
+        peer_addr: peer_addr.clone(),
+        transport,
+        mode: SessionMode::Unknown,
+        connected_at: Utc::now(),
+        bytes_up: bytes_up.clone(),
+        bytes_down: bytes_down.clone(),
+    };
+    let session_id = session_keys.session_id;
+    ctx.state
+        .connections
+        .write()
+        .await
+        .insert(session_id, conn_info);
+
+    let result = handle_session_v3(
+        session_keys,
+        read,
+        write,
+        dns_cache,
+        forward_config,
+        ctx.clone(),
+        bytes_up,
+        bytes_down,
+    )
+    .await;
+
+    ctx.state.connections.write().await.remove(&session_id);
+    match &result {
+        Ok(()) => info!(
+            session_id = %session_id,
+            client_name = %display_name,
+            peer = %peer_addr,
+            "Client disconnected"
+        ),
+        Err(e) => warn!(
+            session_id = %session_id,
+            client_name = %display_name,
+            peer = %peer_addr,
+            error = %e,
+            "Client disconnected with error"
+        ),
+    }
+    result
+}
+
+/// v3 session handler: verify challenge response, then proceed as normal.
+async fn handle_session_v3<R, W>(
     session_keys: SessionKeys,
     mut tunnel_read: R,
     tunnel_write: W,
     dns_cache: DnsCache,
     forward_config: PortForwardingConfig,
-    state: ServerState,
+    ctx: ServerContext,
     bytes_up: Arc<AtomicU64>,
     bytes_down: Arc<AtomicU64>,
 ) -> Result<()>
@@ -318,6 +520,62 @@ where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
 {
+    let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
+
+    // First frame must be ChallengeResponse
+    let frame_buf = util::read_framed(&mut tunnel_read).await?;
+    let (plaintext, _nonce) = decrypt_frame(cipher.as_ref(), &frame_buf)?;
+    let frame = decode_data_frame(&plaintext)?;
+
+    match frame.command {
+        Command::ChallengeResponse { hash } => {
+            // Verify challenge response
+            if let Some(ref challenge) = session_keys.challenge {
+                let expected: [u8; 32] = blake3::hash(challenge).into();
+                if !util::ct_eq(&hash, &expected) {
+                    return Err(anyhow::anyhow!("Invalid challenge response"));
+                }
+            } else {
+                return Err(anyhow::anyhow!("No challenge to verify"));
+            }
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Expected ChallengeResponse as first v3 frame, got cmd={}",
+                frame.command.cmd_byte()
+            ));
+        }
+    }
+
+    // Now read the actual first command frame (Connect, RegisterForward, etc.)
+    handle_session(
+        session_keys,
+        tunnel_read,
+        tunnel_write,
+        dns_cache,
+        forward_config,
+        ctx,
+        bytes_up,
+        bytes_down,
+    )
+    .await
+}
+
+async fn handle_session<R, W>(
+    session_keys: SessionKeys,
+    mut tunnel_read: R,
+    tunnel_write: W,
+    dns_cache: DnsCache,
+    forward_config: PortForwardingConfig,
+    ctx: ServerContext,
+    bytes_up: Arc<AtomicU64>,
+    bytes_down: Arc<AtomicU64>,
+) -> Result<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let state = &ctx.state;
     let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
 
     // Read first encrypted frame to determine session mode
@@ -329,7 +587,7 @@ where
     match frame.command {
         Command::Connect(ref dest) => {
             // Check routing rules
-            if !check_routing_rules(&state, dest).await {
+            if !check_routing_rules(state, dest).await {
                 warn!(dest = %dest, "Connection blocked by routing rule");
                 return Err(anyhow::anyhow!("Blocked by routing rule"));
             }
@@ -346,7 +604,10 @@ where
 
             info!(dest = %dest, "Connecting to destination");
             let outbound = outbound::connect(dest, &dns_cache).await?;
-            relay::relay_encrypted(
+
+            // Use rate-limited relay if client has bandwidth/quota config
+            let client_id_str = session_keys.client_id.0.to_string();
+            relay::relay_encrypted_with_limits(
                 tunnel_read,
                 tunnel_write,
                 outbound,
@@ -355,6 +616,9 @@ where
                 state.metrics.clone(),
                 bytes_up,
                 bytes_down,
+                client_id_str,
+                ctx.bandwidth.clone(),
+                ctx.quotas.clone(),
             )
             .await
         }
@@ -385,8 +649,122 @@ where
             )
             .await
         }
+        Command::DnsQuery { query_id, data } => {
+            // Handle encrypted DNS query: forward to upstream DNS and return response
+            let upstream = {
+                let cfg = state.config.read().await;
+                cfg.dns_upstream.clone()
+            };
+            info!(query_id, upstream = %upstream, "Handling DNS tunnel query");
+            let dns_response = match tokio::net::UdpSocket::bind("0.0.0.0:0").await {
+                Ok(sock) => {
+                    let _ = sock.send_to(&data, &upstream).await;
+                    let mut buf = vec![0u8; 4096];
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        sock.recv_from(&mut buf),
+                    )
+                    .await
+                    {
+                        Ok(Ok((n, _))) => buf[..n].to_vec(),
+                        _ => Vec::new(),
+                    }
+                }
+                Err(_) => Vec::new(),
+            };
+            let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
+            let mut session_keys = session_keys;
+            let response_frame = DataFrame {
+                command: Command::DnsResponse {
+                    query_id,
+                    data: dns_response,
+                },
+                flags: 0,
+                stream_id: 0,
+            };
+            let frame_bytes = encode_data_frame(&response_frame);
+            let nonce = session_keys.next_server_nonce();
+            let encrypted = encrypt_frame(cipher.as_ref(), &nonce, &frame_bytes)?;
+            let mut tunnel_write = tunnel_write;
+            let len = (encrypted.len() as u16).to_be_bytes();
+            tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &len).await?;
+            tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &encrypted).await?;
+            Ok(())
+        }
+        Command::SpeedTest { direction, duration_secs, .. } => {
+            info!(direction, duration_secs, "Speed test requested");
+            // Speed test: server sends random data for the specified duration
+            let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
+            let mut session_keys = session_keys;
+            let mut tunnel_write = tunnel_write;
+            if direction == 0 {
+                // Download test: server sends data to client
+                let start = std::time::Instant::now();
+                let duration = std::time::Duration::from_secs(duration_secs as u64);
+                let chunk = vec![0xABu8; 8192];
+                while start.elapsed() < duration {
+                    let frame = DataFrame {
+                        command: Command::Data(chunk.clone()),
+                        flags: 0,
+                        stream_id: 0,
+                    };
+                    let frame_bytes = encode_data_frame(&frame);
+                    let nonce = session_keys.next_server_nonce();
+                    match encrypt_frame(cipher.as_ref(), &nonce, &frame_bytes) {
+                        Ok(encrypted) => {
+                            let len = (encrypted.len() as u16).to_be_bytes();
+                            if tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &len).await.is_err() {
+                                break;
+                            }
+                            if tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &encrypted).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+            // Send close frame to indicate speed test complete
+            let close_frame = DataFrame {
+                command: Command::Close,
+                flags: 0,
+                stream_id: 0,
+            };
+            let frame_bytes = encode_data_frame(&close_frame);
+            let nonce = session_keys.next_server_nonce();
+            if let Ok(encrypted) = encrypt_frame(cipher.as_ref(), &nonce, &frame_bytes) {
+                let len = (encrypted.len() as u16).to_be_bytes();
+                let _ = tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &len).await;
+                let _ = tokio::io::AsyncWriteExt::write_all(&mut tunnel_write, &encrypted).await;
+            }
+            Ok(())
+        }
+        Command::UdpAssociate { .. } => {
+            if let Some(conn) = state
+                .connections
+                .write()
+                .await
+                .get_mut(&session_keys.session_id)
+            {
+                conn.mode = SessionMode::UdpRelay;
+            }
+
+            info!("Client requesting UDP relay mode");
+            udp_relay::run_udp_relay_session(
+                tunnel_read,
+                tunnel_write,
+                cipher,
+                session_keys,
+                frame,
+                state.metrics.clone(),
+                bytes_up,
+                bytes_down,
+                None, // FEC config: negotiated out-of-band or from server config
+            )
+            .await
+        }
         other => Err(anyhow::anyhow!(
-            "Expected Connect or RegisterForward, got cmd={}",
+            "Expected Connect, RegisterForward, or UdpAssociate, got cmd={}",
             other.cmd_byte()
         )),
     }

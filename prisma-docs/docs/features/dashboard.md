@@ -4,67 +4,64 @@ sidebar_position: 5
 
 # Dashboard
 
-The Prisma dashboard is a real-time web interface for monitoring and managing the proxy server. It is built with Next.js 16, shadcn/ui, Recharts, and TanStack Query.
+The Prisma dashboard is a real-time web interface for monitoring and managing the proxy server. It is built as a static site with Next.js 16, shadcn/ui, Recharts, and TanStack Query, and served directly by the Prisma server.
 
 ## Prerequisites
 
-- Node.js 18+
 - A running Prisma server with the [Management API](/docs/features/management-api) enabled
+- Dashboard static files (pre-built or built from source)
 
 ## Setup
 
+### Using pre-built files
+
+Download `prisma-dashboard.tar.gz` from the [latest release](https://github.com/Yamimega/prisma/releases/latest) and extract it:
+
+```bash
+mkdir -p /opt/prisma/dashboard
+tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+```
+
+### Building from source
+
 ```bash
 cd prisma-dashboard
-npm install
-```
-
-Create a `.env.local` file:
-
-```env
-# Management API connection
-MGMT_API_URL=http://127.0.0.1:9090
-MGMT_API_TOKEN=your-secure-token-here
-
-# Dashboard authentication
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your-dashboard-password
-AUTH_SECRET=random-32-byte-secret-for-jwt
-```
-
-Generate `AUTH_SECRET`:
-
-```bash
-openssl rand -base64 32
-```
-
-## Running
-
-```bash
-# Development
-npm run dev
-# → http://localhost:3000
-
-# Production build
+npm ci
 npm run build
-npm start
 ```
+
+Static files are output to `prisma-dashboard/out/`.
+
+### Server configuration
+
+Point the server to the dashboard files in `server.toml`:
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "/opt/prisma/dashboard"  # or "./prisma-dashboard/out"
+```
+
+Start the server and access the dashboard at `http://127.0.0.1:9090/`.
 
 ## Authentication
 
-The dashboard uses NextAuth v5 with a credentials provider. Login credentials are configured via `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables. Sessions use JWT tokens — no database required.
+The dashboard uses token-based authentication. Enter the `management_api.auth_token` from your server config on the login page. The token is stored in the browser's session storage and sent as a `Bearer` token with each API request.
 
-All `/dashboard/*` routes are protected by middleware. Unauthenticated users are redirected to `/login`.
+All `/dashboard/*` routes are protected — unauthenticated users are redirected to `/login`.
 
 ## Architecture
 
-The dashboard never exposes the management API token to the browser. All API calls go through a server-side proxy route:
+The dashboard is built as a static single-page application (SPA) and served by the Prisma server's management API (axum). No separate Node.js process is needed in production.
 
 ```
-Browser → /api/proxy/api/health → Next.js route handler → http://127.0.0.1:9090/api/health
-                                   (adds Bearer token)
+Browser → prisma-server:9090 → static files (dashboard)
+                              → /api/* (REST + WebSocket)
 ```
 
-WebSocket connections for real-time metrics and logs connect directly to the management API. Configure `NEXT_PUBLIC_WS_URL` if the WebSocket endpoint differs from the proxy route.
+API calls from the dashboard go directly to the same-origin management API endpoints. WebSocket connections use a `?token=` query parameter for authentication (since the browser WebSocket API cannot send custom headers).
 
 ## Pages
 
@@ -121,13 +118,20 @@ Server configuration editor:
 - **TLS info** — certificate status and file paths
 - **Camouflage** — current camouflage configuration status (read-only)
 
-## Environment Variables
+## Development
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `MGMT_API_URL` | No | `http://127.0.0.1:9090` | Rust management API URL |
-| `MGMT_API_TOKEN` | Yes | — | Bearer token matching `management_api.auth_token` |
-| `ADMIN_USERNAME` | No | `admin` | Dashboard login username |
-| `ADMIN_PASSWORD` | No | `admin` | Dashboard login password |
-| `AUTH_SECRET` | Yes | — | Secret for signing JWT session tokens |
-| `NEXT_PUBLIC_WS_URL` | No | — | Override WebSocket URL (for custom proxy setups) |
+For local development, you can run the Next.js dev server:
+
+```bash
+cd prisma-dashboard
+npm install
+npm run dev
+# → http://localhost:3000
+```
+
+The dev server expects the Prisma management API running on the same origin or a CORS-enabled address. Configure `cors_origins` in your server config if using a different port:
+
+```toml
+[management_api]
+cors_origins = ["http://localhost:3000"]
+```

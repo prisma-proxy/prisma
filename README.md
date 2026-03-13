@@ -1,43 +1,79 @@
 # Prisma
 
-A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil** wire protocol with modern cryptographic primitives, supporting both QUIC and TCP transports with local SOCKS5 and HTTP CONNECT proxy interfaces.
+A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil v3** wire protocol — combining the best of XHTTP, Hysteria2, and original innovations into the most powerful anti-censorship tunnel available.
 
 ## Features
 
-- **Dual transport** — QUIC (primary) with TCP fallback for UDP-blocked networks
-- **Double encryption** — PrismaVeil encryption inside QUIC/TLS for defense-in-depth
+### Core Protocol
+- **PrismaVeil v3** — 2-step handshake (1 RTT), 0-RTT session resumption with ticket system
 - **Modern cryptography** — X25519 ECDH, BLAKE3 KDF, ChaCha20-Poly1305 / AES-256-GCM AEAD
 - **HMAC-SHA256 authentication** with constant-time verification
-- **Anti-replay protection** via 1024-bit sliding window
-- **Random padding** on handshake messages to resist traffic fingerprinting
-- **Camouflage (anti-active-detection)** — TLS-on-TCP wrapping, decoy fallback for probes, configurable ALPN
-- **SOCKS5 proxy interface** (RFC 1928) for application compatibility
-- **HTTP CONNECT proxy** for browsers and HTTP-aware clients
+- **Anti-replay protection** via 1024-bit sliding window + bloom filter for 0-RTT tickets
+- **Per-frame padding** with negotiated ranges to resist traffic analysis
+
+### Transport
+- **6 transports** — QUIC, TCP, WebSocket, gRPC, XHTTP (3 modes), CDN-compatible
+- **XHTTP modes** — packet-up, stream-up, stream-one with XMUX connection pooling
+- **Double encryption** — PrismaVeil encryption inside QUIC/TLS for defense-in-depth
+
+### Anti-Censorship
+- **Salamander UDP obfuscation** — BLAKE3-derived XOR keystream makes QUIC look like random UDP
+- **HTTP/3 masquerade** — QUIC server serves real websites to browsers; PrismaVeil clients distinguished by ALPN
+- **Port hopping** — deterministic HMAC-based UDP port rotation with grace period
+- **Camouflage** — TLS-on-TCP wrapping, decoy fallback for probes, configurable ALPN
+
+### Performance
+- **3 congestion control modes** — Brutal (Hysteria2-style), BBR, Adaptive (auto-detects throttling)
+- **PrismaUDP** — dedicated UDP relay for games/VoIP via QUIC DATAGRAM extension
+- **FEC (Forward Error Correction)** — Reed-Solomon erasure coding for UDP flows
+- **Connection multiplexing** — XMUX pooling with configurable concurrency
+
+### System-Wide Proxy
+- **TUN mode** — capture all system traffic via virtual network interface
+  - Windows (Wintun driver), Linux (`/dev/net/tun`), macOS (utun)
+  - Userspace TCP/IP stack (smoltcp) for TCP stream extraction
+- **Smart DNS** — 4 modes: direct, smart (GeoSite-based), fake IP (zero DNS leaks), tunnel
+- **Rule-based routing** — domain/domain-suffix/domain-keyword/IP-CIDR/port rules with proxy/direct/block actions
+
+### Operations
+- **SOCKS5 proxy** (RFC 1928) + **HTTP CONNECT proxy** for application compatibility
 - **Port forwarding / reverse proxy** — expose local services through the server (frp-style)
-- **Routing rules engine** — domain/IP/port-based allow/block rules
 - **Management API** — REST + WebSocket API for live monitoring and control
 - **Web dashboard** — real-time Next.js dashboard with metrics, client management, and log streaming
+- **Per-client bandwidth limits** and **traffic quotas** (daily/weekly/monthly)
+- **Speed test** — built-in bandwidth measurement
 - **DNS caching** with async resolution
-- **Connection backpressure** via configurable max connection limits
 - **Structured logging** (pretty or JSON) via `tracing` with broadcast support
 
 ## Architecture
 
 ```
 prisma/
-├── prisma-core/       # Shared library: crypto, protocol, config, types, state
-├── prisma-server/     # Proxy server (TCP + QUIC inbound)
-├── prisma-client/     # Proxy client (SOCKS5 + HTTP CONNECT inbound)
+├── prisma-core/       # Shared library: crypto, protocol, config, DNS, routing, congestion, FEC
+├── prisma-server/     # Proxy server (TCP, QUIC, CDN, WS, gRPC, XHTTP inbound)
+├── prisma-client/     # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
 ├── prisma-mgmt/       # Management API (REST + WebSocket via axum)
-├── prisma-cli/        # CLI wrapper with key/cert generation
+├── prisma-cli/        # CLI wrapper with key/cert generation, init, validate, status
 ├── prisma-dashboard/  # Web dashboard (Next.js + shadcn/ui)
 └── prisma-docs/       # Documentation site (Docusaurus)
 ```
 
-**Data flow — outbound proxy:**
+**Data flow — outbound proxy (SOCKS5/HTTP):**
 
 ```
 Application ──SOCKS5/HTTP──▶ prisma-client ──PrismaVeil/QUIC──▶ prisma-server ──TCP──▶ Destination
+```
+
+**Data flow — TUN mode (system-wide):**
+
+```
+All Apps ──IP packets──▶ TUN device ──smoltcp──▶ prisma-client ──PrismaVeil──▶ prisma-server ──▶ Destination
+```
+
+**Data flow — UDP relay (games/VoIP):**
+
+```
+Game ──UDP──▶ SOCKS5 UDP ASSOCIATE / TUN ──CMD_UDP_DATA──▶ prisma-server ──UDP──▶ Game Server
 ```
 
 **Data flow — port forwarding (reverse proxy):**
@@ -49,7 +85,7 @@ Internet ──TCP──▶ prisma-server:port ──PrismaVeil──▶ prisma-
 **Data flow — management & dashboard:**
 
 ```
-Browser ──HTTP──▶ prisma-dashboard (Next.js) ──REST/WS──▶ prisma-mgmt (axum) ──▶ ServerState
+Browser ──HTTP──▶ prisma-server (axum serves static dashboard + REST/WS API) ──▶ ServerState
 ```
 
 ## Quick Start
@@ -98,17 +134,22 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh |
 ### Prerequisites
 
 - [Rust](https://rustup.rs/) stable toolchain
-- [Node.js](https://nodejs.org/) 18+ (for the dashboard)
+- [Node.js](https://nodejs.org/) 18+ (for building the dashboard)
 - Git
 
 ### Build
 
 ```bash
 git clone https://github.com/Yamimega/prisma.git && cd prisma
+
+# Build the dashboard (static files)
+cd prisma-dashboard && npm ci && npm run build && cd ..
+
+# Build the server + client
 cargo build --release
 ```
 
-Binaries are placed in `target/release/`.
+Binaries are placed in `target/release/`. Dashboard static files are in `prisma-dashboard/out/`.
 
 Or install the CLI directly:
 
@@ -169,12 +210,12 @@ enabled = true
 port_range_start = 10000
 port_range_end = 20000
 
-# Enable management API (for dashboard)
+# Enable management API + dashboard
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-cors_origins = ["http://localhost:3000"]
+dashboard_dir = "./prisma-dashboard/out"  # Path to built dashboard static files
 ```
 
 ### 4. Configure the client
@@ -223,20 +264,23 @@ curl --proxy http://127.0.0.1:8080 https://httpbin.org/ip
 curl http://<server-ip>:10080
 ```
 
-### 6. Run the dashboard (optional)
+### 6. Access the dashboard (optional)
+
+If you configured `dashboard_dir` in the server config, the dashboard is served automatically at the management API address:
+
+```
+http://127.0.0.1:9090
+```
+
+Log in with your `management_api.auth_token` as the API token.
+
+To build the dashboard from source:
 
 ```bash
-cd prisma-dashboard
-npm install
-# Set environment variables
-export MGMT_API_URL=http://127.0.0.1:9090
-export MGMT_API_TOKEN=your-secure-token-here
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=your-dashboard-password
-export AUTH_SECRET=$(openssl rand -base64 32)
-npm run dev
-# Open http://localhost:3000
+cd prisma-dashboard && npm ci && npm run build
 ```
+
+Static files are output to `prisma-dashboard/out/`.
 
 ## Dashboard
 
@@ -253,12 +297,13 @@ The Prisma dashboard provides a real-time web interface for monitoring and manag
 | **Logs** | Real-time log stream with level and target filtering |
 | **Settings** | Edit server config, view TLS info, camouflage status |
 
-**Tech stack:** Next.js 16, shadcn/ui, Recharts, TanStack Query, NextAuth v5
+**Tech stack:** Next.js 16 (static export), shadcn/ui, Recharts, TanStack Query
+
+The dashboard is built as static HTML/JS/CSS and served directly by the Prisma server via the `dashboard_dir` config option. No separate Node.js process is needed in production.
 
 **Data sources:**
 - REST API for CRUD operations (clients, routes, config)
 - WebSocket for real-time push (metrics every 1s, log entries)
-- Server-side API proxy to hide the management API token from the browser
 
 ## Management API
 
@@ -295,7 +340,11 @@ All endpoints require `Authorization: Bearer <auth_token>`.
 | `prisma server` | `-c, --config <PATH>` (default: `server.toml`) | Start the proxy server |
 | `prisma client` | `-c, --config <PATH>` (default: `client.toml`) | Start the proxy client |
 | `prisma gen-key` | — | Generate a new client UUID + auth secret |
-| `prisma gen-cert` | `-o, --output <DIR>` (default: `.`), `--cn <NAME>` (default: `prisma-server`) | Generate self-signed TLS certificate |
+| `prisma gen-cert` | `-o, --output <DIR>`, `--cn <NAME>` | Generate self-signed TLS certificate |
+| `prisma init` | `--mode server\|client` | Interactive config setup |
+| `prisma validate` | `-c, --config <PATH>` | Validate config without starting |
+| `prisma status` | `-c, --config <PATH>` | Check server connectivity |
+| `prisma speed-test` | `--server`, `--token`, `--duration` | Bandwidth measurement |
 
 ## Configuration
 
@@ -320,6 +369,10 @@ Example: `PRISMA_LOGGING_LEVEL=debug` overrides `logging.level`.
 | `authorized_clients[].id` | string | — | Client UUID |
 | `authorized_clients[].auth_secret` | string | — | 64 hex char (32 byte) shared secret |
 | `authorized_clients[].name` | string? | — | Optional client label |
+| `authorized_clients[].bandwidth_up` | string? | — | Upload rate limit (e.g., `"100mbps"`) |
+| `authorized_clients[].bandwidth_down` | string? | — | Download rate limit |
+| `authorized_clients[].quota` | string? | — | Transfer quota (e.g., `"100GB"`) |
+| `authorized_clients[].quota_period` | string? | — | `daily` / `weekly` / `monthly` |
 | `logging.level` | string | `"info"` | `trace` / `debug` / `info` / `warn` / `error` |
 | `logging.format` | string | `"pretty"` | `pretty` / `json` |
 | `performance.max_connections` | u32 | `1024` | Max concurrent connections |
@@ -331,10 +384,26 @@ Example: `PRISMA_LOGGING_LEVEL=debug` overrides `logging.level`.
 | `management_api.listen_addr` | string | `"127.0.0.1:9090"` | Management API bind address |
 | `management_api.auth_token` | string | — | Bearer token for API authentication |
 | `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins |
+| `management_api.dashboard_dir` | string? | — | Path to built dashboard static files |
 | `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |
 | `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS |
 | `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
 | `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
+| `camouflage.h3_cover_site` | string? | — | Upstream URL for HTTP/3 masquerade cover site |
+| `camouflage.h3_static_dir` | string? | — | Local static files for H3 masquerade |
+| `camouflage.salamander_password` | string? | — | Salamander UDP obfuscation password (QUIC) |
+| `congestion.mode` | string | `"bbr"` | `brutal` / `bbr` / `adaptive` |
+| `congestion.target_bandwidth` | string? | — | Target for brutal/adaptive (e.g., `"100mbps"`) |
+| `port_hopping.enabled` | bool | `false` | Enable QUIC port hopping |
+| `port_hopping.base_port` | u16 | `10000` | Start of port range |
+| `port_hopping.port_range` | u16 | `50000` | Number of ports in range |
+| `port_hopping.interval_secs` | u64 | `60` | Seconds between hops |
+| `port_hopping.grace_period_secs` | u64 | `10` | Dual-port acceptance window |
+| `dns_upstream` | string | `"8.8.8.8:53"` | Upstream DNS for CMD_DNS_QUERY |
+| `cdn.xhttp_mode` | string? | — | XHTTP mode: `packet-up` / `stream-up` / `stream-one` |
+| `cdn.xhttp_upload_path` | string | `"/api/v1/upload"` | XHTTP upload endpoint path |
+| `cdn.xhttp_download_path` | string | `"/api/v1/events"` | XHTTP download endpoint path |
+| `cdn.xhttp_stream_path` | string | `"/api/v1/stream"` | XHTTP stream endpoint path |
 
 ### Client config reference
 
@@ -346,26 +415,81 @@ Example: `PRISMA_LOGGING_LEVEL=debug` overrides `logging.level`.
 | `identity.client_id` | string | — | Client UUID (must match server config) |
 | `identity.auth_secret` | string | — | Shared secret (must match server config) |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
-| `transport` | string | `"quic"` | `quic` / `tcp` |
+| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP |
-| `tls_server_name` | string? | — | TLS SNI server name (defaults to server_addr hostname) |
+| `tls_server_name` | string? | — | TLS SNI server name |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
+| `salamander_password` | string? | — | Salamander UDP obfuscation password (QUIC) |
+| `congestion.mode` | string | `"bbr"` | `brutal` / `bbr` / `adaptive` |
+| `congestion.target_bandwidth` | string? | — | Target for brutal/adaptive (e.g., `"100mbps"`) |
+| `port_hopping.enabled` | bool | `false` | Enable QUIC port hopping |
+| `dns.mode` | string | `"direct"` | `smart` / `fake` / `tunnel` / `direct` |
+| `dns.fake_ip_range` | string | `"198.18.0.0/15"` | CIDR range for fake DNS IPs |
+| `tun.enabled` | bool | `false` | Enable TUN mode (system-wide proxy) |
+| `tun.device_name` | string | `"prisma-tun0"` | TUN device name |
+| `tun.mtu` | u16 | `1500` | TUN device MTU |
+| `tun.dns` | string | `"fake"` | TUN DNS mode: `fake` / `tunnel` |
+| `udp_fec.enabled` | bool | `false` | Enable FEC for UDP relay |
+| `udp_fec.data_shards` | usize | `10` | Original packets per FEC group |
+| `udp_fec.parity_shards` | usize | `3` | Parity packets per FEC group |
+| `xhttp_mode` | string? | — | `packet-up` / `stream-up` / `stream-one` |
+| `xmux.max_connections_min/max` | u16 | `1`/`4` | Connection pool size range |
+| `xmux.max_concurrency_min/max` | u16 | `8`/`16` | Per-connection concurrency range |
+| `routing.rules[].type` | string | — | `domain` / `domain-suffix` / `ip-cidr` / `port` / `all` |
+| `routing.rules[].action` | string | `"proxy"` | `proxy` / `direct` / `block` |
 | `port_forwards[].name` | string | — | Label for this port forward |
-| `port_forwards[].local_addr` | string | — | Local service address (e.g. `127.0.0.1:3000`) |
+| `port_forwards[].local_addr` | string | — | Local service address |
 | `port_forwards[].remote_port` | u16 | — | Port to listen on at the server |
 | `logging.level` | string | `"info"` | Log level |
 | `logging.format` | string | `"pretty"` | Log format |
 
-## Camouflage (Anti-Active-Detection)
+## Anti-Censorship Features
 
-Prisma supports camouflage to resist active probing by censorship systems like the GFW. Three layers:
+Prisma provides multiple layers of anti-detection and anti-blocking:
 
-1. **TLS-on-TCP** — Wraps the TCP transport in TLS (reuses existing cert/key), making PrismaVeil traffic look like HTTPS
-2. **Decoy fallback** — Non-Prisma connections (HTTP probes, browsers, GFW probes) are reverse-proxied to a configurable decoy website instead of being dropped
-3. **ALPN customization** — QUIC/TLS ALPN protocols are configurable (default `["h2", "http/1.1"]` instead of `"prisma-v1"`)
+### Salamander UDP Obfuscation
 
-**Server config:**
+Strips QUIC headers and XOR-obfuscates all UDP packets with a BLAKE3-derived keystream. Traffic appears as random bytes on the wire. Cached key derivation avoids per-packet overhead.
+
+```toml
+# Server
+[camouflage]
+salamander_password = "shared-obfuscation-password"
+
+# Client
+salamander_password = "shared-obfuscation-password"
+```
+
+### HTTP/3 Masquerade
+
+The QUIC server serves a real website over HTTP/3 to browsers and active probes. PrismaVeil clients are distinguished by ALPN negotiation (`prisma-v3` vs `h3`).
+
+```toml
+[camouflage]
+h3_cover_site = "https://example.com"    # Reverse-proxy a real site
+# OR
+h3_static_dir = "/var/www/html"          # Serve local static files
+```
+
+### Port Hopping
+
+Server binds a range of UDP ports. Client rotates ports on a deterministic HMAC-based schedule, making it difficult for censors to block a single port.
+
+```toml
+[port_hopping]
+enabled = true
+base_port = 10000
+port_range = 50000
+interval_secs = 60
+grace_period_secs = 10
+```
+
+### Camouflage (TCP)
+
+1. **TLS-on-TCP** — Wraps the TCP transport in TLS, making PrismaVeil traffic look like HTTPS
+2. **Decoy fallback** — Non-Prisma connections are reverse-proxied to a decoy website
+3. **ALPN customization** — Configurable ALPN protocols (default `["h2", "http/1.1"]`)
 
 ```toml
 [camouflage]
@@ -375,12 +499,20 @@ fallback_addr = "example.com:443"
 alpn_protocols = ["h2", "http/1.1"]
 ```
 
-**Client config:**
+### Congestion Control
+
+Three modes to overcome network throttling:
+
+| Mode | Best For |
+|------|----------|
+| **Brutal** | Throttled networks — sends at target rate regardless of loss |
+| **BBR** | Normal networks — probes bandwidth, fair sharing |
+| **Adaptive** | Auto-detects throttling and increases aggressiveness |
 
 ```toml
-tls_on_tcp = true
-tls_server_name = "example.com"
-alpn_protocols = ["h2", "http/1.1"]
+[congestion]
+mode = "adaptive"
+target_bandwidth = "100mbps"
 ```
 
 See [Camouflage documentation](./prisma-docs/docs/features/camouflage.md) for detailed setup instructions.
@@ -440,23 +572,27 @@ Rules are evaluated in priority order (lowest number first). The first matching 
 
 ## Protocol Overview
 
-### PrismaVeil Handshake
+### PrismaVeil v3 Handshake (1 RTT)
 
 ```
 Client                                    Server
   │                                         │
-  │──── ClientHello ──────────────────────▶│  (version, X25519 pubkey, timestamp, padding)
+  │──── ClientInit ─────────────────────▶│  (version=0x03, X25519 pubkey, client_id,
+  │                                         │   timestamp, cipher_suite, auth_token, padding)
   │                                         │
-  │◀──── ServerHello ─────────────────────│  (X25519 pubkey, encrypted challenge, padding)
+  │  Server: ECDH → preliminary key        │
   │                                         │
-  │  Both sides: ECDH → BLAKE3 KDF → session key
+  │◀──── ServerInit (encrypted) ─────────│  (status, session_id, X25519 pubkey, challenge,
+  │                                         │   padding_range, features, session_ticket)
   │                                         │
-  │──── ClientAuth (encrypted) ───────────▶│  (client_id, HMAC-SHA256 token, cipher suite, challenge response)
+  │  Client: Derive final session key      │
   │                                         │
-  │◀──── ServerAccept (encrypted) ────────│  (status, session_id)
+  │──── ChallengeResp (encrypted) ──────▶│  (BLAKE3(challenge)) — first data frame
   │                                         │
   │════ Encrypted data frames ════════════│
 ```
+
+0-RTT resumption: Subsequent connections use session tickets to skip the full handshake.
 
 ### Encrypted frame wire format
 
@@ -464,25 +600,29 @@ Client                                    Server
 [nonce:12 bytes][ciphertext length:2 bytes BE][ciphertext + AEAD tag]
 ```
 
-### Data frame plaintext format
+### Data frame plaintext format (v3)
 
 ```
-[command:1][flags:1][stream_id:4][payload:variable]
+[command:1][flags:2 LE][stream_id:4][payload:variable]
 ```
 
-Commands: `CONNECT (0x01)`, `DATA (0x02)`, `CLOSE (0x03)`, `PING (0x04)`, `PONG (0x05)`, `REGISTER_FORWARD (0x06)`, `FORWARD_READY (0x07)`, `FORWARD_CONNECT (0x08)`
+**14 commands:** `CONNECT (0x01)`, `DATA (0x02)`, `CLOSE (0x03)`, `PING (0x04)`, `PONG (0x05)`, `REGISTER_FORWARD (0x06)`, `FORWARD_READY (0x07)`, `FORWARD_CONNECT (0x08)`, `UDP_ASSOCIATE (0x09)`, `UDP_DATA (0x0A)`, `SPEED_TEST (0x0B)`, `DNS_QUERY (0x0C)`, `DNS_RESPONSE (0x0D)`, `CHALLENGE_RESP (0x0E)`
+
+**6 flag bits:** PADDED, FEC, PRIORITY, DATAGRAM, COMPRESSED, 0RTT
 
 ### Cryptographic details
 
 | Component | Algorithm | Purpose |
 |-----------|-----------|---------|
 | Key exchange | X25519 ECDH | Ephemeral shared secret per session |
-| Key derivation | BLAKE3 `derive_key` | Session key from shared secret + public keys + timestamp |
+| Key derivation | BLAKE3 `derive_key` (2-phase) | Preliminary key + final session key |
 | Data encryption | ChaCha20-Poly1305 or AES-256-GCM | Authenticated encryption of data frames |
 | Authentication | HMAC-SHA256 | Client identity verification |
 | Challenge-response | BLAKE3 hash | Proves client derived the correct session key |
+| UDP obfuscation | BLAKE3-derived XOR keystream | Salamander packet obfuscation |
+| FEC | Reed-Solomon erasure coding | UDP packet loss recovery |
 | Nonce | `[direction:1][reserved:3][counter:8]` | Per-direction monotonic counter |
-| Anti-replay | 1024-bit sliding bitmap | Detects replayed or out-of-order frames |
+| Anti-replay | 1024-bit sliding bitmap + bloom filter | Detects replayed frames and 0-RTT tickets |
 
 ## Development
 
@@ -509,20 +649,22 @@ cargo test -p prisma-core --test integration
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Unit tests | 38 | Crypto primitives, codec round-trips, anti-replay, handshake, HTTP parsing |
+| Unit tests | 115 | Crypto, codec, anti-replay, handshake, DNS, FEC, Salamander, congestion, port hopping, routing, TUN |
 | Config tests | 7 | Loading, validation, defaults, rejection of invalid configs |
 | Property tests | 6 | Randomized round-trip testing via proptest |
-| Snapshot tests | 6 | Wire format stability via insta |
+| Snapshot tests | 9 | Wire format stability via insta (v1/v2/v3 frames) |
+| Client tests | 27 | Connection pool, relay, proxy, XHTTP stream, UDP relay |
+| Server tests | 16 | Handler, listeners, bandwidth, H3 masquerade |
 | Integration | 1 | Full E2E: handshake + encrypted echo through tunnel |
-| **Total** | **58** | |
+| **Total** | **181** | |
 
 ### Dashboard development
 
 ```bash
 cd prisma-dashboard
 npm install
-npm run dev     # Start dev server on http://localhost:3000
-npm run build   # Production build
+npm run dev     # Start dev server on http://localhost:3000 (for development only)
+npm run build   # Build static files to out/ (served by prisma-server in production)
 ```
 
 ### Linting
@@ -550,67 +692,101 @@ prisma-core/src/
 │   ├── server.rs         # ServerConfig + ManagementApiConfig + RoutingRule
 │   ├── client.rs         # ClientConfig struct
 │   └── validation.rs     # Config validation rules
+├── congestion/           # Congestion control (Brutal, BBR, Adaptive)
+│   ├── mod.rs            # CongestionMode enum
+│   ├── brutal.rs         # Fixed-rate CC (Hysteria2-style)
+│   ├── bbr.rs            # Google BBRv2
+│   └── adaptive.rs       # Auto-switching with throttle detection
 ├── crypto/
 │   ├── aead.rs           # AeadCipher trait + ChaCha20/AES-256-GCM impls
 │   ├── ecdh.rs           # X25519 key exchange
-│   ├── kdf.rs            # BLAKE3 key derivation
+│   ├── kdf.rs            # BLAKE3 key derivation (2-phase for v3)
 │   └── padding.rs        # Random padding generation
+├── dns/                  # DNS handling
+│   ├── mod.rs            # DnsMode enum, DnsResolver
+│   ├── smart.rs          # GeoSite-based blocklist matching
+│   └── fake_ip.rs        # FakeIP pool (198.18.0.0/15, LRU eviction)
 ├── error.rs              # Error types (thiserror)
+├── fec.rs                # Forward Error Correction (Reed-Solomon)
 ├── logging.rs            # Tracing initialization + broadcast layer
+├── port_hop.rs           # HMAC-based port hopping algorithm
 ├── protocol/
 │   ├── anti_replay.rs    # Sliding window replay detection
-│   ├── codec.rs          # Encode/decode for all wire messages
-│   ├── handshake.rs      # Client + server handshake state machines
-│   └── types.rs          # Protocol message types, constants
-├── state.rs              # ServerState, ServerMetrics, ConnectionInfo, AuthStoreInner
-├── types.rs              # ClientId, ProxyAddress, CipherSuite, constants
-└── util.rs               # Shared helpers (hex, HMAC, framed I/O, constant-time eq)
+│   ├── codec.rs          # v1/v2/v3 encode/decode for all wire messages
+│   ├── handshake.rs      # Client + server handshake (2-step v3 + legacy 4-step)
+│   └── types.rs          # Protocol message types, 14 commands, v3 flags
+├── router/               # Rule-based routing engine
+│   ├── mod.rs            # Rule matching
+│   └── rules.rs          # Domain/IP-CIDR/port/keyword rules
+├── salamander.rs         # Salamander UDP obfuscation (BLAKE3 XOR keystream)
+├── state.rs              # ServerState, ServerMetrics, ConnectionInfo
+├── types.rs              # ClientId, ProxyAddress, CipherSuite, v3 constants
+└── util.rs               # Shared helpers (hex, HMAC, framed I/O)
 
 prisma-server/src/
 ├── auth.rs               # AuthStore (verifies client credentials, runtime CRUD)
+├── bandwidth/            # Per-client rate limiting + traffic quotas
 ├── forward.rs            # Port forwarding session (multiplexed reverse proxy)
-├── handler.rs            # Connection handler (handshake → routing rules → proxy or forward)
+├── handler.rs            # Connection handler (v3 handshake → routing → proxy/forward)
 ├── listener/
 │   ├── tcp.rs            # TCP accept loop with connection backpressure
-│   └── quic.rs           # QUIC endpoint with TLS + semaphore limit
+│   ├── quic.rs           # QUIC endpoint with TLS + semaphore + Salamander
+│   ├── cdn.rs            # CDN/reverse-proxy transport listener
+│   ├── ws_tunnel.rs      # WebSocket tunnel listener
+│   ├── grpc_tunnel.rs    # gRPC tunnel listener
+│   ├── xhttp.rs          # XHTTP transport (packet-up, stream-up, stream-one)
+│   ├── reverse_proxy.rs  # Decoy reverse proxy for camouflage
+│   └── h3_masquerade.rs  # HTTP/3 masquerade (real website + PrismaVeil ALPN split)
+├── grpc_stream.rs        # gRPC stream adapter
+├── ws_stream.rs          # WebSocket stream adapter
+├── xhttp_stream.rs       # XHTTP stream adapter (AsyncRead + AsyncWrite)
+├── udp_relay.rs          # Server-side PrismaUDP relay
 ├── outbound.rs           # TCP connect to destination
-├── relay.rs              # Bidirectional encrypted relay with anti-replay + byte counting
+├── relay.rs              # Bidirectional encrypted relay with anti-replay
 └── state.rs              # Re-exports from prisma-core::state
 
-prisma-mgmt/src/
-├── auth.rs               # Bearer token middleware
-├── handlers/
-│   ├── health.rs         # GET /api/health, /api/metrics
-│   ├── connections.rs    # GET /api/connections, DELETE /api/connections/:id
-│   ├── clients.rs        # CRUD /api/clients
-│   ├── config.rs         # GET/PATCH /api/config, GET /api/config/tls
-│   ├── forwards.rs       # GET /api/forwards
-│   └── routes.rs         # CRUD /api/routes
-├── ws/
-│   ├── metrics.rs        # WS /api/ws/metrics
-│   └── logs.rs           # WS /api/ws/logs
-├── router.rs             # Axum router with all routes
-└── lib.rs                # pub async fn serve()
-
 prisma-client/src/
-├── connector.rs          # TCP / QUIC transport to server
-├── forward.rs            # Port forwarding client (registers forwards, relays local)
+├── connection_pool.rs    # XMUX connection pooling
+├── connector.rs          # TCP/QUIC/WS/gRPC/XHTTP transport to server
+├── forward.rs            # Port forwarding client
+├── grpc_stream.rs        # gRPC stream adapter
+├── ws_stream.rs          # WebSocket stream adapter
+├── xhttp_stream.rs       # XHTTP stream adapter
 ├── proxy.rs              # Shared ProxyContext for all inbound protocols
-├── relay.rs              # Bidirectional relay (local ↔ tunnel)
+├── relay.rs              # Bidirectional relay (local ↔ tunnel, TUN ↔ tunnel)
 ├── socks5/
 │   └── server.rs         # RFC 1928 SOCKS5 implementation
 ├── http/
 │   └── server.rs         # HTTP CONNECT proxy implementation
+├── tun/                  # TUN mode (system-wide proxy)
+│   ├── mod.rs            # TUN module entry
+│   ├── device.rs         # Platform TUN devices (Windows/Linux/macOS)
+│   ├── handler.rs        # TUN packet handler (TCP/UDP routing)
+│   ├── packet.rs         # IPv4/TCP/UDP packet parsing
+│   └── tcp_stack.rs      # smoltcp userspace TCP/IP stack
+├── udp_relay.rs          # Client-side PrismaUDP relay
 └── tunnel.rs             # PrismaVeil tunnel establishment
 
+prisma-cli/src/
+├── main.rs               # CLI entry (server, client, gen-key, gen-cert, init, validate, status)
+├── init.rs               # Interactive config setup
+├── validate.rs           # Config validation command
+└── status.rs             # Server connectivity check
+
+prisma-mgmt/src/
+├── auth.rs               # Bearer token middleware
+├── handlers/             # REST endpoint handlers
+├── ws/                   # WebSocket streams (metrics, logs)
+├── router.rs             # Axum router with all routes
+└── lib.rs                # pub async fn serve()
+
 prisma-dashboard/src/
-├── app/                  # Next.js App Router pages
+├── app/                  # Next.js App Router pages (static export)
 │   ├── dashboard/        # Overview, Clients, Routing, Logs, Settings pages
-│   ├── login/            # Authentication page
-│   └── api/              # NextAuth + API proxy routes
+│   └── login/            # Token-based authentication page
 ├── components/           # React components (shadcn/ui + custom)
 ├── hooks/                # WebSocket + TanStack Query hooks
-└── lib/                  # API client, types, auth config, utilities
+└── lib/                  # API client, types, auth helpers, utilities
 ```
 
 ## Documentation

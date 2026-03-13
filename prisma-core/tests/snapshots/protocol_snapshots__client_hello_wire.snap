@@ -2,7 +2,7 @@
 source: prisma-core/tests/protocol_snapshots.rs
 expression: encoded
 ---
-- 1
+- 2
 - 170
 - 170
 - 170

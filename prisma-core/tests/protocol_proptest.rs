@@ -37,7 +37,7 @@ proptest! {
     #[test]
     fn test_data_frame_round_trip(
         cmd in arb_command(),
-        flags in any::<u8>(),
+        flags in any::<u16>(),
         stream_id in any::<u32>(),
     ) {
         let frame = DataFrame {

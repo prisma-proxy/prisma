@@ -16,13 +16,49 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `identity.client_id` | string | — | Client UUID (must match server config) |
 | `identity.auth_secret` | string | — | 64 hex character shared secret (must match server config) |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
-| `transport` | string | `"quic"` | `quic` / `tcp` |
+| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
 | `port_forwards[].name` | string | — | Human-readable label for this port forward |
 | `port_forwards[].local_addr` | string | — | Local service address (e.g. `127.0.0.1:3000`) |
 | `port_forwards[].remote_port` | u16 | — | Port to listen on at the server |
 | `logging.level` | string | `"info"` | `trace` / `debug` / `info` / `warn` / `error` |
 | `logging.format` | string | `"pretty"` | `pretty` / `json` |
+| `xhttp_mode` | string? | — | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `xhttp_upload_url` | string? | — | XHTTP upload URL for packet-up/stream-up |
+| `xhttp_download_url` | string? | — | XHTTP download URL for packet-up |
+| `xhttp_stream_url` | string? | — | XHTTP stream URL for stream-one |
+| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | Extra XHTTP request headers |
+| `xmux.max_connections_min` | u16 | `1` | Min connections in pool |
+| `xmux.max_connections_max` | u16 | `4` | Max connections in pool |
+| `xmux.max_concurrency_min` | u16 | `8` | Min concurrency per connection |
+| `xmux.max_concurrency_max` | u16 | `16` | Max concurrency per connection |
+| `xmux.max_lifetime_secs_min` | u64 | `300` | Min connection lifetime (seconds) |
+| `xmux.max_lifetime_secs_max` | u64 | `600` | Max connection lifetime (seconds) |
+| `xmux.max_requests_min` | u32 | `100` | Min requests before rotation |
+| `xmux.max_requests_max` | u32 | `200` | Max requests before rotation |
+| `user_agent` | string? | — | Override User-Agent header |
+| `referer` | string? | — | Override Referer header |
+| `congestion.mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` |
+| `congestion.target_bandwidth` | string? | — | Target bandwidth for brutal/adaptive (e.g., `"100mbps"`) |
+| `port_hopping.enabled` | bool | `false` | Enable QUIC port hopping |
+| `port_hopping.base_port` | u16 | `10000` | Start of port range |
+| `port_hopping.port_range` | u16 | `50000` | Number of ports in range |
+| `port_hopping.interval_secs` | u64 | `60` | Seconds between port hops |
+| `port_hopping.grace_period_secs` | u64 | `10` | Dual-port acceptance window |
+| `salamander_password` | string? | — | Salamander UDP obfuscation password (QUIC only) |
+| `udp_fec.enabled` | bool | `false` | Enable Forward Error Correction for UDP relay |
+| `udp_fec.data_shards` | usize | `10` | Original packets per FEC group |
+| `udp_fec.parity_shards` | usize | `3` | Parity packets per FEC group |
+| `dns.mode` | string | `"direct"` | DNS mode: `"smart"` / `"fake"` / `"tunnel"` / `"direct"` |
+| `dns.fake_ip_range` | string | `"198.18.0.0/15"` | CIDR range for fake DNS IPs |
+| `dns.upstream` | string | `"8.8.8.8:53"` | Upstream DNS server |
+| `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `port` / `all` |
+| `routing.rules[].value` | string | — | Match value |
+| `routing.rules[].action` | string | `"proxy"` | Action: `"proxy"` / `"direct"` / `"block"` |
+| `tun.enabled` | bool | `false` | Enable TUN mode (system-wide proxy) |
+| `tun.device_name` | string | `"prisma-tun0"` | TUN device name |
+| `tun.mtu` | u16 | `1500` | TUN device MTU |
+| `tun.dns` | string | `"fake"` | TUN DNS mode: `"fake"` / `"tunnel"` |
 
 ## Full example
 
@@ -64,7 +100,11 @@ The client config is validated at startup. The following rules are enforced:
 - `identity.client_id` must not be empty
 - `identity.auth_secret` must be valid hex
 - `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`
-- `transport` must be one of: `quic`, `tcp`
+- `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`
+- `xhttp_mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
+- `xhttp_mode = "stream-one"` requires `xhttp_stream_url`
+- `xhttp_mode = "packet-up"` or `"stream-up"` requires `xhttp_upload_url` and `xhttp_download_url`
+- XMUX ranges must have min ≤ max
 - `logging.level` must be one of: `trace`, `debug`, `info`, `warn`, `error`
 - `logging.format` must be one of: `pretty`, `json`
 

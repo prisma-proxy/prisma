@@ -17,6 +17,23 @@ pub struct ServerConfig {
     pub management_api: ManagementApiConfig,
     #[serde(default)]
     pub camouflage: CamouflageConfig,
+    #[serde(default)]
+    pub cdn: CdnConfig,
+    #[serde(default)]
+    pub padding: PaddingConfig,
+    // Congestion control (QUIC only)
+    #[serde(default)]
+    pub congestion: super::client::CongestionConfig,
+    // Port hopping (QUIC only)
+    #[serde(default)]
+    pub port_hopping: crate::port_hop::PortHoppingConfig,
+    /// Upstream DNS server for CMD_DNS_QUERY forwarding.
+    #[serde(default = "default_dns_upstream")]
+    pub dns_upstream: String,
+}
+
+fn default_dns_upstream() -> String {
+    "8.8.8.8:53".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +47,18 @@ pub struct AuthorizedClient {
     pub id: String,
     pub auth_secret: String, // hex-encoded
     pub name: Option<String>,
+    /// Per-client upload bandwidth limit (e.g., "100mbps").
+    #[serde(default)]
+    pub bandwidth_up: Option<String>,
+    /// Per-client download bandwidth limit (e.g., "100mbps").
+    #[serde(default)]
+    pub bandwidth_down: Option<String>,
+    /// Traffic quota (e.g., "100GB").
+    #[serde(default)]
+    pub quota: Option<String>,
+    /// Quota reset period.
+    #[serde(default)]
+    pub quota_period: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +131,8 @@ pub struct ManagementApiConfig {
     pub auth_token: String,
     #[serde(default)]
     pub cors_origins: Vec<String>,
+    #[serde(default)]
+    pub dashboard_dir: Option<String>,
 }
 
 impl Default for ManagementApiConfig {
@@ -111,6 +142,7 @@ impl Default for ManagementApiConfig {
             listen_addr: default_mgmt_listen_addr(),
             auth_token: String::new(),
             cors_origins: Vec::new(),
+            dashboard_dir: None,
         }
     }
 }
@@ -151,6 +183,17 @@ pub struct CamouflageConfig {
     pub tls_on_tcp: bool,
     #[serde(default = "super::default_alpn")]
     pub alpn_protocols: Vec<String>,
+    /// Salamander UDP obfuscation password. When set, QUIC packets are XOR-obfuscated.
+    #[serde(default)]
+    pub salamander_password: Option<String>,
+    /// HTTP/3 masquerade: upstream URL to reverse-proxy for non-PrismaVeil QUIC connections.
+    /// When set, active probers see a real website over HTTP/3.
+    #[serde(default)]
+    pub h3_cover_site: Option<String>,
+    /// HTTP/3 masquerade: directory of static files to serve for non-PrismaVeil QUIC connections.
+    /// Used as fallback when `h3_cover_site` is not set.
+    #[serde(default)]
+    pub h3_static_dir: Option<String>,
 }
 
 impl Default for CamouflageConfig {
@@ -160,8 +203,137 @@ impl Default for CamouflageConfig {
             fallback_addr: None,
             tls_on_tcp: false,
             alpn_protocols: super::default_alpn(),
+            salamander_password: None,
+            h3_cover_site: None,
+            h3_static_dir: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CdnConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_cdn_listen_addr")]
+    pub listen_addr: String,
+    #[serde(default)]
+    pub tls: Option<CdnTlsConfig>,
+    #[serde(default = "default_ws_tunnel_path")]
+    pub ws_tunnel_path: String,
+    #[serde(default = "default_grpc_tunnel_path")]
+    pub grpc_tunnel_path: String,
+    #[serde(default)]
+    pub cover_upstream: Option<String>,
+    #[serde(default)]
+    pub cover_static_dir: Option<String>,
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
+    #[serde(default)]
+    pub expose_management_api: bool,
+    #[serde(default = "default_management_api_path")]
+    pub management_api_path: String,
+    // XHTTP transport paths
+    #[serde(default = "default_xhttp_upload_path")]
+    pub xhttp_upload_path: String,
+    #[serde(default = "default_xhttp_download_path")]
+    pub xhttp_download_path: String,
+    #[serde(default = "default_xhttp_stream_path")]
+    pub xhttp_stream_path: String,
+    #[serde(default)]
+    pub xhttp_mode: Option<String>,
+    #[serde(default)]
+    pub xhttp_extra_headers: Vec<(String, String)>,
+    #[serde(default)]
+    pub xhttp_nosse: bool,
+    // Header obfuscation
+    #[serde(default)]
+    pub response_server_header: Option<String>,
+    #[serde(default = "default_true")]
+    pub padding_header: bool,
+    #[serde(default)]
+    pub enable_sse_disguise: bool,
+}
+
+impl Default for CdnConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_addr: default_cdn_listen_addr(),
+            tls: None,
+            ws_tunnel_path: default_ws_tunnel_path(),
+            grpc_tunnel_path: default_grpc_tunnel_path(),
+            cover_upstream: None,
+            cover_static_dir: None,
+            trusted_proxies: Vec::new(),
+            expose_management_api: false,
+            management_api_path: default_management_api_path(),
+            xhttp_upload_path: default_xhttp_upload_path(),
+            xhttp_download_path: default_xhttp_download_path(),
+            xhttp_stream_path: default_xhttp_stream_path(),
+            xhttp_mode: None,
+            xhttp_extra_headers: Vec::new(),
+            xhttp_nosse: false,
+            response_server_header: None,
+            padding_header: true,
+            enable_sse_disguise: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CdnTlsConfig {
+    pub cert_path: String,
+    pub key_path: String,
+}
+
+/// Per-frame padding configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaddingConfig {
+    #[serde(default = "default_padding_min")]
+    pub min: u16,
+    #[serde(default = "default_padding_max")]
+    pub max: u16,
+}
+
+impl Default for PaddingConfig {
+    fn default() -> Self {
+        Self {
+            min: default_padding_min(),
+            max: default_padding_max(),
+        }
+    }
+}
+
+fn default_padding_min() -> u16 {
+    0
+}
+fn default_padding_max() -> u16 {
+    256
+}
+
+fn default_cdn_listen_addr() -> String {
+    "0.0.0.0:443".into()
+}
+fn default_ws_tunnel_path() -> String {
+    "/ws-tunnel".into()
+}
+fn default_grpc_tunnel_path() -> String {
+    "/tunnel.PrismaTunnel".into()
+}
+fn default_management_api_path() -> String {
+    "/prisma-mgmt".into()
+}
+fn default_xhttp_upload_path() -> String {
+    "/api/v1/upload".into()
+}
+fn default_xhttp_download_path() -> String {
+    "/api/v1/events".into()
+}
+fn default_xhttp_stream_path() -> String {
+    "/api/v1/stream".into()
+}
+fn default_true() -> bool {
+    true
 }
 
 fn default_mgmt_listen_addr() -> String {

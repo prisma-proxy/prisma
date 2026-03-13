@@ -24,7 +24,7 @@ export default function NewClientPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/clients">
+        <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
             Back to clients
           </Button>

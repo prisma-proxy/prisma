@@ -186,6 +186,38 @@ The provided service files include several systemd security directives:
 | `ReadOnlyPaths=/etc/prisma` | Ensures config files cannot be modified by the service |
 | `LimitNOFILE=65535` | Raises the file descriptor limit for high connection counts |
 
+## 8. Dashboard setup (optional)
+
+Download the pre-built dashboard from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source:
+
+```bash
+# From release
+sudo mkdir -p /opt/prisma/dashboard
+sudo tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+
+# Or from source
+cd prisma-dashboard && npm ci && npm run build
+sudo cp -r out/ /opt/prisma/dashboard/
+```
+
+Add to `server.toml`:
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "/opt/prisma/dashboard"
+```
+
+Update the systemd service to allow read access:
+
+```ini
+ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
+```
+
+Access the dashboard at `http://127.0.0.1:9090/`.
+
 ## Directory layout summary
 
 ```
@@ -194,6 +226,7 @@ The provided service files include several systemd security directives:
 /etc/prisma/client.toml         # Client configuration
 /etc/prisma/prisma-cert.pem     # TLS certificate
 /etc/prisma/prisma-key.pem      # TLS private key
+/opt/prisma/dashboard/          # Dashboard static files (optional)
 /etc/systemd/system/prisma-server.service
 /etc/systemd/system/prisma-client.service
 ```

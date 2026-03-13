@@ -3,7 +3,7 @@ members = ["prisma-core", "prisma-server", "prisma-client", "prisma-cli", "prism
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 
@@ -13,10 +13,24 @@ tokio = { version = "1", features = ["full"] }
 
 # QUIC
 quinn = "0.11"
+quinn-proto = "0.11"
 rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 
 tokio-rustls = "0.26"
+
+# FEC
+reed-solomon-erasure = "6"
+
+# DNS
+hickory-proto = "0.24"
+
+# TUN device
+smoltcp = { version = "0.12", default-features = false, features = ["alloc", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp"] }
+wintun = "0.5"
+
+# Bandwidth management
+governor = "0.8"
 
 # Crypto
 chacha20poly1305 = "0.10"
@@ -45,7 +59,7 @@ moka = { version = "0.12", features = ["future"] }
 
 # Web framework
 axum = { version = "0.8", features = ["ws"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
 serde_json = "1"
 
 # Time
@@ -61,8 +75,36 @@ anyhow = "1"
 # CLI
 clap = { version = "4", features = ["derive"] }
 
+# Async utilities
+futures-util = "0.3"
+tokio-stream = "0.1"
+
 # Bytes
 bytes = "1"
+
+# WebSocket
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+
+# HTTPS server
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+
+# HTTP client (reverse proxy)
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "tokio", "http1", "http2"] }
+http-body-util = "0.1"
+
+# HTTP/3
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+
+# gRPC
+tonic = "0.13"
+prost = "0.13"
+# Sync HTTP client (CLI)
+ureq = { version = "3", features = ["json"] }
+
+# Concurrent map
+dashmap = "6"
 
 # Dev
 proptest = "1"

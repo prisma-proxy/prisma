@@ -17,6 +17,35 @@ env:
   BINARY_NAME: prisma
 
 jobs:
+  dashboard:
+    name: Build Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: prisma-dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-dashboard
+
+      - name: Build static dashboard
+        run: npm run build
+        working-directory: prisma-dashboard
+
+      - name: Package dashboard
+        run: tar -czf prisma-dashboard.tar.gz -C prisma-dashboard/out .
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: prisma-dashboard
+          path: prisma-dashboard.tar.gz
+
   build:
     name: Build ${{ matrix.artifact }}
     strategy:
@@ -118,7 +147,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [dashboard, build]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -134,6 +163,12 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name 'prisma-*' \) -exec cp {} release/ \;
           ls -la release/
+          count=$(find release -type f -name 'prisma-*' ! -name '*.sha256' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No artifacts found — all builds failed. Aborting release."
+            exit 1
+          fi
+          echo "Found $count artifact(s)"
 
       - name: Generate checksums file
         run: |

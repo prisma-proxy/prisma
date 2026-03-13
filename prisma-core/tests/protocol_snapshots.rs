@@ -7,7 +7,7 @@ use std::net::Ipv4Addr;
 #[test]
 fn test_client_hello_snapshot() {
     let msg = ClientHello {
-        version: PROTOCOL_VERSION,
+        version: PROTOCOL_VERSION_V2,
         client_ephemeral_pub: [0xAA; 32],
         timestamp: 1700000000,
         padding: vec![],
@@ -71,7 +71,52 @@ fn test_server_accept_snapshot() {
     let msg = ServerAccept {
         status: AcceptStatus::Ok,
         session_id: uuid::Uuid::nil(),
+        padding_range: None,
     };
     let encoded = encode_server_accept(&msg);
     insta::assert_yaml_snapshot!("server_accept_wire", encoded);
+}
+
+#[test]
+fn test_server_accept_v2_snapshot() {
+    let msg = ServerAccept {
+        status: AcceptStatus::Ok,
+        session_id: uuid::Uuid::nil(),
+        padding_range: Some(PaddingRange::new(0, 256)),
+    };
+    let encoded = encode_server_accept(&msg);
+    insta::assert_yaml_snapshot!("server_accept_v2_wire", encoded);
+}
+
+#[test]
+fn test_client_init_v3_snapshot() {
+    let msg = ClientInit {
+        version: PROTOCOL_VERSION,
+        flags: 0,
+        client_ephemeral_pub: [0xAA; 32],
+        client_id: ClientId(uuid::Uuid::nil()),
+        timestamp: 1700000000,
+        cipher_suite: CipherSuite::ChaCha20Poly1305,
+        auth_token: [0xBB; 32],
+        padding: vec![],
+    };
+    let encoded = encode_client_init(&msg);
+    insta::assert_yaml_snapshot!("client_init_v3_wire", encoded);
+}
+
+#[test]
+fn test_server_init_v3_snapshot() {
+    let msg = ServerInit {
+        status: AcceptStatus::Ok,
+        session_id: uuid::Uuid::nil(),
+        server_ephemeral_pub: [0xCC; 32],
+        challenge: [0xDD; 32],
+        padding_min: 0,
+        padding_max: 256,
+        server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
+        session_ticket: vec![0x01, 0x02, 0x03],
+        padding: vec![],
+    };
+    let encoded = encode_server_init(&msg);
+    insta::assert_yaml_snapshot!("server_init_v3_wire", encoded);
 }

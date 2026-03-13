@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::types::MAX_PADDING_SIZE;
+use crate::types::{PaddingRange, MAX_PADDING_SIZE};
 
 /// Generate random padding of random length up to `max_size`.
 /// Format: [padding_len:2][random_bytes:padding_len]
@@ -18,6 +18,19 @@ pub fn generate_padding(max_size: usize) -> Vec<u8> {
     rng.fill(&mut buf[..]);
     result.extend_from_slice(&buf);
     result
+}
+
+/// Generate random padding bytes using a `PaddingRange`.
+/// Returns raw random bytes of the specified length (no length header).
+pub fn generate_frame_padding(range: &PaddingRange) -> Vec<u8> {
+    let len = range.random_in_range();
+    if len == 0 {
+        return Vec::new();
+    }
+    let mut rng = rand::thread_rng();
+    let mut buf = vec![0u8; len];
+    rng.fill(&mut buf[..]);
+    buf
 }
 
 /// Strip padding from the end of data. The last segment of `data` should be

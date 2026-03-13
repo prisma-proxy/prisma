@@ -3,6 +3,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, info, warn};
 
+use prisma_core::router::RouteAction;
 use prisma_core::types::{ProxyAddress, ProxyDestination};
 
 use crate::proxy::ProxyContext;
@@ -69,6 +70,41 @@ async fn handle_http_client(stream: TcpStream, ctx: &ProxyContext) -> Result<()>
         if header.trim().is_empty() {
             break;
         }
+    }
+
+    // Check routing rules
+    let domain = match &destination.address {
+        ProxyAddress::Domain(d) => Some(d.as_str()),
+        _ => None,
+    };
+    let ip = match &destination.address {
+        ProxyAddress::Ipv4(ip) => Some(std::net::IpAddr::V4(*ip)),
+        ProxyAddress::Ipv6(ip) => Some(std::net::IpAddr::V6(*ip)),
+        _ => None,
+    };
+
+    match ctx.router.route(domain, ip, destination.port) {
+        RouteAction::Block => {
+            info!(dest = %destination, "HTTP CONNECT blocked by routing rule");
+            let mut stream = buf_reader.into_inner();
+            send_http_error(&mut stream, 403, "Forbidden").await?;
+            return Ok(());
+        }
+        RouteAction::Direct => {
+            info!(dest = %destination, "HTTP CONNECT direct (bypassing proxy)");
+            let dest_str = match &destination.address {
+                ProxyAddress::Domain(d) => format!("{}:{}", d, destination.port),
+                ProxyAddress::Ipv4(ip) => format!("{}:{}", ip, destination.port),
+                ProxyAddress::Ipv6(ip) => format!("[{}]:{}", ip, destination.port),
+            };
+            let outbound = TcpStream::connect(&dest_str).await?;
+            let mut stream = buf_reader.into_inner();
+            stream
+                .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                .await?;
+            return relay::relay_direct(stream, outbound).await;
+        }
+        RouteAction::Proxy => {}
     }
 
     info!(dest = %destination, "HTTP CONNECT");

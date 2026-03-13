@@ -147,6 +147,9 @@ impl ConnectionInfo {
 pub enum Transport {
     Tcp,
     Quic,
+    WebSocket,
+    Grpc,
+    Xhttp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -154,6 +157,7 @@ pub enum SessionMode {
     Unknown,
     Proxy,
     Forward,
+    UdpRelay,
 }
 
 #[derive(Debug, Clone, Serialize)]

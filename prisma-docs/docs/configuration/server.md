@@ -27,11 +27,36 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `management_api.enabled` | bool | `false` | Enable the management REST/WS API |
 | `management_api.listen_addr` | string | `"127.0.0.1:9090"` | Management API bind address |
 | `management_api.auth_token` | string | — | Bearer token for API authentication |
-| `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins for the dashboard |
+| `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins (for external dashboard dev) |
+| `management_api.dashboard_dir` | string? | — | Path to built dashboard static files |
+| `padding.min` | u16 | `0` | Minimum per-frame padding bytes |
+| `padding.max` | u16 | `256` | Maximum per-frame padding bytes |
 | `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |
 | `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS (requires `[tls]` config) |
 | `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
 | `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
+| `cdn.xhttp_upload_path` | string | `"/api/v1/upload"` | XHTTP packet-up upload endpoint |
+| `cdn.xhttp_download_path` | string | `"/api/v1/events"` | XHTTP packet-up download endpoint |
+| `cdn.xhttp_stream_path` | string | `"/api/v1/stream"` | XHTTP stream-one/stream-up endpoint |
+| `cdn.xhttp_mode` | string? | — | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `cdn.xhttp_nosse` | bool | `false` | Disable SSE wrapping for XHTTP download |
+| `cdn.response_server_header` | string? | — | Override HTTP `Server` header |
+| `cdn.padding_header` | bool | `true` | Add `X-Padding` response header |
+| `cdn.enable_sse_disguise` | bool | `false` | Wrap download in SSE format |
+| `cdn.xhttp_extra_headers` | \[\[k,v\]\] | `[]` | Extra response headers for disguise |
+| `camouflage.salamander_password` | string? | — | Salamander UDP obfuscation password (QUIC only) |
+| `dns_upstream` | string | `"8.8.8.8:53"` | Upstream DNS server for CMD_DNS_QUERY forwarding |
+| `congestion.mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` |
+| `congestion.target_bandwidth` | string? | — | Target bandwidth for brutal/adaptive (e.g., `"100mbps"`) |
+| `port_hopping.enabled` | bool | `false` | Enable QUIC port hopping |
+| `port_hopping.base_port` | u16 | `10000` | Start of port range |
+| `port_hopping.port_range` | u16 | `50000` | Number of ports in range |
+| `port_hopping.interval_secs` | u64 | `60` | Seconds between port hops |
+| `port_hopping.grace_period_secs` | u64 | `10` | Seconds to accept on old port after hop |
+| `authorized_clients[].bandwidth_up` | string? | — | Per-client upload rate limit (e.g., `"100mbps"`) |
+| `authorized_clients[].bandwidth_down` | string? | — | Per-client download rate limit |
+| `authorized_clients[].quota` | string? | — | Per-client transfer quota (e.g., `"100GB"`) |
+| `authorized_clients[].quota_period` | string? | — | Quota period: `"daily"` / `"weekly"` / `"monthly"` |
 
 ## Full example
 
@@ -63,12 +88,17 @@ enabled = true
 port_range_start = 10000
 port_range_end = 20000
 
-# Management API — enables the dashboard and REST/WebSocket API
+# Management API + dashboard
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-cors_origins = ["http://localhost:3000"]
+dashboard_dir = "/opt/prisma/dashboard"  # Path to built dashboard static files
+
+# Per-frame padding
+[padding]
+min = 0
+max = 256
 
 # Camouflage (anti-active-detection)
 [camouflage]
@@ -123,9 +153,11 @@ Clients can also be managed at runtime via the [Management API](/docs/features/m
 The management API is disabled by default. When enabled, it starts an HTTP server (axum) that serves both REST endpoints and WebSocket connections.
 
 :::warning
-The `auth_token` protects all management API endpoints. Use a strong, random token in production. The dashboard's server-side proxy hides this token from the browser.
+The `auth_token` protects all management API endpoints. Use a strong, random token in production.
 :::
 
 **Bind address**: By default the API listens on `127.0.0.1:9090` (localhost only). To expose it to the network, change `listen_addr` — but ensure you have proper network-level access controls in place.
 
-**CORS origins**: Required when running the dashboard on a different origin (e.g. `http://localhost:3000` during development). In production behind a reverse proxy, you may not need CORS.
+**Dashboard**: Set `dashboard_dir` to the path containing the built dashboard static files. The server will serve the dashboard at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd prisma-dashboard && npm ci && npm run build`.
+
+**CORS origins**: Only needed when running the dashboard dev server on a different origin (e.g. `http://localhost:3000`). Not needed in production when the dashboard is served by the server itself.
