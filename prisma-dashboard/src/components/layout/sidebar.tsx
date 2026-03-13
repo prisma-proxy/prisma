@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Server,
   Users,
   Route,
   ScrollText,
@@ -11,7 +12,8 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Overview", href: "/dashboard/", icon: LayoutDashboard },
+  { label: "Overview", href: "/dashboard/", icon: LayoutDashboard, exact: true },
+  { label: "Server", href: "/dashboard/servers/", icon: Server },
   { label: "Clients", href: "/dashboard/clients/", icon: Users },
   { label: "Routing", href: "/dashboard/routing/", icon: Route },
   { label: "Logs", href: "/dashboard/logs/", icon: ScrollText },
@@ -28,10 +30,11 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map(({ label, href, icon: Icon }) => {
+        {navItems.map(({ label, href, icon: Icon, exact }) => {
           const base = href.replace(/\/$/, "");
-          const isActive =
-            pathname === base || pathname.startsWith(base + "/");
+          const isActive = exact
+            ? pathname === base || pathname === base + "/"
+            : pathname === base || pathname.startsWith(base + "/");
 
           return (
             <Link

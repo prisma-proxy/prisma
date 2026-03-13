@@ -84,6 +84,15 @@ export type RuleCondition =
   | { type: "PortRange"; value: [number, number] }
   | { type: "All"; value: null };
 
+/** Log levels ordered from most verbose to least verbose. */
+export const LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
+/** Numeric priority for each log level (higher = more severe). */
+export const LOG_LEVEL_PRIORITY: Record<string, number> = Object.fromEntries(
+  LOG_LEVELS.map((l, i) => [l, i])
+);
+
 export interface LogEntry {
   timestamp: string;
   level: string;

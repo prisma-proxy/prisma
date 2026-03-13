@@ -34,7 +34,11 @@ export function createWebSocket<T>(
       onError?.(event);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      // 4001/4003 = auth failure — don't reconnect with a bad token
+      if (event.code === 4001 || event.code === 4003 || event.code === 1008) {
+        shouldReconnect = false;
+      }
       if (shouldReconnect) {
         setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);

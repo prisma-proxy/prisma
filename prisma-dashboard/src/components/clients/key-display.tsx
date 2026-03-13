@@ -11,10 +11,27 @@ interface KeyDisplayProps {
 export function KeyDisplay({ clientId, secretHex }: KeyDisplayProps) {
   const [copied, setCopied] = useState(false);
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(secretHex);
+  function signalCopied() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(secretHex);
+      signalCopied();
+    } catch {
+      // Fallback for non-secure contexts
+      const textarea = document.createElement("textarea");
+      textarea.value = secretHex;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      if (ok) signalCopied();
+    }
   }
 
   return (

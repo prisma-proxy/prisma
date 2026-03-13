@@ -66,6 +66,7 @@ export default function SettingsPage() {
           <CardContent>
             {config && (
               <ConfigForm
+                key={`${config.logging_level}-${config.logging_format}-${config.max_connections}-${config.port_forwarding_enabled}`}
                 config={config}
                 onSave={(data) => patchConfig.mutate(data)}
                 isLoading={patchConfig.isPending}

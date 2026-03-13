@@ -3,12 +3,14 @@
 import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LOG_LEVELS } from "@/lib/types";
 
 interface LogFiltersProps {
   onFilterChange: (filter: { level?: string; target?: string }) => void;
 }
 
-const levels = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"] as const;
+// Display order: most severe first
+const levels = [...LOG_LEVELS].reverse();
 
 const levelColors: Record<string, string> = {
   ERROR: "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-400",
@@ -26,10 +28,20 @@ export function LogFilters({ onFilterChange }: LogFiltersProps) {
 
   const emitFilter = useCallback(
     (nextLevels: Set<string>, nextTarget: string) => {
-      const allSelected = nextLevels.size === levels.length;
+      const allSelected = nextLevels.size === LOG_LEVELS.length;
+      // Find the most verbose selected level to use as the minimum filter.
+      let minLevel: string | undefined;
+      if (!allSelected && nextLevels.size > 0) {
+        for (const l of LOG_LEVELS) {
+          if (nextLevels.has(l)) {
+            minLevel = l.toLowerCase();
+            break;
+          }
+        }
+      }
       onFilterChange({
-        level: allSelected ? undefined : Array.from(nextLevels).join(","),
-        target: nextTarget || undefined,
+        level: minLevel ?? "",
+        target: nextTarget || "",
       });
     },
     [onFilterChange]

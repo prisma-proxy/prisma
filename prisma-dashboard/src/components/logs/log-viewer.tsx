@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { LogEntryWithId } from "@/hooks/use-logs";
 
 interface LogViewerProps {
@@ -24,9 +25,18 @@ function formatTimestamp(ts: string): string {
   return `${h}:${m}:${s}.${ms}`;
 }
 
+const ROW_HEIGHT = 24;
+
 export function LogViewer({ logs }: LogViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+
+  const virtualizer = useVirtualizer({
+    count: logs.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 20,
+  });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -43,10 +53,10 @@ export function LogViewer({ logs }: LogViewerProps) {
   }, []);
 
   useEffect(() => {
-    if (shouldAutoScroll.current && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    if (shouldAutoScroll.current && logs.length > 0) {
+      virtualizer.scrollToIndex(logs.length - 1, { align: "end" });
     }
-  }, [logs]);
+  }, [logs.length, virtualizer]);
 
   if (logs.length === 0) {
     return (
@@ -61,29 +71,46 @@ export function LogViewer({ logs }: LogViewerProps) {
       ref={containerRef}
       className="overflow-y-auto max-h-[600px] rounded-lg border bg-muted/30 p-2 font-mono text-xs"
     >
-      {logs.map((entry) => {
-        const colorClass =
-          levelColors[entry.level] ?? levelColors.DEBUG;
-        return (
-          <div
-            key={entry._id}
-            className="flex items-start gap-2 px-1 py-0.5 hover:bg-muted/50"
-          >
-            <span className="shrink-0 text-muted-foreground">
-              {formatTimestamp(entry.timestamp)}
-            </span>
-            <span
-              className={`inline-flex shrink-0 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none ${colorClass}`}
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const entry = logs[virtualRow.index];
+          const colorClass =
+            levelColors[entry.level] ?? levelColors.DEBUG;
+          return (
+            <div
+              key={entry._id}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              className="flex items-start gap-2 px-1 py-0.5 hover:bg-muted/50"
             >
-              {entry.level}
-            </span>
-            <span className="shrink-0 text-muted-foreground/60">
-              {entry.target}
-            </span>
-            <span className="min-w-0 break-all">{entry.message}</span>
-          </div>
-        );
-      })}
+              <span className="shrink-0 text-muted-foreground">
+                {formatTimestamp(entry.timestamp)}
+              </span>
+              <span
+                className={`inline-flex shrink-0 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none ${colorClass}`}
+              >
+                {entry.level}
+              </span>
+              <span className="shrink-0 text-muted-foreground/60">
+                {entry.target}
+              </span>
+              <span className="min-w-0 break-all">{entry.message}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

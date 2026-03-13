@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ConfigResponse } from "@/lib/types";
+import { LOG_LEVELS } from "@/lib/types";
 
 interface ConfigFormProps {
   config: ConfigResponse;
@@ -20,7 +21,7 @@ interface ConfigFormProps {
   isLoading: boolean;
 }
 
-const loggingLevels = ["trace", "debug", "info", "warn", "error"];
+const loggingLevels = LOG_LEVELS.map((l) => l.toLowerCase());
 const loggingFormats = ["pretty", "json"];
 
 export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {

@@ -28,7 +28,8 @@ export function TrafficChart({ history }: TrafficChartProps) {
   const data = useMemo<ChartDataPoint[]>(() => {
     if (history.length < 2) return [];
 
-    const now = Date.now();
+    // Derive relative time from the latest data point instead of wall clock
+    const latestTs = new Date(history[history.length - 1].timestamp).getTime();
     const points: ChartDataPoint[] = [];
 
     for (let i = 1; i < history.length; i++) {
@@ -39,7 +40,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
       const bytesDownDiff = Math.max(0, curr.total_bytes_down - prev.total_bytes_down);
 
       const ts = new Date(curr.timestamp);
-      const secsAgo = Math.round((now - ts.getTime()) / 1000);
+      const secsAgo = Math.round((latestTs - ts.getTime()) / 1000);
 
       const time =
         secsAgo <= 120
@@ -85,13 +86,12 @@ export function TrafficChart({ history }: TrafficChartProps) {
                 className="text-muted-foreground"
                 width={80}
               />
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <Tooltip
-                formatter={(value: any, name: any) => [
+                formatter={(value, name) => [
                   formatBytes(Number(value)),
                   name === "bytes_up" ? "Upload" : "Download",
                 ]}
-                labelFormatter={(label: any) => String(label)}
+                labelFormatter={(label) => String(label)}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",

@@ -40,8 +40,8 @@ export default function RoutingPage() {
   function handleToggle(id: string, enabled: boolean) {
     const rule = routes?.find((r) => r.id === id);
     if (!rule) return;
-    const { id: _id, ...rest } = rule;
-    updateRoute.mutate({ id, data: { ...rest, enabled } });
+    const { name, priority, condition, action } = rule;
+    updateRoute.mutate({ id, data: { name, priority, condition, action, enabled } });
   }
 
   return (
@@ -49,7 +49,7 @@ export default function RoutingPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Routing Rules</h2>
         <RuleEditor
-          onSubmit={(rule) => createRoute.mutate(rule)}
+          onSubmit={async (rule) => { await createRoute.mutateAsync(rule); }}
           isLoading={createRoute.isPending}
         />
       </div>

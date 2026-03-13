@@ -16,7 +16,6 @@ export function ClientForm({ onSubmit, isLoading }: ClientFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     onSubmit(name.trim());
-    setName("");
   }
 
   return (

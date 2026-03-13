@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { LogEntry } from "@/lib/types";
+import { LOG_LEVEL_PRIORITY } from "@/lib/types";
 import { createWebSocket } from "@/lib/ws";
 
 const MAX_LOGS = 10000;
@@ -12,16 +13,23 @@ export interface LogEntryWithId extends LogEntry {
   _id: number;
 }
 
+interface LogFilter {
+  level?: string;
+  target?: string;
+}
+
 export function useLogs() {
-  const [logs, setLogs] = useState<LogEntryWithId[]>([]);
+  const [allLogs, setAllLogs] = useState<LogEntryWithId[]>([]);
+  const [filter, setFilterState] = useState<LogFilter>({});
   const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
 
-  const setFilter = useCallback((filter: { level?: string; target?: string }) => {
-    wsRef.current?.send(filter);
+  const setFilter = useCallback((f: LogFilter) => {
+    setFilterState(f);
+    wsRef.current?.send(f);
   }, []);
 
   const clearLogs = useCallback(() => {
-    setLogs([]);
+    setAllLogs([]);
   }, []);
 
   useEffect(() => {
@@ -29,9 +37,8 @@ export function useLogs() {
       "/api/ws/logs",
       (entry) => {
         const entryWithId: LogEntryWithId = { ...entry, _id: ++logIdCounter };
-        setLogs((prev) => {
+        setAllLogs((prev) => {
           if (prev.length >= MAX_LOGS) {
-            // Trim from front, append to end — single slice instead of spread + slice
             const trimmed = prev.slice(-(MAX_LOGS - 1));
             trimmed.push(entryWithId);
             return trimmed;
@@ -45,6 +52,23 @@ export function useLogs() {
       wsRef.current?.close();
     };
   }, []);
+
+  // Client-side filtering for level and target
+  const logs = useMemo(() => {
+    if (!filter.level && !filter.target) return allLogs;
+    const minPriority = filter.level
+      ? LOG_LEVEL_PRIORITY[filter.level.toUpperCase()] ?? 0
+      : 0;
+    return allLogs.filter((entry) => {
+      if (filter.level && (LOG_LEVEL_PRIORITY[entry.level] ?? 0) < minPriority) {
+        return false;
+      }
+      if (filter.target && !entry.target.includes(filter.target)) {
+        return false;
+      }
+      return true;
+    });
+  }, [allLogs, filter]);
 
   return { logs, setFilter, clearLogs };
 }

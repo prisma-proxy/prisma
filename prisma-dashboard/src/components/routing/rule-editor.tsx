@@ -23,7 +23,7 @@ import {
 import type { RoutingRule, RuleCondition } from "@/lib/types";
 
 interface RuleEditorProps {
-  onSubmit: (rule: Omit<RoutingRule, "id">) => void;
+  onSubmit: (rule: Omit<RoutingRule, "id">) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -70,17 +70,21 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSubmit({
-      name,
-      priority,
-      condition: buildCondition(),
-      action,
-      enabled: true,
-    });
-    resetForm();
-    setOpen(false);
+    try {
+      await onSubmit({
+        name,
+        priority,
+        condition: buildCondition(),
+        action,
+        enabled: true,
+      });
+      resetForm();
+      setOpen(false);
+    } catch {
+      // Keep form open on failure so the user can retry
+    }
   }
 
   return (
