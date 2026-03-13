@@ -19,6 +19,7 @@ const config: Config = {
   onBrokenLinks: 'throw',
 
   markdown: {
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'throw',
     },
@@ -33,12 +34,31 @@ const config: Config = {
     },
   },
 
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        language: ['en', 'zh'],
+        indexBlog: false,
+        docsRouteBasePath: '/docs',
+      },
+    ],
+  ],
+
   presets: [
     [
       'classic',
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          editUrl: `${repoUrl}/edit/master/prisma-docs/`,
+          showLastUpdateTime: true,
+          lastVersion: 'current',
+          versions: {
+            current: {label: 'v3', path: ''},
+          },
         },
         blog: false,
         theme: {
@@ -49,11 +69,27 @@ const config: Config = {
   ],
 
   themeConfig: {
+    announcementBar: {
+      id: 'v3_release',
+      content:
+        'PrismaVeil v3 is here — <a href="/prisma/docs/introduction">1-RTT handshake, XPorta transport, and more</a>',
+      isCloseable: true,
+    },
+    mermaid: {
+      theme: {light: 'neutral', dark: 'dark'},
+    },
+    tableOfContents: {
+      minHeadingLevel: 2,
+      maxHeadingLevel: 4,
+    },
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      disableSwitch: false,
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'Prisma Proxy',
+      logo: {alt: 'Prisma Proxy Logo', src: 'img/logo.svg'},
       items: [
         {
           type: 'docSidebar',
@@ -62,13 +98,18 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          type: 'docsVersionDropdown',
+          position: 'right',
+        },
+        {
           type: 'localeDropdown',
           position: 'right',
         },
         {
           href: repoUrl,
-          label: 'GitHub',
           position: 'right',
+          className: 'header-github-link',
+          'aria-label': 'GitHub repository',
         },
       ],
     },
@@ -89,6 +130,23 @@ const config: Config = {
             {
               label: 'CLI Reference',
               to: '/docs/cli-reference',
+            },
+          ],
+        },
+        {
+          title: 'Deployment',
+          items: [
+            {
+              label: 'Docker',
+              to: '/docs/deployment/docker',
+            },
+            {
+              label: 'Linux (systemd)',
+              to: '/docs/deployment/linux-systemd',
+            },
+            {
+              label: 'Cloudflare CDN',
+              to: '/docs/deployment/cloudflare-cdn',
             },
           ],
         },
@@ -115,12 +173,23 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Prisma Proxy. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Prisma Proxy.`,
     },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
-      additionalLanguages: ['toml', 'bash', 'rust'],
+      additionalLanguages: ['toml', 'bash', 'rust', 'powershell', 'json'],
+      magicComments: [
+        {
+          className: 'theme-code-block-highlighted-line',
+          line: 'highlight-next-line',
+          block: {start: 'highlight-start', end: 'highlight-end'},
+        },
+        {
+          className: 'code-block-error-line',
+          line: 'This is an error',
+        },
+      ],
     },
   } satisfies Preset.ThemeConfig,
 };
