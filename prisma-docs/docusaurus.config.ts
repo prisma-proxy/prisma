@@ -69,13 +69,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    announcementBar: {
-      id: 'v3_release',
-      content:
-        'PrismaVeil v3 is here — <a href="/prisma/docs/introduction">1-RTT handshake, XPorta transport, and more</a>',
-      isCloseable: true,
-    },
-    mermaid: {
+mermaid: {
       theme: {light: 'neutral', dark: 'dark'},
     },
     tableOfContents: {

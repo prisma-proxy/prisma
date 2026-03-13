@@ -352,25 +352,6 @@ div[class*='codeBlockTitle'] {
 }
 
 /* ========================================
-   Announcement bar
-   ======================================== */
-div[class*='announcementBar'] {
-  background-color: #1e3a5f;
-  color: #ffffff;
-  font-weight: 500;
-}
-
-div[class*='announcementBar'] a {
-  color: #93c5fd;
-  text-decoration: underline;
-}
-
-[data-theme='dark'] div[class*='announcementBar'] {
-  background-color: #0c2d5a;
-  border-bottom: 1px solid #1e3a5f;
-}
-
-/* ========================================
    Footer
    ======================================== */
 .footer--dark {
