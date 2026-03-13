@@ -29,8 +29,18 @@ impl ProxyContext {
             "TCP"
         };
 
+        // When QUIC is used without camouflage, the server expects ALPN "prisma-v1".
+        // The configured alpn_protocols (default ["h2","http/1.1"]) are only for camouflage mode.
+        let quic_alpn: Vec<String>;
+        let alpn = if self.use_quic && !self.tls_on_tcp {
+            quic_alpn = vec!["prisma-v1".into()];
+            &quic_alpn
+        } else {
+            &self.alpn_protocols
+        };
+
         let result = if self.use_quic {
-            connector::connect_quic(&self.server_addr, self.skip_cert_verify, &self.alpn_protocols, self.server_name()).await
+            connector::connect_quic(&self.server_addr, self.skip_cert_verify, alpn, self.server_name()).await
         } else if self.tls_on_tcp {
             connector::connect_tcp_tls(&self.server_addr, self.server_name(), self.skip_cert_verify, &self.alpn_protocols).await
         } else {
