@@ -186,6 +186,32 @@ sudo journalctl -u prisma-server --since "1 hour ago"
 | `ReadOnlyPaths=/etc/prisma` | 确保配置文件不能被服务修改 |
 | `LimitNOFILE=65535` | 提高文件描述符限制以支持高并发连接 |
 
+## 仪表盘（可选）
+
+```bash
+sudo mkdir -p /opt/prisma/dashboard
+# 从发布版：
+sudo tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+# 或从源码构建：
+cd prisma-dashboard && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
+```
+
+在 `server.toml` 中添加：
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token"
+dashboard_dir = "/opt/prisma/dashboard"
+```
+
+更新服务文件以允许仪表盘访问：
+
+```ini
+ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
+```
+
 ## 目录布局总结
 
 ```

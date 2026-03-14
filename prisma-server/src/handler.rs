@@ -8,9 +8,9 @@ use prisma_core::config::server::{PortForwardingConfig, RuleAction, RuleConditio
 use prisma_core::crypto::aead::create_cipher;
 use prisma_core::crypto::kdf::derive_ticket_key;
 use prisma_core::protocol::codec::*;
-use prisma_core::protocol::handshake::{ServerHandshake, ServerHandshakeV3};
+use prisma_core::protocol::handshake::PrismaHandshakeServer;
 use prisma_core::protocol::types::*;
-use prisma_core::types::{PaddingRange, ProxyAddress, ProxyDestination, PROTOCOL_VERSION};
+use prisma_core::types::{PaddingRange, ProxyAddress, ProxyDestination, PRISMA_PROTOCOL_VERSION};
 use prisma_core::util;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -55,7 +55,7 @@ pub async fn handle_tcp_connection(
             }
         }
     };
-    info!(session_id = %session_keys.session_id, "Handshake complete (TCP)");
+    info!(session_id = %session_keys.session_id, "Handshake complete (TCP, v4)");
 
     let (read, write) = stream.into_split();
     run_registered_session(
@@ -131,108 +131,74 @@ where
 
     let version = client_hello_buf[0];
 
-    if version == PROTOCOL_VERSION {
-        // v3 handshake: 2-step ClientInit → ServerInit
-        let ticket_key = derive_ticket_key_from_state(state).await;
-        let (server_init_bytes, server_state) = match ServerHandshakeV3::process_client_init(
-            &client_hello_buf,
-            padding_range,
-            DEFAULT_SERVER_FEATURES,
-            &ticket_key,
-            &auth,
-        ) {
-            Ok(result) => result,
-            Err(e) => {
-                warn!(error = %e, "v3 ClientInit processing failed");
-                state
-                    .metrics
-                    .handshake_failures
-                    .fetch_add(1, Ordering::Relaxed);
-                if let Some(ref fallback) = fallback_addr {
-                    let mut frame_bytes = Vec::with_capacity(2 + frame_len);
-                    frame_bytes.extend_from_slice(&peek[0..2]);
-                    frame_bytes.extend_from_slice(&client_hello_buf);
-                    let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
-                }
-                return Ok(());
-            }
-        };
-
-        util::write_framed(&mut stream, &server_init_bytes).await?;
-
-        // v3: handshake is complete after ServerInit. Session keys are ready.
-        // The client's first data frame must be a ChallengeResponse.
-        let session_keys = server_state.into_session_keys();
-
-        info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged, v3)");
-
-        let (read, write) = tokio::io::split(stream);
-        run_registered_session_v3(
-            session_keys,
-            read,
-            write,
-            Transport::Tcp,
-            peer_addr,
-            &auth,
-            dns_cache,
-            forward_config,
-            ctx,
-        )
-        .await
-    } else {
-        // v1/v2 handshake: 4-step
-        let (server_hello_bytes, server_state) =
-            match ServerHandshake::process_client_hello_with_padding(
-                &client_hello_buf,
-                padding_range,
-            ) {
-                Ok(result) => result,
-                Err(e) => {
-                    warn!(error = %e, "Invalid ClientHello in camouflaged connection");
-                    if let Some(ref fallback) = fallback_addr {
-                        let mut frame_bytes = Vec::with_capacity(2 + frame_len);
-                        frame_bytes.extend_from_slice(&peek[0..2]);
-                        frame_bytes.extend_from_slice(&client_hello_buf);
-                        let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
-                    }
-                    return Ok(());
-                }
-            };
-
-        util::write_framed(&mut stream, &server_hello_bytes).await?;
-
-        let client_auth_buf = util::read_framed(&mut stream).await?;
-
-        let (accept_bytes, session_keys) =
-            match server_state.process_client_auth(&client_auth_buf, &auth) {
-                Ok(result) => result,
-                Err(e) => {
-                    state
-                        .metrics
-                        .handshake_failures
-                        .fetch_add(1, Ordering::Relaxed);
-                    return Err(e.into());
-                }
-            };
-
-        util::write_framed(&mut stream, &accept_bytes).await?;
-
-        info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged)");
-
-        let (read, write) = tokio::io::split(stream);
-        run_registered_session(
-            session_keys,
-            read,
-            write,
-            Transport::Tcp,
-            peer_addr,
-            &auth,
-            dns_cache,
-            forward_config,
-            ctx,
-        )
-        .await
+    if version != PRISMA_PROTOCOL_VERSION {
+        // Not a supported protocol version — relay to fallback (treat as probe)
+        warn!(version, "Unsupported protocol version, relaying to fallback");
+        if let Some(ref fallback) = fallback_addr {
+            let mut frame_bytes = Vec::with_capacity(2 + frame_len);
+            frame_bytes.extend_from_slice(&peek[0..2]);
+            frame_bytes.extend_from_slice(&client_hello_buf);
+            let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
+        }
+        return Ok(());
     }
+
+    // v4 handshake: 2-step
+    let ticket_key = derive_ticket_key_from_state(state).await;
+
+    let bucket_sizes = {
+        let cfg = state.config.read().await;
+        let ts = &cfg.traffic_shaping;
+        let mode = prisma_core::traffic_shaping::PaddingMode::from_str(&ts.padding_mode);
+        if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
+            ts.bucket_sizes.clone()
+        } else {
+            Vec::new()
+        }
+    };
+
+    let (server_init_bytes, session_keys) = match PrismaHandshakeServer::process_client_init(
+        &client_hello_buf,
+        padding_range,
+        DEFAULT_SERVER_FEATURES,
+        &ticket_key,
+        &bucket_sizes,
+        &auth,
+    ) {
+        Ok((bytes, state)) => (bytes, state.into_session_keys()),
+        Err(e) => {
+            warn!(error = %e, "ClientInit processing failed");
+            state
+                .metrics
+                .handshake_failures
+                .fetch_add(1, Ordering::Relaxed);
+            if let Some(ref fallback) = fallback_addr {
+                let mut frame_bytes = Vec::with_capacity(2 + frame_len);
+                frame_bytes.extend_from_slice(&peek[0..2]);
+                frame_bytes.extend_from_slice(&client_hello_buf);
+                let _ = camouflage::decoy_relay(stream, fallback, &frame_bytes).await;
+            }
+            return Ok(());
+        }
+    };
+
+    util::write_framed(&mut stream, &server_init_bytes).await?;
+
+    info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged, v4)");
+
+    let (read, write) = tokio::io::split(stream);
+    run_registered_session(
+        session_keys,
+        read,
+        write,
+        Transport::Tcp,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        ctx,
+    )
+    .await
 }
 
 /// Handle an incoming QUIC bidirectional stream.
@@ -261,39 +227,22 @@ pub async fn handle_quic_stream(
             }
         };
 
-    if session_keys.protocol_version == PROTOCOL_VERSION {
-        info!(session_id = %session_keys.session_id, "Handshake complete (QUIC, v3)");
-        run_registered_session_v3(
-            session_keys,
-            recv,
-            send,
-            Transport::Quic,
-            peer_addr,
-            &auth,
-            dns_cache,
-            forward_config,
-            ctx,
-        )
-        .await
-    } else {
-        info!(session_id = %session_keys.session_id, "Handshake complete (QUIC)");
-        run_registered_session(
-            session_keys,
-            recv,
-            send,
-            Transport::Quic,
-            peer_addr,
-            &auth,
-            dns_cache,
-            forward_config,
-            ctx,
-        )
-        .await
-    }
+    info!(session_id = %session_keys.session_id, "Handshake complete (QUIC, v4)");
+    run_registered_session(
+        session_keys,
+        recv,
+        send,
+        Transport::Quic,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        ctx,
+    )
+    .await
 }
 
-/// Unified handshake over any AsyncRead + AsyncWrite pair.
-/// Detects protocol version and uses appropriate handshake flow.
+/// Unified handshake over any AsyncRead + AsyncWrite pair (v4 only).
 async fn perform_handshake<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -305,44 +254,46 @@ where
     R: AsyncReadExt + Unpin,
     W: AsyncWriteExt + Unpin,
 {
-    let client_hello_buf = util::read_framed(reader).await?;
+    let client_init_buf = util::read_framed(reader).await?;
 
-    if client_hello_buf.is_empty() {
-        return Err(anyhow::anyhow!("Empty client hello"));
+    if client_init_buf.is_empty() {
+        return Err(anyhow::anyhow!("Empty client init"));
     }
 
-    let version = client_hello_buf[0];
+    let version = client_init_buf[0];
 
-    if version == PROTOCOL_VERSION {
-        // v3 handshake: 2-step
-        let ticket_key = derive_ticket_key_from_state(state).await;
-        let (server_init_bytes, server_state) = ServerHandshakeV3::process_client_init(
-            &client_hello_buf,
-            padding_range,
-            DEFAULT_SERVER_FEATURES,
-            &ticket_key,
-            auth,
-        )?;
-
-        util::write_framed(writer, &server_init_bytes).await?;
-
-        Ok(server_state.into_session_keys())
-    } else {
-        // v1/v2 handshake: 4-step
-        let (server_hello_bytes, server_state) =
-            ServerHandshake::process_client_hello_with_padding(&client_hello_buf, padding_range)?;
-
-        util::write_framed(writer, &server_hello_bytes).await?;
-
-        let client_auth_buf = util::read_framed(reader).await?;
-
-        let (accept_bytes, session_keys) =
-            server_state.process_client_auth(&client_auth_buf, auth)?;
-
-        util::write_framed(writer, &accept_bytes).await?;
-
-        Ok(session_keys)
+    if version != PRISMA_PROTOCOL_VERSION {
+        return Err(anyhow::anyhow!(
+            "Unsupported protocol version: 0x{:02x}, expected v4 (0x{:02x})",
+            version,
+            PRISMA_PROTOCOL_VERSION
+        ));
     }
+
+    // v4 handshake: 2-step with bucket sizes
+    let ticket_key = derive_ticket_key_from_state(state).await;
+    let bucket_sizes = {
+        let cfg = state.config.read().await;
+        let ts = &cfg.traffic_shaping;
+        let mode = prisma_core::traffic_shaping::PaddingMode::from_str(&ts.padding_mode);
+        if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
+            ts.bucket_sizes.clone()
+        } else {
+            Vec::new()
+        }
+    };
+    let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+        &client_init_buf,
+        padding_range,
+        DEFAULT_SERVER_FEATURES,
+        &ticket_key,
+        &bucket_sizes,
+        auth,
+    )?;
+
+    util::write_framed(writer, &server_init_bytes).await?;
+
+    Ok(server_state.into_session_keys())
 }
 
 /// Derive a ticket key from server state (uses first authorized client's secret as seed).
@@ -357,7 +308,7 @@ async fn derive_ticket_key_from_state(state: &ServerState) -> [u8; 32] {
     }
 }
 
-/// Register a session in state, run it, then clean up on exit (v1/v2).
+/// Register a session in state, verify challenge response, run it, then clean up on exit.
 #[allow(clippy::too_many_arguments)]
 async fn run_registered_session<R, W>(
     session_keys: SessionKeys,
@@ -381,6 +332,7 @@ where
         client_name = %display_name,
         peer = %peer_addr,
         transport = ?transport,
+        protocol = "v4",
         "Client connected"
     );
 
@@ -404,7 +356,7 @@ where
         .await
         .insert(session_id, conn_info);
 
-    let result = handle_session(
+    let result = handle_session_with_challenge(
         session_keys,
         read,
         write,
@@ -435,88 +387,9 @@ where
     result
 }
 
-/// Register a v3 session — first data frame must be ChallengeResponse.
+/// Verify challenge response from the first data frame, then proceed to handle the session.
 #[allow(clippy::too_many_arguments)]
-async fn run_registered_session_v3<R, W>(
-    session_keys: SessionKeys,
-    read: R,
-    write: W,
-    transport: Transport,
-    peer_addr: String,
-    auth: &AuthStore,
-    dns_cache: DnsCache,
-    forward_config: PortForwardingConfig,
-    ctx: ServerContext,
-) -> Result<()>
-where
-    R: AsyncRead + Unpin + Send + 'static,
-    W: AsyncWrite + Unpin + Send + 'static,
-{
-    let client_name = auth.client_name(&session_keys.client_id);
-    let display_name = client_name.clone().unwrap_or_else(|| "unknown".into());
-    info!(
-        client_id = %session_keys.client_id.0,
-        client_name = %display_name,
-        peer = %peer_addr,
-        transport = ?transport,
-        protocol = "v3",
-        "Client connected"
-    );
-
-    let bytes_up = Arc::new(AtomicU64::new(0));
-    let bytes_down = Arc::new(AtomicU64::new(0));
-    let conn_info = ConnectionInfo {
-        session_id: session_keys.session_id,
-        client_id: Some(session_keys.client_id.0),
-        client_name,
-        peer_addr: peer_addr.clone(),
-        transport,
-        mode: SessionMode::Unknown,
-        connected_at: Utc::now(),
-        bytes_up: bytes_up.clone(),
-        bytes_down: bytes_down.clone(),
-    };
-    let session_id = session_keys.session_id;
-    ctx.state
-        .connections
-        .write()
-        .await
-        .insert(session_id, conn_info);
-
-    let result = handle_session_v3(
-        session_keys,
-        read,
-        write,
-        dns_cache,
-        forward_config,
-        ctx.clone(),
-        bytes_up,
-        bytes_down,
-    )
-    .await;
-
-    ctx.state.connections.write().await.remove(&session_id);
-    match &result {
-        Ok(()) => info!(
-            session_id = %session_id,
-            client_name = %display_name,
-            peer = %peer_addr,
-            "Client disconnected"
-        ),
-        Err(e) => warn!(
-            session_id = %session_id,
-            client_name = %display_name,
-            peer = %peer_addr,
-            error = %e,
-            "Client disconnected with error"
-        ),
-    }
-    result
-}
-
-/// v3 session handler: verify challenge response, then proceed as normal.
-#[allow(clippy::too_many_arguments)]
-async fn handle_session_v3<R, W>(
+async fn handle_session_with_challenge<R, W>(
     session_keys: SessionKeys,
     mut tunnel_read: R,
     tunnel_write: W,
@@ -551,7 +424,7 @@ where
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Expected ChallengeResponse as first v3 frame, got cmd={}",
+                "Expected ChallengeResponse as first frame, got cmd={}",
                 frame.command.cmd_byte()
             ));
         }
@@ -837,25 +710,8 @@ fn domain_glob_match(pattern: &str, domain: &str) -> bool {
 }
 
 fn cidr_match_v4(cidr: &str, ip: std::net::Ipv4Addr) -> bool {
-    let parts: Vec<&str> = cidr.split('/').collect();
-    if parts.len() != 2 {
-        return false;
-    }
-    let Ok(network) = parts[0].parse::<std::net::Ipv4Addr>() else {
+    let Some((network, mask)) = prisma_core::router::parse_cidr_v4(cidr) else {
         return false;
     };
-    let Ok(prefix_len) = parts[1].parse::<u32>() else {
-        return false;
-    };
-    if prefix_len > 32 {
-        return false;
-    }
-    let mask = if prefix_len == 0 {
-        0u32
-    } else {
-        !0u32 << (32 - prefix_len)
-    };
-    let ip_bits = u32::from(ip);
-    let net_bits = u32::from(network);
-    (ip_bits & mask) == (net_bits & mask)
+    (u32::from(ip) & mask) == network
 }

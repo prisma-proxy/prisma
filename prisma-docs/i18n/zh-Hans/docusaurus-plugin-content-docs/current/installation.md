@@ -15,14 +15,14 @@ import TabItem from '@theme/TabItem';
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1 | iex
+irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1 | iex
 ```
 
   </TabItem>
@@ -36,14 +36,14 @@ irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1 | iex
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash -s -- --setup
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --setup
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1))) -Setup
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Setup
 ```
 
   </TabItem>
@@ -54,23 +54,96 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh |
 - `prisma-cert.pem` / `prisma-key.pem` — TLS 证书和私钥
 - `server.toml` / `client.toml` — 示例配置文件（如果不存在）
 
-### 自定义安装目录
+### 安装指定版本
 
-设置 `PRISMA_INSTALL_DIR` 指定安装位置：
+固定到特定版本而非最新版本：
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-PRISMA_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v0.2.1
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-$env:PRISMA_INSTALL_DIR = "C:\tools\prisma"; irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v0.2.1
 ```
+
+  </TabItem>
+</Tabs>
+
+### 自定义安装目录
+
+使用 `--dir`（或设置 `PRISMA_INSTALL_DIR`）指定安装位置：
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Dir "C:\tools\prisma"
+```
+
+  </TabItem>
+</Tabs>
+
+### 卸载
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --uninstall
+```
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Uninstall
+```
+
+  </TabItem>
+</Tabs>
+
+### 安装脚本选项参考
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+| 选项 | 描述 |
+|------|------|
+| `--setup` | 生成凭证、TLS 证书和示例配置文件 |
+| `--version VER` | 安装指定版本（如 `v0.2.1`）。默认：latest |
+| `--dir DIR` | 安装目录。默认：`/usr/local/bin` |
+| `--config-dir DIR` | `--setup` 的配置文件输出目录。默认：当前目录 |
+| `--uninstall` | 删除 prisma 二进制文件 |
+| `--force` | 覆盖已有安装而不报告当前版本 |
+| `--no-verify` | 跳过 SHA256 校验和验证 |
+| `--quiet` | 静默模式，不输出信息 |
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+| 选项 | 描述 |
+|------|------|
+| `-Setup` | 生成凭证、TLS 证书和示例配置文件 |
+| `-Version VER` | 安装指定版本（如 `v0.2.1`）。默认：latest |
+| `-Dir DIR` | 安装目录。默认：`%LOCALAPPDATA%\prisma` |
+| `-ConfigDir DIR` | `-Setup` 的配置文件输出目录。默认：当前目录 |
+| `-Uninstall` | 删除 prisma 二进制文件并清理 PATH |
+| `-Force` | 覆盖已有安装而不报告当前版本 |
+| `-NoVerify` | 跳过 SHA256 校验和验证 |
+| `-Quiet` | 静默模式，不输出信息 |
 
   </TabItem>
 </Tabs>

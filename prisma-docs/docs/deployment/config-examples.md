@@ -49,6 +49,8 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "auto"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -61,10 +63,10 @@ format = "pretty"
 
 | Pros | Cons |
 |------|------|
-| Lowest latency (QUIC multiplexed streams) | Server IP visible to network observers |
+| Lowest latency (QUIC v2 multiplexed streams) | Server IP visible to network observers |
 | Simplest configuration | UDP may be blocked on some networks |
 | No domain or CDN required | No active probe resistance |
-| Built-in TLS 1.3 | IP can be discovered and blocked |
+| Built-in TLS 1.3 + browser fingerprint mimicry | IP can be discovered and blocked |
 
 ---
 
@@ -117,6 +119,7 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "tcp"
 skip_cert_verify = false
+fingerprint = "chrome"
 tls_on_tcp = true
 tls_server_name = "example.com"
 alpn_protocols = ["h2", "http/1.1"]
@@ -453,6 +456,11 @@ enabled = true
 salamander_password = "YOUR-SHARED-OBFUSCATION-KEY"
 alpn_protocols = ["h3"]
 
+# Traffic shaping (anti-fingerprinting)
+[traffic_shaping]
+padding_mode = "bucket"
+bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+
 [congestion]
 mode = "bbr"
 
@@ -473,8 +481,11 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "v2"
 salamander_password = "YOUR-SHARED-OBFUSCATION-KEY"
 alpn_protocols = ["h3"]
+entropy_camouflage = true
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -511,6 +522,7 @@ Production deployment with all features: CDN transport (XPorta + WebSocket + XHT
 ```toml
 listen_addr = "0.0.0.0:8443"
 quic_listen_addr = "0.0.0.0:8443"
+dns_upstream = "8.8.8.8:53"
 
 [tls]
 cert_path = "/etc/letsencrypt/live/example.com/fullchain.pem"
@@ -608,7 +620,28 @@ listen_addr = "127.0.0.1:9090"
 auth_token = "YOUR-SECURE-TOKEN"
 dashboard_dir = "/opt/prisma/dashboard"
 
-dns_upstream = "8.8.8.8:53"
+# Static routing rules (persist across restarts)
+[routing]
+# geoip_path = "/etc/prisma/geoip.dat"
+
+[[routing.rules]]
+type = "ip-cidr"
+value = "10.0.0.0/8"
+action = "block"
+
+[[routing.rules]]
+type = "ip-cidr"
+value = "172.16.0.0/12"
+action = "block"
+
+[[routing.rules]]
+type = "domain-keyword"
+value = "torrent"
+action = "block"
+
+[[routing.rules]]
+type = "all"
+action = "allow"
 ```
 
 ### Client (XPorta — maximum stealth)
@@ -670,6 +703,8 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "auto"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -689,21 +724,36 @@ include_routes = ["0.0.0.0/0"]
 # exclude_routes auto-excludes server IP
 dns = "fake"
 
-[routing.rules]
-# Direct access for local networks
+# GeoIP-based split routing
+[routing]
+geoip_path = "/etc/prisma/geoip.dat"
+
+# Direct access for private/local networks (via GeoIP)
 [[routing.rules]]
-type = "ip-cidr"
-value = "10.0.0.0/8"
+type = "geoip"
+value = "private"
+action = "direct"
+
+# Direct access for CN IPs (bypass proxy for domestic traffic)
+[[routing.rules]]
+type = "geoip"
+value = "cn"
+action = "direct"
+
+# Direct access for CN domains
+[[routing.rules]]
+type = "domain-suffix"
+value = "cn"
 action = "direct"
 
 [[routing.rules]]
-type = "ip-cidr"
-value = "192.168.0.0/16"
+type = "domain-suffix"
+value = "baidu.com"
 action = "direct"
 
 [[routing.rules]]
-type = "ip-cidr"
-value = "172.16.0.0/12"
+type = "domain-suffix"
+value = "qq.com"
 action = "direct"
 
 # Block ads

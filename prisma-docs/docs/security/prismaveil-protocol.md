@@ -10,22 +10,20 @@ PrismaVeil is the custom wire protocol used between the Prisma client and server
 
 | Version | Handshake | Features |
 |---------|-----------|----------|
-| v1 (0x01) | 4-step (2 RTT) | Basic proxy, port forwarding |
-| v2 (0x02) | 4-step (2 RTT) | + Per-frame padding, XHTTP transport, XMUX |
-| **v3 (0x03)** | **2-step (1 RTT)** | + 0-RTT resumption, PrismaUDP, FEC, DNS, speed test, congestion control, port hopping, Salamander |
+| **v4 (0x04)** | **2-step (1 RTT)** | All features: 0-RTT resumption, PrismaUDP, FEC, DNS, speed test, congestion control, port hopping, Salamander v2, bucket padding, traffic shaping, PrismaTLS, PrismaFP, entropy camouflage |
 
-## v3 Handshake (Current)
+## PrismaVeil Handshake
 
-The v3 handshake reduces latency from 2 RTT (v1/v2) to 1 RTT by combining authentication into the initial key exchange:
+The PrismaVeil handshake achieves 1 RTT by combining authentication into the initial key exchange:
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
 
-    C->>S: ClientInit (version=0x03, flags, X25519 pubkey, client_id, timestamp, cipher_suite, auth_token, padding)
+    C->>S: PrismaClientInit (version=0x04, flags, X25519 pubkey, client_id, timestamp, cipher_suite, auth_token, padding)
     Note over S: ECDH → preliminary key
-    S->>C: ServerInit [encrypted] (status, session_id, X25519 pubkey, challenge, padding_range, features, session_ticket, padding)
+    S->>C: PrismaServerInit [encrypted] (status, session_id, X25519 pubkey, challenge, padding_range, features, bucket_sizes, session_ticket, padding)
     Note over C: Derive final session key
     C->>S: ChallengeResponse [encrypted] (BLAKE3(challenge))
     Note over C,S: Encrypted data frames
@@ -35,7 +33,7 @@ sequenceDiagram
 
 | Field | Size | Description |
 |-------|------|-------------|
-| `version` | 1 byte | `0x03` |
+| `version` | 1 byte | `0x04` |
 | `flags` | 1 byte | Bit 0: has_0rtt_data, Bit 1: resumption |
 | `client_ephemeral_pub` | 32 bytes | X25519 ephemeral public key |
 | `client_id` | 16 bytes | Client UUID |
@@ -55,6 +53,8 @@ sequenceDiagram
 | `padding_min` | 2 bytes (LE) | Negotiated minimum per-frame padding |
 | `padding_max` | 2 bytes (LE) | Negotiated maximum per-frame padding |
 | `server_features` | 4 bytes (LE) | Bitmask of supported features |
+| `bucket_count` | 2 bytes | Number of bucket sizes for traffic shaping |
+| `bucket_sizes` | variable | Bucket size list (2 bytes each, `bucket_count` entries) |
 | `session_ticket_len` | 2 bytes | Length of session ticket |
 | `session_ticket` | variable | Opaque ticket for 0-RTT resumption |
 | `padding` | variable | Random padding |
@@ -73,7 +73,7 @@ sequenceDiagram
     participant C as Client
     participant S as Server
 
-    C->>S: ClientResume (version=0x03, flags=RESUMPTION, X25519 pubkey, session_ticket, encrypted_0rtt_data)
+    C->>S: ClientResume (version=0x04, flags=RESUMPTION, X25519 pubkey, session_ticket, encrypted_0rtt_data)
     S->>C: ServerResume
     Note over C,S: Encrypted data frames (resumed)
 ```
@@ -101,16 +101,6 @@ Anti-replay protection: Server maintains a bloom filter of used session tickets.
 | `0x03` | VersionMismatch | Unsupported protocol version |
 | `0x04` | QuotaExceeded | Traffic quota exceeded |
 
-## Legacy v1/v2 Handshake
-
-The 4-step handshake from v1/v2 is still supported for backward compatibility:
-
-```
-ClientHello → ServerHello → ClientAuth → ServerAccept   (2 RTT)
-```
-
-See the v1/v2 documentation for details.
-
 ## Encrypted Frame Wire Format
 
 After the handshake, all data is exchanged as encrypted frames:
@@ -123,17 +113,10 @@ The nonce is transmitted with each frame. The ciphertext includes the AEAD authe
 
 ## Data Frame Plaintext Format
 
-**v3 format (2-byte flags):**
-
 ```
-Unpadded: [command:1][flags:2 LE][stream_id:4][payload:variable]
-Padded:   [command:1][flags:2 LE][stream_id:4][payload_len:2][payload:variable][padding:variable]
-```
-
-**v1/v2 format (1-byte flags, backward compatible):**
-
-```
-[command:1][flags:1][stream_id:4][payload:variable]
+Unpadded:  [command:1][flags:2 LE][stream_id:4][payload:variable]
+Padded:    [command:1][flags:2 LE][stream_id:4][payload_len:2][payload:variable][padding:variable]
+Bucketed:  [command:1][flags:2 LE (FLAG_BUCKETED)][stream_id:4][payload_len:2][payload:variable][bucket_padding:variable]
 ```
 
 ## Command Types
@@ -155,7 +138,7 @@ Padded:   [command:1][flags:2 LE][stream_id:4][payload_len:2][payload:variable][
 | `0x0D` | DNS_RESPONSE | Server → Client | Query ID (2 bytes) + raw DNS response |
 | `0x0E` | CHALLENGE_RESP | Client → Server | BLAKE3 hash (32 bytes) |
 
-## Flag Bits (v3: 2 bytes, little-endian)
+## Flag Bits (2 bytes, little-endian)
 
 | Bit | Name | Description |
 |-----|------|-------------|
@@ -165,6 +148,8 @@ Padded:   [command:1][flags:2 LE][stream_id:4][payload_len:2][payload:variable][
 | 0x0008 | DATAGRAM | Unreliable delivery hint |
 | 0x0010 | COMPRESSED | zstd compressed payload |
 | 0x0020 | 0RTT | Part of 0-RTT data |
+| 0x0040 | BUCKETED | Frame padded to a bucket boundary |
+| 0x0080 | CHAFF | Dummy frame (discard payload) |
 
 ## PrismaUDP
 
@@ -220,7 +205,7 @@ Three configurable modes:
 
 ### Salamander UDP Obfuscation
 
-Strips QUIC headers and XOR-obfuscates all UDP packets with a BLAKE3-derived keystream. Traffic appears as random bytes on the wire.
+Strips QUIC headers and XOR-obfuscates all UDP packets with a BLAKE3-derived keystream. Traffic appears as random bytes on the wire. In v4, Salamander uses a per-packet nonce (non-deterministic) to prevent correlation attacks, and prepends an ASCII prefix for GFW entropy analysis (Ex2) exemption.
 
 ### HTTP/3 Masquerade
 
@@ -242,21 +227,11 @@ Random padding added to every data frame within the negotiated range, preventing
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `PROTOCOL_VERSION` | `0x03` | Current protocol version |
-| `PROTOCOL_VERSION_V2` | `0x02` | v2 protocol (still accepted) |
-| `PROTOCOL_VERSION_V1` | `0x01` | v1 protocol (still accepted) |
+| `PRISMA_PROTOCOL_VERSION` | `0x04` | Current protocol version |
 | `MAX_FRAME_SIZE` | 16384 | Maximum frame size in bytes |
 | `NONCE_SIZE` | 12 | Nonce size in bytes |
 | `MAX_PADDING_SIZE` | 256 | Maximum padding size in bytes |
-| `QUIC_ALPN` | `"prisma-v3"` | QUIC ALPN protocol string |
+| `PRISMA_QUIC_ALPN` | `"h3"` | QUIC ALPN protocol string |
 | `SESSION_TICKET_KEY_SIZE` | 32 | Ticket encryption key size |
 | `SESSION_TICKET_MAX_AGE_SECS` | 86400 | Session ticket lifetime (24h) |
 
-## Backward Compatibility
-
-The v3 server accepts v1, v2, and v3 clients:
-
-- **v1 client → v3 server**: 4-step handshake, no padding, ALPN `"prisma-v1"` accepted
-- **v2 client → v3 server**: 4-step handshake, per-frame padding, ALPN `"prisma-v2"` accepted
-- **v3 client → v3 server**: 2-step handshake, all v3 features, ALPN `"prisma-v3"`
-- **v3 client → v2 server**: Falls back to 4-step handshake if v3 ServerInit not received

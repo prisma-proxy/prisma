@@ -5,7 +5,7 @@ mod validate;
 use clap::{Parser, Subcommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const PROTOCOL_VERSION: u8 = prisma_core::types::PROTOCOL_VERSION;
+const PROTOCOL_VERSION: u8 = prisma_core::types::PRISMA_PROTOCOL_VERSION;
 
 #[derive(Parser)]
 #[command(name = "prisma", about = "Prisma proxy infrastructure suite")]
@@ -270,6 +270,12 @@ async fn run_speed_test(
             &prisma_core::dns::DnsConfig::default(),
         ),
         router: Arc::new(Router::new(vec![])),
+        // v4 fields
+        protocol_version: config.protocol_version.clone(),
+        fingerprint: config.fingerprint.clone(),
+        quic_version: config.quic_version.clone(),
+        traffic_shaping: config.traffic_shaping.clone(),
+        use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
     };
 
     let transport = ctx.connect().await?;
@@ -285,7 +291,7 @@ async fn run_speed_test(
     )
     .await?;
 
-    println!("  Tunnel established (v3, 1 RTT)");
+    println!("  Tunnel established (v4, 1 RTT)");
     println!();
 
     let (mut tunnel_read, mut tunnel_write) = tokio::io::split(tunnel.stream);
@@ -437,10 +443,9 @@ fn print_version() {
         "prisma {} (PrismaVeil Protocol v{})",
         VERSION, PROTOCOL_VERSION
     );
-    println!("Backward-compatible with v1 and v2 clients");
     println!();
-    println!("v3 features:");
-    println!("  - 2-step handshake (1 RTT, down from 2 RTT)");
+    println!("Protocol features:");
+    println!("  - 2-step handshake (1 RTT)");
     println!("  - 0-RTT session resumption with tickets");
     println!("  - PrismaUDP relay (CMD_UDP_ASSOCIATE/UDP_DATA)");
     println!("  - Encrypted DNS queries (CMD_DNS_QUERY/DNS_RESPONSE)");
@@ -450,28 +455,28 @@ fn print_version() {
     println!("  - Server feature negotiation bitmask");
     println!("  - Brutal/BBR/Adaptive congestion control");
     println!("  - Port hopping (QUIC, HMAC-based)");
-    println!("  - Salamander UDP obfuscation");
+    println!("  - Salamander v2 UDP obfuscation (nonce-based)");
     println!("  - Forward Error Correction (Reed-Solomon)");
     println!("  - Smart/Fake/Tunnel DNS modes");
     println!("  - Rule-based routing (domain/IP/port)");
     println!("  - Per-client bandwidth limits and traffic quotas");
     println!("  - XPorta transport (REST API simulation, CDN-compatible)");
-    println!();
-    println!("v2 features:");
-    println!("  - Per-frame padding with configurable ranges");
-    println!("  - XHTTP transport modes (packet-up, stream-up, stream-one)");
-    println!("  - XMUX connection multiplexing");
-    println!("  - HTTP header obfuscation");
+    println!("  - Bucket padding (anti-encapsulated-TLS fingerprinting)");
+    println!("  - Traffic shaping (chaff, jitter, coalescing)");
+    println!("  - PrismaTLS (replaces REALITY, padding beacon auth)");
+    println!("  - PrismaFP (browser fingerprint mimicry)");
+    println!("  - Entropy camouflage (GFW exemption)");
+    println!("  - TUN mode");
     println!();
     println!("Supported ciphers:");
     println!("  - chacha20-poly1305 (default)");
     println!("  - aes-256-gcm");
     println!();
     println!("Supported transports:");
-    println!("  - quic  (default)");
-    println!("  - tcp");
-    println!("  - ws    (WebSocket, CDN-compatible)");
-    println!("  - grpc  (gRPC, CDN-compatible)");
-    println!("  - xhttp  (HTTP-native, CDN-compatible)");
-    println!("  - xporta (REST API simulation, CDN-compatible)");
+    println!("  - quic      (QUIC v2, default)");
+    println!("  - prisma-tls (TCP + PrismaTLS)");
+    println!("  - ws        (WebSocket, CDN-compatible)");
+    println!("  - grpc      (gRPC, CDN-compatible)");
+    println!("  - xhttp     (HTTP-native, CDN-compatible)");
+    println!("  - xporta    (REST API simulation, CDN-compatible)");
 }

@@ -6,7 +6,7 @@ use tracing::{debug, warn};
 
 use prisma_core::protocol::codec::*;
 use prisma_core::protocol::types::*;
-use prisma_core::types::{MAX_FRAME_SIZE, PROTOCOL_VERSION_V2};
+use prisma_core::types::MAX_FRAME_SIZE;
 
 use crate::tunnel::TunnelConnection;
 
@@ -21,7 +21,6 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
 
     // SOCKS5 → tunnel: read raw data, encrypt into frames
     let mut client_keys = tunnel.session_keys.clone();
-    let use_padding = client_keys.protocol_version >= PROTOCOL_VERSION_V2;
     let padding_range = client_keys.padding_range;
     let cipher_s2t = cipher.clone();
     let socks_to_tunnel = async move {
@@ -30,17 +29,12 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
             match socks_read.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    let flags = if use_padding { FLAG_PADDED } else { 0 };
                     let frame = DataFrame {
                         command: Command::Data(buf[..n].to_vec()),
-                        flags,
+                        flags: FLAG_PADDED,
                         stream_id: 0,
                     };
-                    let frame_bytes = if use_padding {
-                        encode_data_frame_padded(&frame, &padding_range)
-                    } else {
-                        encode_data_frame(&frame)
-                    };
+                    let frame_bytes = encode_data_frame_padded(&frame, &padding_range);
                     let nonce = client_keys.next_client_nonce();
                     match encrypt_frame(cipher_s2t.as_ref(), &nonce, &frame_bytes) {
                         Ok(encrypted) => {
@@ -136,7 +130,6 @@ where
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
     let cipher: Arc<dyn prisma_core::crypto::aead::AeadCipher> = Arc::from(cipher);
-    let use_padding = session_keys.protocol_version >= PROTOCOL_VERSION_V2;
     let padding_range = session_keys.padding_range;
 
     // Poll interval for checking smoltcp socket state
@@ -156,17 +149,12 @@ where
                     (n, closed)
                 };
                 if n > 0 {
-                    let flags = if use_padding { FLAG_PADDED } else { 0 };
                     let frame = DataFrame {
                         command: Command::Data(local_buf[..n].to_vec()),
-                        flags,
+                        flags: FLAG_PADDED,
                         stream_id: 0,
                     };
-                    let frame_bytes = if use_padding {
-                        encode_data_frame_padded(&frame, &padding_range)
-                    } else {
-                        encode_data_frame(&frame)
-                    };
+                    let frame_bytes = encode_data_frame_padded(&frame, &padding_range);
                     let nonce = session_keys.next_client_nonce();
                     match encrypt_frame(cipher.as_ref(), &nonce, &frame_bytes) {
                         Ok(encrypted) => {

@@ -26,8 +26,8 @@ const config: Config = {
   },
 
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en', 'zh-Hans'],
+    defaultLocale: 'zh-Hans',
+    locales: ['zh-Hans', 'en'],
     localeConfigs: {
       en: {label: 'English'},
       'zh-Hans': {label: '简体中文'},
@@ -57,7 +57,7 @@ const config: Config = {
           showLastUpdateTime: true,
           lastVersion: 'current',
           versions: {
-            current: {label: 'v3', path: ''},
+            current: {label: 'v4', path: ''},
           },
         },
         blog: false,

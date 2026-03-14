@@ -4,72 +4,32 @@ sidebar_position: 1
 
 # Linux systemd Deployment
 
-This guide covers deploying Prisma as a systemd service on Linux.
+Deploy Prisma as a systemd service on Linux.
 
-## Prerequisites
+## Quick Deploy
 
-- Prisma binary built or installed (see [Installation](../installation.md))
-- Root access for service installation
-
-## 1. Create a system user
+Run these commands to set up Prisma as a system service:
 
 ```bash
+# Install binary + create system user + set up directories
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin prisma
+sudo mkdir -p /etc/prisma && sudo chown prisma:prisma /etc/prisma && sudo chmod 750 /etc/prisma
+sudo cp prisma /usr/local/bin/prisma && sudo chmod 755 /usr/local/bin/prisma
+
+# Copy config and TLS certs (adjust paths as needed)
+sudo install -o prisma -g prisma -m 640 server.toml /etc/prisma/
+sudo install -o prisma -g prisma -m 640 prisma-cert.pem prisma-key.pem /etc/prisma/
 ```
 
-## 2. Set up directories
+:::tip
+Update `cert_path` and `key_path` in your config to `/etc/prisma/prisma-cert.pem` and `/etc/prisma/prisma-key.pem`.
+:::
 
-```bash
-sudo mkdir -p /etc/prisma
-sudo chown prisma:prisma /etc/prisma
-sudo chmod 750 /etc/prisma
-```
+## Service Files
 
-## 3. Install the binary
+### Server
 
-```bash
-sudo cp target/release/prisma /usr/local/bin/prisma
-sudo chmod 755 /usr/local/bin/prisma
-```
-
-## 4. Add configuration files
-
-Copy your `server.toml` and/or `client.toml` to `/etc/prisma/`:
-
-```bash
-sudo cp server.toml /etc/prisma/server.toml
-sudo cp client.toml /etc/prisma/client.toml
-sudo chown prisma:prisma /etc/prisma/*.toml
-sudo chmod 640 /etc/prisma/*.toml
-```
-
-If using TLS certificates, copy them as well:
-
-```bash
-sudo cp prisma-cert.pem prisma-key.pem /etc/prisma/
-sudo chown prisma:prisma /etc/prisma/*.pem
-sudo chmod 640 /etc/prisma/*.pem
-```
-
-Update paths in `server.toml` to reference the new locations:
-
-```toml
-[tls]
-cert_path = "/etc/prisma/prisma-cert.pem"
-key_path = "/etc/prisma/prisma-key.pem"
-```
-
-## 5. Install systemd service files
-
-### Server service
-
-Copy the service file from the repository:
-
-```bash
-sudo cp deploy/systemd/prisma-server.service /etc/systemd/system/
-```
-
-Or create `/etc/systemd/system/prisma-server.service`:
+Create `/etc/systemd/system/prisma-server.service`:
 
 ```ini
 [Unit]
@@ -99,13 +59,9 @@ SyslogIdentifier=prisma-server
 WantedBy=multi-user.target
 ```
 
-### Client service
+### Client
 
-```bash
-sudo cp deploy/systemd/prisma-client.service /etc/systemd/system/
-```
-
-Or create `/etc/systemd/system/prisma-client.service`:
+Create `/etc/systemd/system/prisma-client.service`:
 
 ```ini
 [Unit]
@@ -135,69 +91,48 @@ SyslogIdentifier=prisma-client
 WantedBy=multi-user.target
 ```
 
-## 6. Enable and start the service
+## Enable and Start
 
 ```bash
-# Reload systemd to pick up the new service files
 sudo systemctl daemon-reload
-
-# Enable the service to start on boot
-sudo systemctl enable prisma-server
-
-# Start the service
-sudo systemctl start prisma-server
-
-# Check status
+sudo systemctl enable --now prisma-server   # enable + start in one command
 sudo systemctl status prisma-server
 ```
 
 For the client:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable prisma-client
-sudo systemctl start prisma-client
-sudo systemctl status prisma-client
+sudo systemctl enable --now prisma-client
 ```
 
-## 7. View logs
+## Logs
 
 ```bash
-# Follow server logs
-sudo journalctl -u prisma-server -f
-
-# Follow client logs
-sudo journalctl -u prisma-client -f
-
-# View recent logs
-sudo journalctl -u prisma-server --since "1 hour ago"
+journalctl -u prisma-server -f              # follow live
+journalctl -u prisma-server --since "1h ago" # recent logs
 ```
 
-## Security hardening
+## Security Hardening
 
-The provided service files include several systemd security directives:
+The service files include these systemd security directives:
 
 | Directive | Effect |
 |-----------|--------|
-| `ProtectSystem=strict` | Mounts the entire filesystem read-only except for specific paths |
-| `ProtectHome=true` | Makes `/home`, `/root`, and `/run/user` inaccessible |
-| `PrivateTmp=true` | Creates a private `/tmp` mount for the service |
-| `NoNewPrivileges=true` | Prevents the process from gaining new privileges |
-| `ReadOnlyPaths=/etc/prisma` | Ensures config files cannot be modified by the service |
-| `LimitNOFILE=65535` | Raises the file descriptor limit for high connection counts |
+| `ProtectSystem=strict` | Filesystem read-only except allowed paths |
+| `ProtectHome=true` | `/home`, `/root`, `/run/user` inaccessible |
+| `PrivateTmp=true` | Private `/tmp` mount |
+| `NoNewPrivileges=true` | Cannot gain new privileges |
+| `ReadOnlyPaths=/etc/prisma` | Config files immutable at runtime |
+| `LimitNOFILE=65535` | High file descriptor limit for many connections |
 
-## 8. Dashboard setup (optional)
-
-Download the pre-built dashboard from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source:
+## Dashboard (Optional)
 
 ```bash
-# From release
 sudo mkdir -p /opt/prisma/dashboard
+# From release:
 sudo tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
-
-# Or from source
-cd prisma-dashboard && npm ci && npm run build
-sudo cp -r out/ /opt/prisma/dashboard/
+# Or build from source:
+cd prisma-dashboard && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
 ```
 
 Add to `server.toml`:
@@ -206,27 +141,22 @@ Add to `server.toml`:
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
-auth_token = "your-secure-token-here"
+auth_token = "your-secure-token"
 dashboard_dir = "/opt/prisma/dashboard"
 ```
 
-Update the systemd service to allow read access:
+Update service file to allow dashboard access:
 
 ```ini
 ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
 ```
 
-Access the dashboard at `http://127.0.0.1:9090/`.
-
-## Directory layout summary
+## Directory Layout
 
 ```
-/usr/local/bin/prisma           # Binary
-/etc/prisma/server.toml         # Server configuration
-/etc/prisma/client.toml         # Client configuration
-/etc/prisma/prisma-cert.pem     # TLS certificate
-/etc/prisma/prisma-key.pem      # TLS private key
-/opt/prisma/dashboard/          # Dashboard static files (optional)
-/etc/systemd/system/prisma-server.service
-/etc/systemd/system/prisma-client.service
+/usr/local/bin/prisma              # Binary
+/etc/prisma/server.toml            # Server config
+/etc/prisma/client.toml            # Client config
+/etc/prisma/*.pem                  # TLS certificates
+/opt/prisma/dashboard/             # Dashboard (optional)
 ```

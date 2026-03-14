@@ -18,6 +18,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::load_server_config;
+use prisma_core::config::server::RoutingRule;
 use prisma_core::logging::init_logging_with_broadcast;
 use prisma_core::state::{LogEntry, MetricsSnapshot, ServerState};
 use tracing::info;
@@ -53,6 +54,38 @@ pub async fn run(config_path: &str) -> Result<()> {
 
     let auth_inner = AuthStoreInner::from_config(&config.authorized_clients)?;
     let state = ServerState::new(&config, auth_inner, log_tx, metrics_tx);
+
+    // Load static routing rules from config
+    if !config.routing.rules.is_empty() {
+        let static_rules: Vec<RoutingRule> = config
+            .routing
+            .rules
+            .iter()
+            .enumerate()
+            .map(|(i, rule)| RoutingRule::from_router_rule(rule, 10000 + i as u32))
+            .collect();
+        let count = static_rules.len();
+        state.routing_rules.write().await.extend(static_rules);
+        info!(count, "Loaded static routing rules from config");
+    }
+
+    // Load GeoIP database if configured
+    if let Some(ref path) = config.routing.geoip_path {
+        match prisma_core::geodata::GeoIPMatcher::load(path) {
+            Ok(matcher) => {
+                info!(
+                    countries = matcher.country_codes().len(),
+                    "GeoIP database loaded for server"
+                );
+                // Store for potential future server-side geo-filtering
+                let _ = matcher;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load GeoIP database: {}", e);
+            }
+        }
+    }
+
     let auth_store = AuthStore::from_inner(state.auth_store.clone());
     let dns_cache = DnsCache::default();
 

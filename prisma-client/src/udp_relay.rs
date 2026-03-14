@@ -12,7 +12,7 @@ use prisma_core::crypto::aead::AeadCipher;
 use prisma_core::fec::{decode_fec_header, encode_fec_header, FecConfig, FecDecoder, FecEncoder};
 use prisma_core::protocol::codec::*;
 use prisma_core::protocol::types::*;
-use prisma_core::types::{MAX_FRAME_SIZE, PROTOCOL_VERSION_V2};
+use prisma_core::types::MAX_FRAME_SIZE;
 
 use crate::tunnel::TunnelConnection;
 
@@ -55,7 +55,6 @@ pub async fn relay_udp(
 
     // Local UDP → Tunnel: read SOCKS5 UDP datagrams, encrypt as CMD_UDP_DATA
     let mut client_keys = tunnel.session_keys.clone();
-    let use_padding = client_keys.protocol_version >= PROTOCOL_VERSION_V2;
     let padding_range = client_keys.padding_range;
     let cipher_up = cipher.clone();
     let peer_map_up = peer_map.clone();
@@ -122,7 +121,6 @@ pub async fn relay_udp(
             let assoc_id = 1; // Single association per tunnel
             peer_map_up.lock().await.insert(assoc_id, peer);
 
-            let flags = if use_padding { FLAG_PADDED } else { 0 };
             let frame = DataFrame {
                 command: Command::UdpData {
                     assoc_id,
@@ -132,14 +130,10 @@ pub async fn relay_udp(
                     dest_port,
                     payload: payload.clone(),
                 },
-                flags,
+                flags: FLAG_PADDED,
                 stream_id: 0,
             };
-            let frame_bytes = if use_padding {
-                encode_data_frame_padded(&frame, &padding_range)
-            } else {
-                encode_data_frame(&frame)
-            };
+            let frame_bytes = encode_data_frame_padded(&frame, &padding_range);
             let nonce = client_keys.next_client_nonce();
             match encrypt_frame(cipher_up.as_ref(), &nonce, &frame_bytes) {
                 Ok(encrypted) => {
@@ -171,7 +165,6 @@ pub async fn relay_udp(
                         fec_payload.extend_from_slice(&header);
                         fec_payload.extend_from_slice(&group.shards[i]);
 
-                        let fec_flags = flags | FLAG_FEC;
                         let parity_frame = DataFrame {
                             command: Command::UdpData {
                                 assoc_id,
@@ -181,14 +174,10 @@ pub async fn relay_udp(
                                 dest_port: 0,
                                 payload: fec_payload,
                             },
-                            flags: fec_flags,
+                            flags: FLAG_PADDED | FLAG_FEC,
                             stream_id: 0,
                         };
-                        let parity_bytes = if use_padding {
-                            encode_data_frame_padded(&parity_frame, &padding_range)
-                        } else {
-                            encode_data_frame(&parity_frame)
-                        };
+                        let parity_bytes = encode_data_frame_padded(&parity_frame, &padding_range);
                         let parity_nonce = client_keys.next_client_nonce();
                         match encrypt_frame(cipher_up.as_ref(), &parity_nonce, &parity_bytes) {
                             Ok(encrypted) => {

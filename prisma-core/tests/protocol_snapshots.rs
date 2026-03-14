@@ -5,29 +5,6 @@ use prisma_core::types::*;
 use std::net::Ipv4Addr;
 
 #[test]
-fn test_client_hello_snapshot() {
-    let msg = ClientHello {
-        version: PROTOCOL_VERSION_V2,
-        client_ephemeral_pub: [0xAA; 32],
-        timestamp: 1700000000,
-        padding: vec![],
-    };
-    let encoded = encode_client_hello(&msg);
-    insta::assert_yaml_snapshot!("client_hello_wire", encoded);
-}
-
-#[test]
-fn test_server_hello_snapshot() {
-    let msg = ServerHello {
-        server_ephemeral_pub: [0xBB; 32],
-        encrypted_challenge: vec![0x01, 0x02, 0x03, 0x04],
-        padding: vec![],
-    };
-    let encoded = encode_server_hello(&msg);
-    insta::assert_yaml_snapshot!("server_hello_wire", encoded);
-}
-
-#[test]
 fn test_data_frame_connect_snapshot() {
     let frame = DataFrame {
         command: Command::Connect(ProxyDestination {
@@ -67,31 +44,9 @@ fn test_data_frame_data_snapshot() {
 }
 
 #[test]
-fn test_server_accept_snapshot() {
-    let msg = ServerAccept {
-        status: AcceptStatus::Ok,
-        session_id: uuid::Uuid::nil(),
-        padding_range: None,
-    };
-    let encoded = encode_server_accept(&msg);
-    insta::assert_yaml_snapshot!("server_accept_wire", encoded);
-}
-
-#[test]
-fn test_server_accept_v2_snapshot() {
-    let msg = ServerAccept {
-        status: AcceptStatus::Ok,
-        session_id: uuid::Uuid::nil(),
-        padding_range: Some(PaddingRange::new(0, 256)),
-    };
-    let encoded = encode_server_accept(&msg);
-    insta::assert_yaml_snapshot!("server_accept_v2_wire", encoded);
-}
-
-#[test]
-fn test_client_init_v3_snapshot() {
-    let msg = ClientInit {
-        version: PROTOCOL_VERSION,
+fn test_prisma_client_init_snapshot() {
+    let msg = PrismaClientInit {
+        version: PRISMA_PROTOCOL_VERSION,
         flags: 0,
         client_ephemeral_pub: [0xAA; 32],
         client_id: ClientId(uuid::Uuid::nil()),
@@ -101,12 +56,12 @@ fn test_client_init_v3_snapshot() {
         padding: vec![],
     };
     let encoded = encode_client_init(&msg);
-    insta::assert_yaml_snapshot!("client_init_v3_wire", encoded);
+    insta::assert_yaml_snapshot!("prisma_client_init_wire", encoded);
 }
 
 #[test]
-fn test_server_init_v3_snapshot() {
-    let msg = ServerInit {
+fn test_prisma_server_init_snapshot() {
+    let msg = PrismaServerInit {
         status: AcceptStatus::Ok,
         session_id: uuid::Uuid::nil(),
         server_ephemeral_pub: [0xCC; 32],
@@ -115,8 +70,9 @@ fn test_server_init_v3_snapshot() {
         padding_max: 256,
         server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
         session_ticket: vec![0x01, 0x02, 0x03],
+        bucket_sizes: vec![128, 256, 512],
         padding: vec![],
     };
     let encoded = encode_server_init(&msg);
-    insta::assert_yaml_snapshot!("server_init_v3_wire", encoded);
+    insta::assert_yaml_snapshot!("prisma_server_init_wire", encoded);
 }

@@ -35,12 +35,7 @@ pub fn obfuscate(packet: &[u8], password: &[u8]) -> Vec<u8> {
 
 /// Deobfuscate a packet (XOR is its own inverse).
 pub fn deobfuscate(packet: &[u8], password: &[u8]) -> Vec<u8> {
-    if packet.is_empty() {
-        return Vec::new();
-    }
-
-    let keystream = derive_keystream(password, packet.len());
-    xor_bytes(packet, &keystream)
+    obfuscate(packet, password)
 }
 
 /// XOR a buffer in-place with the keystream derived from the password.
@@ -75,6 +70,16 @@ impl SalamanderKey {
         output
     }
 
+    /// v4: Derive a keystream using a per-packet nonce for non-deterministic output.
+    /// This prevents identical packets from producing identical obfuscated output.
+    pub fn keystream_with_nonce(&self, len: usize, nonce: &[u8; 8]) -> Vec<u8> {
+        let mut keyed_hasher = blake3::Hasher::new_keyed(&self.key);
+        keyed_hasher.update(nonce);
+        let mut output = vec![0u8; len];
+        keyed_hasher.finalize_xof().fill(&mut output);
+        output
+    }
+
     /// XOR a buffer in-place with the derived keystream.
     pub fn xor_in_place(&self, data: &mut [u8]) {
         if data.is_empty() {
@@ -85,6 +90,78 @@ impl SalamanderKey {
             *d ^= k;
         }
     }
+
+    /// v4: XOR with a per-packet nonce for non-deterministic output.
+    pub fn xor_in_place_with_nonce(&self, data: &mut [u8], nonce: &[u8; 8]) {
+        if data.is_empty() {
+            return;
+        }
+        let keystream = self.keystream_with_nonce(data.len(), nonce);
+        for (d, k) in data.iter_mut().zip(keystream.iter()) {
+            *d ^= k;
+        }
+    }
+}
+
+/// ASCII prefix length for GFW entropy exemption.
+/// Re-uses the value from entropy module; defined here to avoid a cross-module const dep.
+const ASCII_PREFIX_LEN: usize = crate::entropy::ASCII_PREFIX_LEN;
+
+/// v4: Prepend an ASCII prefix to a packet before obfuscation.
+/// This ensures the first bytes on the wire are printable ASCII,
+/// passing GFW exemption rule Ex2.
+pub fn prepend_ascii_prefix(data: &[u8]) -> Vec<u8> {
+    let prefix = crate::entropy::generate_ascii_prefix();
+    let mut result = Vec::with_capacity(ASCII_PREFIX_LEN + data.len());
+    result.extend_from_slice(&prefix);
+    result.extend_from_slice(data);
+    result
+}
+
+/// v4: Strip the ASCII prefix from a received packet.
+pub fn strip_ascii_prefix(data: &[u8]) -> Option<&[u8]> {
+    if data.len() < ASCII_PREFIX_LEN {
+        return None;
+    }
+    Some(&data[ASCII_PREFIX_LEN..])
+}
+
+/// v4: Obfuscate with per-packet nonce (non-deterministic).
+/// Wire format: [nonce:8][obfuscated_data:var]
+pub fn obfuscate_v4(packet: &[u8], password: &[u8]) -> Vec<u8> {
+    if packet.is_empty() {
+        return Vec::new();
+    }
+
+    let mut nonce = [0u8; 8];
+    rand::Rng::fill(&mut rand::thread_rng(), &mut nonce[..]);
+
+    let key = SalamanderKey::new(password);
+    let keystream = key.keystream_with_nonce(packet.len(), &nonce);
+
+    let mut result = Vec::with_capacity(8 + packet.len());
+    result.extend_from_slice(&nonce);
+    for (d, k) in packet.iter().zip(keystream.iter()) {
+        result.push(d ^ k);
+    }
+    result
+}
+
+/// v4: Deobfuscate a packet with per-packet nonce.
+pub fn deobfuscate_v4(data: &[u8], password: &[u8]) -> Option<Vec<u8>> {
+    if data.len() < 8 {
+        return None;
+    }
+
+    let mut nonce = [0u8; 8];
+    nonce.copy_from_slice(&data[..8]);
+    let ciphertext = &data[8..];
+
+    let key = SalamanderKey::new(password);
+    let keystream = key.keystream_with_nonce(ciphertext.len(), &nonce);
+
+    let plaintext: Vec<u8> = ciphertext.iter().zip(keystream.iter()).map(|(d, k)| d ^ k).collect();
+    Some(plaintext)
 }
 
 /// Derive a keystream of the given length from the password.
@@ -158,13 +235,29 @@ impl AsyncUdpSocket for SalamanderSocket {
     }
 
     fn try_send(&self, transmit: &Transmit) -> io::Result<()> {
-        // Copy and XOR in-place to avoid separate keystream allocation + collect
-        let mut obfuscated = transmit.contents.to_vec();
-        self.cached_key.xor_in_place(&mut obfuscated);
+        // v4: Single-buffer nonce-based obfuscation with ASCII prefix
+        let payload = transmit.contents;
+        let total_len = ASCII_PREFIX_LEN + 8 + payload.len();
+        let mut buf = Vec::with_capacity(total_len);
+
+        // ASCII prefix for GFW entropy exemption (always, avoids per-packet popcount scan)
+        buf.extend_from_slice(&crate::entropy::generate_ascii_prefix());
+
+        // 8-byte random nonce
+        let mut nonce = [0u8; 8];
+        rand::Rng::fill(&mut rand::thread_rng(), &mut nonce[..]);
+        buf.extend_from_slice(&nonce);
+
+        // XOR obfuscate payload directly into the buffer
+        let keystream = self.cached_key.keystream_with_nonce(payload.len(), &nonce);
+        for (d, k) in payload.iter().zip(keystream.iter()) {
+            buf.push(d ^ k);
+        }
+
         let obfuscated_transmit = Transmit {
             destination: transmit.destination,
             ecn: transmit.ecn,
-            contents: &obfuscated,
+            contents: &buf,
             segment_size: transmit.segment_size,
             src_ip: transmit.src_ip,
         };
@@ -180,25 +273,45 @@ impl AsyncUdpSocket for SalamanderSocket {
         // Receive from the inner socket
         let result = self.inner.poll_recv(cx, bufs, meta);
 
-        // If we got data, deobfuscate it in-place
+        // If we got data, strip ASCII prefix (if present) and deobfuscate with nonce
         if let Poll::Ready(Ok(count)) = &result {
             for i in 0..*count {
-                let len = meta[i].len;
-                let stride = meta[i].stride;
-                // Handle GRO: multiple datagrams may be packed in one buffer
-                if stride > 0 && stride < len {
-                    // Multiple datagrams, deobfuscate each one
-                    let buf = &mut bufs[i];
-                    let mut offset = 0;
-                    while offset < len {
-                        let end = (offset + stride).min(len);
-                        self.cached_key.xor_in_place(&mut buf[offset..end]);
-                        offset += stride;
-                    }
+                let data_len = meta[i].len;
+                let buf = &mut bufs[i];
+
+                // Always expect ASCII prefix + nonce (v4 always sends prefix).
+                // Fall back to nonce-at-offset-0 for backward compat with older senders.
+                let (nonce_start, has_prefix) =
+                    if data_len >= ASCII_PREFIX_LEN + 8
+                        && crate::entropy::has_ascii_prefix(&buf[..data_len], ASCII_PREFIX_LEN)
+                    {
+                        (ASCII_PREFIX_LEN, true)
+                    } else if data_len >= 8 {
+                        (0, false)
+                    } else {
+                        continue;
+                    };
+
+                // Extract 8-byte nonce
+                let mut nonce = [0u8; 8];
+                nonce.copy_from_slice(&buf[nonce_start..nonce_start + 8]);
+                let payload_start = nonce_start + 8;
+                let payload_len = if has_prefix {
+                    data_len - ASCII_PREFIX_LEN - 8
                 } else {
-                    // Single datagram
-                    self.cached_key.xor_in_place(&mut bufs[i][..len]);
+                    data_len - 8
+                };
+
+                // Deobfuscate payload in-place
+                self.cached_key
+                    .xor_in_place_with_nonce(&mut buf[payload_start..payload_start + payload_len], &nonce);
+
+                // Shift deobfuscated payload to the beginning of the buffer
+                if payload_start > 0 {
+                    buf.copy_within(payload_start..payload_start + payload_len, 0);
                 }
+                meta[i].len = payload_len;
+                meta[i].stride = meta[i].stride.min(payload_len);
             }
         }
 
@@ -297,5 +410,66 @@ mod tests {
         // XOR again to recover
         xor_in_place(&mut data, password);
         assert_eq!(&data, &original);
+    }
+
+    #[test]
+    fn test_v4_round_trip() {
+        let password = b"v4-test-password";
+        let original = b"Hello from v4 with per-packet nonce!";
+
+        let obfuscated = obfuscate_v4(original, password);
+        // Should be 8 bytes longer (nonce prefix)
+        assert_eq!(obfuscated.len(), original.len() + 8);
+
+        let recovered = deobfuscate_v4(&obfuscated, password).unwrap();
+        assert_eq!(&recovered, &original[..]);
+    }
+
+    #[test]
+    fn test_v4_non_deterministic() {
+        let password = b"v4-nondeterminism";
+        let original = b"same input different output";
+
+        let o1 = obfuscate_v4(original, password);
+        let o2 = obfuscate_v4(original, password);
+
+        // Same password + same input should produce DIFFERENT output (random nonce)
+        assert_ne!(o1, o2, "v4 obfuscation should be non-deterministic");
+
+        // But both should deobfuscate to the same plaintext
+        let r1 = deobfuscate_v4(&o1, password).unwrap();
+        let r2 = deobfuscate_v4(&o2, password).unwrap();
+        assert_eq!(r1, r2);
+        assert_eq!(&r1, &original[..]);
+    }
+
+    #[test]
+    fn test_ascii_prefix() {
+        let data = b"packet data";
+        let prefixed = prepend_ascii_prefix(data);
+
+        // Should be 8 bytes longer
+        assert_eq!(prefixed.len(), data.len() + 8);
+
+        // First 8 bytes should be printable ASCII
+        for &b in &prefixed[..8] {
+            assert!(b >= 0x20 && b <= 0x7E, "byte {:#04x} not printable ASCII", b);
+        }
+
+        // Stripping should recover original
+        let stripped = strip_ascii_prefix(&prefixed).unwrap();
+        assert_eq!(stripped, data);
+    }
+
+    #[test]
+    fn test_per_packet_nonce_keystream() {
+        let key = SalamanderKey::new(b"nonce-test");
+        let nonce1 = [0u8; 8];
+        let nonce2 = [1u8; 8];
+
+        let ks1 = key.keystream_with_nonce(32, &nonce1);
+        let ks2 = key.keystream_with_nonce(32, &nonce2);
+
+        assert_ne!(ks1, ks2, "Different nonces must produce different keystreams");
     }
 }

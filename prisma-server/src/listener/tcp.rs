@@ -35,6 +35,23 @@ pub async fn listen(
 
     let fallback_addr = config.camouflage.fallback_addr.clone();
     let camouflage_enabled = config.camouflage.enabled;
+    let prisma_tls_enabled = config.prisma_tls.enabled;
+    let anti_rtt_ms = if config.anti_rtt.enabled {
+        Some(config.anti_rtt.normalization_ms)
+    } else {
+        None
+    };
+
+    if prisma_tls_enabled {
+        if let Some(first) = config.prisma_tls.mask_servers.first() {
+            info!(dest = %first.addr, "PrismaTLS mode enabled");
+        } else {
+            info!("PrismaTLS mode enabled");
+        }
+    }
+    if let Some(ms) = anti_rtt_ms {
+        info!(normalization_ms = ms, "Anti-RTT normalization enabled");
+    }
 
     info!(addr = %config.listen_addr, max_connections = max_conn, "TCP listener started");
 

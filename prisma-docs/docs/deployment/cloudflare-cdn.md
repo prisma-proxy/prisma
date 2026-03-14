@@ -21,14 +21,30 @@ A censor can discover the IP, add it to a blocklist, and your proxy becomes unre
 
 When Cloudflare's proxy is enabled (orange cloud), the traffic flow changes:
 
-```
-Without Cloudflare:
-  Client → DNS "proxy.example.com" → Returns 1.2.3.4 (your server)
-  Client → Connects to 1.2.3.4 → Censor sees and blocks this IP
+**Without Cloudflare:**
 
-With Cloudflare:
-  Client → DNS "proxy.example.com" → Returns 104.16.x.x (Cloudflare)
-  Client → TLS to 104.16.x.x → Cloudflare → Connects to 1.2.3.4
+```mermaid
+graph LR
+    C[Client] -->|DNS query| D["DNS: proxy.example.com"]
+    D -->|"1.2.3.4 (your server)"| C
+    C -->|Direct TLS| S["Server 1.2.3.4"]
+    X["Censor"] -.->|"sees IP, blocks"| S
+
+    style X fill:#dc2626,stroke:#991b1b,color:#fff
+```
+
+**With Cloudflare:**
+
+```mermaid
+graph LR
+    C[Client] -->|DNS query| D["DNS: proxy.example.com"]
+    D -->|"104.16.x.x (Cloudflare)"| C
+    C -->|TLS| CF["Cloudflare CDN"]
+    CF -->|Origin connect| S["Server 1.2.3.4"]
+    X["Censor"] -.->|"sees only Cloudflare IP"| CF
+
+    style CF fill:#f59e0b,stroke:#d97706,color:#000
+    style X fill:#dc2626,stroke:#991b1b,color:#fff
 ```
 
 Your real server IP never appears in DNS responses or in the client's network traffic. Only Cloudflare's infrastructure knows your origin IP.

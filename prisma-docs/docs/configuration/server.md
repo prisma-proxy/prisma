@@ -31,6 +31,20 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `management_api.dashboard_dir` | string? | — | Path to built dashboard static files |
 | `padding.min` | u16 | `0` | Minimum per-frame padding bytes |
 | `padding.max` | u16 | `256` | Maximum per-frame padding bytes |
+| `protocol_version` | string | `"v4"` | Protocol version (v4 only) |
+| `prisma_tls.enabled` | bool | `false` | Enable PrismaTLS (replaces REALITY) |
+| `prisma_tls.mask_servers` | array | `[]` | Mask server pool for relay |
+| `prisma_tls.mask_servers[].addr` | string | — | Mask server address (e.g. `"www.microsoft.com:443"`) |
+| `prisma_tls.mask_servers[].names` | string[] | `[]` | Allowed SNI names |
+| `prisma_tls.auth_secret` | string | `""` | PrismaTLS auth secret (hex-encoded, 32 bytes) |
+| `prisma_tls.auth_rotation_hours` | u64 | `1` | Auth key rotation interval in hours |
+| `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
+| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | Bucket sizes for bucket padding mode |
+| `traffic_shaping.timing_jitter_ms` | u32 | `0` | Max timing jitter (ms) on handshake frames |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | Chaff injection interval (ms), 0=disabled |
+| `traffic_shaping.coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms), 0=disabled |
+| `anti_rtt.enabled` | bool | `false` | Enable RTT normalization |
+| `anti_rtt.normalization_ms` | u32 | `150` | Target RTT for normalization |
 | `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |
 | `camouflage.tls_on_tcp` | bool | `false` | Wrap TCP transport in TLS (requires `[tls]` config) |
 | `camouflage.fallback_addr` | string? | — | Decoy server address for non-Prisma connections |
@@ -78,6 +92,10 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `authorized_clients[].bandwidth_down` | string? | — | Per-client download rate limit |
 | `authorized_clients[].quota` | string? | — | Per-client transfer quota (e.g., `"100GB"`) |
 | `authorized_clients[].quota_period` | string? | — | Quota period: `"daily"` / `"weekly"` / `"monthly"` |
+| `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
+| `routing.rules[].value` | string | — | Match value |
+| `routing.rules[].action` | string | — | Action: `"allow"` / `"block"` (or `"proxy"` / `"direct"` mapped to allow) |
+| `routing.geoip_path` | string? | — | Path to v2fly geoip.dat file for GeoIP-based routing |
 
 ## Full example
 
@@ -131,6 +149,26 @@ alpn_protocols = ["h2", "http/1.1"]
 # h3_cover_site = "https://example.com"           # HTTP/3 masquerade cover site
 # h3_static_dir = "/var/www/html"                 # OR serve local static files for H3
 
+# PrismaTLS (replaces REALITY for active probing resistance)
+# [prisma_tls]
+# enabled = true
+# auth_secret = "hex-encoded-32-bytes"
+# auth_rotation_hours = 1
+# [[prisma_tls.mask_servers]]
+# addr = "www.microsoft.com:443"
+# names = ["www.microsoft.com"]
+# [[prisma_tls.mask_servers]]
+# addr = "www.apple.com:443"
+# names = ["www.apple.com"]
+
+# Traffic shaping (anti-fingerprinting)
+# [traffic_shaping]
+# padding_mode = "bucket"
+# bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+# timing_jitter_ms = 30
+# chaff_interval_ms = 500
+# coalesce_window_ms = 5
+
 # CDN transport (WebSocket + gRPC + XHTTP through Cloudflare)
 # [cdn]
 # enabled = true
@@ -152,6 +190,21 @@ alpn_protocols = ["h2", "http/1.1"]
 # session_timeout_secs = 300
 # cookie_name = "_sess"
 # encoding = "json"
+
+# Static routing rules (persist across restarts)
+# [routing]
+# geoip_path = "/etc/prisma/geoip.dat"
+# [[routing.rules]]
+# type = "ip-cidr"
+# value = "10.0.0.0/8"
+# action = "block"
+# [[routing.rules]]
+# type = "domain-keyword"
+# value = "torrent"
+# action = "block"
+# [[routing.rules]]
+# type = "all"
+# action = "allow"
 ```
 
 ## Validation rules

@@ -78,6 +78,24 @@ sidebar_position: 1
 | `authorized_clients[].bandwidth_down` | string? | — | 单客户端下载速率限制 |
 | `authorized_clients[].quota` | string? | — | 单客户端流量配额（如 `"100GB"`） |
 | `authorized_clients[].quota_period` | string? | — | 配额周期：`"daily"` / `"weekly"` / `"monthly"` |
+| `protocol_version` | string | `"v4"` | 协议版本（仅 v4） |
+| `prisma_tls.enabled` | bool | `false` | 启用 PrismaTLS（替代 REALITY） |
+| `prisma_tls.mask_servers` | array | `[]` | 掩护服务器池 |
+| `prisma_tls.mask_servers[].addr` | string | — | 掩护服务器地址（如 `"www.microsoft.com:443"`） |
+| `prisma_tls.mask_servers[].names` | string[] | `[]` | 允许的 SNI 名称 |
+| `prisma_tls.auth_secret` | string | `""` | PrismaTLS 认证密钥（十六进制编码，32 字节） |
+| `prisma_tls.auth_rotation_hours` | u64 | `1` | 认证密钥轮换间隔（小时） |
+| `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
+| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | 桶填充模式的桶大小 |
+| `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧最大时序抖动（毫秒） |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 杂音注入间隔（毫秒），0=禁用 |
+| `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒），0=禁用 |
+| `anti_rtt.enabled` | bool | `false` | 启用 RTT 归一化 |
+| `anti_rtt.normalization_ms` | u32 | `150` | RTT 归一化目标值 |
+| `routing.rules[].type` | string | — | 规则类型：`domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
+| `routing.rules[].value` | string | — | 匹配值 |
+| `routing.rules[].action` | string | — | 动作：`"allow"` / `"block"`（或 `"proxy"` / `"direct"` 映射为 allow） |
+| `routing.geoip_path` | string? | — | v2fly geoip.dat 文件路径，用于 GeoIP 路由 |
 
 ## 完整示例
 
@@ -131,6 +149,26 @@ alpn_protocols = ["h2", "http/1.1"]
 # h3_cover_site = "https://example.com"           # HTTP/3 伪装覆盖站点
 # h3_static_dir = "/var/www/html"                 # 或提供本地静态文件用于 H3 伪装
 
+# PrismaTLS（替代 REALITY 的主动探测防御）
+# [prisma_tls]
+# enabled = true
+# auth_secret = "hex-encoded-32-bytes"
+# auth_rotation_hours = 1
+# [[prisma_tls.mask_servers]]
+# addr = "www.microsoft.com:443"
+# names = ["www.microsoft.com"]
+# [[prisma_tls.mask_servers]]
+# addr = "www.apple.com:443"
+# names = ["www.apple.com"]
+
+# 流量整形（抗指纹识别）
+# [traffic_shaping]
+# padding_mode = "bucket"
+# bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+# timing_jitter_ms = 30
+# chaff_interval_ms = 500
+# coalesce_window_ms = 5
+
 # CDN 传输（通过 Cloudflare 的 WebSocket + gRPC + XHTTP）
 # [cdn]
 # enabled = true
@@ -152,6 +190,21 @@ alpn_protocols = ["h2", "http/1.1"]
 # session_timeout_secs = 300
 # cookie_name = "_sess"
 # encoding = "json"
+
+# 静态路由规则（重启后保持不变）
+# [routing]
+# geoip_path = "/etc/prisma/geoip.dat"
+# [[routing.rules]]
+# type = "ip-cidr"
+# value = "10.0.0.0/8"
+# action = "block"
+# [[routing.rules]]
+# type = "domain-keyword"
+# value = "torrent"
+# action = "block"
+# [[routing.rules]]
+# type = "all"
+# action = "allow"
 ```
 
 ## 验证规则

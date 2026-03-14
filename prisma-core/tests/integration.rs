@@ -33,12 +33,14 @@ impl AuthVerifier for TestVerifier {
     }
 }
 
-/// End-to-end test: echo server → prisma server logic → prisma client logic → verify echo.
+/// End-to-end test: echo server -> prisma server logic -> prisma client logic -> verify echo.
+/// Uses the v4 handshake (2-step: PrismaClientInit -> PrismaServerInit).
 #[tokio::test]
 async fn test_e2e_echo_through_tunnel() {
     let client_id = ClientId::new();
     let auth_secret = [0x42u8; 32];
     let cipher_suite = CipherSuite::ChaCha20Poly1305;
+    let ticket_key = [0xFFu8; 32];
 
     // Start echo server on a random port
     let echo_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -65,7 +67,7 @@ async fn test_e2e_echo_through_tunnel() {
         }
     });
 
-    // Create a TCP pair to simulate the tunnel (client side ↔ server side)
+    // Create a TCP pair to simulate the tunnel (client side <-> server side)
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = proxy_listener.local_addr().unwrap();
 
@@ -75,38 +77,35 @@ async fn test_e2e_echo_through_tunnel() {
     };
 
     // Server side
-    let _echo_addr_clone = echo_addr;
     let server_handle = tokio::spawn(async move {
         let (mut server_stream, _) = proxy_listener.accept().await.unwrap();
 
-        // Handshake: read ClientHello
+        // Step 1: Read PrismaClientInit
         let mut len_buf = [0u8; 2];
         server_stream.read_exact(&mut len_buf).await.unwrap();
         let len = u16::from_be_bytes(len_buf) as usize;
-        let mut ch_buf = vec![0u8; len];
-        server_stream.read_exact(&mut ch_buf).await.unwrap();
+        let mut ci_buf = vec![0u8; len];
+        server_stream.read_exact(&mut ci_buf).await.unwrap();
 
-        let (sh_bytes, server_state) = ServerHandshake::process_client_hello(&ch_buf).unwrap();
+        // Process PrismaClientInit, produce PrismaServerInit
+        let padding_range = PaddingRange::new(0, 256);
+        let (si_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+            &ci_buf,
+            padding_range,
+            FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
 
-        // Send ServerHello
-        let sh_len = (sh_bytes.len() as u16).to_be_bytes();
-        server_stream.write_all(&sh_len).await.unwrap();
-        server_stream.write_all(&sh_bytes).await.unwrap();
+        // Step 2: Send PrismaServerInit
+        let si_len = (si_bytes.len() as u16).to_be_bytes();
+        server_stream.write_all(&si_len).await.unwrap();
+        server_stream.write_all(&si_bytes).await.unwrap();
 
-        // Read ClientAuth
-        server_stream.read_exact(&mut len_buf).await.unwrap();
-        let len = u16::from_be_bytes(len_buf) as usize;
-        let mut ca_buf = vec![0u8; len];
-        server_stream.read_exact(&mut ca_buf).await.unwrap();
-
-        let (accept_bytes, mut session_keys) = server_state
-            .process_client_auth(&ca_buf, &verifier)
-            .unwrap();
-
-        // Send ServerAccept
-        let sa_len = (accept_bytes.len() as u16).to_be_bytes();
-        server_stream.write_all(&sa_len).await.unwrap();
-        server_stream.write_all(&accept_bytes).await.unwrap();
+        // Handshake complete — produce session keys
+        let mut session_keys = server_state.into_session_keys();
 
         // Read Connect command
         let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
@@ -160,34 +159,23 @@ async fn test_e2e_echo_through_tunnel() {
 
     let mut client_stream = TcpStream::connect(proxy_addr).await.unwrap();
 
-    // Step 1: Send ClientHello
-    let handshake = ClientHandshake::new(client_id, auth_secret, cipher_suite);
-    let (client_state, hello_bytes) = handshake.start();
+    // Step 1: Send PrismaClientInit
+    let handshake = PrismaHandshakeClient::new(client_id, auth_secret, cipher_suite);
+    let (client_state, init_bytes) = handshake.start();
 
-    let len = (hello_bytes.len() as u16).to_be_bytes();
+    let len = (init_bytes.len() as u16).to_be_bytes();
     client_stream.write_all(&len).await.unwrap();
-    client_stream.write_all(&hello_bytes).await.unwrap();
+    client_stream.write_all(&init_bytes).await.unwrap();
 
-    // Step 2: Receive ServerHello
+    // Step 2: Receive PrismaServerInit
     let mut len_buf = [0u8; 2];
     client_stream.read_exact(&mut len_buf).await.unwrap();
-    let sh_len = u16::from_be_bytes(len_buf) as usize;
-    let mut sh_buf = vec![0u8; sh_len];
-    client_stream.read_exact(&mut sh_buf).await.unwrap();
+    let si_len = u16::from_be_bytes(len_buf) as usize;
+    let mut si_buf = vec![0u8; si_len];
+    client_stream.read_exact(&mut si_buf).await.unwrap();
 
-    // Step 3: Process ServerHello, send ClientAuth
-    let (auth_bytes, accept_state) = client_state.process_server_hello(&sh_buf).unwrap();
-    let len = (auth_bytes.len() as u16).to_be_bytes();
-    client_stream.write_all(&len).await.unwrap();
-    client_stream.write_all(&auth_bytes).await.unwrap();
-
-    // Step 4: Receive ServerAccept
-    client_stream.read_exact(&mut len_buf).await.unwrap();
-    let sa_len = u16::from_be_bytes(len_buf) as usize;
-    let mut sa_buf = vec![0u8; sa_len];
-    client_stream.read_exact(&mut sa_buf).await.unwrap();
-
-    let mut session_keys = accept_state.process_server_accept(&sa_buf).unwrap();
+    // Process PrismaServerInit — handshake complete
+    let (mut session_keys, _bucket_sizes) = client_state.process_server_init(&si_buf).unwrap();
 
     // Create cipher
     let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);

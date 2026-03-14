@@ -36,6 +36,8 @@ tonic = { workspace = true }
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
+webpki-roots = "0.26"
+hex = "0.4"
 
 [dev-dependencies]
 proptest = { workspace = true }

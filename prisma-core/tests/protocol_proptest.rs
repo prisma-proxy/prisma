@@ -53,40 +53,59 @@ proptest! {
     }
 
     #[test]
-    fn test_client_hello_round_trip(
+    fn test_prisma_client_init_round_trip(
         pub_key in proptest::array::uniform32(any::<u8>()),
         timestamp in any::<u64>(),
+        auth_token in proptest::array::uniform32(any::<u8>()),
         padding in proptest::collection::vec(any::<u8>(), 0..64),
     ) {
-        let msg = ClientHello {
-            version: PROTOCOL_VERSION,
+        let msg = PrismaClientInit {
+            version: PRISMA_PROTOCOL_VERSION,
+            flags: 0,
             client_ephemeral_pub: pub_key,
+            client_id: ClientId(uuid::Uuid::nil()),
             timestamp,
+            cipher_suite: CipherSuite::ChaCha20Poly1305,
+            auth_token,
             padding: padding.clone(),
         };
-        let encoded = encode_client_hello(&msg);
-        let decoded = decode_client_hello(&encoded).unwrap();
-        prop_assert_eq!(decoded.version, PROTOCOL_VERSION);
+        let encoded = encode_client_init(&msg);
+        let decoded = decode_client_init(&encoded).unwrap();
+        prop_assert_eq!(decoded.version, PRISMA_PROTOCOL_VERSION);
         prop_assert_eq!(decoded.client_ephemeral_pub, pub_key);
         prop_assert_eq!(decoded.timestamp, timestamp);
+        prop_assert_eq!(decoded.auth_token, auth_token);
         prop_assert_eq!(decoded.padding, padding);
     }
 
     #[test]
-    fn test_server_hello_round_trip(
-        pub_key in proptest::array::uniform32(any::<u8>()),
-        challenge in proptest::collection::vec(any::<u8>(), 1..128),
+    fn test_prisma_server_init_round_trip(
+        server_pub in proptest::array::uniform32(any::<u8>()),
+        challenge in proptest::array::uniform32(any::<u8>()),
+        padding_min in 0u16..=128,
+        padding_max in 128u16..=512,
+        ticket in proptest::collection::vec(any::<u8>(), 0..128),
         padding in proptest::collection::vec(any::<u8>(), 0..64),
     ) {
-        let msg = ServerHello {
-            server_ephemeral_pub: pub_key,
-            encrypted_challenge: challenge.clone(),
+        let msg = PrismaServerInit {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            server_ephemeral_pub: server_pub,
+            challenge,
+            padding_min,
+            padding_max,
+            server_features: FEATURE_UDP_RELAY,
+            session_ticket: ticket.clone(),
+            bucket_sizes: vec![],
             padding: padding.clone(),
         };
-        let encoded = encode_server_hello(&msg);
-        let decoded = decode_server_hello(&encoded).unwrap();
-        prop_assert_eq!(decoded.server_ephemeral_pub, pub_key);
-        prop_assert_eq!(decoded.encrypted_challenge, challenge);
+        let encoded = encode_server_init(&msg);
+        let decoded = decode_server_init(&encoded).unwrap();
+        prop_assert_eq!(decoded.server_ephemeral_pub, server_pub);
+        prop_assert_eq!(decoded.challenge, challenge);
+        prop_assert_eq!(decoded.padding_min, padding_min);
+        prop_assert_eq!(decoded.padding_max, padding_max);
+        prop_assert_eq!(decoded.session_ticket, ticket);
         prop_assert_eq!(decoded.padding, padding);
     }
 }

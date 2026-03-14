@@ -1,60 +1,67 @@
+/// Derive a 32-byte key from context material using BLAKE3's key derivation mode.
+///
+/// The `domain` string provides cryptographic domain separation so that
+/// different callers sharing the same inputs produce independent keys.
+fn blake3_derive(domain: &str, context: &[u8]) -> [u8; 32] {
+    let mut output = [0u8; 32];
+    let mut hasher = blake3::Hasher::new_derive_key(domain);
+    hasher.update(context);
+    let mut reader = hasher.finalize_xof();
+    reader.fill(&mut output);
+    output
+}
+
+/// Build the standard KDF context: shared secret, both public keys, and timestamp.
+fn build_kdf_context(
+    shared_secret: &[u8; 32],
+    client_pub: &[u8; 32],
+    server_pub: &[u8; 32],
+    timestamp: u64,
+) -> Vec<u8> {
+    let mut context = Vec::with_capacity(32 + 32 + 32 + 8);
+    context.extend_from_slice(shared_secret);
+    context.extend_from_slice(client_pub);
+    context.extend_from_slice(server_pub);
+    context.extend_from_slice(&timestamp.to_be_bytes());
+    context
+}
+
 /// Derive a session key from the shared secret and contextual binding data.
 ///
 /// Uses BLAKE3's key derivation mode with a domain separation string.
 /// The context includes both public keys and a timestamp to ensure
 /// unique keys per session even if ephemeral keys are somehow reused.
 ///
-/// Used by v1/v2 handshake.
+/// Legacy KDF, retained for compatibility testing.
 pub fn derive_session_key(
     shared_secret: &[u8; 32],
     client_pub: &[u8; 32],
     server_pub: &[u8; 32],
     timestamp: u64,
 ) -> [u8; 32] {
-    let mut context = Vec::with_capacity(32 + 32 + 32 + 8);
-    context.extend_from_slice(shared_secret);
-    context.extend_from_slice(client_pub);
-    context.extend_from_slice(server_pub);
-    context.extend_from_slice(&timestamp.to_be_bytes());
-
-    let mut output = [0u8; 32];
-    let mut hasher = blake3::Hasher::new_derive_key("prisma-veil-v1-session-key");
-    hasher.update(&context);
-    let mut reader = hasher.finalize_xof();
-    reader.fill(&mut output);
-    output
+    let context = build_kdf_context(shared_secret, client_pub, server_pub, timestamp);
+    blake3_derive("prisma-veil-v1-session-key", &context)
 }
 
-/// v3 Phase 1: Derive preliminary key for encrypting ServerInit.
+/// Derive preliminary key for encrypting PrismaServerInit.
 ///
-/// This key is derived from the client's public key + server's public key + timestamp,
-/// WITHOUT the shared secret (since the server hasn't proven identity yet).
-/// Uses BLAKE3 KDF with domain "prisma-v3-preliminary".
+/// This key is derived from the shared secret + client's public key + server's public key + timestamp.
+/// Used in the v4 handshake to encrypt the ServerInit response.
 pub fn derive_preliminary_key(
     shared_secret: &[u8; 32],
     client_pub: &[u8; 32],
     server_pub: &[u8; 32],
     timestamp: u64,
 ) -> [u8; 32] {
-    let mut context = Vec::with_capacity(32 + 32 + 32 + 8);
-    context.extend_from_slice(shared_secret);
-    context.extend_from_slice(client_pub);
-    context.extend_from_slice(server_pub);
-    context.extend_from_slice(&timestamp.to_be_bytes());
-
-    let mut output = [0u8; 32];
-    let mut hasher = blake3::Hasher::new_derive_key("prisma-v3-preliminary");
-    hasher.update(&context);
-    let mut reader = hasher.finalize_xof();
-    reader.fill(&mut output);
-    output
+    let context = build_kdf_context(shared_secret, client_pub, server_pub, timestamp);
+    blake3_derive("prisma-v3-preliminary", &context)
 }
 
-/// v3 Phase 2: Derive final session key with challenge binding.
+/// Derive final session key with challenge binding.
 ///
 /// This key is derived after the server proves its identity via the challenge.
 /// Context includes the shared secret, both public keys, challenge, and timestamp.
-/// Uses BLAKE3 KDF with domain "prisma-v3-session".
+/// Used in the v4 handshake for data transfer encryption.
 pub fn derive_v3_session_key(
     shared_secret: &[u8; 32],
     client_pub: &[u8; 32],
@@ -62,31 +69,16 @@ pub fn derive_v3_session_key(
     challenge: &[u8; 32],
     timestamp: u64,
 ) -> [u8; 32] {
-    let mut context = Vec::with_capacity(32 + 32 + 32 + 32 + 8);
-    context.extend_from_slice(shared_secret);
-    context.extend_from_slice(client_pub);
-    context.extend_from_slice(server_pub);
+    let mut context = build_kdf_context(shared_secret, client_pub, server_pub, timestamp);
     context.extend_from_slice(challenge);
-    context.extend_from_slice(&timestamp.to_be_bytes());
-
-    let mut output = [0u8; 32];
-    let mut hasher = blake3::Hasher::new_derive_key("prisma-v3-session");
-    hasher.update(&context);
-    let mut reader = hasher.finalize_xof();
-    reader.fill(&mut output);
-    output
+    blake3_derive("prisma-v3-session", &context)
 }
 
 /// Derive a key for encrypting/decrypting session tickets.
 ///
 /// The ticket key is derived from a server-side secret using BLAKE3 KDF.
 pub fn derive_ticket_key(server_secret: &[u8; 32]) -> [u8; 32] {
-    let mut output = [0u8; 32];
-    let mut hasher = blake3::Hasher::new_derive_key("prisma-v3-session-ticket");
-    hasher.update(server_secret);
-    let mut reader = hasher.finalize_xof();
-    reader.fill(&mut output);
-    output
+    blake3_derive("prisma-v3-session-ticket", server_secret)
 }
 
 #[cfg(test)]

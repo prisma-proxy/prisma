@@ -32,5 +32,10 @@ prisma-dashboard/.env*
 prisma-dashboard/*.tsbuildinfo
 prisma-dashboard/next-env.d.ts
 
+.claude
+
+# Benchmark artifacts
+benchmark-results/
+
 # Misc
 prisma-plan.md

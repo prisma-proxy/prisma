@@ -4,15 +4,17 @@ use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-// Protocol constants
-pub const PROTOCOL_VERSION: u8 = 0x03;
-pub const PROTOCOL_VERSION_V2: u8 = 0x02;
-pub const PROTOCOL_VERSION_V1: u8 = 0x01;
+// Protocol constants — v4 only (v1/v2/v3 dropped)
+pub const PRISMA_PROTOCOL_VERSION: u8 = 0x04;
 pub const MAX_FRAME_SIZE: usize = 16384;
 pub const NONCE_SIZE: usize = 12;
 pub const MAX_PADDING_SIZE: usize = 256;
-pub const QUIC_ALPN: &str = "prisma-v3";
-pub const QUIC_ALPN_V2: &str = "prisma-v2";
+// Standard ALPN to avoid protocol identification by DPI
+pub const PRISMA_QUIC_ALPN: &str = "h3";
+pub const PRISMA_QUIC_ALPN_H2: &str = "h2";
+
+/// QUIC version 2 (RFC 9369) version number.
+pub const QUIC_VERSION_2: u32 = 0x6b3343cf;
 
 // Session ticket constants
 pub const SESSION_TICKET_KEY_SIZE: usize = 32;

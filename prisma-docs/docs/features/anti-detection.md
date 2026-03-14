@@ -4,7 +4,7 @@ sidebar_position: 8
 
 # Anti-Detection Features
 
-PrismaVeil v3 includes multiple layers of anti-detection to resist deep packet inspection (DPI), active probing, and traffic analysis by censorship systems like the GFW.
+PrismaVeil includes multiple layers of anti-detection to resist deep packet inspection (DPI), active probing, and traffic analysis by censorship systems like the GFW.
 
 ## Salamander UDP Obfuscation
 
@@ -13,9 +13,14 @@ Salamander strips QUIC protocol headers and XOR-obfuscates all UDP packets, maki
 ### How It Works
 
 1. Derive a keystream from the shared password using BLAKE3
-2. XOR every outgoing UDP packet with the keystream before sending
-3. On receive, XOR to recover the original QUIC packet
-4. Result: no recognizable QUIC or TLS headers on the wire
+2. Generate a per-packet nonce (non-deterministic) to prevent correlation attacks
+3. XOR every outgoing UDP packet with the nonce-keyed keystream before sending
+4. On receive, extract the nonce and XOR to recover the original QUIC packet
+5. Result: no recognizable QUIC or TLS headers on the wire
+
+### Entropy Camouflage
+
+Salamander v2 prepends a short ASCII prefix to each obfuscated packet. This lowers the measured entropy of the packet to pass GFW Ex2 (entropy analysis) checks, which flag purely random traffic. The ASCII prefix is derived deterministically from the packet nonce so the receiver can strip it without ambiguity.
 
 ### Configuration
 
@@ -96,6 +101,35 @@ Starts with BBR behavior. Detects intentional throttling (consistent loss + stab
 [congestion]
 mode = "adaptive"
 target_bandwidth = "100mbps"
+```
+
+## PrismaTLS
+
+PrismaTLS replaces the REALITY protocol for active probing resistance. Instead of embedding auth in the TLS Session ID (which is deprecated in TLS 1.3), PrismaTLS hides a 16-byte HMAC auth tag inside the TLS padding extension.
+
+- **PrismaAuth**: Authentication via padding extension beacon (epoch-rotated, position-randomized)
+- **PrismaMask**: Dynamic pool of mask servers with health checking and auto-failover
+- **PrismaFP**: Byte-level ClientHello construction matching Chrome/Firefox/Safari fingerprints
+- **PrismaFlow**: HTTP/2 SETTINGS mimicry + RTT normalization
+
+## Traffic Shaping
+
+Defenses against encapsulated TLS fingerprinting (USENIX 2024):
+
+- **Bucket padding**: Pad frames to fixed sizes from a configurable bucket set
+- **Chaff injection**: Dummy frames during idle periods for background noise
+- **Timing jitter**: Random delays on handshake-phase frames
+- **Frame coalescing**: Buffer small frames and merge them to hide packet boundaries
+
+### Configuration
+
+```toml
+[traffic_shaping]
+padding_mode = "bucket"
+bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+timing_jitter_ms = 30
+chaff_interval_ms = 500
+coalesce_window_ms = 5
 ```
 
 ## Camouflage & Fallback
@@ -181,8 +215,11 @@ Different transports have different detectability profiles:
 |-----------|---------------|----------------|-------------|
 | QUIC + Salamander | Highest | No | Yes (native) |
 | QUIC (standard) | High | No | Yes (native) |
+| PrismaTLS | Highest | No | TCP fallback |
 | XHTTP (stream-one) | High | Yes | TCP fallback |
 | WebSocket | Medium | Yes | TCP fallback |
 | gRPC | Medium | Yes | TCP fallback |
 | TCP + TLS | Medium | No | TCP fallback |
 | TCP (raw) | Low | No | TCP fallback |
+
+> **Note**: QUIC transports support QUIC v2 (RFC 9369) for improved ossification resistance.

@@ -14,7 +14,7 @@ sidebar_position: 2
 ## 构建
 
 ```bash
-git clone <repo-url> && cd prisma
+git clone https://github.com/Yamimega/prisma.git && cd prisma
 cargo build --release
 ```
 

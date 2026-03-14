@@ -10,7 +10,7 @@ use tracing::{debug, info, warn};
 use prisma_core::config::client::PortForwardConfig;
 use prisma_core::crypto::aead::{create_cipher, AeadCipher};
 use prisma_core::protocol::codec::*;
-use prisma_core::protocol::handshake::ClientHandshake;
+use prisma_core::protocol::handshake::PrismaHandshakeClient;
 use prisma_core::protocol::types::*;
 use prisma_core::types::MAX_FRAME_SIZE;
 use prisma_core::util;
@@ -25,17 +25,13 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
     // Establish tunnel
     let mut stream = ctx.connect().await?;
 
-    // Perform handshake
-    let handshake = ClientHandshake::new(ctx.client_id, ctx.auth_secret, ctx.cipher_suite);
-    let (client_state, hello_bytes) = handshake.start();
-    util::write_framed(&mut stream, &hello_bytes).await?;
+    // Perform handshake (v4: 2-step, 1 RTT)
+    let handshake = PrismaHandshakeClient::new(ctx.client_id, ctx.auth_secret, ctx.cipher_suite);
+    let (client_state, init_bytes) = handshake.start();
+    util::write_framed(&mut stream, &init_bytes).await?;
 
-    let server_hello_buf = util::read_framed(&mut stream).await?;
-    let (client_auth_bytes, accept_state) = client_state.process_server_hello(&server_hello_buf)?;
-    util::write_framed(&mut stream, &client_auth_bytes).await?;
-
-    let accept_buf = util::read_framed(&mut stream).await?;
-    let session_keys = accept_state.process_server_accept(&accept_buf)?;
+    let server_init_buf = util::read_framed(&mut stream).await?;
+    let (session_keys, _bucket_sizes) = client_state.process_server_init(&server_init_buf)?;
     info!(session_id = %session_keys.session_id, "Forward tunnel established");
 
     let cipher: Arc<dyn AeadCipher> = Arc::from(create_cipher(

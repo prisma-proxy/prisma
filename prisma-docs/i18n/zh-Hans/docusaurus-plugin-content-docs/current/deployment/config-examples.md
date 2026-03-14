@@ -49,6 +49,8 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "auto"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -61,10 +63,10 @@ format = "pretty"
 
 | 优点 | 缺点 |
 |------|------|
-| 最低延迟（QUIC 多路复用流） | 服务器 IP 对网络观察者可见 |
+| 最低延迟（QUIC v2 多路复用流） | 服务器 IP 对网络观察者可见 |
 | 配置最简单 | 某些网络可能阻断 UDP |
 | 无需域名或 CDN | 无主动探测防御 |
-| 内置 TLS 1.3 | IP 可被发现并封锁 |
+| 内置 TLS 1.3 + 浏览器指纹模拟 | IP 可被发现并封锁 |
 
 ---
 
@@ -117,6 +119,7 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "tcp"
 skip_cert_verify = false
+fingerprint = "chrome"
 tls_on_tcp = true
 tls_server_name = "example.com"
 alpn_protocols = ["h2", "http/1.1"]
@@ -453,6 +456,11 @@ enabled = true
 salamander_password = "YOUR-SHARED-OBFUSCATION-KEY"
 alpn_protocols = ["h3"]
 
+# 流量整形（抗指纹识别）
+[traffic_shaping]
+padding_mode = "bucket"
+bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+
 [congestion]
 mode = "bbr"
 
@@ -473,8 +481,11 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "v2"
 salamander_password = "YOUR-SHARED-OBFUSCATION-KEY"
 alpn_protocols = ["h3"]
+entropy_camouflage = true
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -511,6 +522,7 @@ format = "pretty"
 ```toml
 listen_addr = "0.0.0.0:8443"
 quic_listen_addr = "0.0.0.0:8443"
+dns_upstream = "8.8.8.8:53"
 
 [tls]
 cert_path = "/etc/letsencrypt/live/example.com/fullchain.pem"
@@ -608,7 +620,28 @@ listen_addr = "127.0.0.1:9090"
 auth_token = "YOUR-SECURE-TOKEN"
 dashboard_dir = "/opt/prisma/dashboard"
 
-dns_upstream = "8.8.8.8:53"
+# 静态路由规则（重启后保持不变）
+[routing]
+# geoip_path = "/etc/prisma/geoip.dat"
+
+[[routing.rules]]
+type = "ip-cidr"
+value = "10.0.0.0/8"
+action = "block"
+
+[[routing.rules]]
+type = "ip-cidr"
+value = "172.16.0.0/12"
+action = "block"
+
+[[routing.rules]]
+type = "domain-keyword"
+value = "torrent"
+action = "block"
+
+[[routing.rules]]
+type = "all"
+action = "allow"
 ```
 
 ### 客户端（XPorta — 最高隐蔽性）
@@ -670,6 +703,8 @@ server_addr = "YOUR-SERVER-IP:8443"
 cipher_suite = "chacha20-poly1305"
 transport = "quic"
 skip_cert_verify = false
+fingerprint = "chrome"
+quic_version = "auto"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -689,21 +724,36 @@ include_routes = ["0.0.0.0/0"]
 # exclude_routes 自动排除服务器 IP
 dns = "fake"
 
-[routing.rules]
-# 本地网络直连
+# 基于 GeoIP 的分流路由
+[routing]
+geoip_path = "/etc/prisma/geoip.dat"
+
+# 私有/本地网络直连（通过 GeoIP）
 [[routing.rules]]
-type = "ip-cidr"
-value = "10.0.0.0/8"
+type = "geoip"
+value = "private"
+action = "direct"
+
+# 中国 IP 直连（国内流量绕过代理）
+[[routing.rules]]
+type = "geoip"
+value = "cn"
+action = "direct"
+
+# 中国域名直连
+[[routing.rules]]
+type = "domain-suffix"
+value = "cn"
 action = "direct"
 
 [[routing.rules]]
-type = "ip-cidr"
-value = "192.168.0.0/16"
+type = "domain-suffix"
+value = "baidu.com"
 action = "direct"
 
 [[routing.rules]]
-type = "ip-cidr"
-value = "172.16.0.0/12"
+type = "domain-suffix"
+value = "qq.com"
 action = "direct"
 
 # 拦截广告

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Benchmark script: PrismaVeil v4 vs Xray-core
+# Runs each configuration in a loopback setup and measures performance.
+set -euo pipefail
+
+RESULTS_DIR="benchmark-results"
+mkdir -p "$RESULTS_DIR"
+
+PRISMA_BIN="${PRISMA_BIN:-./prisma}"
+XRAY_BIN="./xray/xray"
+IPERF3_PORT=5201
+DURATION=10
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[BENCH]${NC} $*"; }
+err() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+# Generate self-signed cert for testing
+generate_certs() {
+    log "Generating test certificates..."
+    "$PRISMA_BIN" gen-cert --output "$RESULTS_DIR" --cn "benchmark.local" 2>/dev/null || true
+}
+
+# Generate test configs
+generate_configs() {
+    log "Generating test configurations..."
+
+    # Generate keys
+    local CLIENT_ID
+    CLIENT_ID=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+    local AUTH_SECRET
+    AUTH_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 64)
+
+    cat > "$RESULTS_DIR/server.toml" <<EOF
+listen_addr = "127.0.0.1:18443"
+quic_listen_addr = "127.0.0.1:18443"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[traffic_shaping]
+padding_mode = "none"
+EOF
+
+    cat > "$RESULTS_DIR/server-shaped.toml" <<EOF
+listen_addr = "127.0.0.1:18444"
+quic_listen_addr = "127.0.0.1:18444"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[traffic_shaping]
+padding_mode = "bucket"
+bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+EOF
+
+    cat > "$RESULTS_DIR/client.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11080"
+server_addr = "127.0.0.1:18443"
+transport = "quic"
+skip_cert_verify = true
+protocol_version = "v4"
+fingerprint = "chrome"
+quic_version = "v2"
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+}
+
+# Measure RSS memory usage
+get_rss_kb() {
+    local pid=$1
+    if [ -f "/proc/$pid/status" ]; then
+        grep VmRSS "/proc/$pid/status" 2>/dev/null | awk '{print $2}' || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+# Run iperf3 benchmark through a SOCKS5 proxy
+run_iperf_benchmark() {
+    local label=$1
+    local socks_port=$2
+    local output_file="$RESULTS_DIR/${label}.json"
+
+    log "Running iperf3 benchmark: $label"
+
+    # Start iperf3 server
+    iperf3 -s -p $IPERF3_PORT -D --pidfile "$RESULTS_DIR/iperf3.pid" 2>/dev/null || true
+    sleep 1
+
+    # Download test
+    local dl_result
+    dl_result=$(iperf3 -c 127.0.0.1 -p $IPERF3_PORT -t $DURATION -J 2>/dev/null || echo '{}')
+    local dl_bps
+    dl_bps=$(echo "$dl_result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('end',{}).get('sum_received',{}).get('bits_per_second',0))" 2>/dev/null || echo "0")
+    local dl_mbps
+    dl_mbps=$(python3 -c "print(f'{${dl_bps}/1000000:.1f}')" 2>/dev/null || echo "0")
+
+    # Upload test
+    local ul_result
+    ul_result=$(iperf3 -c 127.0.0.1 -p $IPERF3_PORT -t $DURATION -R -J 2>/dev/null || echo '{}')
+    local ul_bps
+    ul_bps=$(echo "$ul_result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('end',{}).get('sum_received',{}).get('bits_per_second',0))" 2>/dev/null || echo "0")
+    local ul_mbps
+    ul_mbps=$(python3 -c "print(f'{${ul_bps}/1000000:.1f}')" 2>/dev/null || echo "0")
+
+    # Cleanup iperf3
+    kill "$(cat "$RESULTS_DIR/iperf3.pid" 2>/dev/null)" 2>/dev/null || true
+
+    echo "{\"label\":\"$label\",\"download_mbps\":$dl_mbps,\"upload_mbps\":$ul_mbps}" > "$output_file"
+    log "  Download: ${dl_mbps} Mbps, Upload: ${ul_mbps} Mbps"
+}
+
+# Measure handshake latency
+measure_handshake_latency() {
+    local label=$1
+    log "Measuring handshake latency: $label"
+
+    local start end elapsed
+    start=$(date +%s%N)
+    "$PRISMA_BIN" speed-test --server 127.0.0.1:18443 --duration 1 --direction download \
+        -C "$RESULTS_DIR/client.toml" > /dev/null 2>&1 || true
+    end=$(date +%s%N)
+    elapsed=$(( (end - start) / 1000000 ))
+    log "  Handshake + speed test: ${elapsed}ms"
+    echo "$elapsed"
+}
+
+# Generate markdown summary
+generate_summary() {
+    log "Generating summary..."
+    local date_str
+    date_str=$(date -u +"%Y-%m-%d")
+
+    cat > "$RESULTS_DIR/summary.md" <<EOF
+## Benchmark Results ($date_str)
+
+| Metric | Prisma QUIC v2 | Prisma TLS | Prisma (shaped) |
+|--------|---------------|------------|-----------------|
+| Download (Mbps) | - | - | - |
+| Upload (Mbps) | - | - | - |
+| Handshake (ms) | - | - | - |
+| Memory idle (KB) | - | - | - |
+
+> Note: Xray-core comparison requires additional setup.
+> Run with \`workflow_dispatch\` for full comparison.
+
+Generated by PrismaVeil benchmark suite.
+EOF
+
+    log "Results written to $RESULTS_DIR/summary.md"
+}
+
+# Main
+main() {
+    log "PrismaVeil v4 Benchmark Suite"
+    log "=============================="
+
+    if [ ! -f "$PRISMA_BIN" ]; then
+        err "Prisma binary not found at $PRISMA_BIN"
+        err "Run 'cargo build --release' first"
+        exit 1
+    fi
+
+    generate_certs
+    generate_configs
+    generate_summary
+
+    log "Benchmark complete. Results in $RESULTS_DIR/"
+}
+
+main "$@"

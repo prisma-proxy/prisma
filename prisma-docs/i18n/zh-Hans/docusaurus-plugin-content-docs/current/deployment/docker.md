@@ -4,31 +4,33 @@ sidebar_position: 2
 
 # Docker
 
-:::info
-Docker 支持正在规划中。本页概述了预期的实现方案。
-:::
+## 多阶段构建
 
-## 多阶段构建方案
-
-Docker 镜像将使用多阶段构建以保持最终镜像最小化：
+Docker 镜像使用多阶段构建：Node.js 将仪表盘构建为静态文件，Rust 构建服务器二进制文件，最终镜像是包含两者的最小 Debian 运行时。
 
 ```dockerfile
-# 阶段 1：构建
-FROM rust:1.82 AS builder
-WORKDIR /app
+FROM node:22-slim AS dashboard
+WORKDIR /dashboard
+COPY prisma-dashboard/package.json prisma-dashboard/package-lock.json ./
+RUN npm ci
+COPY prisma-dashboard/ ./
+RUN npm run build
+
+FROM rust:1-bookworm AS builder
+WORKDIR /src
 COPY . .
 RUN cargo build --release -p prisma-cli
 
-# 阶段 2：运行时
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/prisma /usr/local/bin/prisma
-RUN useradd --system --no-create-home prisma
-USER prisma
+COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
+COPY --from=dashboard /dashboard/out /opt/prisma/dashboard
 ENTRYPOINT ["prisma"]
 ```
 
-## 预期用法
+构建好的仪表盘位于容器内的 `/opt/prisma/dashboard`。在服务端配置中设置 `dashboard_dir` 即可提供服务。
+
+## 用法
 
 ### 服务端
 
@@ -37,10 +39,23 @@ docker run -d \
   --name prisma-server \
   -p 8443:8443/tcp \
   -p 8443:8443/udp \
-  -v /path/to/server.toml:/etc/prisma/server.toml:ro \
-  -v /path/to/certs:/etc/prisma/certs:ro \
-  prisma server -c /etc/prisma/server.toml
+  -p 9090:9090/tcp \
+  -v /path/to/server.toml:/config/server.toml:ro \
+  -v /path/to/certs:/config/certs:ro \
+  prisma server -c /config/server.toml
 ```
+
+Docker 环境下的 `server.toml` 示例：
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "0.0.0.0:9090"
+auth_token = "your-secure-token-here"
+dashboard_dir = "/opt/prisma/dashboard"
+```
+
+通过 `http://<host>:9090/` 访问仪表盘。
 
 ### 客户端
 
@@ -49,8 +64,8 @@ docker run -d \
   --name prisma-client \
   -p 1080:1080 \
   -p 8080:8080 \
-  -v /path/to/client.toml:/etc/prisma/client.toml:ro \
-  prisma client -c /etc/prisma/client.toml
+  -v /path/to/client.toml:/config/client.toml:ro \
+  prisma client -c /config/client.toml
 ```
 
 ## Docker Compose
@@ -59,12 +74,13 @@ docker run -d \
 services:
   prisma-server:
     build: .
-    command: server -c /etc/prisma/server.toml
+    command: server -c /config/server.toml
     ports:
       - "8443:8443/tcp"
       - "8443:8443/udp"
+      - "9090:9090/tcp"
     volumes:
-      - ./server.toml:/etc/prisma/server.toml:ro
-      - ./certs:/etc/prisma/certs:ro
+      - ./server.toml:/config/server.toml:ro
+      - ./certs:/config/certs:ro
     restart: unless-stopped
 ```

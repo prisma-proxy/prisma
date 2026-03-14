@@ -189,4 +189,4 @@ prisma speed-test -s my-server.example.com:8443 -d 15 --direction download
 prisma version
 ```
 
-无需参数。输出 Prisma 版本、PrismaVeil 协议版本、支持的加密算法、支持的传输方式以及 v2 和 v3 功能列表。
+无需参数。输出 Prisma 版本、PrismaVeil 协议版本、支持的加密算法、支持的传输方式以及 v2 和 v3 的功能列表。

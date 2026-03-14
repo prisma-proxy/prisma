@@ -6,8 +6,11 @@
 //! - **Block**: drop connection (e.g. ad blocking)
 
 use std::net::IpAddr;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+
+use crate::geodata::GeoIPMatcher;
 
 /// Action to take when a rule matches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +45,9 @@ pub enum RuleCondition {
     /// IP CIDR range match.
     #[serde(rename = "ip-cidr")]
     IpCidr(String),
+    /// GeoIP country match (e.g., "cn", "us", "private").
+    #[serde(rename = "geoip")]
+    GeoIp(String),
     /// Port number or range (e.g., "80" or "8000-9000").
     #[serde(rename = "port")]
     Port(String),
@@ -55,11 +61,18 @@ pub struct Router {
     rules: Vec<Rule>,
     /// Pre-parsed CIDR entries for fast IP matching.
     cidrs: Vec<(u32, u32)>, // (network_u32, mask_u32) per IpCidr rule index
+    /// Optional GeoIP matcher for country-based routing.
+    geoip: Option<Arc<GeoIPMatcher>>,
 }
 
 impl Router {
     /// Create a router from a list of rules.
     pub fn new(rules: Vec<Rule>) -> Self {
+        Self::with_geoip(rules, None)
+    }
+
+    /// Create a router with an optional GeoIP matcher.
+    pub fn with_geoip(rules: Vec<Rule>, geoip: Option<Arc<GeoIPMatcher>>) -> Self {
         let cidrs = rules
             .iter()
             .map(|r| {
@@ -70,7 +83,7 @@ impl Router {
                 }
             })
             .collect();
-        Self { rules, cidrs }
+        Self { rules, cidrs, geoip }
     }
 
     /// Match a connection by domain, IP, and port.
@@ -115,6 +128,13 @@ impl Router {
                     false // TODO: IPv6 CIDR support
                 }
             }
+            RuleCondition::GeoIp(code) => {
+                if let (Some(geoip), Some(IpAddr::V4(v4))) = (&self.geoip, ip) {
+                    geoip.matches(code, v4)
+                } else {
+                    false
+                }
+            }
             RuleCondition::Port(p) => parse_port_match(p, port),
             RuleCondition::All => true,
         }
@@ -122,7 +142,7 @@ impl Router {
 }
 
 /// Parse a CIDR string into (network_u32, mask_u32).
-fn parse_cidr_v4(cidr: &str) -> Option<(u32, u32)> {
+pub fn parse_cidr_v4(cidr: &str) -> Option<(u32, u32)> {
     let parts: Vec<&str> = cidr.split('/').collect();
     if parts.len() != 2 {
         return None;
@@ -152,11 +172,14 @@ fn parse_port_match(spec: &str, port: u16) -> bool {
     }
 }
 
-/// Routing configuration for the client config file.
+/// Routing configuration for config files.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoutingConfig {
     #[serde(default)]
     pub rules: Vec<Rule>,
+    /// Path to a v2fly geoip.dat file for GeoIP-based routing.
+    #[serde(default)]
+    pub geoip_path: Option<String>,
 }
 
 #[cfg(test)]
@@ -245,6 +268,50 @@ mod tests {
         let public_ip = "8.8.8.8".parse().ok();
 
         assert_eq!(router.route(None, local_ip, 80), RouteAction::Direct);
+        assert_eq!(router.route(None, public_ip, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_geoip_no_matcher() {
+        let rules = vec![Rule {
+            condition: RuleCondition::GeoIp("cn".into()),
+            action: RouteAction::Direct,
+        }];
+        let router = Router::new(rules);
+
+        // Without a GeoIP matcher, GeoIp rules never match
+        let ip = "1.2.3.4".parse().ok();
+        assert_eq!(router.route(None, ip, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_geoip_with_matcher() {
+        use std::collections::HashMap;
+        use std::net::Ipv4Addr;
+
+        // Build a mock matcher with 10.0.0.0/8 as "private"
+        let mut entries = HashMap::new();
+        let mask = !0u32 << 24;
+        let network = u32::from(Ipv4Addr::new(10, 0, 0, 0)) & mask;
+        entries.insert("private".to_string(), vec![(network, mask)]);
+        let matcher = Arc::new(GeoIPMatcher::new_from_entries(entries));
+
+        let rules = vec![
+            Rule {
+                condition: RuleCondition::GeoIp("private".into()),
+                action: RouteAction::Direct,
+            },
+            Rule {
+                condition: RuleCondition::All,
+                action: RouteAction::Proxy,
+            },
+        ];
+        let router = Router::with_geoip(rules, Some(matcher));
+
+        let private_ip: Option<IpAddr> = "10.1.2.3".parse().ok();
+        let public_ip: Option<IpAddr> = "8.8.8.8".parse().ok();
+
+        assert_eq!(router.route(None, private_ip, 80), RouteAction::Direct);
         assert_eq!(router.route(None, public_ip, 80), RouteAction::Proxy);
     }
 

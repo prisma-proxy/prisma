@@ -5,158 +5,13 @@ use crate::types::{CipherSuite, ClientId, ProxyAddress, ProxyDestination, NONCE_
 
 use super::types::*;
 
-// --- Handshake message encoding/decoding ---
+// --- Handshake message encoding/decoding (v4 only) ---
 
-/// Encode ClientHello to bytes (v1/v2).
-pub fn encode_client_hello(msg: &ClientHello) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 32 + 8 + msg.padding.len());
-    buf.push(msg.version);
-    buf.extend_from_slice(&msg.client_ephemeral_pub);
-    buf.extend_from_slice(&msg.timestamp.to_be_bytes());
-    buf.extend_from_slice(&msg.padding);
-    buf
-}
-
-/// Decode ClientHello from bytes (v1/v2).
-pub fn decode_client_hello(data: &[u8]) -> Result<ClientHello, ProtocolError> {
-    if data.len() < 41 {
-        // 1 + 32 + 8
-        return Err(ProtocolError::InvalidFrame(
-            "ClientHello too short".to_string(),
-        ));
-    }
-    let version = data[0];
-    let mut pub_key = [0u8; 32];
-    pub_key.copy_from_slice(&data[1..33]);
-    let timestamp = u64::from_be_bytes(data[33..41].try_into().unwrap());
-    let padding = data[41..].to_vec();
-
-    Ok(ClientHello {
-        version,
-        client_ephemeral_pub: pub_key,
-        timestamp,
-        padding,
-    })
-}
-
-/// Encode ServerHello to bytes (v1/v2).
-pub fn encode_server_hello(msg: &ServerHello) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(32 + 2 + msg.encrypted_challenge.len() + msg.padding.len());
-    buf.extend_from_slice(&msg.server_ephemeral_pub);
-    buf.extend_from_slice(&(msg.encrypted_challenge.len() as u16).to_be_bytes());
-    buf.extend_from_slice(&msg.encrypted_challenge);
-    buf.extend_from_slice(&msg.padding);
-    buf
-}
-
-/// Decode ServerHello from bytes (v1/v2).
-pub fn decode_server_hello(data: &[u8]) -> Result<ServerHello, ProtocolError> {
-    if data.len() < 34 {
-        // 32 + 2
-        return Err(ProtocolError::InvalidFrame(
-            "ServerHello too short".to_string(),
-        ));
-    }
-    let mut pub_key = [0u8; 32];
-    pub_key.copy_from_slice(&data[..32]);
-    let challenge_len = u16::from_be_bytes([data[32], data[33]]) as usize;
-    if data.len() < 34 + challenge_len {
-        return Err(ProtocolError::InvalidFrame(
-            "ServerHello challenge truncated".to_string(),
-        ));
-    }
-    let encrypted_challenge = data[34..34 + challenge_len].to_vec();
-    let padding = data[34 + challenge_len..].to_vec();
-
-    Ok(ServerHello {
-        server_ephemeral_pub: pub_key,
-        encrypted_challenge,
-        padding,
-    })
-}
-
-/// Encode ClientAuth to bytes (plaintext, will be encrypted by handshake layer).
-pub fn encode_client_auth(msg: &ClientAuth) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(16 + 32 + 1 + 32);
-    buf.extend_from_slice(msg.client_id.0.as_bytes());
-    buf.extend_from_slice(&msg.auth_token);
-    buf.push(msg.cipher_suite as u8);
-    buf.extend_from_slice(&msg.challenge_response);
-    buf
-}
-
-/// Decode ClientAuth from bytes.
-pub fn decode_client_auth(data: &[u8]) -> Result<ClientAuth, ProtocolError> {
-    if data.len() < 81 {
-        // 16 + 32 + 1 + 32
-        return Err(ProtocolError::InvalidFrame(
-            "ClientAuth too short".to_string(),
-        ));
-    }
-    let client_id = ClientId(uuid::Uuid::from_bytes(data[..16].try_into().unwrap()));
-    let mut auth_token = [0u8; 32];
-    auth_token.copy_from_slice(&data[16..48]);
-    let cipher_suite =
-        CipherSuite::from_u8(data[48]).ok_or(ProtocolError::InvalidCommand(data[48]))?;
-    let mut challenge_response = [0u8; 32];
-    challenge_response.copy_from_slice(&data[49..81]);
-
-    Ok(ClientAuth {
-        client_id,
-        auth_token,
-        cipher_suite,
-        challenge_response,
-    })
-}
-
-/// Encode ServerAccept to bytes (v1/v2).
-/// v2 format: [status:1][session_id:16][padding_min:2][padding_max:2]
-/// v1 format: [status:1][session_id:16]
-pub fn encode_server_accept(msg: &ServerAccept) -> Vec<u8> {
-    let has_padding = msg.padding_range.is_some();
-    let mut buf = Vec::with_capacity(1 + 16 + if has_padding { 4 } else { 0 });
-    buf.push(msg.status as u8);
-    buf.extend_from_slice(msg.session_id.as_bytes());
-    if let Some(ref pr) = msg.padding_range {
-        buf.extend_from_slice(&pr.min.to_be_bytes());
-        buf.extend_from_slice(&pr.max.to_be_bytes());
-    }
-    buf
-}
-
-/// Decode ServerAccept from bytes.
-/// Supports both v1 (17 bytes) and v2 (21 bytes with padding range).
-pub fn decode_server_accept(data: &[u8]) -> Result<ServerAccept, ProtocolError> {
-    if data.len() < 17 {
-        return Err(ProtocolError::InvalidFrame(
-            "ServerAccept too short".to_string(),
-        ));
-    }
-    let status = AcceptStatus::from_u8(data[0]).ok_or(ProtocolError::InvalidFrame(
-        "Invalid accept status".to_string(),
-    ))?;
-    let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
-    let padding_range = if data.len() >= 21 {
-        let min = u16::from_be_bytes([data[17], data[18]]);
-        let max = u16::from_be_bytes([data[19], data[20]]);
-        Some(crate::types::PaddingRange::new(min, max))
-    } else {
-        None
-    };
-    Ok(ServerAccept {
-        status,
-        session_id,
-        padding_range,
-    })
-}
-
-// --- v3 Handshake message encoding/decoding ---
-
-/// Encode ClientInit to bytes (v3).
+/// Encode PrismaClientInit to bytes.
 /// Wire format:
 ///   [version:1][flags:1][client_ephemeral_pub:32][client_id:16][timestamp:8]
 ///   [cipher_suite:1][auth_token:32][padding:var]
-pub fn encode_client_init(msg: &ClientInit) -> Vec<u8> {
+pub fn encode_client_init(msg: &PrismaClientInit) -> Vec<u8> {
     let mut buf = Vec::with_capacity(1 + 1 + 32 + 16 + 8 + 1 + 32 + msg.padding.len());
     buf.push(msg.version);
     buf.push(msg.flags);
@@ -169,12 +24,12 @@ pub fn encode_client_init(msg: &ClientInit) -> Vec<u8> {
     buf
 }
 
-/// Decode ClientInit from bytes (v3).
-pub fn decode_client_init(data: &[u8]) -> Result<ClientInit, ProtocolError> {
+/// Decode PrismaClientInit from bytes.
+pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError> {
     // Minimum: 1+1+32+16+8+1+32 = 91
     if data.len() < 91 {
         return Err(ProtocolError::InvalidFrame(
-            "ClientInit too short".to_string(),
+            "PrismaClientInit too short".to_string(),
         ));
     }
     let version = data[0];
@@ -189,7 +44,7 @@ pub fn decode_client_init(data: &[u8]) -> Result<ClientInit, ProtocolError> {
     auth_token.copy_from_slice(&data[59..91]);
     let padding = data[91..].to_vec();
 
-    Ok(ClientInit {
+    Ok(PrismaClientInit {
         version,
         flags,
         client_ephemeral_pub,
@@ -201,14 +56,17 @@ pub fn decode_client_init(data: &[u8]) -> Result<ClientInit, ProtocolError> {
     })
 }
 
-/// Encode ServerInit to bytes (v3, plaintext — will be encrypted with preliminary key).
+/// Encode PrismaServerInit to bytes (plaintext — will be encrypted with preliminary key).
 /// Wire format:
 ///   [status:1][session_id:16][server_ephemeral_pub:32][challenge:32]
 ///   [padding_min:2][padding_max:2][server_features:4]
-///   [session_ticket_len:2][session_ticket:var][padding:var]
-pub fn encode_server_init(msg: &ServerInit) -> Vec<u8> {
+///   [ticket_len:2][ticket:var]
+///   [bucket_count:2][bucket_sizes:2*N][padding:var]
+pub fn encode_server_init(msg: &PrismaServerInit) -> Vec<u8> {
+    let bucket_bytes = msg.bucket_sizes.len() * 2;
     let mut buf = Vec::with_capacity(
-        1 + 16 + 32 + 32 + 2 + 2 + 4 + 2 + msg.session_ticket.len() + msg.padding.len(),
+        1 + 16 + 32 + 32 + 2 + 2 + 4 + 2 + msg.session_ticket.len() + 2 + bucket_bytes
+            + msg.padding.len(),
     );
     buf.push(msg.status as u8);
     buf.extend_from_slice(msg.session_id.as_bytes());
@@ -219,20 +77,24 @@ pub fn encode_server_init(msg: &ServerInit) -> Vec<u8> {
     buf.extend_from_slice(&msg.server_features.to_le_bytes());
     buf.extend_from_slice(&(msg.session_ticket.len() as u16).to_be_bytes());
     buf.extend_from_slice(&msg.session_ticket);
+    buf.extend_from_slice(&(msg.bucket_sizes.len() as u16).to_be_bytes());
+    for &size in &msg.bucket_sizes {
+        buf.extend_from_slice(&size.to_le_bytes());
+    }
     buf.extend_from_slice(&msg.padding);
     buf
 }
 
-/// Decode ServerInit from bytes (v3).
-pub fn decode_server_init(data: &[u8]) -> Result<ServerInit, ProtocolError> {
-    // Minimum: 1+16+32+32+2+2+4+2 = 91
-    if data.len() < 91 {
+/// Decode PrismaServerInit from bytes.
+pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError> {
+    // Minimum: 1+16+32+32+2+2+4+2+0+2 = 93
+    if data.len() < 93 {
         return Err(ProtocolError::InvalidFrame(
-            "ServerInit too short".to_string(),
+            "PrismaServerInit too short".to_string(),
         ));
     }
     let status = AcceptStatus::from_u8(data[0]).ok_or(ProtocolError::InvalidFrame(
-        "Invalid ServerInit status".to_string(),
+        "Invalid PrismaServerInit status".to_string(),
     ))?;
     let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
     let mut server_ephemeral_pub = [0u8; 32];
@@ -243,15 +105,29 @@ pub fn decode_server_init(data: &[u8]) -> Result<ServerInit, ProtocolError> {
     let padding_max = u16::from_le_bytes([data[83], data[84]]);
     let server_features = u32::from_le_bytes([data[85], data[86], data[87], data[88]]);
     let ticket_len = u16::from_be_bytes([data[89], data[90]]) as usize;
-    if data.len() < 91 + ticket_len {
+    let ticket_end = 91 + ticket_len;
+    if data.len() < ticket_end + 2 {
         return Err(ProtocolError::InvalidFrame(
-            "ServerInit ticket truncated".to_string(),
+            "PrismaServerInit ticket/buckets truncated".to_string(),
         ));
     }
-    let session_ticket = data[91..91 + ticket_len].to_vec();
-    let padding = data[91 + ticket_len..].to_vec();
+    let session_ticket = data[91..ticket_end].to_vec();
+    let bucket_count = u16::from_be_bytes([data[ticket_end], data[ticket_end + 1]]) as usize;
+    let buckets_start = ticket_end + 2;
+    let buckets_end = buckets_start + bucket_count * 2;
+    if data.len() < buckets_end {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit bucket sizes truncated".to_string(),
+        ));
+    }
+    let mut bucket_sizes = Vec::with_capacity(bucket_count);
+    for i in 0..bucket_count {
+        let offset = buckets_start + i * 2;
+        bucket_sizes.push(u16::from_le_bytes([data[offset], data[offset + 1]]));
+    }
+    let padding = data[buckets_end..].to_vec();
 
-    Ok(ServerInit {
+    Ok(PrismaServerInit {
         status,
         session_id,
         server_ephemeral_pub,
@@ -260,12 +136,13 @@ pub fn decode_server_init(data: &[u8]) -> Result<ServerInit, ProtocolError> {
         padding_max,
         server_features,
         session_ticket,
+        bucket_sizes,
         padding,
     })
 }
 
-/// Encode ClientResume to bytes (v3 0-RTT).
-pub fn encode_client_resume(msg: &ClientResume) -> Vec<u8> {
+/// Encode PrismaClientResume to bytes (0-RTT).
+pub fn encode_client_resume(msg: &PrismaClientResume) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         1 + 1 + 32 + 2 + msg.session_ticket.len() + msg.encrypted_0rtt_data.len(),
     );
@@ -278,12 +155,12 @@ pub fn encode_client_resume(msg: &ClientResume) -> Vec<u8> {
     buf
 }
 
-/// Decode ClientResume from bytes (v3 0-RTT).
-pub fn decode_client_resume(data: &[u8]) -> Result<ClientResume, ProtocolError> {
+/// Decode PrismaClientResume from bytes (0-RTT).
+pub fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolError> {
     // Minimum: 1+1+32+2 = 36
     if data.len() < 36 {
         return Err(ProtocolError::InvalidFrame(
-            "ClientResume too short".to_string(),
+            "PrismaClientResume too short".to_string(),
         ));
     }
     let version = data[0];
@@ -293,13 +170,13 @@ pub fn decode_client_resume(data: &[u8]) -> Result<ClientResume, ProtocolError> 
     let ticket_len = u16::from_be_bytes([data[34], data[35]]) as usize;
     if data.len() < 36 + ticket_len {
         return Err(ProtocolError::InvalidFrame(
-            "ClientResume ticket truncated".to_string(),
+            "PrismaClientResume ticket truncated".to_string(),
         ));
     }
     let session_ticket = data[36..36 + ticket_len].to_vec();
     let encrypted_0rtt_data = data[36 + ticket_len..].to_vec();
 
-    Ok(ClientResume {
+    Ok(PrismaClientResume {
         version,
         flags,
         client_ephemeral_pub,
@@ -427,51 +304,7 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
     })
 }
 
-/// Decode a v2 DataFrame (1-byte flags) for backward compatibility.
-pub fn decode_data_frame_v2(data: &[u8]) -> Result<DataFrame, ProtocolError> {
-    if data.len() < 6 {
-        return Err(ProtocolError::InvalidFrame(
-            "v2 DataFrame too short".to_string(),
-        ));
-    }
-    let cmd = data[0];
-    let flags_v2 = data[1];
-    let stream_id = u32::from_be_bytes(data[2..6].try_into().unwrap());
-
-    // Convert v2 1-byte flags to v3 2-byte flags
-    let flags: u16 = if flags_v2 & FLAG_PADDED_V2 != 0 {
-        FLAG_PADDED
-    } else {
-        0
-    };
-
-    let payload = if flags & FLAG_PADDED != 0 {
-        if data.len() < 8 {
-            return Err(ProtocolError::InvalidFrame(
-                "v2 Padded DataFrame too short".to_string(),
-            ));
-        }
-        let payload_len = u16::from_be_bytes([data[6], data[7]]) as usize;
-        if data.len() < 8 + payload_len {
-            return Err(ProtocolError::InvalidFrame(
-                "v2 Padded DataFrame payload truncated".to_string(),
-            ));
-        }
-        &data[8..8 + payload_len]
-    } else {
-        &data[6..]
-    };
-
-    let command = decode_command_payload(cmd, payload)?;
-
-    Ok(DataFrame {
-        command,
-        flags,
-        stream_id,
-    })
-}
-
-fn encode_command_payload(cmd: &Command) -> Vec<u8> {
+pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
     match cmd {
         Command::Connect(dest) => encode_proxy_destination(dest),
         Command::Data(data) => data.clone(),
@@ -849,87 +682,12 @@ pub fn decrypt_frame(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{PROTOCOL_VERSION, PROTOCOL_VERSION_V2};
-
-    #[test]
-    fn test_client_hello_round_trip() {
-        let msg = ClientHello {
-            version: PROTOCOL_VERSION_V2,
-            client_ephemeral_pub: [0xAA; 32],
-            timestamp: 1234567890,
-            padding: vec![0x00, 0x05, 1, 2, 3, 4, 5],
-        };
-        let encoded = encode_client_hello(&msg);
-        let decoded = decode_client_hello(&encoded).unwrap();
-        assert_eq!(decoded.version, msg.version);
-        assert_eq!(decoded.client_ephemeral_pub, msg.client_ephemeral_pub);
-        assert_eq!(decoded.timestamp, msg.timestamp);
-        assert_eq!(decoded.padding, msg.padding);
-    }
-
-    #[test]
-    fn test_server_hello_round_trip() {
-        let msg = ServerHello {
-            server_ephemeral_pub: [0xBB; 32],
-            encrypted_challenge: vec![1, 2, 3, 4, 5],
-            padding: vec![0, 0],
-        };
-        let encoded = encode_server_hello(&msg);
-        let decoded = decode_server_hello(&encoded).unwrap();
-        assert_eq!(decoded.server_ephemeral_pub, msg.server_ephemeral_pub);
-        assert_eq!(decoded.encrypted_challenge, msg.encrypted_challenge);
-        assert_eq!(decoded.padding, msg.padding);
-    }
-
-    #[test]
-    fn test_client_auth_round_trip() {
-        let msg = ClientAuth {
-            client_id: ClientId(uuid::Uuid::nil()),
-            auth_token: [0xCC; 32],
-            cipher_suite: CipherSuite::ChaCha20Poly1305,
-            challenge_response: [0xDD; 32],
-        };
-        let encoded = encode_client_auth(&msg);
-        let decoded = decode_client_auth(&encoded).unwrap();
-        assert_eq!(decoded.client_id, msg.client_id);
-        assert_eq!(decoded.auth_token, msg.auth_token);
-        assert_eq!(decoded.cipher_suite, msg.cipher_suite);
-        assert_eq!(decoded.challenge_response, msg.challenge_response);
-    }
-
-    #[test]
-    fn test_server_accept_round_trip() {
-        let msg = ServerAccept {
-            status: AcceptStatus::Ok,
-            session_id: uuid::Uuid::nil(),
-            padding_range: None,
-        };
-        let encoded = encode_server_accept(&msg);
-        let decoded = decode_server_accept(&encoded).unwrap();
-        assert_eq!(decoded.status, msg.status);
-        assert_eq!(decoded.session_id, msg.session_id);
-        assert_eq!(decoded.padding_range, None);
-    }
-
-    #[test]
-    fn test_server_accept_v2_round_trip() {
-        use crate::types::PaddingRange;
-        let msg = ServerAccept {
-            status: AcceptStatus::Ok,
-            session_id: uuid::Uuid::nil(),
-            padding_range: Some(PaddingRange::new(10, 200)),
-        };
-        let encoded = encode_server_accept(&msg);
-        let decoded = decode_server_accept(&encoded).unwrap();
-        assert_eq!(decoded.status, msg.status);
-        assert_eq!(decoded.session_id, msg.session_id);
-        assert_eq!(decoded.padding_range, Some(PaddingRange::new(10, 200)));
-    }
+    use crate::types::PRISMA_PROTOCOL_VERSION;
 
     #[test]
     fn test_client_init_round_trip() {
-        let msg = ClientInit {
-            version: PROTOCOL_VERSION,
+        let msg = PrismaClientInit {
+            version: PRISMA_PROTOCOL_VERSION,
             flags: 0,
             client_ephemeral_pub: [0xAA; 32],
             client_id: ClientId(uuid::Uuid::nil()),
@@ -951,8 +709,33 @@ mod tests {
     }
 
     #[test]
+    fn test_client_init_minimum_size() {
+        // Exactly 91 bytes: should succeed with empty padding
+        let msg = PrismaClientInit {
+            version: PRISMA_PROTOCOL_VERSION,
+            flags: 0,
+            client_ephemeral_pub: [0xAA; 32],
+            client_id: ClientId(uuid::Uuid::nil()),
+            timestamp: 1700000000,
+            cipher_suite: CipherSuite::ChaCha20Poly1305,
+            auth_token: [0xBB; 32],
+            padding: vec![],
+        };
+        let encoded = encode_client_init(&msg);
+        assert_eq!(encoded.len(), 91);
+        let decoded = decode_client_init(&encoded).unwrap();
+        assert_eq!(decoded.padding, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_client_init_too_short() {
+        let data = [0u8; 90];
+        assert!(decode_client_init(&data).is_err());
+    }
+
+    #[test]
     fn test_server_init_round_trip() {
-        let msg = ServerInit {
+        let msg = PrismaServerInit {
             status: AcceptStatus::Ok,
             session_id: uuid::Uuid::nil(),
             server_ephemeral_pub: [0xCC; 32],
@@ -961,6 +744,7 @@ mod tests {
             padding_max: 200,
             server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
             session_ticket: vec![1, 2, 3, 4, 5],
+            bucket_sizes: vec![128, 256, 512],
             padding: vec![6, 7, 8],
         };
         let encoded = encode_server_init(&msg);
@@ -973,13 +757,41 @@ mod tests {
         assert_eq!(decoded.padding_max, msg.padding_max);
         assert_eq!(decoded.server_features, msg.server_features);
         assert_eq!(decoded.session_ticket, msg.session_ticket);
+        assert_eq!(decoded.bucket_sizes, msg.bucket_sizes);
         assert_eq!(decoded.padding, msg.padding);
     }
 
     #[test]
+    fn test_server_init_no_buckets_round_trip() {
+        let msg = PrismaServerInit {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            server_ephemeral_pub: [0xCC; 32],
+            challenge: [0xDD; 32],
+            padding_min: 10,
+            padding_max: 200,
+            server_features: 0,
+            session_ticket: vec![],
+            bucket_sizes: vec![],
+            padding: vec![],
+        };
+        let encoded = encode_server_init(&msg);
+        let decoded = decode_server_init(&encoded).unwrap();
+        assert_eq!(decoded.bucket_sizes, Vec::<u16>::new());
+        assert_eq!(decoded.session_ticket, Vec::<u8>::new());
+        assert_eq!(decoded.padding, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_server_init_too_short() {
+        let data = [0u8; 92];
+        assert!(decode_server_init(&data).is_err());
+    }
+
+    #[test]
     fn test_client_resume_round_trip() {
-        let msg = ClientResume {
-            version: PROTOCOL_VERSION,
+        let msg = PrismaClientResume {
+            version: PRISMA_PROTOCOL_VERSION,
             flags: CLIENT_INIT_FLAG_RESUMPTION,
             client_ephemeral_pub: [0xEE; 32],
             session_ticket: vec![1, 2, 3, 4, 5],
@@ -1103,7 +915,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v3_command_challenge_response_round_trip() {
+    fn test_command_challenge_response_round_trip() {
         let frame = DataFrame {
             command: Command::ChallengeResponse { hash: [0xAA; 32] },
             flags: 0,
@@ -1115,7 +927,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v3_command_dns_round_trip() {
+    fn test_command_dns_round_trip() {
         let frame = DataFrame {
             command: Command::DnsQuery {
                 query_id: 42,
@@ -1142,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v3_command_speed_test_round_trip() {
+    fn test_command_speed_test_round_trip() {
         let frame = DataFrame {
             command: Command::SpeedTest {
                 direction: 0,

@@ -16,7 +16,7 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `identity.client_id` | string | — | Client UUID (must match server config) |
 | `identity.auth_secret` | string | — | 64 hex character shared secret (must match server config) |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
-| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` |
+| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
 | `tls_server_name` | string? | — | TLS SNI server name override (defaults to server_addr hostname) |
@@ -45,6 +45,7 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `xporta.max_payload_size` | u32 | `65536` | Max payload bytes per request |
 | `xporta.poll_timeout_secs` | u16 | `55` | Long-poll timeout in seconds (10-90) |
 | `xporta.extra_headers` | \[\[k,v\]\] | `[]` | Extra XPorta request headers |
+| `xporta.cookie_name` | string | `"_sess"` | Session cookie name (must match server config) |
 | `xmux.max_connections_min` | u16 | `1` | Min connections in pool |
 | `xmux.max_connections_max` | u16 | `4` | Max connections in pool |
 | `xmux.max_concurrency_min` | u16 | `8` | Min concurrency per connection |
@@ -71,15 +72,29 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `dns.upstream` | string | `"8.8.8.8:53"` | Upstream DNS server |
 | `dns.geosite_path` | string? | — | GeoSite database path for smart DNS mode |
 | `dns.dns_listen_addr` | string | `"127.0.0.1:53"` | Local DNS server listen address |
-| `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `port` / `all` |
-| `routing.rules[].value` | string | — | Match value |
+| `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
+| `routing.rules[].value` | string | — | Match value (country code for `geoip`, e.g. `"cn"`, `"private"`) |
 | `routing.rules[].action` | string | `"proxy"` | Action: `"proxy"` / `"direct"` / `"block"` |
+| `routing.geoip_path` | string? | — | Path to v2fly geoip.dat file for GeoIP-based routing |
 | `tun.enabled` | bool | `false` | Enable TUN mode (system-wide proxy) |
 | `tun.device_name` | string | `"prisma-tun0"` | TUN device name |
 | `tun.mtu` | u16 | `1500` | TUN device MTU |
 | `tun.include_routes` | string[] | `["0.0.0.0/0"]` | Routes to capture in TUN mode |
 | `tun.exclude_routes` | string[] | `[]` | Routes to exclude (server IP auto-excluded) |
 | `tun.dns` | string | `"fake"` | TUN DNS mode: `"fake"` / `"tunnel"` |
+| `protocol_version` | string | `"v4"` | Protocol version (v4 only) |
+| `fingerprint` | string | `"chrome"` | uTLS fingerprint: `chrome` / `firefox` / `safari` / `random` / `none` |
+| `quic_version` | string | `"auto"` | QUIC version: `v2` / `v1` / `auto` |
+| `transport_mode` | string | `"auto"` | Transport mode: `auto` or explicit name |
+| `fallback_order` | string[] | `["quic-v2", ...]` | Transport fallback order for auto mode |
+| `prisma_auth_secret` | string? | — | PrismaTLS auth secret (hex-encoded, must match server) |
+| `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
+| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | Bucket sizes for bucket padding mode |
+| `traffic_shaping.timing_jitter_ms` | u32 | `0` | Max timing jitter (ms) on handshake frames |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | Chaff injection interval (ms), 0=disabled |
+| `traffic_shaping.coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms) |
+| `sni_slicing` | bool | `false` | SNI slicing for QUIC (fragment ClientHello across CRYPTO frames) |
+| `entropy_camouflage` | bool | `false` | Entropy camouflage for Salamander/raw UDP |
 
 ## Full example
 
@@ -90,6 +105,12 @@ server_addr = "127.0.0.1:8443"
 cipher_suite = "chacha20-poly1305"   # or "aes-256-gcm"
 transport = "quic"                   # or "tcp"
 skip_cert_verify = true              # set true for self-signed certs in dev
+
+# v4 features
+protocol_version = "v4"
+fingerprint = "chrome"        # uTLS fingerprint for ClientHello mimicry
+quic_version = "auto"         # "v2", "v1", or "auto"
+# prisma_auth_secret = "hex-encoded-32-bytes"   # For PrismaTLS transport
 
 # Must match a key generated with: prisma gen-key
 [identity]
@@ -121,7 +142,7 @@ The client config is validated at startup. The following rules are enforced:
 - `identity.client_id` must not be empty
 - `identity.auth_secret` must be valid hex
 - `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`
-- `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`
+- `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`
 - `xhttp_mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
 - `xhttp_mode = "stream-one"` requires `xhttp_stream_url`
 - `xhttp_mode = "packet-up"` or `"stream-up"` requires `xhttp_upload_url` and `xhttp_download_url`
@@ -152,6 +173,19 @@ If your network blocks UDP traffic, use the TCP transport:
 ```toml
 transport = "tcp"
 ```
+
+### PrismaTLS (active probing resistance)
+
+PrismaTLS replaces REALITY for maximum active probing resistance on direct connections. The server is indistinguishable from a real website to active probers.
+
+```toml
+transport = "prisma-tls"
+tls_server_name = "www.microsoft.com"
+fingerprint = "chrome"
+prisma_auth_secret = "hex-encoded-32-bytes"
+```
+
+See [PrismaTLS](/docs/features/prisma-tls) for detailed configuration.
 
 ### XPorta (maximum stealth — CDN)
 

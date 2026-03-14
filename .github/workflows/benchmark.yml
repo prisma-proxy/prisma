@@ -1,0 +1,55 @@
+name: Benchmark Prisma vs Xray-core
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly Monday 4am UTC
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest Prisma release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --pattern 'prisma-linux-amd64' --dir . || {
+            echo "No release found, building from source as fallback"
+            rustup default stable
+            cargo build --release -p prisma-cli
+            cp target/release/prisma prisma-linux-amd64
+          }
+          chmod +x prisma-linux-amd64
+          mv prisma-linux-amd64 prisma
+
+      - name: Download latest Xray-core release
+        run: |
+          mkdir -p xray
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          unzip -q Xray-linux-64.zip -d xray
+          chmod +x xray/xray
+
+      - name: Install iperf3
+        run: sudo apt-get install -y iperf3
+
+      - name: Run benchmarks
+        run: |
+          chmod +x scripts/benchmark.sh
+          ./scripts/benchmark.sh
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: benchmark-results/
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f benchmark-results/summary.md ]; then
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body-file benchmark-results/summary.md
+          fi

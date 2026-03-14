@@ -76,76 +76,15 @@ pub async fn listen(
         return Ok(());
     }
 
-    while let Some(incoming) = endpoint.accept().await {
-        let auth = auth.clone();
-        let dns = dns_cache.clone();
-        let fwd = config.port_forwarding.clone();
-        let ctx = ctx.clone();
-        let semaphore = semaphore.clone();
-        tokio::spawn(async move {
-            match incoming.await {
-                Ok(connection) => {
-                    let remote = connection.remote_address();
-                    info!(peer = %remote, "New QUIC connection");
-
-                    loop {
-                        match connection.accept_bi().await {
-                            Ok((send, recv)) => {
-                                let permit = match semaphore.clone().try_acquire_owned() {
-                                    Ok(p) => p,
-                                    Err(_) => {
-                                        warn!(peer = %remote, "QUIC stream rejected: max connections");
-                                        continue;
-                                    }
-                                };
-                                let auth = auth.clone();
-                                let dns = dns.clone();
-                                let fwd = fwd.clone();
-                                let ctx = ctx.clone();
-                                let peer_str = remote.to_string();
-                                tokio::spawn(async move {
-                                    ctx.state
-                                        .metrics
-                                        .total_connections
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    ctx.state
-                                        .metrics
-                                        .active_connections
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    if let Err(e) = handler::handle_quic_stream(
-                                        send,
-                                        recv,
-                                        auth,
-                                        dns,
-                                        fwd,
-                                        ctx.clone(),
-                                        peer_str,
-                                    )
-                                    .await
-                                    {
-                                        warn!(error = %e, "QUIC stream handler error");
-                                    }
-                                    ctx.state
-                                        .metrics
-                                        .active_connections
-                                        .fetch_sub(1, Ordering::Relaxed);
-                                    drop(permit);
-                                });
-                            }
-                            Err(quinn::ConnectionError::ApplicationClosed(_)) => break,
-                            Err(e) => {
-                                warn!(error = %e, "Failed to accept QUIC stream");
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to accept QUIC connection");
-                }
-            }
-        });
-    }
+    accept_loop(
+        endpoint,
+        auth,
+        dns_cache,
+        config.port_forwarding.clone(),
+        ctx,
+        semaphore,
+    )
+    .await;
 
     Ok(())
 }
@@ -380,6 +319,7 @@ fn build_tls_config(config: &ServerConfig) -> Result<rustls::ServerConfig> {
         .with_single_cert(certs, key)?;
 
     if config.camouflage.enabled && !config.camouflage.alpn_protocols.is_empty() {
+        // Custom ALPN from config
         tls_config.alpn_protocols = config
             .camouflage
             .alpn_protocols
@@ -387,16 +327,14 @@ fn build_tls_config(config: &ServerConfig) -> Result<rustls::ServerConfig> {
             .map(|s| s.as_bytes().to_vec())
             .collect();
     } else {
-        // Accept v3, v2, and v1 ALPN for backward compatibility
+        // Standard ALPN — "h3" only, no legacy "prisma-v3"/"prisma-v2"
         tls_config.alpn_protocols = vec![
-            prisma_core::types::QUIC_ALPN.as_bytes().to_vec(),
-            prisma_core::types::QUIC_ALPN_V2.as_bytes().to_vec(),
-            b"prisma-v1".to_vec(),
+            prisma_core::types::PRISMA_QUIC_ALPN.as_bytes().to_vec(),
         ];
     }
 
-    // When H3 masquerade is enabled, also accept the standard HTTP/3 ALPN so
-    // that browsers and probers can complete the TLS handshake.
+    // When H3 masquerade is enabled, ensure the h3 ALPN is present
+    // for browser/prober compatibility.
     if h3_masquerade_enabled(config) {
         let h3_alpn = b"h3".to_vec();
         if !tls_config.alpn_protocols.contains(&h3_alpn) {

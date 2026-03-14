@@ -4,7 +4,7 @@ sidebar_position: 7
 
 # PrismaUDP（游戏代理）
 
-PrismaUDP 是 PrismaVeil v3 中专为代理 UDP 流量设计的子协议 — 适用于游戏、VoIP、视频通话和 DNS。
+PrismaUDP 是 PrismaVeil 中专为代理 UDP 流量设计的子协议 — 适用于游戏、VoIP、视频通话和 DNS。
 
 ## 概述
 

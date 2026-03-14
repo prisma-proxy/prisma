@@ -76,6 +76,34 @@ pub struct ClientConfig {
     // TUN mode
     #[serde(default)]
     pub tun: TunConfig,
+    // --- v4 features ---
+    /// Protocol version: "v4", "v3" (default for backward compat).
+    #[serde(default = "default_protocol_version")]
+    pub protocol_version: String,
+    /// uTLS fingerprint: "chrome", "firefox", "safari", "random", or "none" (default).
+    #[serde(default = "default_fingerprint")]
+    pub fingerprint: String,
+    /// QUIC version preference: "v2", "v1", "auto" (default: "auto").
+    #[serde(default = "default_quic_version")]
+    pub quic_version: String,
+    /// Transport selection mode: "auto" or explicit transport name.
+    #[serde(default = "default_transport_mode")]
+    pub transport_mode: String,
+    /// Ordered list of transports for auto-fallback.
+    #[serde(default = "default_fallback_order")]
+    pub fallback_order: Vec<String>,
+    /// SNI slicing for QUIC (fragment ClientHello across CRYPTO frames).
+    #[serde(default)]
+    pub sni_slicing: bool,
+    /// Traffic shaping configuration.
+    #[serde(default)]
+    pub traffic_shaping: crate::traffic_shaping::TrafficShapingConfig,
+    /// Entropy camouflage for Salamander/raw UDP.
+    #[serde(default)]
+    pub entropy_camouflage: bool,
+    /// PrismaTLS auth secret for v4 authentication (hex-encoded, 32 bytes).
+    #[serde(default)]
+    pub prisma_auth_secret: Option<String>,
 }
 
 /// TUN device configuration.
@@ -224,6 +252,31 @@ pub struct PortForwardConfig {
     pub name: String,
     pub local_addr: String,
     pub remote_port: u16,
+}
+
+fn default_protocol_version() -> String {
+    "v4".into()
+}
+
+fn default_fingerprint() -> String {
+    "chrome".into()
+}
+
+fn default_quic_version() -> String {
+    "auto".into()
+}
+
+fn default_transport_mode() -> String {
+    "auto".into()
+}
+
+fn default_fallback_order() -> Vec<String> {
+    vec![
+        "quic-v2".into(),
+        "prisma-tls".into(),
+        "ws-cdn".into(),
+        "xporta".into(),
+    ]
 }
 
 fn default_cipher_suite() -> String {

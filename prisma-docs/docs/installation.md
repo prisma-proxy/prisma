@@ -15,14 +15,14 @@ The fastest way to get Prisma running. Automatically detects your OS and archite
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1 | iex
+irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1 | iex
 ```
 
   </TabItem>
@@ -36,14 +36,14 @@ Add `--setup` to also generate credentials, TLS certificates, and example config
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash -s -- --setup
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --setup
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1))) -Setup
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Setup
 ```
 
   </TabItem>
@@ -54,23 +54,96 @@ This creates:
 - `prisma-cert.pem` / `prisma-key.pem` — TLS certificate and key
 - `server.toml` / `client.toml` — example config files (if not already present)
 
-### Custom install directory
+### Install a specific version
 
-Set `PRISMA_INSTALL_DIR` to install to a different location:
+Pin to a release tag instead of the latest version:
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-PRISMA_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v0.2.1
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-$env:PRISMA_INSTALL_DIR = "C:\tools\prisma"; irm https://raw.githubusercontent.com/Yamimega/prisma/master/install.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v0.2.1
 ```
+
+  </TabItem>
+</Tabs>
+
+### Custom install directory
+
+Use `--dir` (or set `PRISMA_INSTALL_DIR`) to install to a different location:
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Dir "C:\tools\prisma"
+```
+
+  </TabItem>
+</Tabs>
+
+### Uninstall
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --uninstall
+```
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Uninstall
+```
+
+  </TabItem>
+</Tabs>
+
+### Installer options reference
+
+<Tabs>
+  <TabItem value="linux" label="Linux / macOS" default>
+
+| Option | Description |
+|--------|-------------|
+| `--setup` | Generate credentials, TLS certificate, and example configs |
+| `--version VER` | Install a specific version (e.g., `v0.2.1`). Default: latest |
+| `--dir DIR` | Install directory. Default: `/usr/local/bin` |
+| `--config-dir DIR` | Config output directory for `--setup`. Default: current dir |
+| `--uninstall` | Remove the prisma binary |
+| `--force` | Overwrite existing installation without reporting current version |
+| `--no-verify` | Skip SHA256 checksum verification |
+| `--quiet` | Suppress informational output |
+
+  </TabItem>
+  <TabItem value="windows" label="Windows (PowerShell)">
+
+| Option | Description |
+|--------|-------------|
+| `-Setup` | Generate credentials, TLS certificate, and example configs |
+| `-Version VER` | Install a specific version (e.g., `v0.2.1`). Default: latest |
+| `-Dir DIR` | Install directory. Default: `%LOCALAPPDATA%\prisma` |
+| `-ConfigDir DIR` | Config output directory for `-Setup`. Default: current dir |
+| `-Uninstall` | Remove the prisma binary and clean PATH |
+| `-Force` | Overwrite existing installation without reporting current version |
+| `-NoVerify` | Skip SHA256 checksum verification |
+| `-Quiet` | Suppress informational output |
 
   </TabItem>
 </Tabs>

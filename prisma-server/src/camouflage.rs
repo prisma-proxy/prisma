@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
 use prisma_core::config::server::ServerConfig;
-use prisma_core::types::{PROTOCOL_VERSION, PROTOCOL_VERSION_V1, PROTOCOL_VERSION_V2};
+use prisma_core::types::PRISMA_PROTOCOL_VERSION;
 
 /// Minimum ClientHello payload size in bytes.
 const MIN_CLIENT_HELLO_SIZE: u16 = 41;
@@ -15,7 +15,7 @@ const MIN_CLIENT_HELLO_SIZE: u16 = 41;
 ///
 /// Wire format: `[len_hi:1][len_lo:1][version:1]...`
 /// - `frame_len = u16::from_be_bytes([b[0], b[1]])` must be >= `MIN_CLIENT_HELLO_SIZE` (41)
-/// - `version` must be a known protocol version (v1 or v2)
+/// - `version` must match `PRISMA_PROTOCOL_VERSION` (v4)
 ///
 /// This rejects HTTP probes (`GET ` → version=0x54), TLS ClientHello (`0x16 0x03` → version varies),
 /// and random bytes (version unlikely to match with valid length).
@@ -31,9 +31,7 @@ pub fn looks_like_prisma_hello(bytes: &[u8]) -> bool {
     let frame_len = u16::from_be_bytes([bytes[0], bytes[1]]);
     let version = bytes[2];
     frame_len >= MIN_CLIENT_HELLO_SIZE
-        && (version == PROTOCOL_VERSION
-            || version == PROTOCOL_VERSION_V2
-            || version == PROTOCOL_VERSION_V1)
+        && version == PRISMA_PROTOCOL_VERSION
 }
 
 /// Build a `tokio_rustls::TlsAcceptor` for wrapping TCP connections in TLS.
@@ -98,24 +96,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prisma_hello_valid_v1() {
-        // frame_len=100 (0x0064), version=0x01 (v1)
-        assert!(looks_like_prisma_hello(&[0x00, 0x64, 0x01]));
-    }
-
-    #[test]
-    fn test_prisma_hello_valid_v2() {
-        // frame_len=100 (0x0064), version=0x02 (v2)
-        assert!(looks_like_prisma_hello(&[0x00, 0x64, 0x02]));
-    }
-
-    #[test]
-    fn test_prisma_hello_valid_v3() {
-        // frame_len=100 (0x0064), version=0x03 (v3)
-        assert!(looks_like_prisma_hello(&[0x00, 0x64, 0x03]));
-    }
-
-    #[test]
     fn test_prisma_hello_too_short_frame() {
         // frame_len=10 (too small), version=0x01
         assert!(!looks_like_prisma_hello(&[0x00, 0x0A, 0x01]));
@@ -123,8 +103,8 @@ mod tests {
 
     #[test]
     fn test_prisma_hello_wrong_version() {
-        // frame_len=100, version=0x05 (unknown)
-        assert!(!looks_like_prisma_hello(&[0x00, 0x64, 0x05]));
+        // frame_len=100, version=0x03 (old v3, no longer accepted)
+        assert!(!looks_like_prisma_hello(&[0x00, 0x64, 0x03]));
     }
 
     #[test]
@@ -137,6 +117,12 @@ mod tests {
     fn test_prisma_hello_tls_client_hello() {
         // TLS record: 0x16, 0x03, 0x01
         assert!(!looks_like_prisma_hello(&[0x16, 0x03, 0x01]));
+    }
+
+    #[test]
+    fn test_prisma_hello_valid() {
+        // frame_len=100 (0x0064), version=0x04 (v4)
+        assert!(looks_like_prisma_hello(&[0x00, 0x64, 0x04]));
     }
 
     #[test]

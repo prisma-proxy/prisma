@@ -11,7 +11,6 @@ pub const CMD_PONG: u8 = 0x05;
 pub const CMD_REGISTER_FORWARD: u8 = 0x06;
 pub const CMD_FORWARD_READY: u8 = 0x07;
 pub const CMD_FORWARD_CONNECT: u8 = 0x08;
-// v3 commands
 pub const CMD_UDP_ASSOCIATE: u8 = 0x09;
 pub const CMD_UDP_DATA: u8 = 0x0A;
 pub const CMD_SPEED_TEST: u8 = 0x0B;
@@ -19,18 +18,17 @@ pub const CMD_DNS_QUERY: u8 = 0x0C;
 pub const CMD_DNS_RESPONSE: u8 = 0x0D;
 pub const CMD_CHALLENGE_RESP: u8 = 0x0E;
 
-// Flag bits (v3: 2-byte little-endian flags)
+// Flag bits (2-byte little-endian)
 pub const FLAG_PADDED: u16 = 0x0001;
 pub const FLAG_FEC: u16 = 0x0002;
 pub const FLAG_PRIORITY: u16 = 0x0004;
 pub const FLAG_DATAGRAM: u16 = 0x0008;
 pub const FLAG_COMPRESSED: u16 = 0x0010;
 pub const FLAG_0RTT: u16 = 0x0020;
+pub const FLAG_BUCKETED: u16 = 0x0040;
+pub const FLAG_CHAFF: u16 = 0x0080;
 
-// Legacy v2 flag for backward compat
-pub const FLAG_PADDED_V2: u8 = 0x01;
-
-/// Server feature flags bitmask (v3 ServerInit).
+/// Server feature flags bitmask.
 pub const FEATURE_UDP_RELAY: u32 = 0x0001;
 pub const FEATURE_FEC: u32 = 0x0002;
 pub const FEATURE_PORT_HOPPING: u32 = 0x0004;
@@ -38,86 +36,49 @@ pub const FEATURE_SPEED_TEST: u32 = 0x0008;
 pub const FEATURE_DNS_TUNNEL: u32 = 0x0010;
 pub const FEATURE_BANDWIDTH_LIMIT: u32 = 0x0020;
 
-/// Handshake: Client → Server (v1/v2 step 1)
+// --- PrismaVeil handshake types (v4 only) ---
+
+/// PrismaVeil handshake: Client → Server.
+/// 2-step handshake: PrismaClientInit → PrismaServerInit.
 #[derive(Debug, Clone)]
-pub struct ClientHello {
-    pub version: u8,
+pub struct PrismaClientInit {
+    pub version: u8, // PRISMA_PROTOCOL_VERSION (0x04)
+    pub flags: u8,
     pub client_ephemeral_pub: [u8; 32],
-    pub timestamp: u64,
-    pub padding: Vec<u8>,
-}
-
-/// Handshake: Server → Client (v1/v2 step 2)
-#[derive(Debug, Clone)]
-pub struct ServerHello {
-    pub server_ephemeral_pub: [u8; 32],
-    pub encrypted_challenge: Vec<u8>, // Encrypted with derived session key
-    pub padding: Vec<u8>,
-}
-
-/// Handshake: Client → Server (v1/v2 step 3) — encrypted with session key
-#[derive(Debug, Clone)]
-pub struct ClientAuth {
     pub client_id: ClientId,
-    pub auth_token: [u8; 32], // HMAC-SHA256
+    pub timestamp: u64,
     pub cipher_suite: CipherSuite,
-    pub challenge_response: [u8; 32], // BLAKE3 hash of challenge
-}
-
-/// Handshake: Server → Client (v1/v2 step 4)
-#[derive(Debug, Clone)]
-pub struct ServerAccept {
-    pub status: AcceptStatus,
-    pub session_id: Uuid,
-    /// Negotiated padding range for per-frame padding (v2 only).
-    pub padding_range: Option<PaddingRange>,
-}
-
-// --- v3 handshake types ---
-
-/// v3 Handshake: Client → Server (step 1)
-/// Combines ClientHello + ClientAuth into a single message.
-#[derive(Debug, Clone)]
-pub struct ClientInit {
-    pub version: u8, // 0x03
-    pub flags: u8,   // bit0: has_0rtt_data, bit1: resumption
-    pub client_ephemeral_pub: [u8; 32],
-    pub client_id: ClientId, // UUID (16 bytes)
-    pub timestamp: u64,      // Unix timestamp (seconds)
-    pub cipher_suite: CipherSuite,
-    pub auth_token: [u8; 32], // HMAC-SHA256(auth_secret, client_id || timestamp)
+    pub auth_token: [u8; 32],
     pub padding: Vec<u8>,
 }
 
-/// v3 Handshake: Server → Client (step 1 response)
-/// Combines ServerHello + ServerAccept into a single encrypted message.
+/// PrismaVeil handshake: Server → Client.
 #[derive(Debug, Clone)]
-pub struct ServerInit {
+pub struct PrismaServerInit {
     pub status: AcceptStatus,
     pub session_id: Uuid,
     pub server_ephemeral_pub: [u8; 32],
-    pub challenge: [u8; 32], // Random challenge
+    pub challenge: [u8; 32],
     pub padding_min: u16,
     pub padding_max: u16,
-    pub server_features: u32,    // Bitmask of supported features
-    pub session_ticket: Vec<u8>, // Opaque ticket for 0-RTT resumption
+    pub server_features: u32,
+    pub session_ticket: Vec<u8>,
+    /// Bucket sizes for traffic shaping (empty = disabled).
+    pub bucket_sizes: Vec<u16>,
     pub padding: Vec<u8>,
 }
 
-/// v3 0-RTT Resumption: Client → Server
+/// 0-RTT Resumption: Client → Server.
 #[derive(Debug, Clone)]
-pub struct ClientResume {
-    pub version: u8, // 0x03
-    pub flags: u8,   // bit1=1 (resumption)
+pub struct PrismaClientResume {
+    pub version: u8,
+    pub flags: u8,
     pub client_ephemeral_pub: [u8; 32],
     pub session_ticket: Vec<u8>,
     pub encrypted_0rtt_data: Vec<u8>,
 }
 
 /// Opaque session ticket for 0-RTT resumption.
-/// Server encrypts this with a server-side ticket key.
-/// Plaintext contents:
-///   [client_id:16][session_key:32][cipher_suite:1][issued_at:8][padding_min:2][padding_max:2]
 #[derive(Debug, Clone)]
 pub struct SessionTicket {
     pub client_id: ClientId,
@@ -127,7 +88,7 @@ pub struct SessionTicket {
     pub padding_range: PaddingRange,
 }
 
-/// ClientInit flags
+/// PrismaClientInit flags.
 pub const CLIENT_INIT_FLAG_0RTT: u8 = 0x01;
 pub const CLIENT_INIT_FLAG_RESUMPTION: u8 = 0x02;
 
@@ -177,7 +138,6 @@ pub enum Command {
     ForwardConnect {
         remote_port: u16,
     },
-    // v3 commands
     /// Client → Server: set up UDP relay session.
     UdpAssociate {
         bind_addr_type: u8,
@@ -209,7 +169,7 @@ pub enum Command {
         query_id: u16,
         data: Vec<u8>,
     },
-    /// Client → Server: challenge response (first frame after v3 handshake).
+    /// Client → Server: challenge response (first frame after handshake).
     ChallengeResponse {
         hash: [u8; 32], // BLAKE3(challenge)
     },
@@ -237,8 +197,11 @@ impl Command {
 }
 
 /// A data frame in the PrismaVeil wire protocol.
-/// v2 format: [cmd:1][flags:1][stream_id:4][payload:var][padding:var]
-/// v3 format: [cmd:1][flags:2][stream_id:4][payload:var][padding:var]
+///
+/// Wire format: `[cmd:1][flags:2][stream_id:4][payload:var][padding:var]`
+///
+/// When `FLAG_BUCKETED` is set:
+/// `[cmd:1][flags:2][stream_id:4][bucket_pad_len:2][payload:var][bucket_padding:var]`
 #[derive(Debug, Clone)]
 pub struct DataFrame {
     pub command: Command,

@@ -21,14 +21,30 @@ sidebar_position: 3
 
 启用 Cloudflare 代理（橙色云朵图标）后，流量路径发生变化：
 
-```
-没有 Cloudflare：
-  客户端 → DNS 查询 "proxy.example.com" → 返回 1.2.3.4（你的服务器）
-  客户端 → 连接 1.2.3.4 → 审查者发现并封锁该 IP
+**没有 Cloudflare：**
 
-使用 Cloudflare：
-  客户端 → DNS 查询 "proxy.example.com" → 返回 104.16.x.x（Cloudflare）
-  客户端 → TLS 连接 104.16.x.x → Cloudflare → 连接到你的源站 1.2.3.4
+```mermaid
+graph LR
+    C[客户端] -->|DNS 查询| D["DNS: proxy.example.com"]
+    D -->|"1.2.3.4（你的服务器）"| C
+    C -->|直连 TLS| S["服务器 1.2.3.4"]
+    X["审查者"] -.->|"发现 IP，封锁"| S
+
+    style X fill:#dc2626,stroke:#991b1b,color:#fff
+```
+
+**使用 Cloudflare：**
+
+```mermaid
+graph LR
+    C[客户端] -->|DNS 查询| D["DNS: proxy.example.com"]
+    D -->|"104.16.x.x（Cloudflare）"| C
+    C -->|TLS| CF["Cloudflare CDN"]
+    CF -->|源站连接| S["服务器 1.2.3.4"]
+    X["审查者"] -.->|"只看到 Cloudflare IP"| CF
+
+    style CF fill:#f59e0b,stroke:#d97706,color:#000
+    style X fill:#dc2626,stroke:#991b1b,color:#fff
 ```
 
 你的真实服务器 IP 永远不会出现在 DNS 响应或客户端的网络流量中。只有 Cloudflare 基础设施知道你的源站 IP。

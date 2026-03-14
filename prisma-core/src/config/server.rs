@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::router;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub listen_addr: String,
@@ -30,6 +32,26 @@ pub struct ServerConfig {
     /// Upstream DNS server for CMD_DNS_QUERY forwarding.
     #[serde(default = "default_dns_upstream")]
     pub dns_upstream: String,
+    // --- v4 features ---
+    /// Protocol version: "v4", "v3" (default for backward compat)
+    #[serde(default = "default_protocol_version")]
+    pub protocol_version: String,
+    /// PrismaTLS configuration (replaces REALITY).
+    #[serde(default)]
+    pub prisma_tls: PrismaTlsConfig,
+    /// Traffic shaping (anti-fingerprinting).
+    #[serde(default)]
+    pub traffic_shaping: crate::traffic_shaping::TrafficShapingConfig,
+    /// Cross-layer RTT normalization.
+    #[serde(default)]
+    pub anti_rtt: AntiRttConfig,
+    /// Static routing rules (loaded from config, persist across restarts).
+    #[serde(default)]
+    pub routing: router::RoutingConfig,
+}
+
+fn default_protocol_version() -> String {
+    "v4".into()
 }
 
 fn default_dns_upstream() -> String {
@@ -171,6 +193,48 @@ pub enum RuleCondition {
 pub enum RuleAction {
     Allow,
     Block,
+}
+
+impl RoutingRule {
+    /// Convert a client-style router::Rule into a server RoutingRule.
+    /// Used to load static rules from the server config file.
+    pub fn from_router_rule(rule: &router::Rule, priority: u32) -> Self {
+        let condition = match &rule.condition {
+            router::RuleCondition::Domain(s) => RuleCondition::DomainExact(s.clone()),
+            router::RuleCondition::DomainSuffix(s) => {
+                RuleCondition::DomainMatch(format!("*.{}", s))
+            }
+            router::RuleCondition::DomainKeyword(s) => {
+                RuleCondition::DomainMatch(format!("*{}*", s))
+            }
+            router::RuleCondition::IpCidr(s) => RuleCondition::IpCidr(s.clone()),
+            router::RuleCondition::GeoIp(s) => RuleCondition::IpCidr(format!("geoip:{}", s)),
+            router::RuleCondition::Port(s) => {
+                if let Some((a, b)) = s.split_once('-') {
+                    RuleCondition::PortRange(
+                        a.parse().unwrap_or(0),
+                        b.parse().unwrap_or(0),
+                    )
+                } else {
+                    let p = s.parse().unwrap_or(0);
+                    RuleCondition::PortRange(p, p)
+                }
+            }
+            router::RuleCondition::All => RuleCondition::All,
+        };
+        let action = match rule.action {
+            router::RouteAction::Block => RuleAction::Block,
+            _ => RuleAction::Allow,
+        };
+        RoutingRule {
+            id: Uuid::new_v4(),
+            name: format!("static-{}", priority),
+            priority,
+            condition,
+            action,
+            enabled: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -408,6 +472,67 @@ fn default_xporta_cookie_name() -> String {
 }
 fn default_xporta_encoding() -> String {
     "json".into()
+}
+
+/// PrismaTLS configuration (replaces REALITY).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrismaTlsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Mask servers for relay (replaces single `dest`).
+    #[serde(default)]
+    pub mask_servers: Vec<MaskServerEntry>,
+    /// Shared auth secret (hex-encoded, 32 bytes).
+    #[serde(default)]
+    pub auth_secret: String,
+    /// Auth key rotation interval in hours. Default: 1.
+    #[serde(default = "default_auth_rotation_hours")]
+    pub auth_rotation_hours: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaskServerEntry {
+    pub addr: String,
+    #[serde(default)]
+    pub names: Vec<String>,
+}
+
+fn default_auth_rotation_hours() -> u64 { 1 }
+
+impl Default for PrismaTlsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mask_servers: Vec::new(),
+            auth_secret: String::new(),
+            auth_rotation_hours: 1,
+        }
+    }
+}
+
+/// Cross-layer RTT normalization (v4).
+/// Delays transport-layer ACKs to mask the proxy hop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AntiRttConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Target RTT in milliseconds to normalize transport ACKs to.
+    /// Should match typical RTT to popular destinations (~100-200ms).
+    #[serde(default = "default_normalization_ms")]
+    pub normalization_ms: u32,
+}
+
+impl Default for AntiRttConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            normalization_ms: default_normalization_ms(),
+        }
+    }
+}
+
+fn default_normalization_ms() -> u32 {
+    150
 }
 
 fn default_level() -> String {

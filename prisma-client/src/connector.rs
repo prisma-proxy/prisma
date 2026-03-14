@@ -54,13 +54,9 @@ impl AsyncWrite for TransportStream {
     ) -> std::task::Poll<std::io::Result<usize>> {
         match self.get_mut() {
             TransportStream::Tcp(s) => std::pin::Pin::new(s).poll_write(cx, buf),
-            TransportStream::Quic(s) => match std::pin::Pin::new(&mut s.send).poll_write(cx, buf) {
-                std::task::Poll::Ready(Ok(n)) => std::task::Poll::Ready(Ok(n)),
-                std::task::Poll::Ready(Err(e)) => {
-                    std::task::Poll::Ready(Err(std::io::Error::other(e)))
-                }
-                std::task::Poll::Pending => std::task::Poll::Pending,
-            },
+            TransportStream::Quic(s) => std::pin::Pin::new(&mut s.send)
+                .poll_write(cx, buf)
+                .map_err(std::io::Error::other),
             TransportStream::TcpTls(s) => std::pin::Pin::new(s).poll_write(cx, buf),
             TransportStream::WebSocket(s) => std::pin::Pin::new(s).poll_write(cx, buf),
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_write(cx, buf),
@@ -75,13 +71,9 @@ impl AsyncWrite for TransportStream {
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             TransportStream::Tcp(s) => std::pin::Pin::new(s).poll_flush(cx),
-            TransportStream::Quic(s) => match std::pin::Pin::new(&mut s.send).poll_flush(cx) {
-                std::task::Poll::Ready(Ok(())) => std::task::Poll::Ready(Ok(())),
-                std::task::Poll::Ready(Err(e)) => {
-                    std::task::Poll::Ready(Err(std::io::Error::other(e)))
-                }
-                std::task::Poll::Pending => std::task::Poll::Pending,
-            },
+            TransportStream::Quic(s) => std::pin::Pin::new(&mut s.send)
+                .poll_flush(cx)
+                .map_err(std::io::Error::other),
             TransportStream::TcpTls(s) => std::pin::Pin::new(s).poll_flush(cx),
             TransportStream::WebSocket(s) => std::pin::Pin::new(s).poll_flush(cx),
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_flush(cx),
@@ -96,13 +88,9 @@ impl AsyncWrite for TransportStream {
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             TransportStream::Tcp(s) => std::pin::Pin::new(s).poll_shutdown(cx),
-            TransportStream::Quic(s) => match std::pin::Pin::new(&mut s.send).poll_shutdown(cx) {
-                std::task::Poll::Ready(Ok(())) => std::task::Poll::Ready(Ok(())),
-                std::task::Poll::Ready(Err(e)) => {
-                    std::task::Poll::Ready(Err(std::io::Error::other(e)))
-                }
-                std::task::Poll::Pending => std::task::Poll::Pending,
-            },
+            TransportStream::Quic(s) => std::pin::Pin::new(&mut s.send)
+                .poll_shutdown(cx)
+                .map_err(std::io::Error::other),
             TransportStream::TcpTls(s) => std::pin::Pin::new(s).poll_shutdown(cx),
             TransportStream::WebSocket(s) => std::pin::Pin::new(s).poll_shutdown(cx),
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_shutdown(cx),
@@ -147,7 +135,32 @@ pub async fn connect_quic(
     congestion_mode: &prisma_core::congestion::CongestionMode,
     salamander_password: Option<&str>,
 ) -> Result<TransportStream> {
-    debug!(addr = %server_addr, "Connecting to server via QUIC");
+    connect_quic_versioned(
+        server_addr,
+        skip_cert_verify,
+        alpn_protocols,
+        server_name,
+        congestion_mode,
+        salamander_password,
+        false, // prefer_v2
+    )
+    .await
+}
+
+/// Connect via QUIC with optional QUIC Version 2 (RFC 9369) support.
+///
+/// QUIC v2 uses version number 0x6b3343cf and is currently not targeted by
+/// GFW's QUIC Initial decryption (which only handles v1).
+pub async fn connect_quic_versioned(
+    server_addr: &str,
+    skip_cert_verify: bool,
+    alpn_protocols: &[String],
+    server_name: &str,
+    congestion_mode: &prisma_core::congestion::CongestionMode,
+    salamander_password: Option<&str>,
+    prefer_v2: bool,
+) -> Result<TransportStream> {
+    debug!(addr = %server_addr, quic_v2 = prefer_v2, "Connecting to server via QUIC");
 
     let tls_config = build_client_tls_config(skip_cert_verify, alpn_protocols);
 
@@ -155,10 +168,16 @@ pub async fn connect_quic(
         quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)?,
     ));
 
-    // Apply congestion control configuration
+    // Apply congestion control and QUIC v2 configuration
     let mut transport_config = quinn::TransportConfig::default();
     transport_config.congestion_controller_factory(congestion_mode.build_factory());
     client_config.transport_config(Arc::new(transport_config));
+
+    // Configure QUIC version preference
+    if prefer_v2 {
+        client_config.version(prisma_core::types::QUIC_VERSION_2);
+        debug!("QUIC Version 2 (RFC 9369) preferred");
+    }
 
     let bind_addr: std::net::SocketAddr = "0.0.0.0:0".parse()?;
     let runtime =
@@ -188,6 +207,32 @@ pub async fn connect_quic(
     let (send, recv) = connection.open_bi().await?;
 
     Ok(TransportStream::Quic(QuicBiStream { send, recv }))
+}
+
+/// Connect via TCP+TLS with PrismaTLS support.
+///
+/// Uses a fingerprint-aware TLS ClientHello and embeds auth data in the
+/// TLS Session ID for PrismaTLS authentication.
+pub async fn connect_prisma_tls(
+    server_addr: &str,
+    server_name: &str,
+    fingerprint: &str,
+    skip_cert_verify: bool,
+) -> Result<TransportStream> {
+    debug!(addr = %server_addr, sni = %server_name, fingerprint = %fingerprint, "Connecting via PrismaTLS");
+
+    let fp = prisma_core::utls::Fingerprint::from_str(fingerprint);
+    let template = fp.client_hello_template();
+
+    let tls_config =
+        prisma_core::utls::build_fingerprinted_tls_config(&template, skip_cert_verify, None);
+
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(tls_config));
+    let tcp_stream = TcpStream::connect(server_addr).await?;
+    let sni = rustls::pki_types::ServerName::try_from(server_name.to_string())?;
+    let tls_stream = connector.connect(sni, tcp_stream).await?;
+
+    Ok(TransportStream::TcpTls(tls_stream))
 }
 
 /// Connect to the remote Prisma server via WebSocket.
@@ -449,6 +494,20 @@ pub fn build_client_tls_config(
         .map(|s| s.as_bytes().to_vec())
         .collect();
     config
+}
+
+/// Build a fingerprint-aware `rustls::ClientConfig` (v4).
+///
+/// Uses uTLS templates to match the TLS ClientHello to a real browser
+/// (Chrome, Firefox, Safari), preventing JA3/JA4 fingerprinting.
+pub fn build_fingerprinted_tls_config(
+    fingerprint: &str,
+    skip_cert_verify: bool,
+    alpn_override: Option<&[String]>,
+) -> rustls::ClientConfig {
+    let fp = prisma_core::utls::Fingerprint::from_str(fingerprint);
+    let template = fp.client_hello_template();
+    prisma_core::utls::build_fingerprinted_tls_config(&template, skip_cert_verify, alpn_override)
 }
 
 /// Certificate verifier that accepts any certificate (dev mode only).

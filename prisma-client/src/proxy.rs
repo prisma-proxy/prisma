@@ -6,7 +6,8 @@ use prisma_core::congestion::CongestionMode;
 use prisma_core::dns::DnsConfig;
 use prisma_core::fec::FecConfig;
 use prisma_core::router::Router;
-use prisma_core::types::{CipherSuite, ClientId, QUIC_ALPN};
+use prisma_core::traffic_shaping::TrafficShapingConfig;
+use prisma_core::types::{CipherSuite, ClientId, PRISMA_QUIC_ALPN};
 use tracing::{info, warn};
 
 use crate::connector::{self, TransportStream};
@@ -49,11 +50,24 @@ pub struct ProxyContext {
     pub dns_config: DnsConfig,
     pub dns_resolver: DnsResolver,
     pub router: Arc<Router>,
+    // --- v4 fields ---
+    /// Protocol version: "v4" or "v3".
+    pub protocol_version: String,
+    /// uTLS fingerprint profile for TLS ClientHello mimicry.
+    pub fingerprint: String,
+    /// QUIC version preference: "v2", "v1", or "auto".
+    pub quic_version: String,
+    /// Traffic shaping configuration.
+    pub traffic_shaping: TrafficShapingConfig,
+    /// Whether to use PrismaTLS transport mode.
+    pub use_prisma_tls: bool,
 }
 
 impl ProxyContext {
     /// Connect to the remote Prisma server using the configured transport.
     pub async fn connect(&self) -> Result<TransportStream> {
+        let prefer_quic_v2 = self.quic_version == "v2" || self.quic_version == "auto";
+
         let transport = if self.use_xporta {
             "XPorta"
         } else if self.use_xhttp {
@@ -62,17 +76,22 @@ impl ProxyContext {
             "WebSocket"
         } else if self.use_grpc {
             "gRPC"
+        } else if self.use_prisma_tls {
+            "PrismaTLS"
         } else if self.use_quic {
-            "QUIC"
+            if prefer_quic_v2 {
+                "QUIC-v2"
+            } else {
+                "QUIC"
+            }
         } else if self.tls_on_tcp {
             "TLS-on-TCP"
         } else {
             "TCP"
         };
 
-        // When QUIC is used without camouflage, the server expects the native ALPN.
-        // The configured alpn_protocols (default ["h2","http/1.1"]) are only for camouflage mode.
-        let default_quic_alpn = vec![QUIC_ALPN.to_string()];
+        // Use standard ALPN ("h3") to avoid protocol identification by DPI.
+        let default_quic_alpn = vec![PRISMA_QUIC_ALPN.to_string()];
         let alpn = if self.use_quic && !self.tls_on_tcp {
             &default_quic_alpn
         } else {
@@ -126,6 +145,15 @@ impl ProxyContext {
         } else if self.use_grpc {
             let grpc_url = self.grpc_url.as_deref().unwrap_or("http://localhost");
             connector::connect_grpc(grpc_url).await
+        } else if self.use_prisma_tls {
+            // PrismaTLS: TCP+TLS with fingerprint-aware ClientHello
+            connector::connect_prisma_tls(
+                &self.server_addr,
+                self.server_name(),
+                &self.fingerprint,
+                self.skip_cert_verify,
+            )
+            .await
         } else if self.use_quic {
             // Apply port hopping if enabled
             let server_addr = if self.port_hopping.enabled {
@@ -144,13 +172,14 @@ impl ProxyContext {
             } else {
                 self.server_addr.clone()
             };
-            connector::connect_quic(
+            connector::connect_quic_versioned(
                 &server_addr,
                 self.skip_cert_verify,
                 alpn,
                 self.server_name(),
                 &self.congestion_mode,
                 self.salamander_password.as_deref(),
+                prefer_quic_v2,
             )
             .await
         } else if self.tls_on_tcp {

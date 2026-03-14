@@ -60,7 +60,7 @@ fallback_addr = "example.com:443"
 
 ## ALPN 自定义
 
-默认情况下，QUIC 使用 `"prisma-v1"` 作为 ALPN 协议，这是一个指纹特征。启用伪装后，ALPN 默认设置为 `["h2", "http/1.1"]` — 与真实 HTTPS 站点使用的协议匹配。
+PrismaVeil v4 对 QUIC 使用标准 ALPN `"h3"`，避免被 DPI 进行协议识别。对于启用伪装的 TCP 传输，ALPN 默认为 `["h2", "http/1.1"]` — 与真实 HTTPS 站点使用的协议匹配。
 
 ```toml
 [camouflage]
@@ -140,3 +140,7 @@ auth_secret = "your-hex-secret"
 | `tls_on_tcp` | bool | `false` | 通过 TLS 包装的 TCP 连接到服务器 |
 | `tls_server_name` | string? | — | TLS SNI 服务器名称（默认使用 `server_addr` 中的主机名） |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS ALPN 协议（必须与服务端匹配） |
+
+## PrismaTLS（高级部署推荐）
+
+对于存在主动探测的环境，PrismaTLS 是推荐的主动探测抵抗方案，可替代基本伪装。PrismaTLS 将认证信息隐藏在 TLS padding 扩展中，并使用字节级 ClientHello 指纹构建来模拟真实浏览器，提供比诱饵回退更强的保护。详见[反检测](../features/anti-detection.md#prismatls)文档了解完整细节。

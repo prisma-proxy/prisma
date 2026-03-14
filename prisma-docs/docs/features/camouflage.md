@@ -60,7 +60,7 @@ When a probe connects:
 
 ## ALPN customization
 
-By default, QUIC uses `"prisma-v1"` as the ALPN protocol, which is a fingerprint. With camouflage enabled, ALPN defaults to `["h2", "http/1.1"]` — matching what real HTTPS sites use.
+PrismaVeil v4 uses standard ALPN `"h3"` for QUIC, avoiding protocol identification by DPI. For TCP-based transports with camouflage enabled, ALPN defaults to `["h2", "http/1.1"]` -- matching what real HTTPS sites use.
 
 ```toml
 [camouflage]
@@ -140,3 +140,7 @@ auth_secret = "your-hex-secret"
 | `tls_on_tcp` | bool | `false` | Connect to server via TLS-wrapped TCP |
 | `tls_server_name` | string? | — | TLS SNI server name (defaults to hostname in `server_addr`) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS ALPN protocols (must match server) |
+
+## PrismaTLS (Recommended for Advanced Deployments)
+
+For environments with active probing, PrismaTLS is the recommended approach for active probing resistance, replacing basic camouflage. PrismaTLS hides authentication inside the TLS padding extension and uses byte-level ClientHello fingerprint construction to match real browsers, providing stronger protection than decoy fallback alone. See the [Anti-Detection](../features/anti-detection.md#prismatls) documentation for full details.

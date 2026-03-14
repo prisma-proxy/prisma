@@ -8,6 +8,7 @@ pub mod http;
 pub mod proxy;
 pub mod relay;
 pub mod socks5;
+pub mod transport_selector;
 pub mod tun;
 pub mod tunnel;
 pub mod udp_relay;
@@ -21,6 +22,7 @@ use anyhow::Result;
 use prisma_core::config::load_client_config;
 use prisma_core::congestion::CongestionMode;
 use prisma_core::logging::init_logging;
+use prisma_core::geodata::GeoIPMatcher;
 use prisma_core::router::Router;
 use prisma_core::types::{CipherSuite, ClientId};
 use prisma_core::util;
@@ -65,6 +67,13 @@ pub async fn run(config_path: &str) -> Result<()> {
     let use_grpc = config.transport == "grpc";
     let use_xhttp = config.transport == "xhttp";
     let use_xporta = config.transport == "xporta";
+    let use_prisma_tls = config.transport == "prisma-tls" || config.transport == "reality";
+
+    info!(
+        fingerprint = %config.fingerprint,
+        quic_version = %config.quic_version,
+        "Prisma v4 protocol"
+    );
 
     if use_ws {
         info!(ws_url = ?config.ws_url, "WebSocket transport enabled");
@@ -123,7 +132,24 @@ pub async fn run(config_path: &str) -> Result<()> {
         },
         dns_config: config.dns.clone(),
         dns_resolver: DnsResolver::new(&config.dns),
-        router: Arc::new(Router::new(config.routing.rules.clone())),
+        router: Arc::new({
+            let geoip = config.routing.geoip_path.as_deref().and_then(|path| {
+                match GeoIPMatcher::load(path) {
+                    Ok(m) => Some(Arc::new(m)),
+                    Err(e) => {
+                        tracing::warn!("Failed to load GeoIP database: {}", e);
+                        None
+                    }
+                }
+            });
+            Router::with_geoip(config.routing.rules.clone(), geoip)
+        }),
+        // v4 fields
+        protocol_version: config.protocol_version.clone(),
+        fingerprint: config.fingerprint.clone(),
+        quic_version: config.quic_version.clone(),
+        traffic_shaping: config.traffic_shaping.clone(),
+        use_prisma_tls,
     };
 
     // Log DNS mode
