@@ -182,6 +182,188 @@ client_id = "$CLIENT_ID"
 auth_secret = "$AUTH_SECRET"
 EOF
 
+    # --- Prisma QUIC + AES-256-GCM ------------------------------------
+    cat > "$RESULTS_DIR/server-quic-aes.toml" <<EOF
+listen_addr = "127.0.0.1:18446"
+quic_listen_addr = "127.0.0.1:18446"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[traffic_shaping]
+padding_mode = "none"
+EOF
+
+    cat > "$RESULTS_DIR/client-quic-aes.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11083"
+server_addr = "127.0.0.1:18446"
+transport = "quic"
+cipher_suite = "aes-256-gcm"
+skip_cert_verify = true
+protocol_version = "v4"
+quic_version = "v1"
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+
+    # --- Prisma TCP+TLS + Transport-Only cipher -----------------------
+    cat > "$RESULTS_DIR/server-transport-only.toml" <<EOF
+listen_addr = "127.0.0.1:18447"
+protocol_version = "v4"
+allow_transport_only_cipher = true
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[camouflage]
+enabled = true
+tls_on_tcp = true
+
+[traffic_shaping]
+padding_mode = "none"
+EOF
+
+    cat > "$RESULTS_DIR/client-transport-only.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11084"
+server_addr = "127.0.0.1:18447"
+transport = "tcp"
+cipher_suite = "transport-only"
+tls_on_tcp = true
+tls_server_name = "benchmark.local"
+skip_cert_verify = true
+protocol_version = "v4"
+transport_only_cipher = true
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+
+    # --- Prisma QUIC v2 -----------------------------------------------
+    cat > "$RESULTS_DIR/server-quic-v2.toml" <<EOF
+listen_addr = "127.0.0.1:18448"
+quic_listen_addr = "127.0.0.1:18448"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[traffic_shaping]
+padding_mode = "none"
+EOF
+
+    cat > "$RESULTS_DIR/client-quic-v2.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11085"
+server_addr = "127.0.0.1:18448"
+transport = "quic"
+skip_cert_verify = true
+protocol_version = "v4"
+quic_version = "v2"
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+
+    # --- Prisma WebSocket + TLS (CDN-compatible) ----------------------
+    cat > "$RESULTS_DIR/server-ws.toml" <<EOF
+listen_addr = "127.0.0.1:18449"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[cdn]
+enabled = true
+listen_addr = "127.0.0.1:18449"
+ws_tunnel_path = "/ws-tunnel"
+
+[cdn.tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[traffic_shaping]
+padding_mode = "none"
+EOF
+
+    cat > "$RESULTS_DIR/client-ws.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11086"
+server_addr = "127.0.0.1:18449"
+transport = "ws"
+ws_url = "wss://127.0.0.1:18449/ws-tunnel"
+tls_server_name = "benchmark.local"
+skip_cert_verify = true
+protocol_version = "v4"
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+
+    # --- Prisma TCP+TLS + bucket padding ------------------------------
+    cat > "$RESULTS_DIR/server-bucket.toml" <<EOF
+listen_addr = "127.0.0.1:18450"
+protocol_version = "v4"
+
+[tls]
+cert_path = "$RESULTS_DIR/prisma-cert.pem"
+key_path = "$RESULTS_DIR/prisma-key.pem"
+
+[[authorized_clients]]
+id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+name = "bench-client"
+
+[camouflage]
+enabled = true
+tls_on_tcp = true
+
+[traffic_shaping]
+padding_mode = "bucket"
+bucket_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+EOF
+
+    cat > "$RESULTS_DIR/client-bucket.toml" <<EOF
+socks5_listen_addr = "127.0.0.1:11087"
+server_addr = "127.0.0.1:18450"
+transport = "tcp"
+tls_on_tcp = true
+tls_server_name = "benchmark.local"
+skip_cert_verify = true
+protocol_version = "v4"
+
+[identity]
+client_id = "$CLIENT_ID"
+auth_secret = "$AUTH_SECRET"
+EOF
+
     # ===================================================================
     # Xray-core configurations
     # ===================================================================
@@ -879,6 +1061,11 @@ scenarios = [
     ("prisma-quic",      "Prisma QUIC"),
     ("prisma-tcp",       "Prisma TCP+TLS"),
     ("prisma-shaped",    "Prisma (shaped)"),
+    ("prisma-quic-aes",  "Prisma QUIC AES"),
+    ("prisma-tonly",     "Prisma T-Only"),
+    ("prisma-quic-v2",   "Prisma QUIC v2"),
+    ("prisma-ws",        "Prisma WS+TLS"),
+    ("prisma-bucket",    "Prisma (bucket)"),
     ("xray-vless-tls",   "Xray VLESS+TLS"),
     ("xray-vless-xtls",  "Xray VLESS+XTLS"),
     ("xray-vmess-tls",   "Xray VMess+TLS"),
@@ -896,6 +1083,13 @@ fields = [
     ("memory_idle_kb",  "Memory idle (KB)"),
     ("memory_load_kb",  "Memory load (KB)"),
 ]
+
+profiles = {
+    "Personal VPN":        {"download_mbps": 25, "latency_ms": 35, "concurrent_mbps": 15, "memory_idle_kb": 10, "tput_per_mb": 15},
+    "Multi-Tenant SaaS":   {"download_mbps": 20, "latency_ms": 15, "concurrent_mbps": 35, "memory_idle_kb": 15, "tput_per_mb": 15},
+    "Edge / IoT":          {"download_mbps": 15, "latency_ms": 10, "concurrent_mbps": 20, "memory_idle_kb": 20, "tput_per_mb": 35},
+    "CDN / Bulk Transfer": {"download_mbps": 35, "latency_ms":  5, "concurrent_mbps": 30, "memory_idle_kb": 10, "tput_per_mb": 20},
+}
 
 # Load results — only include scenarios that have a result file
 data = {}
@@ -982,6 +1176,48 @@ def efficiency(key):
     mem = val(key, "memory_load_kb")
     return dl / (mem / 1024) if mem else 0
 
+def compute_scores():
+    """Compute weighted scores for each proxy under each use-case profile."""
+    raw = {}
+    for k in proxy_keys:
+        raw[k] = {
+            "download_mbps": val(k, "download_mbps"),
+            "latency_ms": val(k, "latency_ms"),
+            "concurrent_mbps": val(k, "concurrent_mbps"),
+            "memory_idle_kb": val(k, "memory_idle_kb"),
+            "tput_per_mb": efficiency(k),
+        }
+
+    higher_better = {"download_mbps", "concurrent_mbps", "tput_per_mb"}
+    lower_better = {"latency_ms", "memory_idle_kb"}
+
+    norm = {}
+    for metric in list(higher_better) + list(lower_better):
+        values = [raw[k][metric] for k in proxy_keys if raw[k][metric] > 0]
+        if not values:
+            for k in proxy_keys:
+                norm.setdefault(k, {})[metric] = 0
+            continue
+        max_v = max(values)
+        min_v = min(values)
+        for k in proxy_keys:
+            v = raw[k][metric]
+            if v <= 0:
+                norm.setdefault(k, {})[metric] = 0
+            elif metric in higher_better:
+                norm.setdefault(k, {})[metric] = v / max_v
+            else:
+                norm.setdefault(k, {})[metric] = min_v / v
+
+    results = {}
+    for profile_name, weights in profiles.items():
+        scores = {}
+        for k in proxy_keys:
+            total = sum(weights[m] * norm[k][m] for m in weights)
+            scores[k] = round(total, 1)
+        results[profile_name] = scores
+    return results
+
 bdk, bdv = best("download_mbps")
 blk, blv = best("latency_ms", lower_is_better=True)
 bck, bcv = best("concurrent_mbps")
@@ -1034,6 +1270,36 @@ if xray_keys and prisma_keys:
                 print(f"  Xray uses {B}{1/mem_ratio:.1f}x{N} less memory than Prisma")
 print()
 
+# ── Use-Case Scores ───────────────────────────────────────────────────
+if proxy_keys:
+    scores = compute_scores()
+    profile_names = list(profiles.keys())
+
+    sc_col = max(len(proxy_names[k]) for k in proxy_keys) + 2
+    sc_bar = "\u2500" * (22 + sc_col * len(proxy_keys))
+
+    print(f"  {C}{B}Use-Case Scores (weighted 0\u2013100){N}")
+    print(f"  {sc_bar}")
+    sc_hdr = "".join(proxy_names[k].rjust(sc_col) for k in proxy_keys)
+    print(f"  {'':22}{sc_hdr}")
+    print(f"  {sc_bar}")
+
+    for pname in profile_names:
+        row_scores = scores[pname]
+        best_k = max(proxy_keys, key=lambda k: row_scores[k])
+        parts = []
+        for k in proxy_keys:
+            s = f"{row_scores[k]:.1f}"
+            if k == best_k:
+                pad = sc_col - len(s) - 2  # 2 = star + space
+                parts.append(" " * max(pad, 0) + f"{Y}\u2605 {s}{N}")
+            else:
+                parts.append(s.rjust(sc_col))
+        print(f"  {pname:22}{''.join(parts)}")
+
+    print(f"  {sc_bar}")
+    print()
+
 # ── Markdown file ───────────────────────────────────────────────────────
 md = []
 md.append(f"## Benchmark Results ({DATE})")
@@ -1079,6 +1345,30 @@ if xray_keys and prisma_keys and xdl > 0 and pdl > 0:
         md.append(f"{proxy_names[pk]} is **{dl_ratio:.1f}x** faster than {proxy_names[xk]}.")
     else:
         md.append(f"{proxy_names[xk]} is **{1/dl_ratio:.1f}x** faster than {proxy_names[pk]}.")
+
+if proxy_keys:
+    md.append("")
+    md.append("### Use-Case Scores (weighted 0\u2013100)")
+    md.append("")
+    sc_hdr = "| Use Case |" + "".join(f" {proxy_names[k]} |" for k in proxy_keys)
+    sc_sep = "|----------|" + "".join(f" {'---':>{len(proxy_names[k])}} |" for k in proxy_keys)
+    md.append(sc_hdr)
+    md.append(sc_sep)
+    for pname in profile_names:
+        row_scores = scores[pname]
+        best_k = max(proxy_keys, key=lambda k: row_scores[k])
+        row = f"| {pname} |"
+        for k in proxy_keys:
+            s = f"{row_scores[k]:.1f}"
+            if k == best_k:
+                s = f"**{s}** \u2605"
+            row += f" {s:>{len(proxy_names[k])}} |"
+        md.append(row)
+    md.append("")
+    for pname in profile_names:
+        row_scores = scores[pname]
+        best_k = max(proxy_keys, key=lambda k: row_scores[k])
+        md.append(f"- **{pname}:** {proxy_names[best_k]} ({row_scores[best_k]:.1f}/100)")
 
 md.append("")
 md.append("Generated by PrismaVeil benchmark suite.")
@@ -1145,6 +1435,16 @@ main() {
         "$RESULTS_DIR/server-tcp.toml" "$RESULTS_DIR/client-tcp.toml" 11082
     run_prisma_scenario "prisma-shaped" \
         "$RESULTS_DIR/server-shaped.toml" "$RESULTS_DIR/client-shaped.toml" 11081
+    run_prisma_scenario "prisma-quic-aes" \
+        "$RESULTS_DIR/server-quic-aes.toml" "$RESULTS_DIR/client-quic-aes.toml" 11083
+    run_prisma_scenario "prisma-tonly" \
+        "$RESULTS_DIR/server-transport-only.toml" "$RESULTS_DIR/client-transport-only.toml" 11084
+    run_prisma_scenario "prisma-quic-v2" \
+        "$RESULTS_DIR/server-quic-v2.toml" "$RESULTS_DIR/client-quic-v2.toml" 11085
+    run_prisma_scenario "prisma-ws" \
+        "$RESULTS_DIR/server-ws.toml" "$RESULTS_DIR/client-ws.toml" 11086
+    run_prisma_scenario "prisma-bucket" \
+        "$RESULTS_DIR/server-bucket.toml" "$RESULTS_DIR/client-bucket.toml" 11087
 
     # ── Xray scenarios ────────────────────────────────────────────
     run_xray_scenario "xray-vless-tls" \
