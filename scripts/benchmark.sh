@@ -18,15 +18,25 @@ BENCHMARK_MODE="${BENCHMARK_MODE:-full}"
 if [ "$BENCHMARK_MODE" = "quick" ]; then
     TEST_SIZE_MB=64
     CONCURRENCY=2
-    THROUGHPUT_RUNS=1
-    LATENCY_SAMPLES=3
-    echo "[BENCH] Running in QUICK mode (64MB, 1 run, 3 latency samples, 5 scenarios)"
+    WARMUP_RUNS=1
+    MEASURE_RUNS=3
+    MAX_EXTRA_RUNS=0
+    QUALITY_GATE_ENABLED=0
+    SUSTAINED_SECS=5
+    COOLDOWN_SECS=1
+    PAYLOAD_SIZES="single"   # single 64MB payload only
+    echo "[BENCH] Running in QUICK mode (64MB, 1 warmup, 3 measure, no quality gate, 5 scenarios)"
 else
     TEST_SIZE_MB=256
     CONCURRENCY=4
-    THROUGHPUT_RUNS=5
-    LATENCY_SAMPLES=7
-    echo "[BENCH] Running in FULL mode (256MB, 5 runs, 7 latency samples, all scenarios)"
+    WARMUP_RUNS=2
+    MEASURE_RUNS=7
+    MAX_EXTRA_RUNS=6
+    QUALITY_GATE_ENABLED=1
+    SUSTAINED_SECS=15
+    COOLDOWN_SECS=3
+    PAYLOAD_SIZES="multi"    # 1MB + 32MB + 256MB payloads
+    echo "[BENCH] Running in FULL mode (3 payloads, 2+7 runs, MAD filtering, sustained resources)"
 fi
 
 # Quick mode: representative subset of scenarios
@@ -1064,7 +1074,9 @@ SBEOF
 }
 
 start_test_server() {
-    log "Creating ${TEST_SIZE_MB}MB test payload..."
+    log "Creating test payloads..."
+
+    # Always create the primary testdata file
     dd if=/dev/urandom of="$RESULTS_DIR/testdata" bs=1M count=$TEST_SIZE_MB 2>/dev/null \
         || dd if=/dev/urandom of="$RESULTS_DIR/testdata" bs=1048576 count=$TEST_SIZE_MB 2>/dev/null \
         || true
@@ -1074,7 +1086,21 @@ start_test_server() {
     else
         local actual_mb
         actual_mb=$(( $(stat -c%s "$RESULTS_DIR/testdata" 2>/dev/null || stat -f%z "$RESULTS_DIR/testdata" 2>/dev/null || echo 0) / 1048576 ))
-        log "Test payload: ${actual_mb}MB created"
+        log "  Primary payload: ${actual_mb}MB"
+    fi
+
+    # Full mode: create additional payload sizes for mixed-size testing
+    if [ "$PAYLOAD_SIZES" = "multi" ]; then
+        dd if=/dev/urandom of="$RESULTS_DIR/testdata-small" bs=1M count=1 2>/dev/null \
+            || dd if=/dev/urandom of="$RESULTS_DIR/testdata-small" bs=1048576 count=1 2>/dev/null \
+            || true
+        dd if=/dev/urandom of="$RESULTS_DIR/testdata-medium" bs=1M count=32 2>/dev/null \
+            || dd if=/dev/urandom of="$RESULTS_DIR/testdata-medium" bs=1048576 count=32 2>/dev/null \
+            || true
+        # Large payload reuses testdata (256MB)
+        ln -sf "$RESULTS_DIR/testdata" "$RESULTS_DIR/testdata-large" 2>/dev/null \
+            || cp "$RESULTS_DIR/testdata" "$RESULTS_DIR/testdata-large" 2>/dev/null || true
+        log "  Mixed payloads: 1MB (small), 32MB (medium), ${TEST_SIZE_MB}MB (large)"
     fi
 
     # 1-byte file for latency measurement (minimize transfer time)
@@ -1112,154 +1138,407 @@ ThreadedHTTPServer(('', $HTTP_PORT), Handler).serve_forever()
 }
 
 # ---------------------------------------------------------------------------
+# Statistical pipeline
+# ---------------------------------------------------------------------------
+
+# MAD-based outlier rejection + quality assessment.
+# Input:  space-separated raw numeric values
+# Output: median cv_pct n_used n_total stable_flag
+robust_filter() {
+    local raw_values="$1"
+    python3 -c "
+import math
+
+values = [float(x) for x in '''$raw_values'''.split() if x.strip()]
+if not values:
+    print('0 0 0 0 0')
+    raise SystemExit
+
+n_total = len(values)
+values.sort()
+median = values[len(values) // 2]
+
+# Compute MAD (Median Absolute Deviation)
+abs_devs = sorted(abs(x - median) for x in values)
+mad = abs_devs[len(abs_devs) // 2]
+
+if mad > 0:
+    # Modified Z-scores (Iglewicz & Hoaglin)
+    clean = [x for x in values if abs(0.6745 * (x - median) / mad) <= 3.5]
+else:
+    # MAD=0 means all values are identical or nearly so — keep all
+    clean = list(values)
+
+if not clean:
+    clean = list(values)
+
+clean.sort()
+n_used = len(clean)
+med = clean[len(clean) // 2]
+mean = sum(clean) / n_used
+if mean > 0:
+    sd = math.sqrt(sum((x - mean) ** 2 for x in clean) / n_used)
+    cv = sd / mean * 100
+else:
+    cv = 0.0
+
+stable = 1 if cv < 15 else 0
+print(f'{med:.4f} {cv:.1f} {n_used} {n_total} {stable}')
+" 2>/dev/null || echo "0 0 0 0 0"
+}
+
+# Warmup + collect + filter + quality gate loop.
+# Usage: run_pipeline "<command_that_outputs_a_number>"
+# Output: median cv_pct n_used n_total stable_flag
+run_pipeline() {
+    local cmd=$1
+
+    # Stage 1: Warmup (discard results)
+    for _ in $(seq 1 "$WARMUP_RUNS"); do
+        eval "$cmd" > /dev/null 2>&1 || true
+    done
+
+    # Stage 2: Collect measurements
+    local values=()
+    for _ in $(seq 1 "$MEASURE_RUNS"); do
+        local v
+        v=$(eval "$cmd" 2>/dev/null) || true
+        values+=("${v:-0}")
+    done
+
+    # Stage 3+4: Filter + Quality Gate
+    local result
+    result=$(robust_filter "${values[*]}")
+    local stable
+    stable=$(echo "$result" | awk '{print $5}')
+
+    # Quality gate: re-run if too many rejected or unstable
+    if [ "$QUALITY_GATE_ENABLED" = "1" ]; then
+        local extra_done=0
+        local total_collected=$MEASURE_RUNS
+        local max_total=$((MEASURE_RUNS + MAX_EXTRA_RUNS))
+        while [ "$stable" = "0" ] && [ "$extra_done" -lt "$MAX_EXTRA_RUNS" ]; do
+            for _ in 1 2 3; do
+                local v
+                v=$(eval "$cmd" 2>/dev/null) || true
+                values+=("${v:-0}")
+            done
+            extra_done=$((extra_done + 3))
+            total_collected=$((total_collected + 3))
+            result=$(robust_filter "${values[*]}")
+            stable=$(echo "$result" | awk '{print $5}')
+            [ "$total_collected" -ge "$max_total" ] && break
+        done
+    fi
+
+    echo "$result"
+}
+
+# ---------------------------------------------------------------------------
 # Measurement primitives
 # ---------------------------------------------------------------------------
 
-# Single-stream download throughput (Mbps). Median of 5 runs.
-# Outputs two values: median_mbps cv_pct
+# Single-stream download throughput (Mbps).
+# Quick mode: single payload, outputs "median_mbps cv_pct stable_flag"
+# Full mode: 3 payload sizes, outputs "composite_mbps small_mbps medium_mbps large_mbps cv_pct stable_flag"
 measure_download() {
     local socks_port=$1
-    local speeds=()
-    for _ in $(seq 1 $THROUGHPUT_RUNS); do
-        local speed
-        speed=$(curl -o /dev/null -s -w '%{speed_download}' \
+
+    if [ "$PAYLOAD_SIZES" = "single" ]; then
+        local cmd="curl -o /dev/null -s -w '%{speed_download}' \
             --connect-timeout 10 --max-time 120 \
-            --socks5-hostname "127.0.0.1:$socks_port" \
-            "http://127.0.0.1:$HTTP_PORT/testdata" 2>/dev/null) || true
-        : "${speed:=0}"
-        speeds+=("$speed")
+            --socks5-hostname '127.0.0.1:$socks_port' \
+            'http://127.0.0.1:$HTTP_PORT/testdata'"
+        local result
+        result=$(run_pipeline "$cmd")
+        local raw_median raw_cv raw_stable
+        raw_median=$(echo "$result" | awk '{print $1}')
+        raw_cv=$(echo "$result" | awk '{print $2}')
+        raw_stable=$(echo "$result" | awk '{print $5}')
+        # Convert bytes/s to Mbps
+        local mbps
+        mbps=$(python3 -c "print(f'{float($raw_median) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
+        echo "$mbps 0 0 0 $raw_cv $raw_stable"
+        return
+    fi
+
+    # Full mode: 3 payload sizes
+    local small_mbps=0 medium_mbps=0 large_mbps=0
+    local worst_cv=0 all_stable=1
+
+    for size in small medium large; do
+        local file="testdata-${size}"
+        local timeout=120
+        [ "$size" = "small" ] && timeout=30
+        [ "$size" = "medium" ] && timeout=60
+        local cmd="curl -o /dev/null -s -w '%{speed_download}' \
+            --connect-timeout 10 --max-time $timeout \
+            --socks5-hostname '127.0.0.1:$socks_port' \
+            'http://127.0.0.1:$HTTP_PORT/$file'"
+        local result
+        result=$(run_pipeline "$cmd")
+        local raw_median raw_cv raw_stable
+        raw_median=$(echo "$result" | awk '{print $1}')
+        raw_cv=$(echo "$result" | awk '{print $2}')
+        raw_stable=$(echo "$result" | awk '{print $5}')
+        local mbps
+        mbps=$(python3 -c "print(f'{float($raw_median) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
+
+        case "$size" in
+            small)  small_mbps=$mbps ;;
+            medium) medium_mbps=$mbps ;;
+            large)  large_mbps=$mbps ;;
+        esac
+
+        # Track worst CV and stability across sizes
+        worst_cv=$(python3 -c "print(f'{max(float($worst_cv), float($raw_cv)):.1f}')" 2>/dev/null || echo "$worst_cv")
+        [ "$raw_stable" = "0" ] && all_stable=0
     done
-    python3 -c "
-import math
-v = [float(x) for x in '${speeds[*]}'.split()]
-v_mbps = sorted(x * 8 / 1_000_000 for x in v)
-median = v_mbps[len(v_mbps)//2]
-mean = sum(v_mbps) / len(v_mbps) if v_mbps else 0
-if mean > 0:
-    sd = math.sqrt(sum((x - mean)**2 for x in v_mbps) / len(v_mbps))
-    cv = sd / mean * 100
-else:
-    cv = 0
-print(f'{median:.1f} {cv:.1f}')
-" 2>/dev/null || echo "0 0"
+
+    # Weighted composite: 0.3*small + 0.4*medium + 0.3*large
+    local composite
+    composite=$(python3 -c "
+s, m, l = $small_mbps, $medium_mbps, $large_mbps
+print(f'{0.3*s + 0.4*m + 0.3*l:.1f}')
+" 2>/dev/null || echo "0")
+
+    echo "$composite $small_mbps $medium_mbps $large_mbps $worst_cv $all_stable"
 }
 
-# Time-to-first-byte latency in ms. 7 samples, trimmed mean (drop min+max).
+# Time-to-first-byte latency in ms. Uses run_pipeline with MAD filtering.
 measure_latency() {
     local socks_port=$1
-    local samples=()
-    for _ in $(seq 1 $LATENCY_SAMPLES); do
-        local ttfb
-        ttfb=$(curl -o /dev/null -s -w '%{time_starttransfer}' \
-            --connect-timeout 5 --max-time 10 \
-            --socks5-hostname "127.0.0.1:$socks_port" \
-            "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null) || true
-        : "${ttfb:=0}"
-        samples+=("$ttfb")
-    done
-    python3 -c "
-v = sorted(float(x) * 1000 for x in '${samples[*]}'.split())
-trimmed = v[1:-1] if len(v) >= 3 else v
-print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
-" 2>/dev/null || echo "0"
+    local cmd="curl -o /dev/null -s -w '%{time_starttransfer}' \
+        --connect-timeout 5 --max-time 10 \
+        --socks5-hostname '127.0.0.1:$socks_port' \
+        'http://127.0.0.1:$HTTP_PORT/ping'"
+    local result
+    result=$(run_pipeline "$cmd")
+    local raw_median
+    raw_median=$(echo "$result" | awk '{print $1}')
+    # Convert seconds to ms
+    python3 -c "print(f'{float($raw_median) * 1000:.1f}')" 2>/dev/null || echo "0"
 }
 
-# Handshake time (ms). 7 samples, trimmed mean (drop min+max).
+# Handshake time (ms). Uses run_pipeline with MAD filtering.
 measure_handshake() {
     local socks_port=$1
-    local samples=()
-    for _ in $(seq 1 $LATENCY_SAMPLES); do
-        local t
-        t=$(curl -o /dev/null -s -w '%{time_connect}' \
-            --connect-timeout 5 --max-time 10 \
-            --socks5-hostname "127.0.0.1:$socks_port" \
-            "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null) || true
-        : "${t:=0}"
-        samples+=("$t")
-    done
-    python3 -c "
-v = sorted(float(x) * 1000 for x in '${samples[*]}'.split())
-trimmed = v[1:-1] if len(v) >= 3 else v
-print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
-" 2>/dev/null || echo "0"
+    local cmd="curl -o /dev/null -s -w '%{time_connect}' \
+        --connect-timeout 5 --max-time 10 \
+        --socks5-hostname '127.0.0.1:$socks_port' \
+        'http://127.0.0.1:$HTTP_PORT/ping'"
+    local result
+    result=$(run_pipeline "$cmd")
+    local raw_median
+    raw_median=$(echo "$result" | awk '{print $1}')
+    # Convert seconds to ms
+    python3 -c "print(f'{float($raw_median) * 1000:.1f}')" 2>/dev/null || echo "0"
 }
 
-# Upload throughput (Mbps). Median of 5 runs.
+# Upload throughput (Mbps). Same structure as measure_download.
+# Quick mode: "median_mbps cv_pct stable_flag"
+# Full mode: "composite_mbps small_mbps medium_mbps large_mbps cv_pct stable_flag"
 measure_upload() {
     local socks_port=$1
-    local speeds=()
-    for _ in $(seq 1 $THROUGHPUT_RUNS); do
-        local speed
-        speed=$(curl -s -w '%{speed_upload}' -o /dev/null \
+
+    if [ "$PAYLOAD_SIZES" = "single" ]; then
+        local cmd="curl -s -w '%{speed_upload}' -o /dev/null \
             --connect-timeout 10 --max-time 120 \
-            --data-binary @"$RESULTS_DIR/testdata" \
-            --socks5-hostname "127.0.0.1:$socks_port" \
-            "http://127.0.0.1:$HTTP_PORT/upload" 2>/dev/null) || true
-        : "${speed:=0}"
-        speeds+=("$speed")
+            --data-binary @'$RESULTS_DIR/testdata' \
+            --socks5-hostname '127.0.0.1:$socks_port' \
+            'http://127.0.0.1:$HTTP_PORT/upload'"
+        local result
+        result=$(run_pipeline "$cmd")
+        local raw_median raw_cv raw_stable
+        raw_median=$(echo "$result" | awk '{print $1}')
+        raw_cv=$(echo "$result" | awk '{print $2}')
+        raw_stable=$(echo "$result" | awk '{print $5}')
+        local mbps
+        mbps=$(python3 -c "print(f'{float($raw_median) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
+        echo "$mbps 0 0 0 $raw_cv $raw_stable"
+        return
+    fi
+
+    # Full mode: 3 payload sizes
+    local small_mbps=0 medium_mbps=0 large_mbps=0
+    local worst_cv=0 all_stable=1
+
+    for size in small medium large; do
+        local file="testdata-${size}"
+        local timeout=120
+        [ "$size" = "small" ] && timeout=30
+        [ "$size" = "medium" ] && timeout=60
+        local cmd="curl -s -w '%{speed_upload}' -o /dev/null \
+            --connect-timeout 10 --max-time $timeout \
+            --data-binary @'$RESULTS_DIR/$file' \
+            --socks5-hostname '127.0.0.1:$socks_port' \
+            'http://127.0.0.1:$HTTP_PORT/upload'"
+        local result
+        result=$(run_pipeline "$cmd")
+        local raw_median raw_cv raw_stable
+        raw_median=$(echo "$result" | awk '{print $1}')
+        raw_cv=$(echo "$result" | awk '{print $2}')
+        raw_stable=$(echo "$result" | awk '{print $5}')
+        local mbps
+        mbps=$(python3 -c "print(f'{float($raw_median) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
+
+        case "$size" in
+            small)  small_mbps=$mbps ;;
+            medium) medium_mbps=$mbps ;;
+            large)  large_mbps=$mbps ;;
+        esac
+
+        worst_cv=$(python3 -c "print(f'{max(float($worst_cv), float($raw_cv)):.1f}')" 2>/dev/null || echo "$worst_cv")
+        [ "$raw_stable" = "0" ] && all_stable=0
     done
-    python3 -c "
-v = sorted(float(x) * 8 / 1_000_000 for x in '${speeds[*]}'.split())
-print(f'{v[len(v)//2]:.1f}')
-" 2>/dev/null || echo "0"
+
+    local composite
+    composite=$(python3 -c "
+s, m, l = $small_mbps, $medium_mbps, $large_mbps
+print(f'{0.3*s + 0.4*m + 0.3*l:.1f}')
+" 2>/dev/null || echo "0")
+
+    echo "$composite $small_mbps $medium_mbps $large_mbps $worst_cv $all_stable"
 }
 
-# Aggregate throughput with N parallel downloads (Mbps). Median of 5 runs.
-# Outputs two values: median_mbps cv_pct
+# Aggregate throughput with N parallel downloads (Mbps).
+# Uses run_pipeline with MAD filtering.
+# Output: median_mbps cv_pct stable_flag
 measure_concurrent() {
     local socks_port=$1 n=${2:-$CONCURRENCY}
-    local agg_speeds=()
 
-    for _ in $(seq 1 $THROUGHPUT_RUNS); do
-        local tmpdir
-        tmpdir=$(mktemp -d)
-        for i in $(seq 1 "$n"); do
+    # Build a command that runs N parallel curls and sums their speed
+    local cmd="__conc_tmpdir=\$(mktemp -d); \
+        for __i in \$(seq 1 $n); do \
             curl -o /dev/null -s -w '%{speed_download}' \
                 --connect-timeout 10 --max-time 120 \
-                --socks5-hostname "127.0.0.1:$socks_port" \
-                "http://127.0.0.1:$HTTP_PORT/testdata" \
-                > "$tmpdir/$i" 2>/dev/null &
-        done
-        wait
+                --socks5-hostname '127.0.0.1:$socks_port' \
+                'http://127.0.0.1:$HTTP_PORT/testdata' \
+                > \"\$__conc_tmpdir/\$__i\" 2>/dev/null & \
+        done; \
+        wait; \
+        python3 -c \"import glob; total = sum(float(open(f).read().strip() or '0') for f in glob.glob('\$__conc_tmpdir/*')); print(f'{total * 8 / 1_000_000:.4f}')\" 2>/dev/null || echo 0; \
+        rm -rf \"\$__conc_tmpdir\""
 
-        local agg
-        agg=$(python3 -c "
-import glob
-total = sum(float(open(f).read().strip() or '0') for f in glob.glob('$tmpdir/*'))
-print(f'{total * 8 / 1_000_000:.1f}')
-" 2>/dev/null || echo "0")
-        agg_speeds+=("$agg")
-        rm -rf "$tmpdir"
-    done
-
-    python3 -c "
-import math
-v = sorted(float(x) for x in '${agg_speeds[*]}'.split())
-median = v[len(v)//2]
-mean = sum(v) / len(v) if v else 0
-if mean > 0:
-    sd = math.sqrt(sum((x - mean)**2 for x in v) / len(v))
-    cv = sd / mean * 100
-else:
-    cv = 0
-print(f'{median:.1f} {cv:.1f}')
-" 2>/dev/null || echo "0 0"
+    local result
+    result=$(run_pipeline "$cmd")
+    local raw_median raw_cv raw_stable
+    raw_median=$(echo "$result" | awk '{print $1}')
+    raw_cv=$(echo "$result" | awk '{print $2}')
+    raw_stable=$(echo "$result" | awk '{print $5}')
+    echo "$raw_median $raw_cv $raw_stable"
 }
 
-# Median of 3 RSS snapshots (1s apart) for given PIDs.
-measure_memory() {
-    local samples=()
-    for _ in 1 2 3 4 5; do
+# Sustained resource measurement: CPU + memory sampling under continuous load.
+# Usage: measure_resources_sustained <socks_port> <pid1> [pid2 ...]
+# Output: mem_idle_kb mem_load_kb mem_load_sd_kb cpu_avg_pct cpu_sd_pct
+measure_resources_sustained() {
+    local socks_port=$1
+    shift
+    local pids=("$@")
+    local duration=$SUSTAINED_SECS
+
+    # Phase 1: Idle measurement (5 samples, 1s apart)
+    local idle_samples=()
+    for _ in $(seq 1 5); do
         local total=0
-        for pid in "$@"; do
+        for pid in "${pids[@]}"; do
             local rss
             rss=$(get_rss_kb "$pid")
             total=$((total + rss))
         done
-        samples+=("$total")
+        idle_samples+=("$total")
         sleep 1
     done
-    echo "${samples[*]}" | tr ' ' '\n' | sort -n | sed -n '2p'
+
+    # Phase 2: Start sustained download + sample during load
+    local load_file="testdata"
+    [ "$PAYLOAD_SIZES" = "multi" ] && load_file="testdata-large"
+    curl -o /dev/null -s --max-time "$duration" \
+        --socks5-hostname "127.0.0.1:$socks_port" \
+        "http://127.0.0.1:$HTTP_PORT/$load_file" &
+    local curl_pid=$!
+
+    local load_mem_samples=() cpu_ticks_data=()
+    # Initial CPU ticks baseline
+    local prev_ticks=0
+    for pid in "${pids[@]}"; do
+        local t
+        t=$(get_cpu_ticks "$pid")
+        prev_ticks=$((prev_ticks + t))
+    done
+    local prev_time
+    prev_time=$(date +%s%N)
+
+    for _ in $(seq 1 "$duration"); do
+        sleep 1
+        # Memory sample
+        local total=0
+        for pid in "${pids[@]}"; do
+            local rss
+            rss=$(get_rss_kb "$pid")
+            total=$((total + rss))
+        done
+        load_mem_samples+=("$total")
+
+        # CPU sample (delta since last interval)
+        local curr_ticks=0
+        for pid in "${pids[@]}"; do
+            local t
+            t=$(get_cpu_ticks "$pid")
+            curr_ticks=$((curr_ticks + t))
+        done
+        local curr_time
+        curr_time=$(date +%s%N)
+        cpu_ticks_data+=("$((curr_ticks - prev_ticks)):$((curr_time - prev_time))")
+        prev_ticks=$curr_ticks
+        prev_time=$curr_time
+    done
+
+    wait $curl_pid 2>/dev/null || true
+
+    # Compute results with Python
+    python3 -c "
+import math
+
+clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
+
+# Idle memory
+idle = sorted([${idle_samples[*]// /, }])
+mem_idle = idle[len(idle) // 2]
+
+# Load memory
+load_mem = [${load_mem_samples[*]// /, }]
+if load_mem:
+    load_sorted = sorted(load_mem)
+    mem_load = load_sorted[len(load_sorted) // 2]
+    mem_mean = sum(load_mem) / len(load_mem)
+    mem_sd = math.sqrt(sum((x - mem_mean) ** 2 for x in load_mem) / len(load_mem))
+else:
+    mem_load = mem_idle
+    mem_sd = 0
+
+# CPU percentages per interval
+cpu_raw = '${cpu_ticks_data[*]}'.split()
+cpu_pcts = []
+for entry in cpu_raw:
+    if ':' not in entry:
+        continue
+    dt_str, dw_str = entry.split(':')
+    dt = int(dt_str)
+    dw = int(dw_str)
+    if dw > 0:
+        cpu_pcts.append((dt / clk_tck) / (dw / 1e9) * 100)
+
+if cpu_pcts:
+    cpu_avg = sum(cpu_pcts) / len(cpu_pcts)
+    cpu_sd = math.sqrt(sum((x - cpu_avg) ** 2 for x in cpu_pcts) / len(cpu_pcts))
+else:
+    cpu_avg = 0
+    cpu_sd = 0
+
+print(f'{mem_idle} {mem_load} {mem_sd:.0f} {cpu_avg:.1f} {cpu_sd:.1f}')
+" 2>/dev/null || echo "0 0 0 0.0 0.0"
 }
 
 # ---------------------------------------------------------------------------
@@ -1270,72 +1549,55 @@ measure_memory() {
 run_baseline() {
     log "=== Baseline (no proxy) ==="
 
-    # Download: median of $THROUGHPUT_RUNS runs
-    local dl_speeds=()
-    for _ in $(seq 1 $THROUGHPUT_RUNS); do
-        local speed
-        speed=$(curl -o /dev/null -s -w '%{speed_download}' \
-            --connect-timeout 10 --max-time 120 \
-            "http://127.0.0.1:$HTTP_PORT/testdata" 2>/dev/null) || true
-        : "${speed:=0}"
-        dl_speeds+=("$speed")
-    done
+    # Download throughput (pipeline-based)
+    log "  Measuring baseline download..."
+    local dl_cmd="curl -o /dev/null -s -w '%{speed_download}' \
+        --connect-timeout 10 --max-time 120 \
+        'http://127.0.0.1:$HTTP_PORT/testdata'"
+    local dl_result
+    dl_result=$(run_pipeline "$dl_cmd")
+    local dl_raw dl_cv
+    dl_raw=$(echo "$dl_result" | awk '{print $1}')
+    dl_cv=$(echo "$dl_result" | awk '{print $2}')
     local dl_mbps
-    dl_mbps=$(python3 -c "
-v = sorted(float(x) * 8 / 1_000_000 for x in '${dl_speeds[*]}'.split())
-print(f'{v[len(v)//2]:.1f}')
-" 2>/dev/null || echo "0")
+    dl_mbps=$(python3 -c "print(f'{float($dl_raw) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
 
-    # Latency: $LATENCY_SAMPLES-sample trimmed mean
-    local lat_samples=()
-    for _ in $(seq 1 $LATENCY_SAMPLES); do
-        local ttfb
-        ttfb=$(curl -o /dev/null -s -w '%{time_starttransfer}' \
-            --connect-timeout 5 --max-time 10 \
-            "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null) || true
-        : "${ttfb:=0}"
-        lat_samples+=("$ttfb")
-    done
+    # Latency (pipeline-based, no proxy)
+    log "  Measuring baseline latency..."
+    local lat_cmd="curl -o /dev/null -s -w '%{time_starttransfer}' \
+        --connect-timeout 5 --max-time 10 \
+        'http://127.0.0.1:$HTTP_PORT/ping'"
+    local lat_result
+    lat_result=$(run_pipeline "$lat_cmd")
+    local lat_raw
+    lat_raw=$(echo "$lat_result" | awk '{print $1}')
     local latency_ms
-    latency_ms=$(python3 -c "
-v = sorted(float(x) * 1000 for x in '${lat_samples[*]}'.split())
-trimmed = v[1:-1] if len(v) >= 3 else v
-print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
-" 2>/dev/null || echo "0")
+    latency_ms=$(python3 -c "print(f'{float($lat_raw) * 1000:.1f}')" 2>/dev/null || echo "0")
 
-    # Handshake: $LATENCY_SAMPLES-sample trimmed mean
-    local hs_samples=()
-    for _ in $(seq 1 $LATENCY_SAMPLES); do
-        local hs
-        hs=$(curl -o /dev/null -s -w '%{time_connect}' \
-            --connect-timeout 5 --max-time 10 \
-            "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null) || true
-        : "${hs:=0}"
-        hs_samples+=("$hs")
-    done
+    # Handshake (pipeline-based, no proxy)
+    log "  Measuring baseline handshake..."
+    local hs_cmd="curl -o /dev/null -s -w '%{time_connect}' \
+        --connect-timeout 5 --max-time 10 \
+        'http://127.0.0.1:$HTTP_PORT/ping'"
+    local hs_result
+    hs_result=$(run_pipeline "$hs_cmd")
+    local hs_raw
+    hs_raw=$(echo "$hs_result" | awk '{print $1}')
     local handshake_ms
-    handshake_ms=$(python3 -c "
-v = sorted(float(x) * 1000 for x in '${hs_samples[*]}'.split())
-trimmed = v[1:-1] if len(v) >= 3 else v
-print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
-" 2>/dev/null || echo "0")
+    handshake_ms=$(python3 -c "print(f'{float($hs_raw) * 1000:.1f}')" 2>/dev/null || echo "0")
 
-    # Upload: median of $THROUGHPUT_RUNS runs
-    local ul_speeds=()
-    for _ in $(seq 1 $THROUGHPUT_RUNS); do
-        local uspeed
-        uspeed=$(curl -s -w '%{speed_upload}' -o /dev/null \
-            --connect-timeout 10 --max-time 120 \
-            --data-binary @"$RESULTS_DIR/testdata" \
-            "http://127.0.0.1:$HTTP_PORT/upload" 2>/dev/null) || true
-        : "${uspeed:=0}"
-        ul_speeds+=("$uspeed")
-    done
+    # Upload throughput (pipeline-based)
+    log "  Measuring baseline upload..."
+    local ul_cmd="curl -s -w '%{speed_upload}' -o /dev/null \
+        --connect-timeout 10 --max-time 120 \
+        --data-binary @'$RESULTS_DIR/testdata' \
+        'http://127.0.0.1:$HTTP_PORT/upload'"
+    local ul_result
+    ul_result=$(run_pipeline "$ul_cmd")
+    local ul_raw
+    ul_raw=$(echo "$ul_result" | awk '{print $1}')
     local ul_mbps
-    ul_mbps=$(python3 -c "
-v = sorted(float(x) * 8 / 1_000_000 for x in '${ul_speeds[*]}'.split())
-print(f'{v[len(v)//2]:.1f}')
-" 2>/dev/null || echo "0")
+    ul_mbps=$(python3 -c "print(f'{float($ul_raw) * 8 / 1_000_000:.1f}')" 2>/dev/null || echo "0")
 
     log "  Download: ${dl_mbps} Mbps  |  Upload: ${ul_mbps} Mbps  |  Latency: ${latency_ms} ms"
 
@@ -1351,8 +1613,19 @@ json.dump({
     'memory_idle_kb': 0,
     'memory_load_kb': 0,
     'cpu_avg_pct': 0,
-    'download_cv_pct': 0,
-    'concurrent_cv_pct': 0
+    'download_cv_pct': $dl_cv,
+    'concurrent_cv_pct': 0,
+    'download_small_mbps': 0,
+    'download_medium_mbps': 0,
+    'download_large_mbps': 0,
+    'upload_small_mbps': 0,
+    'upload_medium_mbps': 0,
+    'upload_large_mbps': 0,
+    'cpu_sd_pct': 0,
+    'memory_load_sd_kb': 0,
+    'download_stable': True,
+    'upload_stable': True,
+    'concurrent_stable': True
 }, open('$RESULTS_DIR/baseline.json', 'w'))
 "
 }
@@ -1364,7 +1637,11 @@ import json
 json.dump({'label':'$label','download_mbps':0,'upload_mbps':0,'latency_ms':0,
            'handshake_ms':0,'concurrent_mbps':0,'memory_idle_kb':0,
            'memory_load_kb':0,'cpu_avg_pct':0,'download_cv_pct':0,
-           'concurrent_cv_pct':0},
+           'concurrent_cv_pct':0,
+           'download_small_mbps':0,'download_medium_mbps':0,'download_large_mbps':0,
+           'upload_small_mbps':0,'upload_medium_mbps':0,'upload_large_mbps':0,
+           'cpu_sd_pct':0,'memory_load_sd_kb':0,
+           'download_stable':True,'upload_stable':True,'concurrent_stable':True},
           open('$RESULTS_DIR/${label}.json','w'))
 "
 }
@@ -1430,11 +1707,7 @@ run_prisma_scenario() {
     # Warmup
     warmup_tunnel "$socks_port"
 
-    # Memory (idle) — median of 3 snapshots
-    local mem_idle
-    mem_idle=$(measure_memory $srv $cli)
-
-    # Latency (TTFB, trimmed mean of 7 requests)
+    # Latency (TTFB)
     log "  Measuring latency..."
     local latency_ms
     latency_ms=$(measure_latency "$socks_port")
@@ -1444,51 +1717,49 @@ run_prisma_scenario() {
     local handshake_ms
     handshake_ms=$(measure_handshake "$socks_port")
 
-    # Single-stream throughput (median of 5 runs)
-    log "  Measuring single-stream throughput (5 runs)..."
-    local dl_result dl_mbps dl_cv
+    # Download throughput (mixed payloads in full mode)
+    log "  Measuring download throughput..."
+    local dl_result dl_mbps dl_small dl_medium dl_large dl_cv dl_stable
     dl_result=$(measure_download "$socks_port")
     dl_mbps=$(echo "$dl_result" | awk '{print $1}')
-    dl_cv=$(echo "$dl_result" | awk '{print $2}')
+    dl_small=$(echo "$dl_result" | awk '{print $2}')
+    dl_medium=$(echo "$dl_result" | awk '{print $3}')
+    dl_large=$(echo "$dl_result" | awk '{print $4}')
+    dl_cv=$(echo "$dl_result" | awk '{print $5}')
+    dl_stable=$(echo "$dl_result" | awk '{print $6}')
 
-    # Upload throughput (median of 5 runs)
-    log "  Measuring upload throughput (5 runs)..."
-    local ul_mbps
-    ul_mbps=$(measure_upload "$socks_port")
+    # Upload throughput (mixed payloads in full mode)
+    log "  Measuring upload throughput..."
+    local ul_result ul_mbps ul_small ul_medium ul_large ul_cv ul_stable
+    ul_result=$(measure_upload "$socks_port")
+    ul_mbps=$(echo "$ul_result" | awk '{print $1}')
+    ul_small=$(echo "$ul_result" | awk '{print $2}')
+    ul_medium=$(echo "$ul_result" | awk '{print $3}')
+    ul_large=$(echo "$ul_result" | awk '{print $4}')
+    ul_cv=$(echo "$ul_result" | awk '{print $5}')
+    ul_stable=$(echo "$ul_result" | awk '{print $6}')
 
-    # CPU + concurrent throughput (measure CPU ticks around the concurrent test)
-    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel, 5 runs)..."
-    local cpu_before_srv cpu_before_cli t_before
-    cpu_before_srv=$(get_cpu_ticks $srv)
-    cpu_before_cli=$(get_cpu_ticks $cli)
-    t_before=$(date +%s%N)
+    # Sustained resource measurement (CPU + memory under load)
+    log "  Measuring sustained resources (${SUSTAINED_SECS}s)..."
+    local res_result mem_idle mem_load mem_load_sd cpu_pct cpu_sd
+    res_result=$(measure_resources_sustained "$socks_port" $srv $cli)
+    mem_idle=$(echo "$res_result" | awk '{print $1}')
+    mem_load=$(echo "$res_result" | awk '{print $2}')
+    mem_load_sd=$(echo "$res_result" | awk '{print $3}')
+    cpu_pct=$(echo "$res_result" | awk '{print $4}')
+    cpu_sd=$(echo "$res_result" | awk '{print $5}')
 
-    local conc_result concurrent_mbps conc_cv
+    # Concurrent throughput
+    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
+    local conc_result concurrent_mbps conc_cv conc_stable
     conc_result=$(measure_concurrent "$socks_port")
     concurrent_mbps=$(echo "$conc_result" | awk '{print $1}')
     conc_cv=$(echo "$conc_result" | awk '{print $2}')
-
-    local cpu_after_srv cpu_after_cli t_after
-    cpu_after_srv=$(get_cpu_ticks $srv)
-    cpu_after_cli=$(get_cpu_ticks $cli)
-    t_after=$(date +%s%N)
-
-    # CPU% = (delta_cpu_ticks / CLK_TCK) / wall_seconds * 100
-    local cpu_pct
-    cpu_pct=$(python3 -c "
-clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
-dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
-wall = ($t_after - $t_before) / 1e9
-print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
-" 2>/dev/null || echo "0.0")
-
-    # Memory under load — median of 3 snapshots
-    local mem_load
-    mem_load=$(measure_memory $srv $cli)
+    conc_stable=$(echo "$conc_result" | awk '{print $3}')
 
     log "  Download: ${dl_mbps} Mbps (±${dl_cv}%)  |  Upload: ${ul_mbps} Mbps"
     log "  ${CONCURRENCY}x: ${concurrent_mbps} Mbps (±${conc_cv}%)  |  Handshake: ${handshake_ms} ms"
-    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}% (±${cpu_sd})  |  Mem idle: ${mem_idle} KB"
 
     python3 -c "
 import json
@@ -1503,13 +1774,24 @@ json.dump({
     'memory_load_kb': $mem_load,
     'cpu_avg_pct': $cpu_pct,
     'download_cv_pct': $dl_cv,
-    'concurrent_cv_pct': $conc_cv
+    'concurrent_cv_pct': $conc_cv,
+    'download_small_mbps': $dl_small,
+    'download_medium_mbps': $dl_medium,
+    'download_large_mbps': $dl_large,
+    'upload_small_mbps': $ul_small,
+    'upload_medium_mbps': $ul_medium,
+    'upload_large_mbps': $ul_large,
+    'cpu_sd_pct': $cpu_sd,
+    'memory_load_sd_kb': $mem_load_sd,
+    'download_stable': $( [ "$dl_stable" = "1" ] && echo "True" || echo "False" ),
+    'upload_stable': $( [ "$ul_stable" = "1" ] && echo "True" || echo "False" ),
+    'concurrent_stable': $( [ "$conc_stable" = "1" ] && echo "True" || echo "False" )
 }, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
     kill $srv $cli 2>/dev/null || true
     wait $srv $cli 2>/dev/null || true
-    sleep 1
+    sleep $COOLDOWN_SECS
 }
 
 # Generic Xray scenario runner.
@@ -1560,11 +1842,7 @@ run_xray_scenario() {
     # Warmup
     warmup_tunnel "$socks_port"
 
-    # Memory (idle) — median of 3 snapshots
-    local mem_idle
-    mem_idle=$(measure_memory $srv $cli)
-
-    # Latency (TTFB, trimmed mean of 7 requests)
+    # Latency (TTFB)
     log "  Measuring latency..."
     local latency_ms
     latency_ms=$(measure_latency "$socks_port")
@@ -1574,50 +1852,49 @@ run_xray_scenario() {
     local handshake_ms
     handshake_ms=$(measure_handshake "$socks_port")
 
-    # Single-stream throughput (median of 5 runs)
-    log "  Measuring single-stream throughput (5 runs)..."
-    local dl_result dl_mbps dl_cv
+    # Download throughput (mixed payloads in full mode)
+    log "  Measuring download throughput..."
+    local dl_result dl_mbps dl_small dl_medium dl_large dl_cv dl_stable
     dl_result=$(measure_download "$socks_port")
     dl_mbps=$(echo "$dl_result" | awk '{print $1}')
-    dl_cv=$(echo "$dl_result" | awk '{print $2}')
+    dl_small=$(echo "$dl_result" | awk '{print $2}')
+    dl_medium=$(echo "$dl_result" | awk '{print $3}')
+    dl_large=$(echo "$dl_result" | awk '{print $4}')
+    dl_cv=$(echo "$dl_result" | awk '{print $5}')
+    dl_stable=$(echo "$dl_result" | awk '{print $6}')
 
-    # Upload throughput (median of 5 runs)
-    log "  Measuring upload throughput (5 runs)..."
-    local ul_mbps
-    ul_mbps=$(measure_upload "$socks_port")
+    # Upload throughput (mixed payloads in full mode)
+    log "  Measuring upload throughput..."
+    local ul_result ul_mbps ul_small ul_medium ul_large ul_cv ul_stable
+    ul_result=$(measure_upload "$socks_port")
+    ul_mbps=$(echo "$ul_result" | awk '{print $1}')
+    ul_small=$(echo "$ul_result" | awk '{print $2}')
+    ul_medium=$(echo "$ul_result" | awk '{print $3}')
+    ul_large=$(echo "$ul_result" | awk '{print $4}')
+    ul_cv=$(echo "$ul_result" | awk '{print $5}')
+    ul_stable=$(echo "$ul_result" | awk '{print $6}')
 
-    # CPU + concurrent throughput
-    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel, 5 runs)..."
-    local cpu_before_srv cpu_before_cli t_before
-    cpu_before_srv=$(get_cpu_ticks $srv)
-    cpu_before_cli=$(get_cpu_ticks $cli)
-    t_before=$(date +%s%N)
+    # Sustained resource measurement (CPU + memory under load)
+    log "  Measuring sustained resources (${SUSTAINED_SECS}s)..."
+    local res_result mem_idle mem_load mem_load_sd cpu_pct cpu_sd
+    res_result=$(measure_resources_sustained "$socks_port" $srv $cli)
+    mem_idle=$(echo "$res_result" | awk '{print $1}')
+    mem_load=$(echo "$res_result" | awk '{print $2}')
+    mem_load_sd=$(echo "$res_result" | awk '{print $3}')
+    cpu_pct=$(echo "$res_result" | awk '{print $4}')
+    cpu_sd=$(echo "$res_result" | awk '{print $5}')
 
-    local conc_result concurrent_mbps conc_cv
+    # Concurrent throughput
+    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
+    local conc_result concurrent_mbps conc_cv conc_stable
     conc_result=$(measure_concurrent "$socks_port")
     concurrent_mbps=$(echo "$conc_result" | awk '{print $1}')
     conc_cv=$(echo "$conc_result" | awk '{print $2}')
-
-    local cpu_after_srv cpu_after_cli t_after
-    cpu_after_srv=$(get_cpu_ticks $srv)
-    cpu_after_cli=$(get_cpu_ticks $cli)
-    t_after=$(date +%s%N)
-
-    local cpu_pct
-    cpu_pct=$(python3 -c "
-clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
-dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
-wall = ($t_after - $t_before) / 1e9
-print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
-" 2>/dev/null || echo "0.0")
-
-    # Memory under load — median of 3 snapshots
-    local mem_load
-    mem_load=$(measure_memory $srv $cli)
+    conc_stable=$(echo "$conc_result" | awk '{print $3}')
 
     log "  Download: ${dl_mbps} Mbps (±${dl_cv}%)  |  Upload: ${ul_mbps} Mbps"
     log "  ${CONCURRENCY}x: ${concurrent_mbps} Mbps (±${conc_cv}%)  |  Handshake: ${handshake_ms} ms"
-    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}% (±${cpu_sd})  |  Mem idle: ${mem_idle} KB"
 
     python3 -c "
 import json
@@ -1632,13 +1909,24 @@ json.dump({
     'memory_load_kb': $mem_load,
     'cpu_avg_pct': $cpu_pct,
     'download_cv_pct': $dl_cv,
-    'concurrent_cv_pct': $conc_cv
+    'concurrent_cv_pct': $conc_cv,
+    'download_small_mbps': $dl_small,
+    'download_medium_mbps': $dl_medium,
+    'download_large_mbps': $dl_large,
+    'upload_small_mbps': $ul_small,
+    'upload_medium_mbps': $ul_medium,
+    'upload_large_mbps': $ul_large,
+    'cpu_sd_pct': $cpu_sd,
+    'memory_load_sd_kb': $mem_load_sd,
+    'download_stable': $( [ "$dl_stable" = "1" ] && echo "True" || echo "False" ),
+    'upload_stable': $( [ "$ul_stable" = "1" ] && echo "True" || echo "False" ),
+    'concurrent_stable': $( [ "$conc_stable" = "1" ] && echo "True" || echo "False" )
 }, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
     kill $srv $cli 2>/dev/null || true
     wait $srv $cli 2>/dev/null || true
-    sleep 1
+    sleep $COOLDOWN_SECS
 }
 
 # Check if a UDP port is listening (for Hysteria2/TUIC).
@@ -1712,11 +2000,7 @@ run_singbox_scenario() {
     # Warmup
     warmup_tunnel "$socks_port"
 
-    # Memory (idle) — median of 3 snapshots
-    local mem_idle
-    mem_idle=$(measure_memory $srv $cli)
-
-    # Latency (TTFB, trimmed mean of 7 requests)
+    # Latency (TTFB)
     log "  Measuring latency..."
     local latency_ms
     latency_ms=$(measure_latency "$socks_port")
@@ -1726,50 +2010,49 @@ run_singbox_scenario() {
     local handshake_ms
     handshake_ms=$(measure_handshake "$socks_port")
 
-    # Single-stream throughput (median of 5 runs)
-    log "  Measuring single-stream throughput (5 runs)..."
-    local dl_result dl_mbps dl_cv
+    # Download throughput (mixed payloads in full mode)
+    log "  Measuring download throughput..."
+    local dl_result dl_mbps dl_small dl_medium dl_large dl_cv dl_stable
     dl_result=$(measure_download "$socks_port")
     dl_mbps=$(echo "$dl_result" | awk '{print $1}')
-    dl_cv=$(echo "$dl_result" | awk '{print $2}')
+    dl_small=$(echo "$dl_result" | awk '{print $2}')
+    dl_medium=$(echo "$dl_result" | awk '{print $3}')
+    dl_large=$(echo "$dl_result" | awk '{print $4}')
+    dl_cv=$(echo "$dl_result" | awk '{print $5}')
+    dl_stable=$(echo "$dl_result" | awk '{print $6}')
 
-    # Upload throughput (median of 5 runs)
-    log "  Measuring upload throughput (5 runs)..."
-    local ul_mbps
-    ul_mbps=$(measure_upload "$socks_port")
+    # Upload throughput (mixed payloads in full mode)
+    log "  Measuring upload throughput..."
+    local ul_result ul_mbps ul_small ul_medium ul_large ul_cv ul_stable
+    ul_result=$(measure_upload "$socks_port")
+    ul_mbps=$(echo "$ul_result" | awk '{print $1}')
+    ul_small=$(echo "$ul_result" | awk '{print $2}')
+    ul_medium=$(echo "$ul_result" | awk '{print $3}')
+    ul_large=$(echo "$ul_result" | awk '{print $4}')
+    ul_cv=$(echo "$ul_result" | awk '{print $5}')
+    ul_stable=$(echo "$ul_result" | awk '{print $6}')
 
-    # CPU + concurrent throughput
-    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel, 5 runs)..."
-    local cpu_before_srv cpu_before_cli t_before
-    cpu_before_srv=$(get_cpu_ticks $srv)
-    cpu_before_cli=$(get_cpu_ticks $cli)
-    t_before=$(date +%s%N)
+    # Sustained resource measurement (CPU + memory under load)
+    log "  Measuring sustained resources (${SUSTAINED_SECS}s)..."
+    local res_result mem_idle mem_load mem_load_sd cpu_pct cpu_sd
+    res_result=$(measure_resources_sustained "$socks_port" $srv $cli)
+    mem_idle=$(echo "$res_result" | awk '{print $1}')
+    mem_load=$(echo "$res_result" | awk '{print $2}')
+    mem_load_sd=$(echo "$res_result" | awk '{print $3}')
+    cpu_pct=$(echo "$res_result" | awk '{print $4}')
+    cpu_sd=$(echo "$res_result" | awk '{print $5}')
 
-    local conc_result concurrent_mbps conc_cv
+    # Concurrent throughput
+    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
+    local conc_result concurrent_mbps conc_cv conc_stable
     conc_result=$(measure_concurrent "$socks_port")
     concurrent_mbps=$(echo "$conc_result" | awk '{print $1}')
     conc_cv=$(echo "$conc_result" | awk '{print $2}')
-
-    local cpu_after_srv cpu_after_cli t_after
-    cpu_after_srv=$(get_cpu_ticks $srv)
-    cpu_after_cli=$(get_cpu_ticks $cli)
-    t_after=$(date +%s%N)
-
-    local cpu_pct
-    cpu_pct=$(python3 -c "
-clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
-dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
-wall = ($t_after - $t_before) / 1e9
-print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
-" 2>/dev/null || echo "0.0")
-
-    # Memory under load — median of 3 snapshots
-    local mem_load
-    mem_load=$(measure_memory $srv $cli)
+    conc_stable=$(echo "$conc_result" | awk '{print $3}')
 
     log "  Download: ${dl_mbps} Mbps (±${dl_cv}%)  |  Upload: ${ul_mbps} Mbps"
     log "  ${CONCURRENCY}x: ${concurrent_mbps} Mbps (±${conc_cv}%)  |  Handshake: ${handshake_ms} ms"
-    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}% (±${cpu_sd})  |  Mem idle: ${mem_idle} KB"
 
     python3 -c "
 import json
@@ -1784,13 +2067,24 @@ json.dump({
     'memory_load_kb': $mem_load,
     'cpu_avg_pct': $cpu_pct,
     'download_cv_pct': $dl_cv,
-    'concurrent_cv_pct': $conc_cv
+    'concurrent_cv_pct': $conc_cv,
+    'download_small_mbps': $dl_small,
+    'download_medium_mbps': $dl_medium,
+    'download_large_mbps': $dl_large,
+    'upload_small_mbps': $ul_small,
+    'upload_medium_mbps': $ul_medium,
+    'upload_large_mbps': $ul_large,
+    'cpu_sd_pct': $cpu_sd,
+    'memory_load_sd_kb': $mem_load_sd,
+    'download_stable': $( [ "$dl_stable" = "1" ] && echo "True" || echo "False" ),
+    'upload_stable': $( [ "$ul_stable" = "1" ] && echo "True" || echo "False" ),
+    'concurrent_stable': $( [ "$conc_stable" = "1" ] && echo "True" || echo "False" )
 }, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
     kill $srv $cli 2>/dev/null || true
     wait $srv $cli 2>/dev/null || true
-    sleep 1
+    sleep $COOLDOWN_SECS
 }
 
 # ---------------------------------------------------------------------------
@@ -1984,7 +2278,7 @@ print()
 print(f"  {G}{bar}{N}")
 print(f"  {B}Benchmark Results \u2014 {DATE}{N}")
 print(f"  {TEST_MB}MB payload \u00B7 {CONCURRENCY}x concurrent \u00B7 loopback")
-print(f"  Measurements: 5-run median (throughput), 7-sample trimmed mean (latency)")
+print(f"  Measurements: MAD-filtered median (throughput), pipeline-filtered (latency), sustained sampling (CPU/memory)")
 print(f"  {G}{bar}{N}")
 print()
 
@@ -2262,7 +2556,7 @@ md = []
 md.append(f"## Benchmark Results ({DATE})")
 md.append("")
 md.append(f"**Test:** {TEST_MB}MB payload, {CONCURRENCY}x concurrent streams, loopback")
-md.append(f"**Method:** 5-run median (throughput), 7-sample trimmed mean (latency/handshake), 3-snapshot median (memory)")
+md.append(f"**Method:** MAD-filtered median (throughput, 3 payload sizes), pipeline-filtered (latency/handshake), sustained sampling (CPU/memory)")
 md.append("")
 
 hdr = "| Metric |" + "".join(f" {n} |" for _, n in present)
@@ -2420,7 +2714,8 @@ PYEOF
 
 package_results() {
     log "Removing test data from results directory..."
-    rm -f "$RESULTS_DIR/testdata" "$RESULTS_DIR/ping" "$RESULTS_DIR/upload"
+    rm -f "$RESULTS_DIR/testdata" "$RESULTS_DIR/testdata-small" "$RESULTS_DIR/testdata-medium" "$RESULTS_DIR/testdata-large"
+    rm -f "$RESULTS_DIR/ping" "$RESULTS_DIR/upload"
 
     # Remove log files (can be large) — keep only JSON results and summary
     # Uncomment the next line to also strip logs:

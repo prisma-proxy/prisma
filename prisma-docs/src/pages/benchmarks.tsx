@@ -28,6 +28,17 @@ interface Scenario {
   concurrent_cv_pct: number;
   security_score: number;
   security_tier: string;
+  download_small_mbps: number;
+  download_medium_mbps: number;
+  download_large_mbps: number;
+  upload_small_mbps: number;
+  upload_medium_mbps: number;
+  upload_large_mbps: number;
+  cpu_sd_pct: number;
+  memory_load_sd_kb: number;
+  download_stable: boolean;
+  upload_stable: boolean;
+  concurrent_stable: boolean;
 }
 
 interface BenchmarkData {
@@ -191,10 +202,24 @@ function Legend(): ReactNode {
   );
 }
 
+function StabilityBadge({stable}: {stable: boolean}): ReactNode {
+  if (stable) return null;
+  return (
+    <span className={styles.unstableBadge} title="High variance detected in measurement">
+      {'\u26A0'}
+    </span>
+  );
+}
+
+function hasPerSizeData(scenarios: Scenario[]): boolean {
+  return scenarios.some(s => s.download_small_mbps > 0 || s.download_medium_mbps > 0 || s.download_large_mbps > 0);
+}
+
 function ThroughputChart({scenarios}: {scenarios: Scenario[]}): ReactNode {
   const maxDownload = Math.max(...scenarios.map(s => s.download_mbps));
   const maxUpload = Math.max(...scenarios.map(s => s.upload_mbps));
   const maxVal = Math.max(maxDownload, maxUpload);
+  const showPerSize = hasPerSizeData(scenarios);
 
   return (
     <section className={styles.section}>
@@ -206,10 +231,14 @@ function ThroughputChart({scenarios}: {scenarios: Scenario[]}): ReactNode {
       <div className={styles.chartGroup}>
         <div className={styles.chartGroupTitle}>
           {translate({id: 'benchmarks.throughput.download', message: 'Download (Mbps)'})}
+          {showPerSize && <span style={{fontSize: '0.7rem', marginLeft: '0.5rem', opacity: 0.7}}>weighted: 0.3S + 0.4M + 0.3L</span>}
         </div>
         {scenarios.map(s => (
           <div className={styles.barRow} key={`dl-${s.label}`}>
-            <span className={styles.barLabel}>{s.name}</span>
+            <span className={styles.barLabel}>
+              {s.name}
+              <StabilityBadge stable={s.download_stable ?? true} />
+            </span>
             <div className={styles.barTrack}>
               <div
                 className={`${styles.barFill} ${groupBarClass(s.group)}`}
@@ -221,13 +250,43 @@ function ThroughputChart({scenarios}: {scenarios: Scenario[]}): ReactNode {
         ))}
       </div>
 
+      {showPerSize && (
+        <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+          <table className={styles.dataTable}>
+            <thead>
+              <tr>
+                <th>{translate({id: 'benchmarks.throughput.scenario', message: 'Scenario'})}</th>
+                <th>1MB</th>
+                <th>32MB</th>
+                <th>256MB</th>
+                <th>{translate({id: 'benchmarks.throughput.composite', message: 'Composite'})}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scenarios.filter(s => s.download_small_mbps > 0 || s.download_medium_mbps > 0 || s.download_large_mbps > 0).map(s => (
+                <tr key={`dl-detail-${s.label}`}>
+                  <td className={groupLabelClass(s.group)}>{s.name}</td>
+                  <td>{fmt(s.download_small_mbps, 0)}</td>
+                  <td>{fmt(s.download_medium_mbps, 0)}</td>
+                  <td>{fmt(s.download_large_mbps, 0)}</td>
+                  <td><strong>{fmt(s.download_mbps, 0)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className={styles.chartGroup}>
         <div className={styles.chartGroupTitle}>
           {translate({id: 'benchmarks.throughput.upload', message: 'Upload (Mbps)'})}
         </div>
         {scenarios.map(s => (
           <div className={styles.barRow} key={`ul-${s.label}`}>
-            <span className={styles.barLabel}>{s.name}</span>
+            <span className={styles.barLabel}>
+              {s.name}
+              <StabilityBadge stable={s.upload_stable ?? true} />
+            </span>
             <div className={styles.barTrack}>
               <div
                 className={`${styles.barFill} ${groupBarClass(s.group)}`}
@@ -486,23 +545,32 @@ function ResourceSection({scenarios}: {scenarios: Scenario[]}): ReactNode {
             <tr>
               <th>{translate({id: 'benchmarks.resources.scenario', message: 'Scenario'})}</th>
               <th>{translate({id: 'benchmarks.resources.cpu', message: 'CPU %'})}</th>
-              <th>{translate({id: 'benchmarks.resources.memIdle', message: 'Memory Idle (KB)'})}</th>
-              <th>{translate({id: 'benchmarks.resources.memLoad', message: 'Memory Load (KB)'})}</th>
+              <th>{translate({id: 'benchmarks.resources.cpuSd', message: 'CPU SD'})}</th>
+              <th>{translate({id: 'benchmarks.resources.memIdle', message: 'Mem Idle (KB)'})}</th>
+              <th>{translate({id: 'benchmarks.resources.memLoad', message: 'Mem Load (KB)'})}</th>
+              <th>{translate({id: 'benchmarks.resources.memSd', message: 'Mem SD (KB)'})}</th>
               <th>{translate({id: 'benchmarks.resources.concurrent', message: '4x Concurrent (Mbps)'})}</th>
-              <th>{translate({id: 'benchmarks.resources.dlCv', message: 'DL Stability (CV%)'})}</th>
+              <th>{translate({id: 'benchmarks.resources.dlCv', message: 'DL CV%'})}</th>
+              <th>{translate({id: 'benchmarks.resources.stability', message: 'Stable'})}</th>
             </tr>
           </thead>
           <tbody>
-            {scenarios.map(s => (
-              <tr key={s.label}>
-                <td className={groupLabelClass(s.group)}>{s.name}</td>
-                <td>{fmt(s.cpu_avg_pct)}</td>
-                <td>{s.memory_idle_kb.toLocaleString()}</td>
-                <td>{s.memory_load_kb.toLocaleString()}</td>
-                <td>{fmt(s.concurrent_mbps, 0)}</td>
-                <td>{fmt(s.download_cv_pct)}</td>
-              </tr>
-            ))}
+            {scenarios.map(s => {
+              const allStable = (s.download_stable ?? true) && (s.upload_stable ?? true) && (s.concurrent_stable ?? true);
+              return (
+                <tr key={s.label}>
+                  <td className={groupLabelClass(s.group)}>{s.name}</td>
+                  <td>{fmt(s.cpu_avg_pct)}</td>
+                  <td>{fmt(s.cpu_sd_pct ?? 0)}</td>
+                  <td>{s.memory_idle_kb.toLocaleString()}</td>
+                  <td>{s.memory_load_kb.toLocaleString()}</td>
+                  <td>{(s.memory_load_sd_kb ?? 0).toLocaleString()}</td>
+                  <td>{fmt(s.concurrent_mbps, 0)}</td>
+                  <td>{fmt(s.download_cv_pct)}</td>
+                  <td>{allStable ? '\u2705' : <span className={styles.unstableBadge}>{'\u26A0'}</span>}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -829,7 +897,12 @@ export default function BenchmarksPage(): ReactNode {
     );
   }
 
-  const sortedScenarios = [...data.scenarios].sort((a, b) => {
+  // Filter out scenarios that failed to benchmark (all-zero results)
+  const testedScenarios = data.scenarios.filter(s =>
+    s.group === 'baseline' || s.download_mbps > 0 || s.upload_mbps > 0 || s.latency_ms > 0,
+  );
+
+  const sortedScenarios = [...testedScenarios].sort((a, b) => {
     const order: Record<string, number> = {prisma: 0, singbox: 1, xray: 2, baseline: 3};
     return (order[a.group] ?? 9) - (order[b.group] ?? 9);
   });
@@ -879,7 +952,7 @@ export default function BenchmarksPage(): ReactNode {
             </span>
             <span className={styles.metaItem}>
               <span className={styles.metaIcon}>{'\uD83D\uDCCA'}</span>
-              {data.scenarios.length}{' '}
+              {testedScenarios.length}{' '}
               {translate({id: 'benchmarks.meta.scenarios', message: 'scenarios'})}
             </span>
           </div>

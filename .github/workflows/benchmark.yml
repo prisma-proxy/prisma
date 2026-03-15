@@ -199,6 +199,17 @@ jobs:
                   "concurrent_cv_pct": float(raw.get("concurrent_cv_pct", 0)),
                   "security_score": sec_score,
                   "security_tier": sec_tier,
+                  "download_small_mbps": float(raw.get("download_small_mbps", 0)),
+                  "download_medium_mbps": float(raw.get("download_medium_mbps", 0)),
+                  "download_large_mbps": float(raw.get("download_large_mbps", 0)),
+                  "upload_small_mbps": float(raw.get("upload_small_mbps", 0)),
+                  "upload_medium_mbps": float(raw.get("upload_medium_mbps", 0)),
+                  "upload_large_mbps": float(raw.get("upload_large_mbps", 0)),
+                  "cpu_sd_pct": float(raw.get("cpu_sd_pct", 0)),
+                  "memory_load_sd_kb": int(raw.get("memory_load_sd_kb", 0)),
+                  "download_stable": bool(raw.get("download_stable", True)),
+                  "upload_stable": bool(raw.get("upload_stable", True)),
+                  "concurrent_stable": bool(raw.get("concurrent_stable", True)),
               }
               scenarios.append(scenario)
 
@@ -207,8 +218,12 @@ jobs:
               sys.exit(0)
 
           benchmark_mode = os.environ.get("BENCHMARK_MODE", "full")
-          payload_desc = "64MB" if benchmark_mode == "quick" else "256MB"
-          runs_desc = "1-run" if benchmark_mode == "quick" else "5-run"
+          if benchmark_mode == "quick":
+              payload_desc = "64MB"
+              runs_desc = "3-run MAD-filtered"
+          else:
+              payload_desc = "1MB+32MB+256MB"
+              runs_desc = "7-run MAD-filtered"
           env_desc = f"ubuntu-latest, loopback, {payload_desc} payload, {runs_desc} median"
 
           consolidated = {
