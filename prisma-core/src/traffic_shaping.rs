@@ -251,7 +251,10 @@ mod tests {
         assert_eq!(bucket_pad_size(128, &buckets), 128);
         assert_eq!(bucket_pad_size(129, &buckets), 256);
         assert_eq!(bucket_pad_size(1000, &buckets), 1024);
-        assert_eq!(bucket_pad_size(1025, &buckets), 16384); // fallback to MAX
+        assert_eq!(
+            bucket_pad_size(1025, &buckets),
+            crate::types::MAX_FRAME_SIZE
+        ); // fallback to MAX
     }
 
     #[test]

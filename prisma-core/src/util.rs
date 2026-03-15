@@ -91,6 +91,9 @@ pub async fn write_framed<W: AsyncWriteExt + Unpin>(
     w.write_all(payload)
         .await
         .map_err(|e| ProtocolError::InvalidFrame(format!("write payload: {}", e)))?;
+    w.flush()
+        .await
+        .map_err(|e| ProtocolError::InvalidFrame(format!("flush: {}", e)))?;
     Ok(())
 }
 

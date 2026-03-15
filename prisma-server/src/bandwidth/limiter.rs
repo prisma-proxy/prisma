@@ -96,6 +96,12 @@ impl BandwidthLimiterStore {
         }
     }
 
+    /// Check if a client has any bandwidth limits configured.
+    pub async fn has_client(&self, client_id: &str) -> bool {
+        self.upload.read().await.contains_key(client_id)
+            || self.download.read().await.contains_key(client_id)
+    }
+
     /// Wait until download of `bytes` is allowed.
     pub async fn wait_download(&self, client_id: &str, bytes: u32) {
         let limiters = self.download.read().await;

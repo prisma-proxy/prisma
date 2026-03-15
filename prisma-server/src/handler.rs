@@ -491,22 +491,39 @@ where
             info!(dest = %dest, "Connecting to destination");
             let outbound = outbound::connect(dest, &dns_cache).await?;
 
-            // Use rate-limited relay if client has bandwidth/quota config
+            // Dispatch to fast-path relay when client has no limits configured
             let client_id_str = session_keys.client_id.0.to_string();
-            relay::relay_encrypted_with_limits(
-                tunnel_read,
-                tunnel_write,
-                outbound,
-                cipher,
-                session_keys,
-                state.metrics.clone(),
-                bytes_up,
-                bytes_down,
-                client_id_str,
-                ctx.bandwidth.clone(),
-                ctx.quotas.clone(),
-            )
-            .await
+            let has_limits = ctx.bandwidth.has_client(&client_id_str).await
+                || ctx.quotas.has_client(&client_id_str).await;
+
+            if has_limits {
+                relay::relay_encrypted_with_limits(
+                    tunnel_read,
+                    tunnel_write,
+                    outbound,
+                    cipher,
+                    session_keys,
+                    state.metrics.clone(),
+                    bytes_up,
+                    bytes_down,
+                    client_id_str,
+                    ctx.bandwidth.clone(),
+                    ctx.quotas.clone(),
+                )
+                .await
+            } else {
+                relay::relay_encrypted(
+                    tunnel_read,
+                    tunnel_write,
+                    outbound,
+                    cipher,
+                    session_keys,
+                    state.metrics.clone(),
+                    bytes_up,
+                    bytes_down,
+                )
+                .await
+            }
         }
         Command::RegisterForward {
             remote_port,

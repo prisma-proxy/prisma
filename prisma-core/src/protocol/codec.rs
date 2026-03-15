@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use crate::crypto::aead::{AeadCipher, TAG_SIZE};
+use crate::crypto::aead::AeadCipher;
 use crate::error::{CryptoError, ProtocolError};
 use crate::types::{CipherSuite, ClientId, ProxyAddress, ProxyDestination, NONCE_SIZE};
 
@@ -287,7 +287,22 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
     let flags = u16::from_le_bytes([data[1], data[2]]);
     let stream_id = u32::from_be_bytes(data[3..7].try_into().unwrap());
 
-    let payload = if flags & FLAG_PADDED != 0 {
+    let payload = if flags & FLAG_BUCKETED != 0 {
+        // Bucketed format: [bucket_pad_len:2][payload:var][bucket_padding:var]
+        if data.len() < 9 {
+            return Err(ProtocolError::InvalidFrame(
+                "Bucketed DataFrame too short".to_string(),
+            ));
+        }
+        let bucket_pad_len = u16::from_be_bytes([data[7], data[8]]) as usize;
+        if data.len() < 9 + bucket_pad_len {
+            return Err(ProtocolError::InvalidFrame(
+                "Bucketed DataFrame pad_len exceeds frame".to_string(),
+            ));
+        }
+        // Strip bucket padding from the end
+        &data[9..data.len() - bucket_pad_len]
+    } else if flags & FLAG_PADDED != 0 {
         // Padded format: [payload_len:2][payload:var][padding:var]
         if data.len() < 9 {
             return Err(ProtocolError::InvalidFrame(
@@ -686,79 +701,6 @@ pub fn decrypt_frame(
     let ciphertext = &wire[ciphertext_start..ciphertext_start + len];
     let plaintext = cipher.decrypt(&nonce, ciphertext, &[])?;
     Ok((plaintext, nonce))
-}
-
-/// Decrypt a wire-format encrypted frame in-place.
-///
-/// Decrypts the ciphertext within `wire` and returns a slice of the plaintext
-/// along with the nonce. The plaintext occupies the same region as the ciphertext
-/// (no allocation).
-///
-/// Wire format: `[nonce:12][len:2][ciphertext:len-16][tag:16]`
-pub fn decrypt_frame_in_place(
-    cipher: &dyn AeadCipher,
-    wire: &mut [u8],
-) -> Result<(usize, [u8; NONCE_SIZE]), CryptoError> {
-    if wire.len() < NONCE_SIZE + 2 {
-        return Err(CryptoError::DecryptionFailed(
-            "Encrypted frame too short".into(),
-        ));
-    }
-    let mut nonce = [0u8; NONCE_SIZE];
-    nonce.copy_from_slice(&wire[..NONCE_SIZE]);
-    let len = u16::from_be_bytes([wire[NONCE_SIZE], wire[NONCE_SIZE + 1]]) as usize;
-    let ciphertext_start = NONCE_SIZE + 2;
-    if wire.len() < ciphertext_start + len || len < TAG_SIZE {
-        return Err(CryptoError::DecryptionFailed(
-            "Encrypted frame truncated".into(),
-        ));
-    }
-    let data_len = len - TAG_SIZE;
-    let tag_start = ciphertext_start + data_len;
-    let mut tag = [0u8; TAG_SIZE];
-    tag.copy_from_slice(&wire[tag_start..tag_start + TAG_SIZE]);
-
-    cipher.decrypt_in_place(
-        &nonce,
-        &[],
-        &mut wire[ciphertext_start..ciphertext_start + data_len],
-        &tag,
-    )?;
-
-    Ok((data_len, nonce))
-}
-
-/// Parse a decrypted data frame for CMD_DATA, returning the payload slice directly.
-/// Avoids constructing the full Command enum for the hot path.
-pub fn parse_data_payload(plaintext: &[u8]) -> Result<&[u8], CryptoError> {
-    if plaintext.len() < 7 {
-        return Err(CryptoError::DecryptionFailed("DataFrame too short".into()));
-    }
-    let cmd = plaintext[0];
-    if cmd != CMD_DATA {
-        return Err(CryptoError::DecryptionFailed(format!(
-            "Expected CMD_DATA (0x02), got 0x{:02x}",
-            cmd
-        )));
-    }
-    let flags = u16::from_le_bytes([plaintext[1], plaintext[2]]);
-
-    if flags & FLAG_PADDED != 0 {
-        if plaintext.len() < 9 {
-            return Err(CryptoError::DecryptionFailed(
-                "Padded DataFrame too short".into(),
-            ));
-        }
-        let payload_len = u16::from_be_bytes([plaintext[7], plaintext[8]]) as usize;
-        if plaintext.len() < 9 + payload_len {
-            return Err(CryptoError::DecryptionFailed(
-                "Padded DataFrame payload truncated".into(),
-            ));
-        }
-        Ok(&plaintext[9..9 + payload_len])
-    } else {
-        Ok(&plaintext[7..])
-    }
 }
 
 #[cfg(test)]

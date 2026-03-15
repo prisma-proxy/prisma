@@ -119,6 +119,11 @@ impl QuotaStore {
             .or_insert_with(|| Arc::new(ClientUsage::new(quota_bytes)));
     }
 
+    /// Check if a client has any quota configured.
+    pub async fn has_client(&self, client_id: &str) -> bool {
+        self.clients.read().await.contains_key(client_id)
+    }
+
     /// Get the usage tracker for a client.
     pub async fn get(&self, client_id: &str) -> Option<Arc<ClientUsage>> {
         self.clients.read().await.get(client_id).cloned()

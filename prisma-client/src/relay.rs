@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
-use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder, MAX_PAYLOAD_SIZE};
+use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
 use prisma_core::types::MAX_FRAME_SIZE;
 
@@ -31,15 +31,12 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
     let cipher_s2t = cipher.clone();
     let socks_to_tunnel = async move {
         let mut encoder = FrameEncoder::new();
-        let mut buf = vec![0u8; MAX_PAYLOAD_SIZE];
         loop {
-            match socks_read.read(&mut buf).await {
+            match socks_read.read(encoder.payload_mut()).await {
                 Ok(0) => break,
                 Ok(n) => {
                     let nonce = client_keys.next_client_nonce();
 
-                    // Copy payload into encoder buffer and seal in-place
-                    encoder.payload_mut()[..n].copy_from_slice(&buf[..n]);
                     match encoder.seal_data_frame(cipher_s2t.as_ref(), &nonce, n, 0, &padding_range)
                     {
                         Ok(wire) => {
@@ -135,7 +132,6 @@ where
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
 
     let mut encoder = FrameEncoder::new();
-    let mut local_buf = vec![0u8; MAX_PAYLOAD_SIZE];
     let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
 
     loop {
@@ -144,13 +140,12 @@ where
                 // Read data and check close state in a single lock acquisition
                 let (n, is_closed) = {
                     let mut s = stack.lock().await;
-                    let n = s.read_from_socket(handle, &mut local_buf);
+                    let n = s.read_from_socket(handle, encoder.payload_mut());
                     let closed = s.is_closed(handle);
                     (n, closed)
                 };
                 if n > 0 {
                     let nonce = session_keys.next_client_nonce();
-                    encoder.payload_mut()[..n].copy_from_slice(&local_buf[..n]);
                     match encoder.seal_data_frame(
                         cipher.as_ref(),
                         &nonce,

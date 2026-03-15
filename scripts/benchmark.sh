@@ -58,6 +58,17 @@ get_rss_kb() {
     fi
 }
 
+# Total CPU ticks (utime + stime) for a process from /proc/PID/stat.
+# Returns 0 on non-Linux or if the process doesn't exist.
+get_cpu_ticks() {
+    local pid=$1
+    if [ -f "/proc/$pid/stat" ]; then
+        awk '{print $14 + $15}' "/proc/$pid/stat" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
@@ -826,7 +837,8 @@ json.dump({
     'latency_ms': $latency_ms,
     'concurrent_mbps': 0,
     'memory_idle_kb': 0,
-    'memory_load_kb': 0
+    'memory_load_kb': 0,
+    'cpu_avg_pct': 0
 }, open('$RESULTS_DIR/baseline.json', 'w'))
 "
 }
@@ -836,7 +848,8 @@ write_empty_result() {
     python3 -c "
 import json
 json.dump({'label':'$label','download_mbps':0,'latency_ms':0,
-           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0},
+           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0,
+           'cpu_avg_pct':0},
           open('$RESULTS_DIR/${label}.json','w'))
 "
 }
@@ -905,10 +918,29 @@ run_prisma_scenario() {
     local dl_mbps
     dl_mbps=$(measure_download "$socks_port")
 
-    # Memory (under load — measure during concurrent test)
+    # CPU + concurrent throughput (measure CPU ticks around the concurrent test)
     log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
+    local cpu_before_srv cpu_before_cli t_before
+    cpu_before_srv=$(get_cpu_ticks $srv)
+    cpu_before_cli=$(get_cpu_ticks $cli)
+    t_before=$(date +%s%N)
+
     local concurrent_mbps
     concurrent_mbps=$(measure_concurrent "$socks_port")
+
+    local cpu_after_srv cpu_after_cli t_after
+    cpu_after_srv=$(get_cpu_ticks $srv)
+    cpu_after_cli=$(get_cpu_ticks $cli)
+    t_after=$(date +%s%N)
+
+    # CPU% = (delta_cpu_ticks / CLK_TCK) / wall_seconds * 100
+    local cpu_pct
+    cpu_pct=$(python3 -c "
+clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
+dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
+wall = ($t_after - $t_before) / 1e9
+print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
+" 2>/dev/null || echo "0.0")
 
     # Memory under load (sample right after concurrent finishes while RSS is high)
     local mem_load_srv mem_load_cli mem_load
@@ -917,7 +949,7 @@ run_prisma_scenario() {
     mem_load=$((mem_load_srv + mem_load_cli))
 
     log "  Download: ${dl_mbps} Mbps  |  ${CONCURRENCY}x: ${concurrent_mbps} Mbps"
-    log "  Latency: ${latency_ms} ms  |  Mem idle: ${mem_idle} KB  |  Mem load: ${mem_load} KB"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
 
     python3 -c "
 import json
@@ -927,7 +959,8 @@ json.dump({
     'latency_ms': $latency_ms,
     'concurrent_mbps': $concurrent_mbps,
     'memory_idle_kb': $mem_idle,
-    'memory_load_kb': $mem_load
+    'memory_load_kb': $mem_load,
+    'cpu_avg_pct': $cpu_pct
 }, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
@@ -994,9 +1027,28 @@ run_xray_scenario() {
     local dl_mbps
     dl_mbps=$(measure_download "$socks_port")
 
+    # CPU + concurrent throughput
     log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
+    local cpu_before_srv cpu_before_cli t_before
+    cpu_before_srv=$(get_cpu_ticks $srv)
+    cpu_before_cli=$(get_cpu_ticks $cli)
+    t_before=$(date +%s%N)
+
     local concurrent_mbps
     concurrent_mbps=$(measure_concurrent "$socks_port")
+
+    local cpu_after_srv cpu_after_cli t_after
+    cpu_after_srv=$(get_cpu_ticks $srv)
+    cpu_after_cli=$(get_cpu_ticks $cli)
+    t_after=$(date +%s%N)
+
+    local cpu_pct
+    cpu_pct=$(python3 -c "
+clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
+dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
+wall = ($t_after - $t_before) / 1e9
+print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
+" 2>/dev/null || echo "0.0")
 
     local mem_load_srv mem_load_cli mem_load
     mem_load_srv=$(get_rss_kb $srv)
@@ -1004,7 +1056,7 @@ run_xray_scenario() {
     mem_load=$((mem_load_srv + mem_load_cli))
 
     log "  Download: ${dl_mbps} Mbps  |  ${CONCURRENCY}x: ${concurrent_mbps} Mbps"
-    log "  Latency: ${latency_ms} ms  |  Mem idle: ${mem_idle} KB  |  Mem load: ${mem_load} KB"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
 
     python3 -c "
 import json
@@ -1014,7 +1066,8 @@ json.dump({
     'latency_ms': $latency_ms,
     'concurrent_mbps': $concurrent_mbps,
     'memory_idle_kb': $mem_idle,
-    'memory_load_kb': $mem_load
+    'memory_load_kb': $mem_load,
+    'cpu_avg_pct': $cpu_pct
 }, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
@@ -1060,15 +1113,16 @@ fields = [
     ("download_mbps",   "Download (Mbps)"),
     ("latency_ms",      "Latency TTFB (ms)"),
     ("concurrent_mbps", f"{CONCURRENCY}x Concurrent (Mbps)"),
+    ("cpu_avg_pct",     "CPU under load (%)"),
     ("memory_idle_kb",  "Memory idle (KB)"),
     ("memory_load_kb",  "Memory load (KB)"),
 ]
 
 profiles = {
-    "Personal VPN":        {"download_mbps": 25, "latency_ms": 35, "concurrent_mbps": 15, "memory_idle_kb": 10, "tput_per_mb": 15},
-    "Multi-Tenant SaaS":   {"download_mbps": 20, "latency_ms": 15, "concurrent_mbps": 35, "memory_idle_kb": 15, "tput_per_mb": 15},
-    "Edge / IoT":          {"download_mbps": 15, "latency_ms": 10, "concurrent_mbps": 20, "memory_idle_kb": 20, "tput_per_mb": 35},
-    "CDN / Bulk Transfer": {"download_mbps": 35, "latency_ms":  5, "concurrent_mbps": 30, "memory_idle_kb": 10, "tput_per_mb": 20},
+    "Personal VPN":        {"download_mbps": 20, "latency_ms": 30, "concurrent_mbps": 15, "cpu_avg_pct": 10, "memory_idle_kb": 10, "tput_per_mb": 15},
+    "Multi-Tenant SaaS":   {"download_mbps": 15, "latency_ms": 10, "concurrent_mbps": 30, "cpu_avg_pct": 15, "memory_idle_kb": 15, "tput_per_mb": 15},
+    "Edge / IoT":          {"download_mbps": 10, "latency_ms": 10, "concurrent_mbps": 15, "cpu_avg_pct": 15, "memory_idle_kb": 20, "tput_per_mb": 30},
+    "CDN / Bulk Transfer": {"download_mbps": 30, "latency_ms":  5, "concurrent_mbps": 25, "cpu_avg_pct": 10, "memory_idle_kb": 10, "tput_per_mb": 20},
 }
 
 # Load results — only include scenarios that have a result file
@@ -1111,7 +1165,7 @@ N = "\033[0m"
 
 col_w = 18
 label_w = 24
-skip_bl = {"concurrent_mbps", "memory_idle_kb", "memory_load_kb"}
+skip_bl = {"concurrent_mbps", "cpu_avg_pct", "memory_idle_kb", "memory_load_kb"}
 
 # ── Terminal table ──────────────────────────────────────────────────────
 bar = "\u2500" * (label_w + col_w * len(present))
@@ -1156,6 +1210,12 @@ def efficiency(key):
     mem = val(key, "memory_load_kb")
     return dl / (mem / 1024) if mem else 0
 
+def cpu_efficiency(key):
+    """Throughput per CPU% — higher means more throughput per unit of CPU."""
+    dl = val(key, "concurrent_mbps")
+    cpu = val(key, "cpu_avg_pct")
+    return dl / cpu if cpu > 0 else 0
+
 def compute_scores():
     """Compute weighted scores for each proxy under each use-case profile."""
     raw = {}
@@ -1164,12 +1224,13 @@ def compute_scores():
             "download_mbps": val(k, "download_mbps"),
             "latency_ms": val(k, "latency_ms"),
             "concurrent_mbps": val(k, "concurrent_mbps"),
+            "cpu_avg_pct": val(k, "cpu_avg_pct"),
             "memory_idle_kb": val(k, "memory_idle_kb"),
             "tput_per_mb": efficiency(k),
         }
 
     higher_better = {"download_mbps", "concurrent_mbps", "tput_per_mb"}
-    lower_better = {"latency_ms", "memory_idle_kb"}
+    lower_better = {"latency_ms", "cpu_avg_pct", "memory_idle_kb"}
 
     norm = {}
     for metric in list(higher_better) + list(lower_better):
@@ -1201,12 +1262,18 @@ def compute_scores():
 bdk, bdv = best("download_mbps")
 blk, blv = best("latency_ms", lower_is_better=True)
 bck, bcv = best("concurrent_mbps")
+bpk, bpv = best("cpu_avg_pct", lower_is_better=True)
 bmk, bmv = best("memory_idle_kb", lower_is_better=True)
 eff = sorted(
     [(k, efficiency(k)) for k in proxy_keys if efficiency(k) > 0],
     key=lambda x: -x[1],
 )
 bek = eff[0][0] if eff else None
+cpu_eff = sorted(
+    [(k, cpu_efficiency(k)) for k in proxy_keys if cpu_efficiency(k) > 0],
+    key=lambda x: -x[1],
+)
+bcek = cpu_eff[0][0] if cpu_eff else None
 
 print()
 print(f"  {C}{B}Verdict{N}")
@@ -1217,10 +1284,14 @@ if blk:
     print(f"  {G}\u25A0{N} Lowest latency       {B}{proxy_names[blk]}{N}  ({fmt(blv)} ms)")
 if bck:
     print(f"  {G}\u25A0{N} Best concurrency     {B}{proxy_names[bck]}{N}  ({fmt(bcv)} Mbps)")
+if bpk:
+    print(f"  {G}\u25A0{N} Lowest CPU           {B}{proxy_names[bpk]}{N}  ({fmt(bpv)}%)")
 if bmk:
     print(f"  {G}\u25A0{N} Lowest memory        {B}{proxy_names[bmk]}{N}  ({fmt(bmv)} KB idle)")
 if bek:
     print(f"  {Y}\u2605{N} Best cost-effective  {B}{proxy_names[bek]}{N}  ({fmt(eff[0][1])} Mbps/MB RAM)")
+if bcek:
+    print(f"  {Y}\u2605{N} Best CPU-efficient   {B}{proxy_names[bcek]}{N}  ({fmt(cpu_eff[0][1])} Mbps/%CPU)")
 
 # Prisma vs Xray head-to-head (best Prisma vs best Xray)
 xray_keys = [k for k in proxy_keys if k.startswith("xray-")]
@@ -1314,10 +1385,14 @@ if blk:
     md.append(f"- **Lowest latency:** {proxy_names[blk]} ({fmt(blv)} ms)")
 if bck:
     md.append(f"- **Best concurrency:** {proxy_names[bck]} ({fmt(bcv)} Mbps)")
+if bpk:
+    md.append(f"- **Lowest CPU:** {proxy_names[bpk]} ({fmt(bpv)}%)")
 if bmk:
     md.append(f"- **Lowest memory:** {proxy_names[bmk]} ({fmt(bmv)} KB idle)")
 if bek:
     md.append(f"- **Best cost-effective:** {proxy_names[bek]} ({fmt(eff[0][1])} Mbps/MB RAM)")
+if bcek:
+    md.append(f"- **Best CPU-efficient:** {proxy_names[bcek]} ({fmt(cpu_eff[0][1])} Mbps/%CPU)")
 
 if xray_keys and prisma_keys and xdl > 0 and pdl > 0:
     md.append("")

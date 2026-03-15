@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 // Protocol constants — v4 only (v1/v2/v3 dropped)
 pub const PRISMA_PROTOCOL_VERSION: u8 = 0x04;
-pub const MAX_FRAME_SIZE: usize = 16384;
+pub const MAX_FRAME_SIZE: usize = 32768;
 pub const NONCE_SIZE: usize = 12;
 pub const MAX_PADDING_SIZE: usize = 256;
 // Standard ALPN to avoid protocol identification by DPI
