@@ -1504,11 +1504,11 @@ import math
 clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
 
 # Idle memory
-idle = sorted([${idle_samples[*]// /, }])
+idle = sorted(int(x) for x in '${idle_samples[*]}'.split())
 mem_idle = idle[len(idle) // 2]
 
 # Load memory
-load_mem = [${load_mem_samples[*]// /, }]
+load_mem = [int(x) for x in '${load_mem_samples[*]}'.split() if x.strip()]
 if load_mem:
     load_sorted = sorted(load_mem)
     mem_load = load_sorted[len(load_sorted) // 2]
