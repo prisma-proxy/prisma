@@ -73,7 +73,7 @@ pub enum PaddingMode {
 }
 
 impl PaddingMode {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "bucket" => PaddingMode::Bucket,
             "random" => PaddingMode::Random,
@@ -130,11 +130,7 @@ pub fn encode_bucketed_frame(
     // cmd(1) + flags(2) + stream_id(4) + bucket_pad_len(2) + payload
     let inner_size = 1 + 2 + 4 + 2 + payload.len();
     let target_size = bucket_pad_size(inner_size, bucket_sizes);
-    let pad_len = if target_size > inner_size {
-        target_size - inner_size
-    } else {
-        0
-    };
+    let pad_len = target_size.saturating_sub(inner_size);
 
     let actual_flags = flags | FLAG_BUCKETED;
 
@@ -331,10 +327,10 @@ mod tests {
 
     #[test]
     fn test_padding_mode_parse() {
-        assert_eq!(PaddingMode::from_str("bucket"), PaddingMode::Bucket);
-        assert_eq!(PaddingMode::from_str("Bucket"), PaddingMode::Bucket);
-        assert_eq!(PaddingMode::from_str("random"), PaddingMode::Random);
-        assert_eq!(PaddingMode::from_str("none"), PaddingMode::None);
-        assert_eq!(PaddingMode::from_str("invalid"), PaddingMode::None);
+        assert_eq!(PaddingMode::parse("bucket"), PaddingMode::Bucket);
+        assert_eq!(PaddingMode::parse("Bucket"), PaddingMode::Bucket);
+        assert_eq!(PaddingMode::parse("random"), PaddingMode::Random);
+        assert_eq!(PaddingMode::parse("none"), PaddingMode::None);
+        assert_eq!(PaddingMode::parse("invalid"), PaddingMode::None);
     }
 }

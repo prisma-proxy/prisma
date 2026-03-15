@@ -16,12 +16,12 @@ pub struct GeoIP {
     #[prost(string, tag = "1")]
     pub country_code: String,
     #[prost(message, repeated, tag = "2")]
-    pub cidr: Vec<CIDR>,
+    pub cidr: Vec<Cidr>,
 }
 
 /// A CIDR range: ip (4 or 16 bytes) + prefix length.
 #[derive(Clone, prost::Message)]
-pub struct CIDR {
+pub struct Cidr {
     /// 4 bytes for IPv4, 16 bytes for IPv6.
     #[prost(bytes = "vec", tag = "1")]
     pub ip: Vec<u8>,

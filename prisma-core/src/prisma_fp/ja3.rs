@@ -241,7 +241,7 @@ pub fn compute_ja4(client_hello: &[u8]) -> Option<String> {
     let hash_c = hasher_c.finalize();
     let part_c = &hex::encode_sha256(&hash_c)[..12];
 
-    Some(format!("{}_{}", part_a, format!("{}_{}", part_b, part_c)))
+    Some(format!("{}_{}_{}", part_a, part_b, part_c))
 }
 
 /// Parse cipher suites from the beginning of `data`.
@@ -252,7 +252,7 @@ fn parse_cipher_suites(data: &[u8]) -> Option<Vec<u16>> {
         return None;
     }
     let len = u16::from_be_bytes([data[0], data[1]]) as usize;
-    if data.len() < 2 + len || len % 2 != 0 {
+    if data.len() < 2 + len || !len.is_multiple_of(2) {
         return None;
     }
 
@@ -305,7 +305,7 @@ fn parse_supported_groups(ext_data: &[u8]) -> Vec<u16> {
         return Vec::new();
     }
     let list_len = u16::from_be_bytes([ext_data[0], ext_data[1]]) as usize;
-    if ext_data.len() < 2 + list_len || list_len % 2 != 0 {
+    if ext_data.len() < 2 + list_len || !list_len.is_multiple_of(2) {
         return Vec::new();
     }
 
@@ -340,7 +340,7 @@ fn parse_supported_versions_highest(ext_data: &[u8]) -> Option<u16> {
         return None;
     }
     let len = ext_data[0] as usize;
-    if ext_data.len() < 1 + len || len % 2 != 0 {
+    if ext_data.len() < 1 + len || !len.is_multiple_of(2) {
         return None;
     }
 

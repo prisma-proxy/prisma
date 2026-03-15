@@ -85,18 +85,13 @@ pub fn shape_entropy_padding(data: &[u8], target_direction: PopcountTarget) -> V
 }
 
 /// Direction to bias the popcount toward.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PopcountTarget {
     /// Push popcount below 3.4
     Low,
     /// Push popcount above 4.6
+    #[default]
     High,
-}
-
-impl Default for PopcountTarget {
-    fn default() -> Self {
-        PopcountTarget::High
-    }
 }
 
 /// Check if a packet matches the TLS record signature (passes GFW Ex5).
@@ -143,7 +138,7 @@ mod tests {
         assert_eq!(prefix.len(), ASCII_PREFIX_LEN);
         for &b in &prefix {
             assert!(
-                b >= 0x20 && b <= 0x7E,
+                (0x20..=0x7E).contains(&b),
                 "byte {:#04x} not printable ASCII",
                 b
             );

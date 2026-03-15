@@ -459,7 +459,7 @@ mod tests {
         // First 8 bytes should be printable ASCII
         for &b in &prefixed[..8] {
             assert!(
-                b >= 0x20 && b <= 0x7E,
+                (0x20..=0x7E).contains(&b),
                 "byte {:#04x} not printable ASCII",
                 b
             );

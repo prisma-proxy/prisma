@@ -15,7 +15,7 @@ pub mod fingerprints;
 use serde::{Deserialize, Serialize};
 
 /// Supported browser fingerprint profiles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Fingerprint {
     /// Chrome 120+ on Windows 10/11
@@ -27,11 +27,12 @@ pub enum Fingerprint {
     /// Randomly select a fingerprint per connection
     Random,
     /// No fingerprint mimicry (use default rustls behavior)
+    #[default]
     None,
 }
 
 impl Fingerprint {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "chrome" => Fingerprint::Chrome,
             "firefox" => Fingerprint::Firefox,
@@ -66,12 +67,6 @@ impl Fingerprint {
             Fingerprint::Safari => fingerprints::safari_17(),
             _ => fingerprints::default_template(),
         }
-    }
-}
-
-impl Default for Fingerprint {
-    fn default() -> Self {
-        Fingerprint::None
     }
 }
 
@@ -184,12 +179,12 @@ mod tests {
 
     #[test]
     fn test_fingerprint_from_str() {
-        assert_eq!(Fingerprint::from_str("chrome"), Fingerprint::Chrome);
-        assert_eq!(Fingerprint::from_str("Chrome"), Fingerprint::Chrome);
-        assert_eq!(Fingerprint::from_str("firefox"), Fingerprint::Firefox);
-        assert_eq!(Fingerprint::from_str("safari"), Fingerprint::Safari);
-        assert_eq!(Fingerprint::from_str("random"), Fingerprint::Random);
-        assert_eq!(Fingerprint::from_str("unknown"), Fingerprint::None);
+        assert_eq!(Fingerprint::parse("chrome"), Fingerprint::Chrome);
+        assert_eq!(Fingerprint::parse("Chrome"), Fingerprint::Chrome);
+        assert_eq!(Fingerprint::parse("firefox"), Fingerprint::Firefox);
+        assert_eq!(Fingerprint::parse("safari"), Fingerprint::Safari);
+        assert_eq!(Fingerprint::parse("random"), Fingerprint::Random);
+        assert_eq!(Fingerprint::parse("unknown"), Fingerprint::None);
     }
 
     #[test]

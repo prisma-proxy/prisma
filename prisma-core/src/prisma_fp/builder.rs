@@ -239,11 +239,7 @@ impl ClientHelloBuilder {
                 // No padding needed or target already exceeded
                 if config.extensions_order.contains(&0x0015) {
                     // Padding was requested but not needed for size; include minimal
-                    if let Some(ref beacon) = config.padding_content {
-                        Some(beacon.clone())
-                    } else {
-                        None
-                    }
+                    config.padding_content.as_ref().cloned()
                 } else {
                     None
                 }
@@ -623,9 +619,11 @@ mod tests {
 
     #[test]
     fn test_default_config_builds_successfully() {
-        let mut config = ClientHelloConfig::default();
-        config.server_name = "test.example.com".into();
-        config.x25519_pub_key = [0x42; 32];
+        let config = ClientHelloConfig {
+            server_name: "test.example.com".into(),
+            x25519_pub_key: [0x42; 32],
+            ..Default::default()
+        };
         let record = ClientHelloBuilder::build(&config);
 
         // Should produce a valid non-empty record

@@ -167,7 +167,7 @@ mod tests {
             let d = n.compute_delay_with_jitter();
             let ms = d.as_millis() as u64;
             assert!(
-                ms >= 800 && ms <= 1200,
+                (800..=1200).contains(&ms),
                 "jitter out of +/-20% range: got {}ms, expected 800..=1200",
                 ms
             );
@@ -203,7 +203,7 @@ mod tests {
             let d = n.compute_delay_with_jitter();
             let ms = d.as_millis() as u64;
             assert!(
-                ms >= 8 && ms <= 12,
+                (8..=12).contains(&ms),
                 "jitter out of range for small base: got {}ms",
                 ms
             );

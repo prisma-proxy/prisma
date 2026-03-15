@@ -221,7 +221,7 @@ pub async fn connect_prisma_tls(
 ) -> Result<TransportStream> {
     debug!(addr = %server_addr, sni = %server_name, fingerprint = %fingerprint, "Connecting via PrismaTLS");
 
-    let fp = prisma_core::utls::Fingerprint::from_str(fingerprint);
+    let fp = prisma_core::utls::Fingerprint::parse(fingerprint);
     let template = fp.client_hello_template();
 
     let tls_config =
@@ -505,7 +505,7 @@ pub fn build_fingerprinted_tls_config(
     skip_cert_verify: bool,
     alpn_override: Option<&[String]>,
 ) -> rustls::ClientConfig {
-    let fp = prisma_core::utls::Fingerprint::from_str(fingerprint);
+    let fp = prisma_core::utls::Fingerprint::parse(fingerprint);
     let template = fp.client_hello_template();
     prisma_core::utls::build_fingerprinted_tls_config(&template, skip_cert_verify, alpn_override)
 }

@@ -152,7 +152,7 @@ where
     let bucket_sizes = {
         let cfg = state.config.read().await;
         let ts = &cfg.traffic_shaping;
-        let mode = prisma_core::traffic_shaping::PaddingMode::from_str(&ts.padding_mode);
+        let mode = prisma_core::traffic_shaping::PaddingMode::parse(&ts.padding_mode);
         if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
             ts.bucket_sizes.clone()
         } else {
@@ -278,7 +278,7 @@ where
     let bucket_sizes = {
         let cfg = state.config.read().await;
         let ts = &cfg.traffic_shaping;
-        let mode = prisma_core::traffic_shaping::PaddingMode::from_str(&ts.padding_mode);
+        let mode = prisma_core::traffic_shaping::PaddingMode::parse(&ts.padding_mode);
         if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
             ts.bucket_sizes.clone()
         } else {

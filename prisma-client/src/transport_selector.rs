@@ -32,7 +32,7 @@ pub enum TransportType {
 
 impl TransportType {
     /// Parse from config string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "quic-v2-salamander" | "quic_v2_salamander" => Some(TransportType::QuicV2Salamander),
             "quic-v2" | "quic_v2" => Some(TransportType::QuicV2),
@@ -162,7 +162,7 @@ impl TransportSelector {
     pub fn from_config(order: &[String]) -> Self {
         let transports: Vec<TransportType> = order
             .iter()
-            .filter_map(|s| TransportType::from_str(s))
+            .filter_map(|s| TransportType::parse(s))
             .collect();
 
         if transports.is_empty() {
@@ -297,22 +297,19 @@ mod tests {
 
     #[test]
     fn test_transport_type_parse() {
+        assert_eq!(TransportType::parse("quic-v2"), Some(TransportType::QuicV2));
         assert_eq!(
-            TransportType::from_str("quic-v2"),
-            Some(TransportType::QuicV2)
-        );
-        assert_eq!(
-            TransportType::from_str("reality"),
+            TransportType::parse("reality"),
             Some(TransportType::PrismaTls)
         );
         assert_eq!(
-            TransportType::from_str("prisma-tls"),
+            TransportType::parse("prisma-tls"),
             Some(TransportType::PrismaTls)
         );
         assert_eq!(
-            TransportType::from_str("websocket"),
+            TransportType::parse("websocket"),
             Some(TransportType::WebSocket)
         );
-        assert_eq!(TransportType::from_str("invalid"), None);
+        assert_eq!(TransportType::parse("invalid"), None);
     }
 }
