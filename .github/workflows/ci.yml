@@ -3,7 +3,17 @@ name: CI
 on:
   push:
     branches: [master, main]
+    paths:
+      - 'prisma-*/src/**'
+      - 'prisma-*/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
   pull_request:
+    paths:
+      - 'prisma-*/src/**'
+      - 'prisma-*/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
 
 env:
   CARGO_TERM_COLOR: always
