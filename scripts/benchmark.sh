@@ -10,7 +10,7 @@ RESULTS_DIR="$(cd "$RESULTS_DIR" && pwd)"
 PRISMA_BIN="${PRISMA_BIN:-./prisma}"
 XRAY_BIN="${XRAY_BIN:-./xray/xray}"
 HTTP_PORT=18888
-TEST_SIZE_MB=100
+TEST_SIZE_MB=1024
 CONCURRENCY=4
 PIDS=()
 
@@ -74,10 +74,13 @@ generate_certs() {
 generate_configs() {
     log "Generating test configurations..."
 
-    local CLIENT_ID AUTH_SECRET XRAY_UUID
+    local CLIENT_ID AUTH_SECRET XRAY_UUID XRAY_SS_PASS XRAY_SS2022_KEY
     CLIENT_ID=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
     AUTH_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 64)
     XRAY_UUID=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+    XRAY_SS_PASS=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p -c 32)
+    # SS-2022 requires exactly 16 bytes base64 for aes-128-gcm
+    XRAY_SS2022_KEY=$(openssl rand -base64 16 2>/dev/null || head -c 16 /dev/urandom | base64)
 
     # --- Prisma QUIC ---------------------------------------------------
     cat > "$RESULTS_DIR/server-quic.toml" <<EOF
@@ -179,8 +182,12 @@ client_id = "$CLIENT_ID"
 auth_secret = "$AUTH_SECRET"
 EOF
 
-    # --- Xray VLESS + TLS -------------------------------------------------
-    cat > "$RESULTS_DIR/xray-server.json" <<XEOF
+    # ===================================================================
+    # Xray-core configurations
+    # ===================================================================
+
+    # --- Xray VLESS + TLS (TCP) ----------------------------------------
+    cat > "$RESULTS_DIR/xray-vless-tls-server.json" <<XEOF
 {
   "inbounds": [{
     "port": 28443,
@@ -204,7 +211,7 @@ EOF
 }
 XEOF
 
-    cat > "$RESULTS_DIR/xray-client.json" <<XEOF
+    cat > "$RESULTS_DIR/xray-vless-tls-client.json" <<XEOF
 {
   "inbounds": [{
     "port": 21080,
@@ -223,6 +230,332 @@ XEOF
     "streamSettings": {
       "network": "tcp",
       "security": "tls",
+      "tlsSettings": {"allowInsecure": true}
+    }
+  }]
+}
+XEOF
+
+    # --- Xray VLESS + XTLS-Vision (fastest Xray mode) -----------------
+    cat > "$RESULTS_DIR/xray-vless-xtls-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28444,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "$XRAY_UUID", "flow": "xtls-rprx-vision"}],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {
+        "certificates": [{
+          "certificateFile": "$RESULTS_DIR/prisma-cert.pem",
+          "keyFile": "$RESULTS_DIR/prisma-key.pem"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-vless-xtls-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21081,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "vless",
+    "settings": {
+      "vnext": [{
+        "address": "127.0.0.1",
+        "port": 28444,
+        "users": [{"id": "$XRAY_UUID", "encryption": "none", "flow": "xtls-rprx-vision"}]
+      }]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {"allowInsecure": true}
+    }
+  }]
+}
+XEOF
+
+    # --- Xray VMess + TLS (TCP) ----------------------------------------
+    cat > "$RESULTS_DIR/xray-vmess-tls-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28445,
+    "protocol": "vmess",
+    "settings": {
+      "clients": [{"id": "$XRAY_UUID", "alterId": 0}]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {
+        "certificates": [{
+          "certificateFile": "$RESULTS_DIR/prisma-cert.pem",
+          "keyFile": "$RESULTS_DIR/prisma-key.pem"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-vmess-tls-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21082,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "vmess",
+    "settings": {
+      "vnext": [{
+        "address": "127.0.0.1",
+        "port": 28445,
+        "users": [{"id": "$XRAY_UUID", "alterId": 0, "security": "auto"}]
+      }]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {"allowInsecure": true}
+    }
+  }]
+}
+XEOF
+
+    # --- Xray Trojan + TLS ---------------------------------------------
+    cat > "$RESULTS_DIR/xray-trojan-tls-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28446,
+    "protocol": "trojan",
+    "settings": {
+      "clients": [{"password": "$XRAY_SS_PASS"}]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {
+        "certificates": [{
+          "certificateFile": "$RESULTS_DIR/prisma-cert.pem",
+          "keyFile": "$RESULTS_DIR/prisma-key.pem"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-trojan-tls-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21083,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "trojan",
+    "settings": {
+      "servers": [{
+        "address": "127.0.0.1",
+        "port": 28446,
+        "password": "$XRAY_SS_PASS"
+      }]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "tls",
+      "tlsSettings": {"allowInsecure": true}
+    }
+  }]
+}
+XEOF
+
+    # --- Xray Shadowsocks AEAD (chacha20-ietf-poly1305, no TLS) ---------
+    cat > "$RESULTS_DIR/xray-ss-aead-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28447,
+    "protocol": "shadowsocks",
+    "settings": {
+      "method": "chacha20-ietf-poly1305",
+      "password": "$XRAY_SS_PASS",
+      "network": "tcp"
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-ss-aead-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21084,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "shadowsocks",
+    "settings": {
+      "servers": [{
+        "address": "127.0.0.1",
+        "port": 28447,
+        "method": "chacha20-ietf-poly1305",
+        "password": "$XRAY_SS_PASS"
+      }]
+    }
+  }]
+}
+XEOF
+
+    # --- Xray Shadowsocks-2022 (blake3-aes-128-gcm, no TLS) -----------
+    cat > "$RESULTS_DIR/xray-ss2022-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28450,
+    "protocol": "shadowsocks",
+    "settings": {
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "$XRAY_SS2022_KEY",
+      "network": "tcp"
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-ss2022-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21087,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "shadowsocks",
+    "settings": {
+      "servers": [{
+        "address": "127.0.0.1",
+        "port": 28450,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "$XRAY_SS2022_KEY"
+      }]
+    }
+  }]
+}
+XEOF
+
+    # --- Xray VLESS + WebSocket + TLS (CDN-compatible) -----------------
+    cat > "$RESULTS_DIR/xray-vless-ws-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28448,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "$XRAY_UUID"}],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "tls",
+      "wsSettings": {"path": "/ws-tunnel"},
+      "tlsSettings": {
+        "certificates": [{
+          "certificateFile": "$RESULTS_DIR/prisma-cert.pem",
+          "keyFile": "$RESULTS_DIR/prisma-key.pem"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-vless-ws-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21085,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "vless",
+    "settings": {
+      "vnext": [{
+        "address": "127.0.0.1",
+        "port": 28448,
+        "users": [{"id": "$XRAY_UUID", "encryption": "none"}]
+      }]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "tls",
+      "wsSettings": {"path": "/ws-tunnel"},
+      "tlsSettings": {"allowInsecure": true}
+    }
+  }]
+}
+XEOF
+
+    # --- Xray VLESS + gRPC + TLS ---------------------------------------
+    cat > "$RESULTS_DIR/xray-vless-grpc-server.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 28449,
+    "protocol": "vless",
+    "settings": {
+      "clients": [{"id": "$XRAY_UUID"}],
+      "decryption": "none"
+    },
+    "streamSettings": {
+      "network": "grpc",
+      "security": "tls",
+      "grpcSettings": {"serviceName": "tunnel"},
+      "tlsSettings": {
+        "certificates": [{
+          "certificateFile": "$RESULTS_DIR/prisma-cert.pem",
+          "keyFile": "$RESULTS_DIR/prisma-key.pem"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XEOF
+
+    cat > "$RESULTS_DIR/xray-vless-grpc-client.json" <<XEOF
+{
+  "inbounds": [{
+    "port": 21086,
+    "protocol": "socks",
+    "settings": {"auth": "noauth"}
+  }],
+  "outbounds": [{
+    "protocol": "vless",
+    "settings": {
+      "vnext": [{
+        "address": "127.0.0.1",
+        "port": 28449,
+        "users": [{"id": "$XRAY_UUID", "encryption": "none"}]
+      }]
+    },
+    "streamSettings": {
+      "network": "grpc",
+      "security": "tls",
+      "grpcSettings": {"serviceName": "tunnel"},
       "tlsSettings": {"allowInsecure": true}
     }
   }]
@@ -440,49 +773,48 @@ json.dump({
     sleep 1
 }
 
+# Generic Xray scenario runner.
+# Usage: run_xray_scenario <label> <server_json> <client_json> <server_port> <socks_port>
 run_xray_scenario() {
+    local label=$1 server_cfg=$2 client_cfg=$3 server_port=$4 socks_port=$5
+
     if [ ! -f "$XRAY_BIN" ]; then
-        log "Xray binary not found at $XRAY_BIN — skipping"
-        python3 -c "
-import json
-json.dump({'label':'xray-vless','download_mbps':0,'latency_ms':0,
-           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0},
-          open('$RESULTS_DIR/xray-vless.json','w'))
-"
+        log "Xray binary not found at $XRAY_BIN — skipping $label"
+        write_empty_result "$label"
         return
     fi
 
-    log "=== Xray VLESS+TLS ==="
+    log "=== $label ==="
 
-    "$XRAY_BIN" run -c "$RESULTS_DIR/xray-server.json" \
-        > "$RESULTS_DIR/xray-server.log" 2>&1 &
+    "$XRAY_BIN" run -c "$server_cfg" \
+        > "$RESULTS_DIR/${label}-server.log" 2>&1 &
     local srv=$!; PIDS+=($srv)
-    if ! wait_for_port 28443 15; then
-        err "Xray server failed to start. Log:"
-        tail -20 "$RESULTS_DIR/xray-server.log" >&2 || true
+    if ! wait_for_port "$server_port" 15; then
+        err "$label: Xray server failed to start. Log:"
+        tail -20 "$RESULTS_DIR/${label}-server.log" >&2 || true
         kill $srv 2>/dev/null || true
-        python3 -c "
-import json
-json.dump({'label':'xray-vless','download_mbps':0,'latency_ms':0,
-           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0},
-          open('$RESULTS_DIR/xray-vless.json','w'))
-"
+        write_empty_result "$label"
         return
     fi
 
-    "$XRAY_BIN" run -c "$RESULTS_DIR/xray-client.json" \
-        > "$RESULTS_DIR/xray-client.log" 2>&1 &
+    "$XRAY_BIN" run -c "$client_cfg" \
+        > "$RESULTS_DIR/${label}-client.log" 2>&1 &
     local cli=$!; PIDS+=($cli)
-    if ! wait_for_port 21080 15; then
-        err "Xray client failed to start. Log:"
-        tail -20 "$RESULTS_DIR/xray-client.log" >&2 || true
+    if ! wait_for_port "$socks_port" 15; then
+        err "$label: Xray client failed to start. Log:"
+        tail -20 "$RESULTS_DIR/${label}-client.log" >&2 || true
         kill $srv $cli 2>/dev/null || true
-        python3 -c "
-import json
-json.dump({'label':'xray-vless','download_mbps':0,'latency_ms':0,
-           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0},
-          open('$RESULTS_DIR/xray-vless.json','w'))
-"
+        write_empty_result "$label"
+        return
+    fi
+
+    if ! wait_for_tunnel "$socks_port" 15; then
+        err "$label: tunnel not functional. Server log:"
+        tail -10 "$RESULTS_DIR/${label}-server.log" >&2 || true
+        err "Client log:"
+        tail -10 "$RESULTS_DIR/${label}-client.log" >&2 || true
+        kill $srv $cli 2>/dev/null || true
+        write_empty_result "$label"
         return
     fi
 
@@ -493,15 +825,15 @@ json.dump({'label':'xray-vless','download_mbps':0,'latency_ms':0,
 
     log "  Measuring latency..."
     local latency_ms
-    latency_ms=$(measure_latency 21080)
+    latency_ms=$(measure_latency "$socks_port")
 
     log "  Measuring single-stream throughput..."
     local dl_mbps
-    dl_mbps=$(measure_download 21080)
+    dl_mbps=$(measure_download "$socks_port")
 
     log "  Measuring concurrent throughput (${CONCURRENCY}x parallel)..."
     local concurrent_mbps
-    concurrent_mbps=$(measure_concurrent 21080)
+    concurrent_mbps=$(measure_concurrent "$socks_port")
 
     local mem_load_srv mem_load_cli mem_load
     mem_load_srv=$(get_rss_kb $srv)
@@ -514,13 +846,13 @@ json.dump({'label':'xray-vless','download_mbps':0,'latency_ms':0,
     python3 -c "
 import json
 json.dump({
-    'label': 'xray-vless',
+    'label': '$label',
     'download_mbps': $dl_mbps,
     'latency_ms': $latency_ms,
     'concurrent_mbps': $concurrent_mbps,
     'memory_idle_kb': $mem_idle,
     'memory_load_kb': $mem_load
-}, open('$RESULTS_DIR/xray-vless.json', 'w'))
+}, open('$RESULTS_DIR/${label}.json', 'w'))
 "
 
     kill $srv $cli 2>/dev/null || true
@@ -543,11 +875,18 @@ TEST_MB = int(os.environ["TEST_SIZE_MB"])
 DATE = os.environ["BENCH_DATE"]
 
 scenarios = [
-    ("baseline",      "Baseline"),
-    ("prisma-quic",   "Prisma QUIC"),
-    ("prisma-tcp",    "Prisma TCP+TLS"),
-    ("prisma-shaped", "Prisma (shaped)"),
-    ("xray-vless",    "Xray VLESS+TLS"),
+    ("baseline",         "Baseline"),
+    ("prisma-quic",      "Prisma QUIC"),
+    ("prisma-tcp",       "Prisma TCP+TLS"),
+    ("prisma-shaped",    "Prisma (shaped)"),
+    ("xray-vless-tls",   "Xray VLESS+TLS"),
+    ("xray-vless-xtls",  "Xray VLESS+XTLS"),
+    ("xray-vmess-tls",   "Xray VMess+TLS"),
+    ("xray-trojan-tls",  "Xray Trojan+TLS"),
+    ("xray-ss-aead",     "Xray SS AEAD"),
+    ("xray-ss2022",      "Xray SS-2022"),
+    ("xray-vless-ws",    "Xray VLESS+WS"),
+    ("xray-vless-grpc",  "Xray VLESS+gRPC"),
 ]
 
 fields = [
@@ -558,14 +897,21 @@ fields = [
     ("memory_load_kb",  "Memory load (KB)"),
 ]
 
-# Load results
+# Load results — only include scenarios that have a result file
 data = {}
-for key, _ in scenarios:
+present = []
+for key, name in scenarios:
     path = os.path.join(RESULTS, f"{key}.json")
     try:
-        data[key] = json.load(open(path))
+        d = json.load(open(path))
+        data[key] = d
+        present.append((key, name))
     except Exception:
-        data[key] = {}
+        pass
+
+if not present:
+    print("  No results found.")
+    sys.exit(0)
 
 def val(key, field):
     v = data.get(key, {}).get(field, 0)
@@ -594,7 +940,7 @@ label_w = 24
 skip_bl = {"concurrent_mbps", "memory_idle_kb", "memory_load_kb"}
 
 # ── Terminal table ──────────────────────────────────────────────────────
-bar = "\u2500" * (label_w + col_w * len(scenarios))
+bar = "\u2500" * (label_w + col_w * len(present))
 print()
 print(f"  {G}{bar}{N}")
 print(f"  {B}Benchmark Results \u2014 {DATE}{N}")
@@ -602,13 +948,13 @@ print(f"  {TEST_MB}MB payload \u00B7 {CONCURRENCY}x concurrent \u00B7 loopback")
 print(f"  {G}{bar}{N}")
 print()
 
-hdrs = "".join(name.rjust(col_w) for _, name in scenarios)
+hdrs = "".join(name.rjust(col_w) for _, name in present)
 print(f"  {'':<{label_w}}{hdrs}")
 print(f"  {bar}")
 
 for field, label in fields:
     cells = []
-    for key, _ in scenarios:
+    for key, _ in present:
         v = val(key, field)
         if field in skip_bl and key == "baseline":
             cells.append("\u2014".rjust(col_w))
@@ -621,8 +967,8 @@ for field, label in fields:
 print(f"  {bar}")
 
 # ── Verdict ─────────────────────────────────────────────────────────────
-proxy_keys = [k for k, _ in scenarios if k != "baseline"]
-proxy_names = {k: n for k, n in scenarios if k != "baseline"}
+proxy_keys = [k for k, _ in present if k != "baseline"]
+proxy_names = {k: n for k, n in present if k != "baseline"}
 
 def best(field, lower_is_better=False):
     cands = [(k, val(k, field)) for k in proxy_keys if val(k, field) > 0]
@@ -660,25 +1006,32 @@ if bmk:
 if bek:
     print(f"  {Y}\u2605{N} Best cost-effective  {B}{proxy_names[bek]}{N}  ({fmt(eff[0][1])} Mbps/MB RAM)")
 
-# Prisma vs Xray head-to-head
-xdl = val("xray-vless", "download_mbps")
-pdl = val("prisma-quic", "download_mbps")
-xmem = val("xray-vless", "memory_idle_kb")
-pmem = val("prisma-quic", "memory_idle_kb")
+# Prisma vs Xray head-to-head (best Prisma vs best Xray)
+xray_keys = [k for k in proxy_keys if k.startswith("xray-")]
+prisma_keys = [k for k in proxy_keys if k.startswith("prisma-")]
 
-if xdl > 0 and pdl > 0:
-    dl_ratio = pdl / xdl
-    print(f"  {'\u2500' * 60}")
-    if dl_ratio >= 1:
-        print(f"  {G}\u25A0{N} Prisma QUIC is {B}{dl_ratio:.1f}x{N} faster than Xray VLESS")
-    else:
-        print(f"  Xray VLESS is {B}{1/dl_ratio:.1f}x{N} faster than Prisma QUIC")
-    if xmem > 0 and pmem > 0:
-        mem_ratio = xmem / pmem
-        if mem_ratio >= 1:
-            print(f"  {G}\u25A0{N} Prisma uses {B}{mem_ratio:.1f}x{N} less memory than Xray")
+if xray_keys and prisma_keys:
+    best_xray_dl = max((val(k, "download_mbps"), k) for k in xray_keys)
+    best_prisma_dl = max((val(k, "download_mbps"), k) for k in prisma_keys)
+    xdl, xk = best_xray_dl
+    pdl, pk = best_prisma_dl
+
+    if xdl > 0 and pdl > 0:
+        dl_ratio = pdl / xdl
+        print(f"  {'\u2500' * 60}")
+        if dl_ratio >= 1:
+            print(f"  {G}\u25A0{N} {proxy_names[pk]} is {B}{dl_ratio:.1f}x{N} faster than {proxy_names[xk]}")
         else:
-            print(f"  Xray uses {B}{1/mem_ratio:.1f}x{N} less memory than Prisma")
+            print(f"  {proxy_names[xk]} is {B}{1/dl_ratio:.1f}x{N} faster than {proxy_names[pk]}")
+
+        xmem = val(xk, "memory_idle_kb")
+        pmem = val(pk, "memory_idle_kb")
+        if xmem > 0 and pmem > 0:
+            mem_ratio = xmem / pmem
+            if mem_ratio >= 1:
+                print(f"  {G}\u25A0{N} Prisma uses {B}{mem_ratio:.1f}x{N} less memory than Xray")
+            else:
+                print(f"  Xray uses {B}{1/mem_ratio:.1f}x{N} less memory than Prisma")
 print()
 
 # ── Markdown file ───────────────────────────────────────────────────────
@@ -688,14 +1041,14 @@ md.append("")
 md.append(f"**Test:** {TEST_MB}MB payload, {CONCURRENCY}x concurrent streams, loopback")
 md.append("")
 
-hdr = "| Metric |" + "".join(f" {n} |" for _, n in scenarios)
-sep = "|--------|" + "".join(f" {'---':>{len(n)}} |" for _, n in scenarios)
+hdr = "| Metric |" + "".join(f" {n} |" for _, n in present)
+sep = "|--------|" + "".join(f" {'---':>{len(n)}} |" for _, n in present)
 md.append(hdr)
 md.append(sep)
 
 for field, label in fields:
     row = f"| {label} |"
-    for key, name in scenarios:
+    for key, name in present:
         v = val(key, field)
         if field in skip_bl and key == "baseline":
             s = "\u2014"
@@ -720,12 +1073,12 @@ if bmk:
 if bek:
     md.append(f"- **Best cost-effective:** {proxy_names[bek]} ({fmt(eff[0][1])} Mbps/MB RAM)")
 
-if xdl > 0 and pdl > 0:
+if xray_keys and prisma_keys and xdl > 0 and pdl > 0:
     md.append("")
     if dl_ratio >= 1:
-        md.append(f"Prisma QUIC is **{dl_ratio:.1f}x** faster than Xray VLESS+TLS.")
+        md.append(f"{proxy_names[pk]} is **{dl_ratio:.1f}x** faster than {proxy_names[xk]}.")
     else:
-        md.append(f"Xray VLESS+TLS is **{1/dl_ratio:.1f}x** faster than Prisma QUIC.")
+        md.append(f"{proxy_names[xk]} is **{1/dl_ratio:.1f}x** faster than {proxy_names[pk]}.")
 
 md.append("")
 md.append("Generated by PrismaVeil benchmark suite.")
@@ -745,6 +1098,29 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
+# Package results (exclude test data to reduce size)
+# ---------------------------------------------------------------------------
+
+package_results() {
+    log "Removing test data from results directory..."
+    rm -f "$RESULTS_DIR/testdata" "$RESULTS_DIR/ping"
+
+    # Remove log files (can be large) — keep only JSON results and summary
+    # Uncomment the next line to also strip logs:
+    # rm -f "$RESULTS_DIR"/*.log
+
+    local archive="benchmark-results-$(date -u +%Y%m%d-%H%M%S).tar.gz"
+    log "Packaging results into $archive ..."
+    tar -czf "$archive" \
+        --exclude='testdata' \
+        --exclude='ping' \
+        --exclude='prisma-cert.pem' \
+        --exclude='prisma-key.pem' \
+        -C "$(dirname "$RESULTS_DIR")" "$(basename "$RESULTS_DIR")"
+    log "Archive ready: $archive ($(du -sh "$archive" | cut -f1))"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -761,6 +1137,7 @@ main() {
     generate_configs
     start_test_server
 
+    # ── Prisma scenarios ──────────────────────────────────────────
     run_baseline
     run_prisma_scenario "prisma-quic" \
         "$RESULTS_DIR/server-quic.toml" "$RESULTS_DIR/client-quic.toml" 11080
@@ -768,9 +1145,43 @@ main() {
         "$RESULTS_DIR/server-tcp.toml" "$RESULTS_DIR/client-tcp.toml" 11082
     run_prisma_scenario "prisma-shaped" \
         "$RESULTS_DIR/server-shaped.toml" "$RESULTS_DIR/client-shaped.toml" 11081
-    run_xray_scenario
 
+    # ── Xray scenarios ────────────────────────────────────────────
+    run_xray_scenario "xray-vless-tls" \
+        "$RESULTS_DIR/xray-vless-tls-server.json" \
+        "$RESULTS_DIR/xray-vless-tls-client.json" 28443 21080
+
+    run_xray_scenario "xray-vless-xtls" \
+        "$RESULTS_DIR/xray-vless-xtls-server.json" \
+        "$RESULTS_DIR/xray-vless-xtls-client.json" 28444 21081
+
+    run_xray_scenario "xray-vmess-tls" \
+        "$RESULTS_DIR/xray-vmess-tls-server.json" \
+        "$RESULTS_DIR/xray-vmess-tls-client.json" 28445 21082
+
+    run_xray_scenario "xray-trojan-tls" \
+        "$RESULTS_DIR/xray-trojan-tls-server.json" \
+        "$RESULTS_DIR/xray-trojan-tls-client.json" 28446 21083
+
+    run_xray_scenario "xray-ss-aead" \
+        "$RESULTS_DIR/xray-ss-aead-server.json" \
+        "$RESULTS_DIR/xray-ss-aead-client.json" 28447 21084
+
+    run_xray_scenario "xray-ss2022" \
+        "$RESULTS_DIR/xray-ss2022-server.json" \
+        "$RESULTS_DIR/xray-ss2022-client.json" 28450 21087
+
+    run_xray_scenario "xray-vless-ws" \
+        "$RESULTS_DIR/xray-vless-ws-server.json" \
+        "$RESULTS_DIR/xray-vless-ws-client.json" 28448 21085
+
+    run_xray_scenario "xray-vless-grpc" \
+        "$RESULTS_DIR/xray-vless-grpc-server.json" \
+        "$RESULTS_DIR/xray-vless-grpc-client.json" 28449 21086
+
+    # ── Results ───────────────────────────────────────────────────
     generate_summary
+    package_results
 
     log "Benchmark complete. Results in $RESULTS_DIR/"
 }

@@ -128,6 +128,9 @@ pub enum CipherSuite {
     #[default]
     ChaCha20Poly1305 = 0x01,
     Aes256Gcm = 0x02,
+    /// Transport-only mode: BLAKE3 keyed MAC for integrity, no encryption.
+    /// Safe when the underlying transport already provides confidentiality (TLS/QUIC).
+    TransportOnly = 0x03,
 }
 
 impl CipherSuite {
@@ -135,6 +138,7 @@ impl CipherSuite {
         match v {
             0x01 => Some(CipherSuite::ChaCha20Poly1305),
             0x02 => Some(CipherSuite::Aes256Gcm),
+            0x03 => Some(CipherSuite::TransportOnly),
             _ => None,
         }
     }

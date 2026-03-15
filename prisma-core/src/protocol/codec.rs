@@ -1,5 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+use crate::crypto::aead::{AeadCipher, TAG_SIZE};
 use crate::error::{CryptoError, ProtocolError};
 use crate::types::{CipherSuite, ClientId, ProxyAddress, ProxyDestination, NONCE_SIZE};
 
@@ -261,12 +262,13 @@ pub fn encode_data_frame(frame: &DataFrame) -> Vec<u8> {
 }
 
 /// Encode a DataFrame with padding appended.
+/// Fast-path: skips padding generation entirely when padding_range.max == 0.
 pub fn encode_data_frame_padded(
     frame: &DataFrame,
     padding_range: &crate::types::PaddingRange,
 ) -> Vec<u8> {
     let mut buf = encode_data_frame(frame);
-    if frame.flags & FLAG_PADDED != 0 {
+    if frame.flags & FLAG_PADDED != 0 && padding_range.max > 0 {
         let padding = crate::crypto::padding::generate_frame_padding(padding_range);
         buf.extend_from_slice(&padding);
     }
@@ -316,7 +318,7 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
 pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
     match cmd {
         Command::Connect(dest) => encode_proxy_destination(dest),
-        Command::Data(data) => data.clone(),
+        Command::Data(data) => data.to_vec(),
         Command::Close => Vec::new(),
         Command::Ping(seq) => seq.to_be_bytes().to_vec(),
         Command::Pong(seq) => seq.to_be_bytes().to_vec(),
@@ -401,7 +403,7 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             let dest = decode_proxy_destination(payload)?;
             Ok(Command::Connect(dest))
         }
-        CMD_DATA => Ok(Command::Data(payload.to_vec())),
+        CMD_DATA => Ok(Command::Data(bytes::Bytes::copy_from_slice(payload))),
         CMD_CLOSE => Ok(Command::Close),
         CMD_PING => {
             if payload.len() < 4 {
@@ -647,8 +649,6 @@ fn decode_proxy_destination(data: &[u8]) -> Result<ProxyDestination, ProtocolErr
 // --- Encrypted frame wire format ---
 // [nonce:12][len:2][ciphertext][tag:16]
 
-use crate::crypto::aead::AeadCipher;
-
 /// Encrypt a plaintext data frame into the wire format.
 pub fn encrypt_frame(
     cipher: &dyn AeadCipher,
@@ -686,6 +686,79 @@ pub fn decrypt_frame(
     let ciphertext = &wire[ciphertext_start..ciphertext_start + len];
     let plaintext = cipher.decrypt(&nonce, ciphertext, &[])?;
     Ok((plaintext, nonce))
+}
+
+/// Decrypt a wire-format encrypted frame in-place.
+///
+/// Decrypts the ciphertext within `wire` and returns a slice of the plaintext
+/// along with the nonce. The plaintext occupies the same region as the ciphertext
+/// (no allocation).
+///
+/// Wire format: `[nonce:12][len:2][ciphertext:len-16][tag:16]`
+pub fn decrypt_frame_in_place(
+    cipher: &dyn AeadCipher,
+    wire: &mut [u8],
+) -> Result<(usize, [u8; NONCE_SIZE]), CryptoError> {
+    if wire.len() < NONCE_SIZE + 2 {
+        return Err(CryptoError::DecryptionFailed(
+            "Encrypted frame too short".into(),
+        ));
+    }
+    let mut nonce = [0u8; NONCE_SIZE];
+    nonce.copy_from_slice(&wire[..NONCE_SIZE]);
+    let len = u16::from_be_bytes([wire[NONCE_SIZE], wire[NONCE_SIZE + 1]]) as usize;
+    let ciphertext_start = NONCE_SIZE + 2;
+    if wire.len() < ciphertext_start + len || len < TAG_SIZE {
+        return Err(CryptoError::DecryptionFailed(
+            "Encrypted frame truncated".into(),
+        ));
+    }
+    let data_len = len - TAG_SIZE;
+    let tag_start = ciphertext_start + data_len;
+    let mut tag = [0u8; TAG_SIZE];
+    tag.copy_from_slice(&wire[tag_start..tag_start + TAG_SIZE]);
+
+    cipher.decrypt_in_place(
+        &nonce,
+        &[],
+        &mut wire[ciphertext_start..ciphertext_start + data_len],
+        &tag,
+    )?;
+
+    Ok((data_len, nonce))
+}
+
+/// Parse a decrypted data frame for CMD_DATA, returning the payload slice directly.
+/// Avoids constructing the full Command enum for the hot path.
+pub fn parse_data_payload(plaintext: &[u8]) -> Result<&[u8], CryptoError> {
+    if plaintext.len() < 7 {
+        return Err(CryptoError::DecryptionFailed("DataFrame too short".into()));
+    }
+    let cmd = plaintext[0];
+    if cmd != CMD_DATA {
+        return Err(CryptoError::DecryptionFailed(format!(
+            "Expected CMD_DATA (0x02), got 0x{:02x}",
+            cmd
+        )));
+    }
+    let flags = u16::from_le_bytes([plaintext[1], plaintext[2]]);
+
+    if flags & FLAG_PADDED != 0 {
+        if plaintext.len() < 9 {
+            return Err(CryptoError::DecryptionFailed(
+                "Padded DataFrame too short".into(),
+            ));
+        }
+        let payload_len = u16::from_be_bytes([plaintext[7], plaintext[8]]) as usize;
+        if plaintext.len() < 9 + payload_len {
+            return Err(CryptoError::DecryptionFailed(
+                "Padded DataFrame payload truncated".into(),
+            ));
+        }
+        Ok(&plaintext[9..9 + payload_len])
+    } else {
+        Ok(&plaintext[7..])
+    }
 }
 
 #[cfg(test)]
@@ -838,7 +911,7 @@ mod tests {
     fn test_padded_data_frame_round_trip() {
         use crate::types::PaddingRange;
         let frame = DataFrame {
-            command: Command::Data(vec![1, 2, 3, 4, 5]),
+            command: Command::Data(bytes::Bytes::from_static(&[1, 2, 3, 4, 5])),
             flags: FLAG_PADDED,
             stream_id: 42,
         };
@@ -899,7 +972,7 @@ mod tests {
     #[test]
     fn test_data_frame_data_round_trip() {
         let frame = DataFrame {
-            command: Command::Data(vec![1, 2, 3, 4, 5]),
+            command: Command::Data(bytes::Bytes::from_static(&[1, 2, 3, 4, 5])),
             flags: FLAG_PADDED,
             stream_id: 100,
         };

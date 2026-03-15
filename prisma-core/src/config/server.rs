@@ -42,6 +42,10 @@ pub struct ServerConfig {
     /// Traffic shaping (anti-fingerprinting).
     #[serde(default)]
     pub traffic_shaping: crate::traffic_shaping::TrafficShapingConfig,
+    /// Allow transport-only cipher mode (BLAKE3 MAC only, no application-layer encryption).
+    /// Safe when transport already provides confidentiality (TLS/QUIC). Defaults to false.
+    #[serde(default)]
+    pub allow_transport_only_cipher: bool,
     /// Cross-layer RTT normalization.
     #[serde(default)]
     pub anti_rtt: AntiRttConfig,

@@ -106,8 +106,8 @@ pub fn generate_bucket_padding(payload_size: usize, bucket_sizes: &[u16]) -> (Ve
         return (Vec::new(), 0);
     }
     let pad_len = target - payload_size;
-    let mut rng = rand::thread_rng();
-    let padding: Vec<u8> = (0..pad_len).map(|_| rng.gen()).collect();
+    // Zero-fill: encrypted anyway, random provides no extra security benefit.
+    let padding = vec![0u8; pad_len];
     (padding, pad_len as u16)
 }
 
@@ -141,11 +141,8 @@ pub fn encode_bucketed_frame(
     buf.extend_from_slice(&(pad_len as u16).to_be_bytes());
     buf.extend_from_slice(payload);
 
-    // Append random padding bytes
-    let mut rng = rand::thread_rng();
-    for _ in 0..pad_len {
-        buf.push(rng.gen());
-    }
+    // Zero-fill padding: encrypted anyway, random provides no extra security benefit.
+    buf.resize(buf.len() + pad_len, 0);
 
     buf
 }

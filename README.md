@@ -6,7 +6,7 @@
 
 ## 特性亮点
 
-- **PrismaVeil v4 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM
+- **PrismaVeil v4 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only
 - **7 种传输方式** — QUIC v2、TCP、WebSocket、gRPC、XHTTP、XPorta（CDN 兼容）、PrismaTLS
 - **TUN 模式** — 通过虚拟网络接口实现系统级代理（Windows/Linux/macOS）
 - **GeoIP 路由** — 基于 v2fly geoip.dat 的国家级智能分流，客户端和服务端均支持

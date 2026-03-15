@@ -72,7 +72,7 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
     }
 
     // Map of stream_id → sender for data going to local TCP
-    let streams: Arc<Mutex<HashMap<u32, mpsc::Sender<Vec<u8>>>>> =
+    let streams: Arc<Mutex<HashMap<u32, mpsc::Sender<bytes::Bytes>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     // Read frames from the tunnel and dispatch
@@ -131,7 +131,7 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
                 if let Some(local_addr) = port_map.get(&remote_port) {
                     debug!(stream_id, remote_port, local = %local_addr, "New forwarded connection");
 
-                    let (tx, rx) = mpsc::channel::<Vec<u8>>(64);
+                    let (tx, rx) = mpsc::channel::<bytes::Bytes>(64);
                     streams.lock().await.insert(stream_id, tx);
 
                     let local_addr = local_addr.clone();
@@ -184,7 +184,7 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
 /// Relay between a local TCP connection and the tunnel, using stream_id.
 async fn relay_local<W: AsyncWrite + Unpin + Send + 'static>(
     local: TcpStream,
-    mut from_tunnel: mpsc::Receiver<Vec<u8>>,
+    mut from_tunnel: mpsc::Receiver<bytes::Bytes>,
     tunnel_write: Arc<Mutex<W>>,
     session_keys: Arc<Mutex<SessionKeys>>,
     cipher: Arc<dyn AeadCipher>,
@@ -201,9 +201,15 @@ async fn relay_local<W: AsyncWrite + Unpin + Send + 'static>(
             match tcp_read.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    if send_frame(&tw, &sk, &c, Command::Data(buf[..n].to_vec()), stream_id)
-                        .await
-                        .is_err()
+                    if send_frame(
+                        &tw,
+                        &sk,
+                        &c,
+                        Command::Data(bytes::Bytes::copy_from_slice(&buf[..n])),
+                        stream_id,
+                    )
+                    .await
+                    .is_err()
                     {
                         break;
                     }

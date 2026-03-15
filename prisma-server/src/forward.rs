@@ -16,7 +16,7 @@ use prisma_core::types::MAX_FRAME_SIZE;
 
 use prisma_core::state::ServerMetrics;
 
-type StreamMap = Arc<Mutex<HashMap<u32, mpsc::Sender<Vec<u8>>>>>;
+type StreamMap = Arc<Mutex<HashMap<u32, mpsc::Sender<bytes::Bytes>>>>;
 
 /// Shared state for a multiplexed forward session.
 struct ForwardCtx<W> {
@@ -214,7 +214,7 @@ async fn run_forward_listener<W: AsyncWrite + Unpin + Send + 'static>(
         debug!(stream_id, peer = %peer, port, "New forwarded connection");
 
         // Create a channel for data from the tunnel dispatcher to this connection
-        let (tx, rx) = mpsc::channel::<Vec<u8>>(64);
+        let (tx, rx) = mpsc::channel::<bytes::Bytes>(64);
         ctx.streams.lock().await.insert(stream_id, tx);
 
         // Notify the client about this new connection
@@ -243,7 +243,7 @@ async fn run_forward_listener<W: AsyncWrite + Unpin + Send + 'static>(
 /// Relay data between an inbound TCP connection and the encrypted tunnel, using stream_id.
 async fn relay_forwarded<W: AsyncWrite + Unpin + Send + 'static>(
     inbound: TcpStream,
-    mut from_tunnel: mpsc::Receiver<Vec<u8>>,
+    mut from_tunnel: mpsc::Receiver<bytes::Bytes>,
     ctx: &ForwardCtx<W>,
     stream_id: u32,
 ) {
@@ -257,9 +257,13 @@ async fn relay_forwarded<W: AsyncWrite + Unpin + Send + 'static>(
             match tcp_read.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    if send_frame(&ctx2, Command::Data(buf[..n].to_vec()), stream_id)
-                        .await
-                        .is_err()
+                    if send_frame(
+                        &ctx2,
+                        Command::Data(bytes::Bytes::copy_from_slice(&buf[..n])),
+                        stream_id,
+                    )
+                    .await
+                    .is_err()
                     {
                         break;
                     }

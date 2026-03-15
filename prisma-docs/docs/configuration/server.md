@@ -43,6 +43,7 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `traffic_shaping.timing_jitter_ms` | u32 | `0` | Max timing jitter (ms) on handshake frames |
 | `traffic_shaping.chaff_interval_ms` | u32 | `0` | Chaff injection interval (ms), 0=disabled |
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms), 0=disabled |
+| `allow_transport_only_cipher` | bool | `false` | Allow clients to use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). |
 | `anti_rtt.enabled` | bool | `false` | Enable RTT normalization |
 | `anti_rtt.normalization_ms` | u32 | `150` | Target RTT for normalization |
 | `camouflage.enabled` | bool | `false` | Enable camouflage (anti-active-detection) |

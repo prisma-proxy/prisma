@@ -15,7 +15,7 @@ sidebar_position: 2
 | `server_addr` | string | — | 远程 Prisma 服务器地址（如 `1.2.3.4:8443`） |
 | `identity.client_id` | string | — | 客户端 UUID（须与服务端配置匹配） |
 | `identity.auth_secret` | string | — | 64 个十六进制字符的共享密钥（须与服务端配置匹配） |
-| `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
+| `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` / `transport-only` |
 | `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` |
 | `skip_cert_verify` | bool | `false` | 跳过 TLS 证书验证 |
 | `tls_on_tcp` | bool | `false` | 通过 TLS 包裹的 TCP 连接（须与服务端伪装设置匹配） |
@@ -95,6 +95,7 @@ sidebar_position: 2
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒） |
 | `sni_slicing` | bool | `false` | QUIC SNI 分片（将 ClientHello 分片到多个 CRYPTO 帧中） |
 | `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装 |
+| `transport_only_cipher` | bool | `false` | 使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。服务端也须启用。 |
 
 ## 完整示例
 
@@ -141,7 +142,7 @@ format = "pretty"
 - `server_addr` 不能为空
 - `identity.client_id` 不能为空
 - `identity.auth_secret` 必须是有效的十六进制字符串
-- `cipher_suite` 必须是以下之一：`chacha20-poly1305`、`aes-256-gcm`
+- `cipher_suite` 必须是以下之一：`chacha20-poly1305`、`aes-256-gcm`、`transport-only`
 - `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`
 - `xhttp_mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
 - `xhttp_mode = "stream-one"` 需要设置 `xhttp_stream_url`

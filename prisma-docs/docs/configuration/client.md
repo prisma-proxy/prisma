@@ -15,7 +15,7 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `server_addr` | string | — | Remote Prisma server address (e.g. `1.2.3.4:8443`) |
 | `identity.client_id` | string | — | Client UUID (must match server config) |
 | `identity.auth_secret` | string | — | 64 hex character shared secret (must match server config) |
-| `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
+| `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` / `transport-only` |
 | `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
@@ -95,6 +95,7 @@ The client is configured via a TOML file (default: `client.toml`). Configuration
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms) |
 | `sni_slicing` | bool | `false` | SNI slicing for QUIC (fragment ClientHello across CRYPTO frames) |
 | `entropy_camouflage` | bool | `false` | Entropy camouflage for Salamander/raw UDP |
+| `transport_only_cipher` | bool | `false` | Use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). Server must also allow it. |
 
 ## Full example
 
@@ -141,7 +142,7 @@ The client config is validated at startup. The following rules are enforced:
 - `server_addr` must not be empty
 - `identity.client_id` must not be empty
 - `identity.auth_secret` must be valid hex
-- `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`
+- `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`, `transport-only`
 - `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`
 - `xhttp_mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
 - `xhttp_mode = "stream-one"` requires `xhttp_stream_url`

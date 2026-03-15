@@ -26,7 +26,8 @@ fn arb_destination() -> impl Strategy<Value = ProxyDestination> {
 fn arb_command() -> impl Strategy<Value = Command> {
     prop_oneof![
         arb_destination().prop_map(Command::Connect),
-        proptest::collection::vec(any::<u8>(), 0..1024).prop_map(Command::Data),
+        proptest::collection::vec(any::<u8>(), 0..1024)
+            .prop_map(|v| Command::Data(bytes::Bytes::from(v))),
         Just(Command::Close),
         any::<u32>().prop_map(Command::Ping),
         any::<u32>().prop_map(Command::Pong),

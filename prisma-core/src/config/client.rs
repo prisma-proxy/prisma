@@ -104,6 +104,10 @@ pub struct ClientConfig {
     /// PrismaTLS auth secret for v4 authentication (hex-encoded, 32 bytes).
     #[serde(default)]
     pub prisma_auth_secret: Option<String>,
+    /// Use transport-only cipher mode (BLAKE3 MAC only, no application-layer encryption).
+    /// Only effective when transport provides confidentiality (TLS/QUIC). Defaults to false.
+    #[serde(default)]
+    pub transport_only_cipher: bool,
 }
 
 /// TUN device configuration.

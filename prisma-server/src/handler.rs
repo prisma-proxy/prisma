@@ -149,21 +149,12 @@ where
     // v4 handshake: 2-step
     let ticket_key = derive_ticket_key_from_state(state).await;
 
-    let bucket_sizes = {
-        let cfg = state.config.read().await;
-        let ts = &cfg.traffic_shaping;
-        let mode = prisma_core::traffic_shaping::PaddingMode::parse(&ts.padding_mode);
-        if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
-            ts.bucket_sizes.clone()
-        } else {
-            Vec::new()
-        }
-    };
+    let (bucket_sizes, server_features) = compute_server_features(state).await;
 
     let (server_init_bytes, session_keys) = match PrismaHandshakeServer::process_client_init(
         &client_hello_buf,
         padding_range,
-        DEFAULT_SERVER_FEATURES,
+        server_features,
         &ticket_key,
         &bucket_sizes,
         &auth,
@@ -275,20 +266,11 @@ where
 
     // v4 handshake: 2-step with bucket sizes
     let ticket_key = derive_ticket_key_from_state(state).await;
-    let bucket_sizes = {
-        let cfg = state.config.read().await;
-        let ts = &cfg.traffic_shaping;
-        let mode = prisma_core::traffic_shaping::PaddingMode::parse(&ts.padding_mode);
-        if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
-            ts.bucket_sizes.clone()
-        } else {
-            Vec::new()
-        }
-    };
+    let (bucket_sizes, server_features) = compute_server_features(state).await;
     let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
         &client_init_buf,
         padding_range,
-        DEFAULT_SERVER_FEATURES,
+        server_features,
         &ticket_key,
         &bucket_sizes,
         auth,
@@ -297,6 +279,23 @@ where
     util::write_framed(writer, &server_init_bytes).await?;
 
     Ok(server_state.into_session_keys())
+}
+
+/// Compute server features bitmask and bucket sizes from the current config.
+async fn compute_server_features(state: &ServerState) -> (Vec<u16>, u32) {
+    let cfg = state.config.read().await;
+    let ts = &cfg.traffic_shaping;
+    let mode = prisma_core::traffic_shaping::PaddingMode::parse(&ts.padding_mode);
+    let buckets = if mode == prisma_core::traffic_shaping::PaddingMode::Bucket {
+        ts.bucket_sizes.clone()
+    } else {
+        Vec::new()
+    };
+    let mut features = DEFAULT_SERVER_FEATURES;
+    if cfg.allow_transport_only_cipher {
+        features |= FEATURE_TRANSPORT_ONLY_CIPHER;
+    }
+    (buckets, features)
 }
 
 /// Derive a ticket key from server state (uses first authorized client's secret as seed).
@@ -592,7 +591,7 @@ where
                 // Download test: server sends data to client
                 let start = std::time::Instant::now();
                 let duration = std::time::Duration::from_secs(duration_secs as u64);
-                let chunk = vec![0xABu8; 8192];
+                let chunk = bytes::Bytes::from_static(&[0xABu8; 8192]);
                 while start.elapsed() < duration {
                     let frame = DataFrame {
                         command: Command::Data(chunk.clone()),

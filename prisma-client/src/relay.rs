@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
-use prisma_core::protocol::codec::*;
+use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
 use prisma_core::types::MAX_FRAME_SIZE;
 
@@ -13,6 +13,12 @@ use crate::tunnel::TunnelConnection;
 /// Bidirectional relay between SOCKS5 client and encrypted tunnel.
 ///
 /// SOCKS5 client ↔ [plain TCP] ↔ relay ↔ [encrypted frames] ↔ tunnel
+///
+/// Performance optimizations:
+/// - 32KB read buffer (4x larger, reduces frame count for bulk transfers)
+/// - FrameEncoder with zero-copy in-place encryption (no heap allocations)
+/// - FrameDecoder with in-place decryption
+/// - Write coalescing (single syscall per frame)
 pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<()> {
     let (mut socks_read, mut socks_write) = socks_stream.into_split();
     let (mut tunnel_read, mut tunnel_write) = tokio::io::split(tunnel.stream);
@@ -24,25 +30,22 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
     let padding_range = client_keys.padding_range;
     let cipher_s2t = cipher.clone();
     let socks_to_tunnel = async move {
-        let mut buf = vec![0u8; 8192];
+        let mut encoder = FrameEncoder::new();
+        // 32KB read buffer (4x larger than default 8KB)
+        let mut buf = vec![0u8; 32768];
         loop {
             match socks_read.read(&mut buf).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    let frame = DataFrame {
-                        command: Command::Data(buf[..n].to_vec()),
-                        flags: FLAG_PADDED,
-                        stream_id: 0,
-                    };
-                    let frame_bytes = encode_data_frame_padded(&frame, &padding_range);
                     let nonce = client_keys.next_client_nonce();
-                    match encrypt_frame(cipher_s2t.as_ref(), &nonce, &frame_bytes) {
-                        Ok(encrypted) => {
-                            let len = (encrypted.len() as u16).to_be_bytes();
-                            if tunnel_write.write_all(&len).await.is_err() {
-                                break;
-                            }
-                            if tunnel_write.write_all(&encrypted).await.is_err() {
+
+                    // Copy payload into encoder buffer and seal in-place
+                    encoder.payload_mut()[..n].copy_from_slice(&buf[..n]);
+                    match encoder.seal_data_frame(cipher_s2t.as_ref(), &nonce, n, 0, &padding_range)
+                    {
+                        Ok(wire) => {
+                            // Single write_all call (coalesced: outer_len + nonce + data + tag)
+                            if tunnel_write.write_all(wire).await.is_err() {
                                 break;
                             }
                         }
@@ -60,7 +63,7 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
     // tunnel → SOCKS5: decrypt frames, send raw data
     let cipher_t2s = cipher.clone();
     let tunnel_to_socks = async move {
-        let mut frame_buf = Vec::with_capacity(MAX_FRAME_SIZE);
+        let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
         loop {
             let mut len_buf = [0u8; 2];
             if tunnel_read.read_exact(&mut len_buf).await.is_err() {
@@ -71,7 +74,6 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
                 warn!(size = frame_len, max = MAX_FRAME_SIZE, "Frame too large");
                 break;
             }
-            frame_buf.resize(frame_len, 0);
             if tunnel_read
                 .read_exact(&mut frame_buf[..frame_len])
                 .await
@@ -80,21 +82,20 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
                 break;
             }
 
-            match decrypt_frame(cipher_t2s.as_ref(), &frame_buf[..frame_len]) {
-                Ok((plaintext, _)) => match decode_data_frame(&plaintext) {
-                    Ok(frame) => match frame.command {
-                        Command::Data(data) => {
-                            if socks_write.write_all(&data).await.is_err() {
-                                break;
-                            }
+            // Decrypt in-place using FrameDecoder
+            match FrameDecoder::unseal_data_frame(
+                &mut frame_buf[..frame_len],
+                frame_len,
+                cipher_t2s.as_ref(),
+            ) {
+                Ok((cmd, payload, _nonce)) => match cmd {
+                    CMD_DATA => {
+                        if socks_write.write_all(payload).await.is_err() {
+                            break;
                         }
-                        Command::Close => break,
-                        _ => {}
-                    },
-                    Err(e) => {
-                        warn!("Frame decode error: {}", e);
-                        break;
                     }
+                    CMD_CLOSE => break,
+                    _ => {}
                 },
                 Err(e) => {
                     warn!("Decrypt error: {}", e);
@@ -135,8 +136,9 @@ where
     // Poll interval for checking smoltcp socket state
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
 
+    let mut encoder = FrameEncoder::new();
     let mut local_buf = vec![0u8; 32768];
-    let mut frame_buf = Vec::with_capacity(MAX_FRAME_SIZE);
+    let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
 
     loop {
         tokio::select! {
@@ -149,18 +151,17 @@ where
                     (n, closed)
                 };
                 if n > 0 {
-                    let frame = DataFrame {
-                        command: Command::Data(local_buf[..n].to_vec()),
-                        flags: FLAG_PADDED,
-                        stream_id: 0,
-                    };
-                    let frame_bytes = encode_data_frame_padded(&frame, &padding_range);
                     let nonce = session_keys.next_client_nonce();
-                    match encrypt_frame(cipher.as_ref(), &nonce, &frame_bytes) {
-                        Ok(encrypted) => {
-                            let len = (encrypted.len() as u16).to_be_bytes();
-                            if tunnel_write.write_all(&len).await.is_err() { break; }
-                            if tunnel_write.write_all(&encrypted).await.is_err() { break; }
+                    encoder.payload_mut()[..n].copy_from_slice(&local_buf[..n]);
+                    match encoder.seal_data_frame(
+                        cipher.as_ref(),
+                        &nonce,
+                        n,
+                        0,
+                        &padding_range,
+                    ) {
+                        Ok(wire) => {
+                            if tunnel_write.write_all(wire).await.is_err() { break; }
                         }
                         Err(e) => {
                             warn!("TUN relay encrypt error: {}", e);
@@ -178,27 +179,26 @@ where
                 if frame_len > MAX_FRAME_SIZE {
                     return Err(anyhow::anyhow!("Frame too large"));
                 }
-                frame_buf.resize(frame_len, 0);
                 tunnel_read.read_exact(&mut frame_buf[..frame_len]).await?;
                 Ok::<_, anyhow::Error>(frame_len)
             } => {
                 match result {
                     Ok(frame_len) => {
-                        match decrypt_frame(cipher.as_ref(), &frame_buf[..frame_len]) {
-                            Ok((plaintext, _)) => match decode_data_frame(&plaintext) {
-                                Ok(frame) => match frame.command {
-                                    Command::Data(data) => {
+                        match FrameDecoder::unseal_data_frame(
+                            &mut frame_buf[..frame_len],
+                            frame_len,
+                            cipher.as_ref(),
+                        ) {
+                            Ok((cmd, payload, _nonce)) => {
+                                match cmd {
+                                    CMD_DATA => {
                                         let mut s = stack.lock().await;
-                                        s.write_to_socket(handle, &data);
+                                        s.write_to_socket(handle, payload);
                                     }
-                                    Command::Close => break,
+                                    CMD_CLOSE => break,
                                     _ => {}
-                                },
-                                Err(e) => {
-                                    warn!("TUN relay frame decode error: {}", e);
-                                    break;
                                 }
-                            },
+                            }
                             Err(e) => {
                                 warn!("TUN relay decrypt error: {}", e);
                                 break;

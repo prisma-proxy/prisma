@@ -20,17 +20,16 @@ pub fn generate_padding(max_size: usize) -> Vec<u8> {
     result
 }
 
-/// Generate random padding bytes using a `PaddingRange`.
-/// Returns raw random bytes of the specified length (no length header).
+/// Generate zero-filled padding bytes using a `PaddingRange`.
+/// Returns zero bytes of the specified length (no length header).
+/// Zero-fill is used instead of random bytes because the padding is encrypted
+/// anyway, so random provides no extra security benefit.
 pub fn generate_frame_padding(range: &PaddingRange) -> Vec<u8> {
     let len = range.random_in_range();
     if len == 0 {
         return Vec::new();
     }
-    let mut rng = rand::thread_rng();
-    let mut buf = vec![0u8; len];
-    rng.fill(&mut buf[..]);
-    buf
+    vec![0u8; len]
 }
 
 /// Strip padding from the end of data. The last segment of `data` should be

@@ -44,7 +44,7 @@ function getFeatures() {
 
 function getHighlights() {
   return [
-    { label: translate({id: 'homepage.highlights.encryption', message: 'Encryption'}), value: 'ChaCha20-Poly1305 / AES-256-GCM' },
+    { label: translate({id: 'homepage.highlights.encryption', message: 'Encryption'}), value: 'ChaCha20-Poly1305 / AES-256-GCM / Transport-Only' },
     { label: translate({id: 'homepage.highlights.keyExchange', message: 'Key Exchange'}), value: 'X25519 ECDH + BLAKE3 KDF' },
     { label: translate({id: 'homepage.highlights.handshake', message: 'Handshake'}), value: '1 RTT (0-RTT with tickets)' },
     { label: translate({id: 'homepage.highlights.udpRelay', message: 'UDP Relay'}), value: 'PrismaUDP + FEC Reed-Solomon' },

@@ -90,6 +90,7 @@ sidebar_position: 1
 | `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧最大时序抖动（毫秒） |
 | `traffic_shaping.chaff_interval_ms` | u32 | `0` | 杂音注入间隔（毫秒），0=禁用 |
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒），0=禁用 |
+| `allow_transport_only_cipher` | bool | `false` | 允许客户端使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。 |
 | `anti_rtt.enabled` | bool | `false` | 启用 RTT 归一化 |
 | `anti_rtt.normalization_ms` | u32 | `150` | RTT 归一化目标值 |
 | `routing.rules[].type` | string | — | 规则类型：`domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |

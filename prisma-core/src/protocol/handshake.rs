@@ -176,6 +176,15 @@ impl PrismaHandshakeServer {
             return Err(ProtocolError::InvalidVersion(client_init.version).into());
         }
 
+        // Reject TransportOnly cipher if server doesn't advertise support
+        if client_init.cipher_suite == CipherSuite::TransportOnly
+            && (server_features & FEATURE_TRANSPORT_ONLY_CIPHER == 0)
+        {
+            return Err(PrismaError::Auth(
+                "TransportOnly cipher not supported by server".into(),
+            ));
+        }
+
         // Verify auth token
         if !verifier.verify(
             &client_init.client_id,

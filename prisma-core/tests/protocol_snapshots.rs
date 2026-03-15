@@ -35,7 +35,7 @@ fn test_data_frame_domain_connect_snapshot() {
 #[test]
 fn test_data_frame_data_snapshot() {
     let frame = DataFrame {
-        command: Command::Data(b"GET / HTTP/1.1\r\n\r\n".to_vec()),
+        command: Command::Data(bytes::Bytes::from_static(b"GET / HTTP/1.1\r\n\r\n")),
         flags: 0,
         stream_id: 1,
     };

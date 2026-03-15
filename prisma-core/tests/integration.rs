@@ -140,7 +140,7 @@ async fn test_e2e_echo_through_tunnel() {
 
                 // Send response back encrypted
                 let response_frame = DataFrame {
-                    command: Command::Data(echo_buf[..n].to_vec()),
+                    command: Command::Data(bytes::Bytes::copy_from_slice(&echo_buf[..n])),
                     flags: 0,
                     stream_id: 0,
                 };
@@ -199,7 +199,7 @@ async fn test_e2e_echo_through_tunnel() {
     // Send data through the tunnel
     let test_data = b"Hello, Prisma!";
     let data_frame = DataFrame {
-        command: Command::Data(test_data.to_vec()),
+        command: Command::Data(bytes::Bytes::from_static(test_data)),
         flags: 0,
         stream_id: 0,
     };
@@ -220,7 +220,7 @@ async fn test_e2e_echo_through_tunnel() {
     let response_frame = decode_data_frame(&plaintext).unwrap();
 
     if let Command::Data(data) = response_frame.command {
-        assert_eq!(data, test_data, "Echo data mismatch");
+        assert_eq!(&data[..], &test_data[..], "Echo data mismatch");
     } else {
         panic!("Expected Data command in response");
     }

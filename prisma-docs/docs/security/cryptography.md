@@ -12,7 +12,7 @@ Prisma uses modern, well-audited cryptographic primitives for all security-criti
 |-----------|-----------|---------|
 | Key exchange | X25519 ECDH | Ephemeral shared secret per session |
 | Key derivation | BLAKE3 `derive_key` | Session key from shared secret + context |
-| Data encryption | ChaCha20-Poly1305 or AES-256-GCM | Authenticated encryption of data frames |
+| Data encryption | ChaCha20-Poly1305, AES-256-GCM, or Transport-Only | Authenticated encryption of data frames (Transport-Only: MAC only) |
 | Authentication | HMAC-SHA256 | Client identity verification |
 | Challenge-response | BLAKE3 hash | Proves client derived the correct session key |
 | Nonce construction | Counter-based | Per-direction monotonic nonce |
@@ -63,6 +63,15 @@ All data frames are encrypted with an AEAD cipher chosen by the client during th
 - Alternative cipher suite
 
 Both ciphers provide authenticated encryption with associated data (AEAD), ensuring confidentiality and integrity of every frame.
+
+### Transport-Only (opt-in)
+
+- BLAKE3 keyed MAC, 128-bit tag, no application-layer encryption
+- Data frames are authenticated but not encrypted — relies on the transport layer (TLS/QUIC) for confidentiality
+- Eliminates AEAD CPU overhead for maximum throughput when the transport already encrypts
+- Wire format is unchanged: `[nonce][len][plaintext][mac:16]`
+- Must be explicitly enabled on both client (`transport_only_cipher = true`) and server (`allow_transport_only_cipher = true`)
+- Not a security reduction when used over TLS/QUIC — the MAC prevents frame injection and replay
 
 ## HMAC-SHA256 authentication
 
