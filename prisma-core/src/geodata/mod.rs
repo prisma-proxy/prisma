@@ -63,14 +63,11 @@ impl GeoIPMatcher {
     pub fn matches(&self, country_code: &str, ip: Ipv4Addr) -> bool {
         let code = country_code.to_ascii_lowercase();
         let ip_u32 = u32::from(ip);
-        self.entries
-            .get(&code)
-            .map(|cidrs| {
-                cidrs
-                    .iter()
-                    .any(|(network, mask)| (ip_u32 & mask) == *network)
-            })
-            .unwrap_or(false)
+        self.entries.get(&code).is_some_and(|cidrs| {
+            cidrs
+                .iter()
+                .any(|(network, mask)| (ip_u32 & mask) == *network)
+        })
     }
 
     /// Return all loaded country codes.

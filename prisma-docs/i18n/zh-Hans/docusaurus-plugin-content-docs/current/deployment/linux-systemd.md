@@ -4,72 +4,32 @@ sidebar_position: 1
 
 # Linux systemd 部署
 
-本指南介绍如何在 Linux 上将 Prisma 部署为 systemd 服务。
+将 Prisma 部署为 Linux 上的 systemd 服务。
 
-## 前置要求
+## 快速部署
 
-- Prisma 二进制文件已构建或安装（参见[安装](../installation.md)）
-- root 访问权限
-
-## 1. 创建系统用户
+运行以下命令将 Prisma 设置为系统服务：
 
 ```bash
+# 安装二进制文件 + 创建系统用户 + 设置目录
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin prisma
+sudo mkdir -p /etc/prisma && sudo chown prisma:prisma /etc/prisma && sudo chmod 750 /etc/prisma
+sudo cp prisma /usr/local/bin/prisma && sudo chmod 755 /usr/local/bin/prisma
+
+# 复制配置文件和 TLS 证书（根据需要调整路径）
+sudo install -o prisma -g prisma -m 640 server.toml /etc/prisma/
+sudo install -o prisma -g prisma -m 640 prisma-cert.pem prisma-key.pem /etc/prisma/
 ```
 
-## 2. 设置目录
+:::tip
+请将配置中的 `cert_path` 和 `key_path` 更新为 `/etc/prisma/prisma-cert.pem` 和 `/etc/prisma/prisma-key.pem`。
+:::
 
-```bash
-sudo mkdir -p /etc/prisma
-sudo chown prisma:prisma /etc/prisma
-sudo chmod 750 /etc/prisma
-```
+## 服务文件
 
-## 3. 安装二进制文件
+### 服务端
 
-```bash
-sudo cp target/release/prisma /usr/local/bin/prisma
-sudo chmod 755 /usr/local/bin/prisma
-```
-
-## 4. 添加配置文件
-
-将 `server.toml` 和/或 `client.toml` 复制到 `/etc/prisma/`：
-
-```bash
-sudo cp server.toml /etc/prisma/server.toml
-sudo cp client.toml /etc/prisma/client.toml
-sudo chown prisma:prisma /etc/prisma/*.toml
-sudo chmod 640 /etc/prisma/*.toml
-```
-
-如果使用 TLS 证书，也需要复制：
-
-```bash
-sudo cp prisma-cert.pem prisma-key.pem /etc/prisma/
-sudo chown prisma:prisma /etc/prisma/*.pem
-sudo chmod 640 /etc/prisma/*.pem
-```
-
-更新 `server.toml` 中的路径以引用新位置：
-
-```toml
-[tls]
-cert_path = "/etc/prisma/prisma-cert.pem"
-key_path = "/etc/prisma/prisma-key.pem"
-```
-
-## 5. 安装 systemd 服务文件
-
-### 服务端服务
-
-从仓库复制服务文件：
-
-```bash
-sudo cp deploy/systemd/prisma-server.service /etc/systemd/system/
-```
-
-或创建 `/etc/systemd/system/prisma-server.service`：
+创建 `/etc/systemd/system/prisma-server.service`：
 
 ```ini
 [Unit]
@@ -99,13 +59,9 @@ SyslogIdentifier=prisma-server
 WantedBy=multi-user.target
 ```
 
-### 客户端服务
+### 客户端
 
-```bash
-sudo cp deploy/systemd/prisma-client.service /etc/systemd/system/
-```
-
-或创建 `/etc/systemd/system/prisma-client.service`：
+创建 `/etc/systemd/system/prisma-client.service`：
 
 ```ini
 [Unit]
@@ -135,56 +91,39 @@ SyslogIdentifier=prisma-client
 WantedBy=multi-user.target
 ```
 
-## 6. 启用并启动服务
+## 启用并启动
 
 ```bash
-# 重新加载 systemd 以识别新的服务文件
 sudo systemctl daemon-reload
-
-# 设置服务开机自启
-sudo systemctl enable prisma-server
-
-# 启动服务
-sudo systemctl start prisma-server
-
-# 检查状态
+sudo systemctl enable --now prisma-server   # 一条命令同时启用并启动
 sudo systemctl status prisma-server
 ```
 
 对于客户端：
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable prisma-client
-sudo systemctl start prisma-client
-sudo systemctl status prisma-client
+sudo systemctl enable --now prisma-client
 ```
 
-## 7. 查看日志
+## 日志
 
 ```bash
-# 跟踪服务端日志
-sudo journalctl -u prisma-server -f
-
-# 跟踪客户端日志
-sudo journalctl -u prisma-client -f
-
-# 查看最近的日志
-sudo journalctl -u prisma-server --since "1 hour ago"
+journalctl -u prisma-server -f              # 实时跟踪
+journalctl -u prisma-server --since "1h ago" # 最近的日志
 ```
 
 ## 安全加固
 
-提供的服务文件包含多个 systemd 安全指令：
+服务文件包含以下 systemd 安全指令：
 
 | 指令 | 效果 |
 |------|------|
-| `ProtectSystem=strict` | 将整个文件系统挂载为只读，除了特定路径 |
-| `ProtectHome=true` | 使 `/home`、`/root` 和 `/run/user` 不可访问 |
-| `PrivateTmp=true` | 为服务创建私有 `/tmp` 挂载 |
-| `NoNewPrivileges=true` | 防止进程获取新的权限 |
-| `ReadOnlyPaths=/etc/prisma` | 确保配置文件不能被服务修改 |
-| `LimitNOFILE=65535` | 提高文件描述符限制以支持高并发连接 |
+| `ProtectSystem=strict` | 文件系统只读，仅允许特定路径写入 |
+| `ProtectHome=true` | `/home`、`/root`、`/run/user` 不可访问 |
+| `PrivateTmp=true` | 私有 `/tmp` 挂载 |
+| `NoNewPrivileges=true` | 禁止获取新权限 |
+| `ReadOnlyPaths=/etc/prisma` | 配置文件运行时不可修改 |
+| `LimitNOFILE=65535` | 高文件描述符限制以支持大量连接 |
 
 ## 仪表盘（可选）
 
@@ -212,14 +151,12 @@ dashboard_dir = "/opt/prisma/dashboard"
 ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
 ```
 
-## 目录布局总结
+## 目录布局
 
 ```
-/usr/local/bin/prisma           # 二进制文件
-/etc/prisma/server.toml         # 服务端配置
-/etc/prisma/client.toml         # 客户端配置
-/etc/prisma/prisma-cert.pem     # TLS 证书
-/etc/prisma/prisma-key.pem      # TLS 私钥
-/etc/systemd/system/prisma-server.service
-/etc/systemd/system/prisma-client.service
+/usr/local/bin/prisma              # 二进制文件
+/etc/prisma/server.toml            # 服务端配置
+/etc/prisma/client.toml            # 客户端配置
+/etc/prisma/*.pem                  # TLS 证书
+/opt/prisma/dashboard/             # 仪表盘（可选）
 ```

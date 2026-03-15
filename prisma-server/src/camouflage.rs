@@ -25,7 +25,7 @@ pub fn looks_like_prisma_hello(bytes: &[u8]) -> bool {
     }
     // Reject TLS record layer: first byte 0x14-0x18 (ChangeCipherSpec, Alert, Handshake, Application)
     // with second byte 0x03 (TLS major version) is a TLS record, not PrismaVeil.
-    if bytes[0] >= 0x14 && bytes[0] <= 0x18 && bytes[1] == 0x03 {
+    if (0x14..=0x18).contains(&bytes[0]) && bytes[1] == 0x03 {
         return false;
     }
     let frame_len = u16::from_be_bytes([bytes[0], bytes[1]]);

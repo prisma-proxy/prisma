@@ -8,7 +8,7 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download latest Prisma release
         env:
@@ -30,16 +30,13 @@ jobs:
           unzip -q Xray-linux-64.zip -d xray
           chmod +x xray/xray
 
-      - name: Install iperf3
-        run: sudo apt-get install -y iperf3
-
       - name: Run benchmarks
         run: |
           chmod +x scripts/benchmark.sh
           ./scripts/benchmark.sh
 
       - name: Upload results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-${{ github.run_number }}
           path: benchmark-results/

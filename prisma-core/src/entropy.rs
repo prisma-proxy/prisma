@@ -109,23 +109,15 @@ pub fn passes_gfw_exemption(data: &[u8]) -> bool {
         return false;
     }
 
-    // Ex1: popcount outside [3.4, 4.6]
     let popcount = average_popcount(data);
-    if popcount <= 3.4 || popcount >= 4.6 {
-        return true;
-    }
 
-    // Ex2: first 6+ bytes are printable ASCII
-    if has_ascii_prefix(data, 6) {
-        return true;
-    }
-
-    // Ex5: TLS record signature
-    if looks_like_tls_record(data) {
-        return true;
-    }
-
-    false
+    // Ex1: popcount outside [3.4, 4.6]
+    popcount <= 3.4
+        || popcount >= 4.6
+        // Ex2: first 6+ bytes are printable ASCII
+        || has_ascii_prefix(data, 6)
+        // Ex5: TLS record signature
+        || looks_like_tls_record(data)
 }
 
 #[cfg(test)]

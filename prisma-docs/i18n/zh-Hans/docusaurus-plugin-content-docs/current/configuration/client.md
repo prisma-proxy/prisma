@@ -45,7 +45,7 @@ sidebar_position: 2
 | `xporta.max_payload_size` | u32 | `65536` | 每请求最大负载字节数 |
 | `xporta.poll_timeout_secs` | u16 | `55` | 长轮询超时时间（10-90 秒） |
 | `xporta.extra_headers` | \[\[k,v\]\] | `[]` | 额外的 XPorta 请求头 |
-| `xporta.cookie_name` | string | `"_sess"` | <!-- TODO: translate -->Session cookie name (must match server config) |
+| `xporta.cookie_name` | string | `"_sess"` | 会话 Cookie 名称（须与服务端配置匹配） |
 | `xmux.max_connections_min` | u16 | `1` | 连接池最小连接数 |
 | `xmux.max_connections_max` | u16 | `4` | 连接池最大连接数 |
 | `xmux.max_concurrency_min` | u16 | `8` | 每连接最小并发数 |
@@ -89,11 +89,11 @@ sidebar_position: 2
 | `fallback_order` | string[] | `["quic-v2", ...]` | 自动模式的传输回退顺序 |
 | `prisma_auth_secret` | string? | — | PrismaTLS 认证密钥（十六进制编码，须与服务端匹配） |
 | `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
-| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | <!-- TODO: translate -->Bucket sizes for bucket padding mode |
-| `traffic_shaping.timing_jitter_ms` | u32 | `0` | <!-- TODO: translate -->Max timing jitter (ms) on handshake frames |
-| `traffic_shaping.chaff_interval_ms` | u32 | `0` | <!-- TODO: translate -->Chaff injection interval (ms), 0=disabled |
+| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | bucket 填充模式的桶大小 |
+| `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧的最大时序抖动（毫秒） |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 混淆注入间隔（毫秒），0=禁用 |
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒） |
-| `sni_slicing` | bool | `false` | <!-- TODO: translate -->SNI slicing for QUIC (fragment ClientHello across CRYPTO frames) |
+| `sni_slicing` | bool | `false` | QUIC SNI 分片（将 ClientHello 分片到多个 CRYPTO 帧中） |
 | `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装 |
 
 ## 完整示例
@@ -174,33 +174,18 @@ transport = "quic"
 transport = "tcp"
 ```
 
-### WebSocket（CDN 兼容）
+### PrismaTLS（主动探测防御）
 
-通过 CDN（如 Cloudflare）进行 WebSocket 隧道：
-
-```toml
-transport = "ws"
-ws_url = "wss://your-domain.com/ws-tunnel"
-```
-
-### gRPC（CDN 兼容）
-
-通过 CDN 进行 gRPC 隧道：
+PrismaTLS 替代 REALITY，在直连场景下提供最强的主动探测防御。服务器对主动探测者来说与真实网站无法区分。
 
 ```toml
-transport = "grpc"
-grpc_url = "https://your-domain.com/tunnel.PrismaTunnel/Tunnel"
+transport = "prisma-tls"
+tls_server_name = "www.microsoft.com"
+fingerprint = "chrome"
+prisma_auth_secret = "hex-encoded-32-bytes"
 ```
 
-### XHTTP（CDN 兼容）
-
-HTTP 原生隧道，支持三种模式：
-
-```toml
-transport = "xhttp"
-xhttp_mode = "stream-one"
-xhttp_stream_url = "https://your-domain.com/api/v1/stream"
-```
+详见 [PrismaTLS](/docs/features/prisma-tls) 了解详细配置。
 
 ### XPorta（最高隐蔽性 — CDN）
 
@@ -218,19 +203,6 @@ encoding = "json"
 ```
 
 详见 [XPorta 传输](/docs/features/xporta-transport) 了解详细配置。
-
-### PrismaTLS（主动探测防御）
-
-PrismaTLS 替代 REALITY，提供最强的主动探测防御。服务器对主动探测者来说与真实网站无法区分。
-
-```toml
-transport = "prisma-tls"
-tls_server_name = "www.microsoft.com"
-fingerprint = "chrome"
-prisma_auth_secret = "hex-encoded-32-bytes"
-```
-
-详见 [PrismaTLS](/docs/features/prisma-tls) 了解详细配置。
 
 ## 禁用 HTTP 代理
 
