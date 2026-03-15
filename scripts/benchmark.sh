@@ -338,6 +338,32 @@ json.dump({
 "
 }
 
+write_empty_result() {
+    local label=$1
+    python3 -c "
+import json
+json.dump({'label':'$label','download_mbps':0,'latency_ms':0,
+           'concurrent_mbps':0,'memory_idle_kb':0,'memory_load_kb':0},
+          open('$RESULTS_DIR/${label}.json','w'))
+"
+}
+
+# Warm-up: verify end-to-end connectivity through SOCKS5 (tunnel may not
+# be established even though the listener is up).
+wait_for_tunnel() {
+    local socks_port=$1 timeout=${2:-15}
+    for _ in $(seq 1 "$timeout"); do
+        if curl -o /dev/null -s --connect-timeout 2 --max-time 3 \
+            --socks5-hostname "127.0.0.1:$socks_port" \
+            "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+    err "Tunnel not ready on SOCKS5 port $socks_port after ${timeout}s"
+    return 1
+}
+
 run_prisma_scenario() {
     local label=$1 server_cfg=$2 client_cfg=$3 socks_port=$4
 
@@ -346,12 +372,29 @@ run_prisma_scenario() {
     "$PRISMA_BIN" server -c "$server_cfg" \
         > "$RESULTS_DIR/${label}-server.log" 2>&1 &
     local srv=$!; PIDS+=($srv)
-    sleep 2
+    sleep 3
 
     "$PRISMA_BIN" client -c "$client_cfg" \
         > "$RESULTS_DIR/${label}-client.log" 2>&1 &
     local cli=$!; PIDS+=($cli)
-    wait_for_port "$socks_port"
+
+    if ! wait_for_port "$socks_port" 15; then
+        err "$label: client failed to start. Log:"
+        tail -20 "$RESULTS_DIR/${label}-client.log" >&2 || true
+        kill $srv $cli 2>/dev/null || true
+        write_empty_result "$label"
+        return
+    fi
+
+    if ! wait_for_tunnel "$socks_port" 15; then
+        err "$label: tunnel not functional. Server log:"
+        tail -10 "$RESULTS_DIR/${label}-server.log" >&2 || true
+        err "Client log:"
+        tail -10 "$RESULTS_DIR/${label}-client.log" >&2 || true
+        kill $srv $cli 2>/dev/null || true
+        write_empty_result "$label"
+        return
+    fi
 
     # Memory (idle)
     local mem_idle_srv mem_idle_cli mem_idle
