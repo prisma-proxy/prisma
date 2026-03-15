@@ -1,11 +1,32 @@
-name: Benchmark Prisma vs Xray-core
+name: Benchmark Prisma vs Xray-core vs sing-box
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Benchmark mode: full or quick'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - quick
   schedule:
     - cron: '0 4 * * 1'  # Weekly Monday 4am UTC
+  push:
+    branches: [master]
+    paths:
+      - 'prisma-*/src/**'
+      - 'prisma-*/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/benchmark.sh'
 
 permissions:
   contents: write
+
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
 
 jobs:
   benchmark:
@@ -33,7 +54,17 @@ jobs:
           unzip -q Xray-linux-64.zip -d xray
           chmod +x xray/xray
 
+      - name: Download latest sing-box release
+        run: |
+          mkdir -p sing-box
+          SB_VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | cut -d'"' -f4)
+          wget -q "https://github.com/SagerNet/sing-box/releases/download/${SB_VERSION}/sing-box-${SB_VERSION#v}-linux-amd64.tar.gz"
+          tar -xzf "sing-box-${SB_VERSION#v}-linux-amd64.tar.gz" --strip-components=1 -C sing-box
+          chmod +x sing-box/sing-box
+
       - name: Run benchmarks
+        env:
+          BENCHMARK_MODE: ${{ github.event_name == 'push' && 'quick' || (github.event.inputs.mode || 'full') }}
         run: |
           chmod +x scripts/benchmark.sh
           ./scripts/benchmark.sh
@@ -45,6 +76,8 @@ jobs:
           path: benchmark-results/
 
       - name: Consolidate benchmark results
+        env:
+          BENCHMARK_MODE: ${{ github.event_name == 'push' && 'quick' || (github.event.inputs.mode || 'full') }}
         run: |
           python3 << 'PYEOF'
           import json, glob, os, sys
@@ -75,6 +108,14 @@ jobs:
               "xray-ss2022":     {"enc": 6,  "fs": 4,  "tar": 1, "pdr": 3, "ar": 4,  "auth": 5},
               "xray-vless-ws":   {"enc": 5,  "fs": 7,  "tar": 1, "pdr": 3, "ar": 2,  "auth": 3},
               "xray-vless-grpc": {"enc": 3,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+              "singbox-vless-tls":   {"enc": 3,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+              "singbox-vmess-tls":   {"enc": 8,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 3,  "auth": 5},
+              "singbox-trojan-tls":  {"enc": 7,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+              "singbox-ss-aead":     {"enc": 6,  "fs": 3,  "tar": 1, "pdr": 3, "ar": 3,  "auth": 5},
+              "singbox-ss2022":      {"enc": 6,  "fs": 4,  "tar": 1, "pdr": 3, "ar": 4,  "auth": 5},
+              "singbox-vless-ws":    {"enc": 5,  "fs": 7,  "tar": 1, "pdr": 3, "ar": 2,  "auth": 3},
+              "singbox-hysteria2":   {"enc": 8,  "fs": 9,  "tar": 4, "pdr": 7, "ar": 7,  "auth": 7},
+              "singbox-tuic":        {"enc": 8,  "fs": 9,  "tar": 3, "pdr": 6, "ar": 7,  "auth": 7},
           }
 
           SCENARIO_NAMES = {
@@ -94,6 +135,14 @@ jobs:
               "xray-ss2022":      ("Xray SS-2022",        "xray"),
               "xray-vless-ws":    ("Xray VLESS+WS",       "xray"),
               "xray-vless-grpc":  ("Xray VLESS+gRPC",     "xray"),
+              "singbox-vless-tls":   ("sing-box VLESS+TLS",   "singbox"),
+              "singbox-vmess-tls":   ("sing-box VMess+TLS",   "singbox"),
+              "singbox-trojan-tls":  ("sing-box Trojan+TLS",  "singbox"),
+              "singbox-ss-aead":     ("sing-box SS AEAD",     "singbox"),
+              "singbox-ss2022":      ("sing-box SS-2022",     "singbox"),
+              "singbox-vless-ws":    ("sing-box VLESS+WS",    "singbox"),
+              "singbox-hysteria2":   ("sing-box Hysteria2",   "singbox"),
+              "singbox-tuic":        ("sing-box TUIC v5",     "singbox"),
           }
 
           def compute_security_score(key):
@@ -157,9 +206,14 @@ jobs:
               print("No benchmark result files found, skipping consolidation")
               sys.exit(0)
 
+          benchmark_mode = os.environ.get("BENCHMARK_MODE", "full")
+          payload_desc = "64MB" if benchmark_mode == "quick" else "256MB"
+          runs_desc = "1-run" if benchmark_mode == "quick" else "5-run"
+          env_desc = f"ubuntu-latest, loopback, {payload_desc} payload, {runs_desc} median"
+
           consolidated = {
               "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-              "environment": "ubuntu-latest, loopback, 256MB payload, 5-run median",
+              "environment": env_desc,
               "scenarios": scenarios,
               "history": [],
           }
@@ -168,13 +222,15 @@ jobs:
           output_path = "prisma-docs/static/data/benchmark-results.json"
           os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+          existing_scenarios = []
           try:
               with open(output_path) as f:
                   existing = json.load(f)
+              existing_scenarios = existing.get("scenarios", [])
               if existing.get("history"):
                   consolidated["history"] = existing["history"]
-              # Append previous run as history entry (keep last 12 weeks)
-              if existing.get("timestamp") and existing.get("scenarios"):
+              # Full mode: append previous run as history entry (keep last 12 weeks)
+              if benchmark_mode == "full" and existing.get("timestamp") and existing.get("scenarios"):
                   history_entry = {
                       "timestamp": existing["timestamp"],
                       "scenarios": existing["scenarios"],
@@ -184,10 +240,20 @@ jobs:
           except (FileNotFoundError, json.JSONDecodeError):
               pass
 
+          # Quick mode: merge into existing data (update only benchmarked scenarios)
+          if benchmark_mode == "quick" and existing_scenarios:
+              existing_by_label = {s["label"]: s for s in existing_scenarios}
+              for s in scenarios:
+                  existing_by_label[s["label"]] = s
+              consolidated["scenarios"] = list(existing_by_label.values())
+              if existing.get("environment"):
+                  consolidated["environment"] = existing["environment"] + " (quick update)"
+
           with open(output_path, "w") as f:
               json.dump(consolidated, f, indent=2)
 
-          print(f"Consolidated {len(scenarios)} scenarios into {output_path}")
+          mode_label = benchmark_mode
+          print(f"Consolidated {len(scenarios)} scenarios ({mode_label} mode) into {output_path}")
           PYEOF
 
       - name: Commit benchmark results to master

@@ -88,6 +88,10 @@
   background-color: #64748b;
 }
 
+.legendSingbox {
+  background-color: #10b981;
+}
+
 /* Bar chart */
 .chartGroup {
   margin-bottom: 1.5rem;
@@ -145,6 +149,10 @@
 
 .barFillBaseline {
   background: linear-gradient(90deg, #475569, #64748b);
+}
+
+.barFillSingbox {
+  background: linear-gradient(90deg, #059669, #10b981);
 }
 
 .barValue {
@@ -231,6 +239,11 @@
 
 .groupLabelBaseline {
   color: #64748b;
+  font-weight: 600;
+}
+
+.groupLabelSingbox {
+  color: #10b981;
   font-weight: 600;
 }
 
@@ -330,6 +343,10 @@
   color: #fb923c;
 }
 
+.cardWinnerSingbox {
+  color: #10b981;
+}
+
 .cardReason {
   font-size: 0.82rem;
   color: var(--ifm-font-color-secondary, #94a3b8);
@@ -395,6 +412,144 @@
   margin-top: 1rem;
 }
 
+/* Filter Tabs */
+.filterTabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--ifm-color-emphasis-300, #334155);
+}
+
+.filterTab {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-secondary, #94a3b8);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-bottom: -2px;
+}
+
+.filterTab:hover {
+  color: var(--ifm-font-color-base, #e2e8f0);
+}
+
+.filterTabActive {
+  color: var(--ifm-font-color-base, #e2e8f0);
+  border-bottom-color: var(--ifm-color-primary);
+}
+
+.filterTab_prisma.filterTabActive {
+  border-bottom-color: #22d3ee;
+  color: #22d3ee;
+}
+
+.filterTab_singbox.filterTabActive {
+  border-bottom-color: #10b981;
+  color: #10b981;
+}
+
+.filterTab_xray.filterTabActive {
+  border-bottom-color: #fb923c;
+  color: #fb923c;
+}
+
+/* Platform Summary Cards */
+.platformCards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.platformCard {
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-300, #334155);
+  background-color: var(--ifm-background-surface-color, #1e293b);
+  border-top: 3px solid var(--ifm-color-emphasis-300, #334155);
+}
+
+.platformCardPrisma {
+  border-top-color: #22d3ee;
+}
+
+.platformCardSingbox {
+  border-top-color: #10b981;
+}
+
+.platformCardXray {
+  border-top-color: #fb923c;
+}
+
+.platformCardTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-font-color-base, #e2e8f0);
+}
+
+.platformCardBest {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.75rem;
+}
+
+.platformStat {
+  font-size: 0.82rem;
+  color: var(--ifm-font-color-secondary, #94a3b8);
+  padding: 0.15rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.platformCardCount {
+  font-size: 0.78rem;
+  color: var(--ifm-font-color-secondary, #64748b);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300, #334155);
+}
+
+/* Head-to-Head Table */
+.h2hTable th {
+  text-align: center;
+}
+
+.h2hTable td {
+  text-align: center;
+}
+
+.h2hTable td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.h2hWinner {
+  font-weight: 700;
+  color: #4ade80;
+}
+
+/* Security bar colors by tier */
+.barFillSecurityS {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+
+.barFillSecurityA {
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+}
+
+.barFillSecurityB {
+  background: linear-gradient(90deg, #ca8a04, #facc15);
+}
+
+.barFillSecurityC {
+  background: linear-gradient(90deg, #dc2626, #f87171);
+}
+
 /* Responsive */
 @media (max-width: 996px) {
   .barLabel {
@@ -414,6 +569,10 @@
 
   .dataTable {
     font-size: 0.8rem;
+  }
+
+  .platformCards {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
 }
 
@@ -450,5 +609,13 @@
 
   .legend {
     justify-content: center;
+  }
+
+  .platformCards {
+    grid-template-columns: 1fr;
+  }
+
+  .filterTabs {
+    overflow-x: auto;
   }
 }

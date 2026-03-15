@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Benchmark script: PrismaVeil v4 vs Xray-core
+# Benchmark script: PrismaVeil v4 vs Xray-core vs sing-box
 # Measures throughput, latency, concurrency, and memory via loopback SOCKS5 proxy.
 set -euo pipefail
 
@@ -9,10 +9,36 @@ RESULTS_DIR="$(cd "$RESULTS_DIR" && pwd)"
 
 PRISMA_BIN="${PRISMA_BIN:-./prisma}"
 XRAY_BIN="${XRAY_BIN:-./xray/xray}"
+SINGBOX_BIN="${SINGBOX_BIN:-./sing-box/sing-box}"
 HTTP_PORT=18888
-TEST_SIZE_MB=256
-CONCURRENCY=4
 PIDS=()
+
+# Mode-aware parameters (set via BENCHMARK_MODE env var)
+BENCHMARK_MODE="${BENCHMARK_MODE:-full}"
+if [ "$BENCHMARK_MODE" = "quick" ]; then
+    TEST_SIZE_MB=64
+    CONCURRENCY=2
+    THROUGHPUT_RUNS=1
+    LATENCY_SAMPLES=3
+    echo "[BENCH] Running in QUICK mode (64MB, 1 run, 3 latency samples, 5 scenarios)"
+else
+    TEST_SIZE_MB=256
+    CONCURRENCY=4
+    THROUGHPUT_RUNS=5
+    LATENCY_SAMPLES=7
+    echo "[BENCH] Running in FULL mode (256MB, 5 runs, 7 latency samples, all scenarios)"
+fi
+
+# Quick mode: representative subset of scenarios
+QUICK_SCENARIOS="baseline prisma-quic prisma-tcp xray-vless-xtls singbox-hysteria2"
+
+should_run_scenario() {
+    local label=$1
+    if [ "$BENCHMARK_MODE" = "full" ]; then
+        return 0
+    fi
+    echo "$QUICK_SCENARIOS" | grep -qw "$label"
+}
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -92,6 +118,12 @@ generate_configs() {
     XRAY_SS_PASS=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p -c 32)
     # SS-2022 requires exactly 16 bytes base64 for aes-128-gcm
     XRAY_SS2022_KEY=$(openssl rand -base64 16 2>/dev/null || head -c 16 /dev/urandom | base64)
+
+    local SINGBOX_UUID SINGBOX_SS_PASS SINGBOX_SS2022_KEY SINGBOX_HYSTERIA_PASS
+    SINGBOX_UUID=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+    SINGBOX_SS_PASS=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p -c 32)
+    SINGBOX_SS2022_KEY=$(openssl rand -base64 16 2>/dev/null || head -c 16 /dev/urandom | base64)
+    SINGBOX_HYSTERIA_PASS=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p -c 32)
 
     # --- Prisma QUIC ---------------------------------------------------
     cat > "$RESULTS_DIR/server-quic.toml" <<EOF
@@ -721,6 +753,314 @@ XEOF
   }]
 }
 XEOF
+    # ===================================================================
+    # sing-box configurations
+    # ===================================================================
+
+    # --- sing-box VLESS + TLS (TCP) ------------------------------------
+    cat > "$RESULTS_DIR/singbox-vless-tls-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "vless",
+    "listen": "127.0.0.1",
+    "listen_port": 38443,
+    "users": [{"uuid": "$SINGBOX_UUID"}],
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-vless-tls-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31080
+  }],
+  "outbounds": [{
+    "type": "vless",
+    "server": "127.0.0.1",
+    "server_port": 38443,
+    "uuid": "$SINGBOX_UUID",
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
+
+    # --- sing-box VMess + TLS (TCP) ------------------------------------
+    cat > "$RESULTS_DIR/singbox-vmess-tls-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "vmess",
+    "listen": "127.0.0.1",
+    "listen_port": 38444,
+    "users": [{"uuid": "$SINGBOX_UUID", "alterId": 0}],
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-vmess-tls-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31081
+  }],
+  "outbounds": [{
+    "type": "vmess",
+    "server": "127.0.0.1",
+    "server_port": 38444,
+    "uuid": "$SINGBOX_UUID",
+    "security": "auto",
+    "alter_id": 0,
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
+
+    # --- sing-box Trojan + TLS -----------------------------------------
+    cat > "$RESULTS_DIR/singbox-trojan-tls-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "trojan",
+    "listen": "127.0.0.1",
+    "listen_port": 38445,
+    "users": [{"password": "$SINGBOX_SS_PASS"}],
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-trojan-tls-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31082
+  }],
+  "outbounds": [{
+    "type": "trojan",
+    "server": "127.0.0.1",
+    "server_port": 38445,
+    "password": "$SINGBOX_SS_PASS",
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
+
+    # --- sing-box Shadowsocks AEAD (chacha20-ietf-poly1305) ------------
+    cat > "$RESULTS_DIR/singbox-ss-aead-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "shadowsocks",
+    "listen": "127.0.0.1",
+    "listen_port": 38446,
+    "method": "chacha20-ietf-poly1305",
+    "password": "$SINGBOX_SS_PASS"
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-ss-aead-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31083
+  }],
+  "outbounds": [{
+    "type": "shadowsocks",
+    "server": "127.0.0.1",
+    "server_port": 38446,
+    "method": "chacha20-ietf-poly1305",
+    "password": "$SINGBOX_SS_PASS"
+  }]
+}
+SBEOF
+
+    # --- sing-box Shadowsocks-2022 (blake3-aes-128-gcm) ----------------
+    cat > "$RESULTS_DIR/singbox-ss2022-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "shadowsocks",
+    "listen": "127.0.0.1",
+    "listen_port": 38447,
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "$SINGBOX_SS2022_KEY"
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-ss2022-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31084
+  }],
+  "outbounds": [{
+    "type": "shadowsocks",
+    "server": "127.0.0.1",
+    "server_port": 38447,
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "$SINGBOX_SS2022_KEY"
+  }]
+}
+SBEOF
+
+    # --- sing-box VLESS + WebSocket + TLS ------------------------------
+    cat > "$RESULTS_DIR/singbox-vless-ws-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "vless",
+    "listen": "127.0.0.1",
+    "listen_port": 38448,
+    "users": [{"uuid": "$SINGBOX_UUID"}],
+    "transport": {
+      "type": "ws",
+      "path": "/ws-tunnel"
+    },
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-vless-ws-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31085
+  }],
+  "outbounds": [{
+    "type": "vless",
+    "server": "127.0.0.1",
+    "server_port": 38448,
+    "uuid": "$SINGBOX_UUID",
+    "transport": {
+      "type": "ws",
+      "path": "/ws-tunnel"
+    },
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
+
+    # --- sing-box Hysteria2 (QUIC-based) -------------------------------
+    cat > "$RESULTS_DIR/singbox-hysteria2-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "hysteria2",
+    "listen": "127.0.0.1",
+    "listen_port": 38449,
+    "up_mbps": 10000,
+    "down_mbps": 10000,
+    "users": [{"password": "$SINGBOX_HYSTERIA_PASS"}],
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-hysteria2-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31086
+  }],
+  "outbounds": [{
+    "type": "hysteria2",
+    "server": "127.0.0.1",
+    "server_port": 38449,
+    "up_mbps": 10000,
+    "down_mbps": 10000,
+    "password": "$SINGBOX_HYSTERIA_PASS",
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
+
+    # --- sing-box TUIC v5 (QUIC-based) ---------------------------------
+    cat > "$RESULTS_DIR/singbox-tuic-server.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "tuic",
+    "listen": "127.0.0.1",
+    "listen_port": 38450,
+    "users": [{"uuid": "$SINGBOX_UUID", "password": "$SINGBOX_HYSTERIA_PASS"}],
+    "tls": {
+      "enabled": true,
+      "certificate_path": "$RESULTS_DIR/prisma-cert.pem",
+      "key_path": "$RESULTS_DIR/prisma-key.pem"
+    }
+  }],
+  "outbounds": [{"type": "direct"}]
+}
+SBEOF
+
+    cat > "$RESULTS_DIR/singbox-tuic-client.json" <<SBEOF
+{
+  "inbounds": [{
+    "type": "socks",
+    "listen": "127.0.0.1",
+    "listen_port": 31087
+  }],
+  "outbounds": [{
+    "type": "tuic",
+    "server": "127.0.0.1",
+    "server_port": 38450,
+    "uuid": "$SINGBOX_UUID",
+    "password": "$SINGBOX_HYSTERIA_PASS",
+    "tls": {
+      "enabled": true,
+      "insecure": true
+    }
+  }]
+}
+SBEOF
 }
 
 start_test_server() {
@@ -780,7 +1120,7 @@ ThreadedHTTPServer(('', $HTTP_PORT), Handler).serve_forever()
 measure_download() {
     local socks_port=$1
     local speeds=()
-    for _ in 1 2 3 4 5; do
+    for _ in $(seq 1 $THROUGHPUT_RUNS); do
         local speed
         speed=$(curl -o /dev/null -s -w '%{speed_download}' \
             --connect-timeout 10 --max-time 120 \
@@ -808,7 +1148,7 @@ print(f'{median:.1f} {cv:.1f}')
 measure_latency() {
     local socks_port=$1
     local samples=()
-    for _ in $(seq 1 7); do
+    for _ in $(seq 1 $LATENCY_SAMPLES); do
         local ttfb
         ttfb=$(curl -o /dev/null -s -w '%{time_starttransfer}' \
             --connect-timeout 5 --max-time 10 \
@@ -828,7 +1168,7 @@ print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
 measure_handshake() {
     local socks_port=$1
     local samples=()
-    for _ in $(seq 1 7); do
+    for _ in $(seq 1 $LATENCY_SAMPLES); do
         local t
         t=$(curl -o /dev/null -s -w '%{time_connect}' \
             --connect-timeout 5 --max-time 10 \
@@ -848,7 +1188,7 @@ print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
 measure_upload() {
     local socks_port=$1
     local speeds=()
-    for _ in 1 2 3 4 5; do
+    for _ in $(seq 1 $THROUGHPUT_RUNS); do
         local speed
         speed=$(curl -s -w '%{speed_upload}' -o /dev/null \
             --connect-timeout 10 --max-time 120 \
@@ -870,7 +1210,7 @@ measure_concurrent() {
     local socks_port=$1 n=${2:-$CONCURRENCY}
     local agg_speeds=()
 
-    for _ in 1 2 3 4 5; do
+    for _ in $(seq 1 $THROUGHPUT_RUNS); do
         local tmpdir
         tmpdir=$(mktemp -d)
         for i in $(seq 1 "$n"); do
@@ -930,9 +1270,9 @@ measure_memory() {
 run_baseline() {
     log "=== Baseline (no proxy) ==="
 
-    # Download: median of 5 runs
+    # Download: median of $THROUGHPUT_RUNS runs
     local dl_speeds=()
-    for _ in 1 2 3 4 5; do
+    for _ in $(seq 1 $THROUGHPUT_RUNS); do
         local speed
         speed=$(curl -o /dev/null -s -w '%{speed_download}' \
             --connect-timeout 10 --max-time 120 \
@@ -946,9 +1286,9 @@ v = sorted(float(x) * 8 / 1_000_000 for x in '${dl_speeds[*]}'.split())
 print(f'{v[len(v)//2]:.1f}')
 " 2>/dev/null || echo "0")
 
-    # Latency: 7-sample trimmed mean
+    # Latency: $LATENCY_SAMPLES-sample trimmed mean
     local lat_samples=()
-    for _ in $(seq 1 7); do
+    for _ in $(seq 1 $LATENCY_SAMPLES); do
         local ttfb
         ttfb=$(curl -o /dev/null -s -w '%{time_starttransfer}' \
             --connect-timeout 5 --max-time 10 \
@@ -963,9 +1303,9 @@ trimmed = v[1:-1] if len(v) >= 3 else v
 print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
 " 2>/dev/null || echo "0")
 
-    # Handshake: 7-sample trimmed mean
+    # Handshake: $LATENCY_SAMPLES-sample trimmed mean
     local hs_samples=()
-    for _ in $(seq 1 7); do
+    for _ in $(seq 1 $LATENCY_SAMPLES); do
         local hs
         hs=$(curl -o /dev/null -s -w '%{time_connect}' \
             --connect-timeout 5 --max-time 10 \
@@ -980,9 +1320,9 @@ trimmed = v[1:-1] if len(v) >= 3 else v
 print(f'{sum(trimmed)/len(trimmed):.1f}' if trimmed else '0.0')
 " 2>/dev/null || echo "0")
 
-    # Upload: median of 5 runs
+    # Upload: median of $THROUGHPUT_RUNS runs
     local ul_speeds=()
-    for _ in 1 2 3 4 5; do
+    for _ in $(seq 1 $THROUGHPUT_RUNS); do
         local uspeed
         uspeed=$(curl -s -w '%{speed_upload}' -o /dev/null \
             --connect-timeout 10 --max-time 120 \
@@ -1301,6 +1641,158 @@ json.dump({
     sleep 1
 }
 
+# Check if a UDP port is listening (for Hysteria2/TUIC).
+wait_for_udp_port() {
+    local port=$1 timeout=${2:-10}
+    for _ in $(seq 1 "$timeout"); do
+        if ss -uln 2>/dev/null | grep -q ":${port} "; then
+            return 0
+        fi
+        sleep 1
+    done
+    err "UDP port $port not ready after ${timeout}s"
+    return 1
+}
+
+# Generic sing-box scenario runner.
+# Usage: run_singbox_scenario <label> <server_json> <client_json> <server_port> <socks_port> [udp]
+run_singbox_scenario() {
+    local label=$1 server_cfg=$2 client_cfg=$3 server_port=$4 socks_port=$5 transport=${6:-tcp}
+
+    if [ ! -f "$SINGBOX_BIN" ]; then
+        log "sing-box binary not found at $SINGBOX_BIN — skipping $label"
+        write_empty_result "$label"
+        return
+    fi
+
+    log "=== $label ==="
+
+    "$SINGBOX_BIN" run -c "$server_cfg" \
+        > "$RESULTS_DIR/${label}-server.log" 2>&1 &
+    local srv=$!; PIDS+=($srv)
+    if [ "$transport" = "udp" ]; then
+        if ! wait_for_udp_port "$server_port" 15; then
+            err "$label: sing-box server failed to start (UDP). Log:"
+            tail -20 "$RESULTS_DIR/${label}-server.log" >&2 || true
+            kill $srv 2>/dev/null || true
+            write_empty_result "$label"
+            return
+        fi
+    else
+        if ! wait_for_port "$server_port" 15; then
+            err "$label: sing-box server failed to start. Log:"
+            tail -20 "$RESULTS_DIR/${label}-server.log" >&2 || true
+            kill $srv 2>/dev/null || true
+            write_empty_result "$label"
+            return
+        fi
+    fi
+
+    "$SINGBOX_BIN" run -c "$client_cfg" \
+        > "$RESULTS_DIR/${label}-client.log" 2>&1 &
+    local cli=$!; PIDS+=($cli)
+    if ! wait_for_port "$socks_port" 15; then
+        err "$label: sing-box client failed to start. Log:"
+        tail -20 "$RESULTS_DIR/${label}-client.log" >&2 || true
+        kill $srv $cli 2>/dev/null || true
+        write_empty_result "$label"
+        return
+    fi
+
+    if ! wait_for_tunnel "$socks_port" 15; then
+        err "$label: tunnel not functional. Server log:"
+        tail -10 "$RESULTS_DIR/${label}-server.log" >&2 || true
+        err "Client log:"
+        tail -10 "$RESULTS_DIR/${label}-client.log" >&2 || true
+        kill $srv $cli 2>/dev/null || true
+        write_empty_result "$label"
+        return
+    fi
+
+    # Warmup
+    warmup_tunnel "$socks_port"
+
+    # Memory (idle) — median of 3 snapshots
+    local mem_idle
+    mem_idle=$(measure_memory $srv $cli)
+
+    # Latency (TTFB, trimmed mean of 7 requests)
+    log "  Measuring latency..."
+    local latency_ms
+    latency_ms=$(measure_latency "$socks_port")
+
+    # Handshake time
+    log "  Measuring handshake time..."
+    local handshake_ms
+    handshake_ms=$(measure_handshake "$socks_port")
+
+    # Single-stream throughput (median of 5 runs)
+    log "  Measuring single-stream throughput (5 runs)..."
+    local dl_result dl_mbps dl_cv
+    dl_result=$(measure_download "$socks_port")
+    dl_mbps=$(echo "$dl_result" | awk '{print $1}')
+    dl_cv=$(echo "$dl_result" | awk '{print $2}')
+
+    # Upload throughput (median of 5 runs)
+    log "  Measuring upload throughput (5 runs)..."
+    local ul_mbps
+    ul_mbps=$(measure_upload "$socks_port")
+
+    # CPU + concurrent throughput
+    log "  Measuring concurrent throughput (${CONCURRENCY}x parallel, 5 runs)..."
+    local cpu_before_srv cpu_before_cli t_before
+    cpu_before_srv=$(get_cpu_ticks $srv)
+    cpu_before_cli=$(get_cpu_ticks $cli)
+    t_before=$(date +%s%N)
+
+    local conc_result concurrent_mbps conc_cv
+    conc_result=$(measure_concurrent "$socks_port")
+    concurrent_mbps=$(echo "$conc_result" | awk '{print $1}')
+    conc_cv=$(echo "$conc_result" | awk '{print $2}')
+
+    local cpu_after_srv cpu_after_cli t_after
+    cpu_after_srv=$(get_cpu_ticks $srv)
+    cpu_after_cli=$(get_cpu_ticks $cli)
+    t_after=$(date +%s%N)
+
+    local cpu_pct
+    cpu_pct=$(python3 -c "
+clk_tck = $(getconf CLK_TCK 2>/dev/null || echo 100)
+dt = ($cpu_after_srv + $cpu_after_cli) - ($cpu_before_srv + $cpu_before_cli)
+wall = ($t_after - $t_before) / 1e9
+print(f'{(dt / clk_tck) / wall * 100:.1f}' if wall > 0 else '0.0')
+" 2>/dev/null || echo "0.0")
+
+    # Memory under load — median of 3 snapshots
+    local mem_load
+    mem_load=$(measure_memory $srv $cli)
+
+    log "  Download: ${dl_mbps} Mbps (±${dl_cv}%)  |  Upload: ${ul_mbps} Mbps"
+    log "  ${CONCURRENCY}x: ${concurrent_mbps} Mbps (±${conc_cv}%)  |  Handshake: ${handshake_ms} ms"
+    log "  Latency: ${latency_ms} ms  |  CPU: ${cpu_pct}%  |  Mem idle: ${mem_idle} KB"
+
+    python3 -c "
+import json
+json.dump({
+    'label': '$label',
+    'download_mbps': $dl_mbps,
+    'upload_mbps': $ul_mbps,
+    'latency_ms': $latency_ms,
+    'handshake_ms': $handshake_ms,
+    'concurrent_mbps': $concurrent_mbps,
+    'memory_idle_kb': $mem_idle,
+    'memory_load_kb': $mem_load,
+    'cpu_avg_pct': $cpu_pct,
+    'download_cv_pct': $dl_cv,
+    'concurrent_cv_pct': $conc_cv
+}, open('$RESULTS_DIR/${label}.json', 'w'))
+"
+
+    kill $srv $cli 2>/dev/null || true
+    wait $srv $cli 2>/dev/null || true
+    sleep 1
+}
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
@@ -1332,6 +1824,14 @@ scenarios = [
     ("xray-ss2022",      "Xray SS-2022"),
     ("xray-vless-ws",    "Xray VLESS+WS"),
     ("xray-vless-grpc",  "Xray VLESS+gRPC"),
+    ("singbox-vless-tls",   "sing-box VLESS+TLS"),
+    ("singbox-vmess-tls",   "sing-box VMess+TLS"),
+    ("singbox-trojan-tls",  "sing-box Trojan+TLS"),
+    ("singbox-ss-aead",     "sing-box SS AEAD"),
+    ("singbox-ss2022",      "sing-box SS-2022"),
+    ("singbox-vless-ws",    "sing-box VLESS+WS"),
+    ("singbox-hysteria2",   "sing-box Hysteria2"),
+    ("singbox-tuic",        "sing-box TUIC v5"),
 ]
 
 fields = [
@@ -1387,6 +1887,14 @@ SECURITY_DB = {
     "xray-ss2022":     {"enc": 7,  "fs": 5,  "tar": 1, "pdr": 4, "ar": 7,  "auth": 6},
     "xray-vless-ws":   {"enc": 3,  "fs": 7,  "tar": 1, "pdr": 6, "ar": 2,  "auth": 3},
     "xray-vless-grpc": {"enc": 3,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+    "singbox-vless-tls":   {"enc": 3,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+    "singbox-vmess-tls":   {"enc": 8,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 3,  "auth": 5},
+    "singbox-trojan-tls":  {"enc": 7,  "fs": 7,  "tar": 1, "pdr": 5, "ar": 2,  "auth": 3},
+    "singbox-ss-aead":     {"enc": 6,  "fs": 3,  "tar": 1, "pdr": 3, "ar": 3,  "auth": 5},
+    "singbox-ss2022":      {"enc": 6,  "fs": 4,  "tar": 1, "pdr": 3, "ar": 4,  "auth": 5},
+    "singbox-vless-ws":    {"enc": 5,  "fs": 7,  "tar": 1, "pdr": 3, "ar": 2,  "auth": 3},
+    "singbox-hysteria2":   {"enc": 8,  "fs": 9,  "tar": 4, "pdr": 7, "ar": 7,  "auth": 7},
+    "singbox-tuic":        {"enc": 8,  "fs": 9,  "tar": 3, "pdr": 6, "ar": 7,  "auth": 7},
 }
 
 def compute_security_score(key):
@@ -1681,32 +2189,38 @@ if bssk:
     ss_dl = val(bssk, "download_mbps")
     print(f"  {Y}\u2605{N} Best security/speed  {B}{proxy_names[bssk]}{N}  (Sec:{ss_sc} + {fmt(ss_dl)} Mbps)")
 
-# Prisma vs Xray head-to-head (best Prisma vs best Xray)
+# Head-to-head comparisons (Prisma vs Xray, Prisma vs sing-box, sing-box vs Xray)
 xray_keys = [k for k in proxy_keys if k.startswith("xray-")]
 prisma_keys = [k for k in proxy_keys if k.startswith("prisma-")]
+singbox_keys = [k for k in proxy_keys if k.startswith("singbox-")]
 
-if xray_keys and prisma_keys:
-    best_xray_dl = max((val(k, "download_mbps"), k) for k in xray_keys)
-    best_prisma_dl = max((val(k, "download_mbps"), k) for k in prisma_keys)
-    xdl, xk = best_xray_dl
-    pdl, pk = best_prisma_dl
-
-    if xdl > 0 and pdl > 0:
-        dl_ratio = pdl / xdl
+def head_to_head(name_a, keys_a, name_b, keys_b):
+    if not keys_a or not keys_b:
+        return
+    best_a_dl = max((val(k, "download_mbps"), k) for k in keys_a)
+    best_b_dl = max((val(k, "download_mbps"), k) for k in keys_b)
+    adl, ak = best_a_dl
+    bdl, bk = best_b_dl
+    if adl > 0 and bdl > 0:
+        dl_ratio = adl / bdl
         print(f"  {'\u2500' * 60}")
         if dl_ratio >= 1:
-            print(f"  {G}\u25A0{N} {proxy_names[pk]} is {B}{dl_ratio:.1f}x{N} faster than {proxy_names[xk]}")
+            print(f"  {G}\u25A0{N} {proxy_names[ak]} is {B}{dl_ratio:.1f}x{N} faster than {proxy_names[bk]}")
         else:
-            print(f"  {proxy_names[xk]} is {B}{1/dl_ratio:.1f}x{N} faster than {proxy_names[pk]}")
+            print(f"  {proxy_names[bk]} is {B}{1/dl_ratio:.1f}x{N} faster than {proxy_names[ak]}")
 
-        xmem = val(xk, "memory_idle_kb")
-        pmem = val(pk, "memory_idle_kb")
-        if xmem > 0 and pmem > 0:
-            mem_ratio = xmem / pmem
+        amem = val(ak, "memory_idle_kb")
+        bmem = val(bk, "memory_idle_kb")
+        if amem > 0 and bmem > 0:
+            mem_ratio = bmem / amem
             if mem_ratio >= 1:
-                print(f"  {G}\u25A0{N} Prisma uses {B}{mem_ratio:.1f}x{N} less memory than Xray")
+                print(f"  {G}\u25A0{N} {name_a} uses {B}{mem_ratio:.1f}x{N} less memory than {name_b}")
             else:
-                print(f"  Xray uses {B}{1/mem_ratio:.1f}x{N} less memory than Prisma")
+                print(f"  {name_b} uses {B}{1/mem_ratio:.1f}x{N} less memory than {name_a}")
+
+head_to_head("Prisma", prisma_keys, "Xray", xray_keys)
+head_to_head("Prisma", prisma_keys, "sing-box", singbox_keys)
+head_to_head("sing-box", singbox_keys, "Xray", xray_keys)
 print()
 
 # ── Use-Case Scores ───────────────────────────────────────────────────
@@ -1840,12 +2354,24 @@ if bssk:
     ss_dl = val(bssk, "download_mbps")
     md.append(f"- **Best security/speed:** {proxy_names[bssk]} (Sec:{ss_sc} + {fmt(ss_dl)} Mbps)")
 
-if xray_keys and prisma_keys and xdl > 0 and pdl > 0:
-    md.append("")
-    if dl_ratio >= 1:
-        md.append(f"{proxy_names[pk]} is **{dl_ratio:.1f}x** faster than {proxy_names[xk]}.")
-    else:
-        md.append(f"{proxy_names[xk]} is **{1/dl_ratio:.1f}x** faster than {proxy_names[pk]}.")
+def md_head_to_head(name_a, keys_a, name_b, keys_b):
+    if not keys_a or not keys_b:
+        return
+    best_a = max((val(k, "download_mbps"), k) for k in keys_a)
+    best_b = max((val(k, "download_mbps"), k) for k in keys_b)
+    adl, ak = best_a
+    bdl, bk = best_b
+    if adl > 0 and bdl > 0:
+        ratio = adl / bdl
+        if ratio >= 1:
+            md.append(f"{proxy_names[ak]} is **{ratio:.1f}x** faster than {proxy_names[bk]}.")
+        else:
+            md.append(f"{proxy_names[bk]} is **{1/ratio:.1f}x** faster than {proxy_names[ak]}.")
+
+md.append("")
+md_head_to_head("Prisma", prisma_keys, "Xray", xray_keys)
+md_head_to_head("Prisma", prisma_keys, "sing-box", singbox_keys)
+md_head_to_head("sing-box", singbox_keys, "Xray", xray_keys)
 
 if proxy_keys:
     md.append("")
@@ -1929,54 +2455,133 @@ main() {
     start_test_server
 
     # ── Prisma scenarios ──────────────────────────────────────────
-    run_baseline
-    run_prisma_scenario "prisma-quic" \
-        "$RESULTS_DIR/server-quic.toml" "$RESULTS_DIR/client-quic.toml" 11080
-    run_prisma_scenario "prisma-tcp" \
-        "$RESULTS_DIR/server-tcp.toml" "$RESULTS_DIR/client-tcp.toml" 11082
-    run_prisma_scenario "prisma-shaped" \
-        "$RESULTS_DIR/server-shaped.toml" "$RESULTS_DIR/client-shaped.toml" 11081
-    run_prisma_scenario "prisma-quic-aes" \
-        "$RESULTS_DIR/server-quic-aes.toml" "$RESULTS_DIR/client-quic-aes.toml" 11083
-    run_prisma_scenario "prisma-tonly" \
-        "$RESULTS_DIR/server-transport-only.toml" "$RESULTS_DIR/client-transport-only.toml" 11084
-    run_prisma_scenario "prisma-ws" \
-        "$RESULTS_DIR/server-ws.toml" "$RESULTS_DIR/client-ws.toml" 11086
-    run_prisma_scenario "prisma-bucket" \
-        "$RESULTS_DIR/server-bucket.toml" "$RESULTS_DIR/client-bucket.toml" 11087
+    if should_run_scenario "baseline"; then run_baseline; fi
+    if should_run_scenario "prisma-quic"; then
+        run_prisma_scenario "prisma-quic" \
+            "$RESULTS_DIR/server-quic.toml" "$RESULTS_DIR/client-quic.toml" 11080
+    fi
+    if should_run_scenario "prisma-tcp"; then
+        run_prisma_scenario "prisma-tcp" \
+            "$RESULTS_DIR/server-tcp.toml" "$RESULTS_DIR/client-tcp.toml" 11082
+    fi
+    if should_run_scenario "prisma-shaped"; then
+        run_prisma_scenario "prisma-shaped" \
+            "$RESULTS_DIR/server-shaped.toml" "$RESULTS_DIR/client-shaped.toml" 11081
+    fi
+    if should_run_scenario "prisma-quic-aes"; then
+        run_prisma_scenario "prisma-quic-aes" \
+            "$RESULTS_DIR/server-quic-aes.toml" "$RESULTS_DIR/client-quic-aes.toml" 11083
+    fi
+    if should_run_scenario "prisma-tonly"; then
+        run_prisma_scenario "prisma-tonly" \
+            "$RESULTS_DIR/server-transport-only.toml" "$RESULTS_DIR/client-transport-only.toml" 11084
+    fi
+    if should_run_scenario "prisma-ws"; then
+        run_prisma_scenario "prisma-ws" \
+            "$RESULTS_DIR/server-ws.toml" "$RESULTS_DIR/client-ws.toml" 11086
+    fi
+    if should_run_scenario "prisma-bucket"; then
+        run_prisma_scenario "prisma-bucket" \
+            "$RESULTS_DIR/server-bucket.toml" "$RESULTS_DIR/client-bucket.toml" 11087
+    fi
 
     # ── Xray scenarios ────────────────────────────────────────────
-    run_xray_scenario "xray-vless-tls" \
-        "$RESULTS_DIR/xray-vless-tls-server.json" \
-        "$RESULTS_DIR/xray-vless-tls-client.json" 28443 21080
+    if should_run_scenario "xray-vless-tls"; then
+        run_xray_scenario "xray-vless-tls" \
+            "$RESULTS_DIR/xray-vless-tls-server.json" \
+            "$RESULTS_DIR/xray-vless-tls-client.json" 28443 21080
+    fi
 
-    run_xray_scenario "xray-vless-xtls" \
-        "$RESULTS_DIR/xray-vless-xtls-server.json" \
-        "$RESULTS_DIR/xray-vless-xtls-client.json" 28444 21081
+    if should_run_scenario "xray-vless-xtls"; then
+        run_xray_scenario "xray-vless-xtls" \
+            "$RESULTS_DIR/xray-vless-xtls-server.json" \
+            "$RESULTS_DIR/xray-vless-xtls-client.json" 28444 21081
+    fi
 
-    run_xray_scenario "xray-vmess-tls" \
-        "$RESULTS_DIR/xray-vmess-tls-server.json" \
-        "$RESULTS_DIR/xray-vmess-tls-client.json" 28445 21082
+    if should_run_scenario "xray-vmess-tls"; then
+        run_xray_scenario "xray-vmess-tls" \
+            "$RESULTS_DIR/xray-vmess-tls-server.json" \
+            "$RESULTS_DIR/xray-vmess-tls-client.json" 28445 21082
+    fi
 
-    run_xray_scenario "xray-trojan-tls" \
-        "$RESULTS_DIR/xray-trojan-tls-server.json" \
-        "$RESULTS_DIR/xray-trojan-tls-client.json" 28446 21083
+    if should_run_scenario "xray-trojan-tls"; then
+        run_xray_scenario "xray-trojan-tls" \
+            "$RESULTS_DIR/xray-trojan-tls-server.json" \
+            "$RESULTS_DIR/xray-trojan-tls-client.json" 28446 21083
+    fi
 
-    run_xray_scenario "xray-ss-aead" \
-        "$RESULTS_DIR/xray-ss-aead-server.json" \
-        "$RESULTS_DIR/xray-ss-aead-client.json" 28447 21084
+    if should_run_scenario "xray-ss-aead"; then
+        run_xray_scenario "xray-ss-aead" \
+            "$RESULTS_DIR/xray-ss-aead-server.json" \
+            "$RESULTS_DIR/xray-ss-aead-client.json" 28447 21084
+    fi
 
-    run_xray_scenario "xray-ss2022" \
-        "$RESULTS_DIR/xray-ss2022-server.json" \
-        "$RESULTS_DIR/xray-ss2022-client.json" 28450 21087
+    if should_run_scenario "xray-ss2022"; then
+        run_xray_scenario "xray-ss2022" \
+            "$RESULTS_DIR/xray-ss2022-server.json" \
+            "$RESULTS_DIR/xray-ss2022-client.json" 28450 21087
+    fi
 
-    run_xray_scenario "xray-vless-ws" \
-        "$RESULTS_DIR/xray-vless-ws-server.json" \
-        "$RESULTS_DIR/xray-vless-ws-client.json" 28448 21085
+    if should_run_scenario "xray-vless-ws"; then
+        run_xray_scenario "xray-vless-ws" \
+            "$RESULTS_DIR/xray-vless-ws-server.json" \
+            "$RESULTS_DIR/xray-vless-ws-client.json" 28448 21085
+    fi
 
-    run_xray_scenario "xray-vless-grpc" \
-        "$RESULTS_DIR/xray-vless-grpc-server.json" \
-        "$RESULTS_DIR/xray-vless-grpc-client.json" 28449 21086
+    if should_run_scenario "xray-vless-grpc"; then
+        run_xray_scenario "xray-vless-grpc" \
+            "$RESULTS_DIR/xray-vless-grpc-server.json" \
+            "$RESULTS_DIR/xray-vless-grpc-client.json" 28449 21086
+    fi
+
+    # ── sing-box scenarios ────────────────────────────────────────
+    if should_run_scenario "singbox-vless-tls"; then
+        run_singbox_scenario "singbox-vless-tls" \
+            "$RESULTS_DIR/singbox-vless-tls-server.json" \
+            "$RESULTS_DIR/singbox-vless-tls-client.json" 38443 31080
+    fi
+
+    if should_run_scenario "singbox-vmess-tls"; then
+        run_singbox_scenario "singbox-vmess-tls" \
+            "$RESULTS_DIR/singbox-vmess-tls-server.json" \
+            "$RESULTS_DIR/singbox-vmess-tls-client.json" 38444 31081
+    fi
+
+    if should_run_scenario "singbox-trojan-tls"; then
+        run_singbox_scenario "singbox-trojan-tls" \
+            "$RESULTS_DIR/singbox-trojan-tls-server.json" \
+            "$RESULTS_DIR/singbox-trojan-tls-client.json" 38445 31082
+    fi
+
+    if should_run_scenario "singbox-ss-aead"; then
+        run_singbox_scenario "singbox-ss-aead" \
+            "$RESULTS_DIR/singbox-ss-aead-server.json" \
+            "$RESULTS_DIR/singbox-ss-aead-client.json" 38446 31083
+    fi
+
+    if should_run_scenario "singbox-ss2022"; then
+        run_singbox_scenario "singbox-ss2022" \
+            "$RESULTS_DIR/singbox-ss2022-server.json" \
+            "$RESULTS_DIR/singbox-ss2022-client.json" 38447 31084
+    fi
+
+    if should_run_scenario "singbox-vless-ws"; then
+        run_singbox_scenario "singbox-vless-ws" \
+            "$RESULTS_DIR/singbox-vless-ws-server.json" \
+            "$RESULTS_DIR/singbox-vless-ws-client.json" 38448 31085
+    fi
+
+    if should_run_scenario "singbox-hysteria2"; then
+        run_singbox_scenario "singbox-hysteria2" \
+            "$RESULTS_DIR/singbox-hysteria2-server.json" \
+            "$RESULTS_DIR/singbox-hysteria2-client.json" 38449 31086 udp
+    fi
+
+    if should_run_scenario "singbox-tuic"; then
+        run_singbox_scenario "singbox-tuic" \
+            "$RESULTS_DIR/singbox-tuic-server.json" \
+            "$RESULTS_DIR/singbox-tuic-client.json" 38450 31087 udp
+    fi
 
     # ── Results ───────────────────────────────────────────────────
     generate_summary

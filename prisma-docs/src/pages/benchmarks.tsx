@@ -15,7 +15,7 @@ import styles from './benchmarks.module.css';
 interface Scenario {
   label: string;
   name: string;
-  group: 'prisma' | 'xray' | 'baseline';
+  group: 'prisma' | 'xray' | 'singbox' | 'baseline';
   download_mbps: number;
   upload_mbps: number;
   latency_ms: number;
@@ -117,6 +117,7 @@ function groupBarClass(group: string): string {
   switch (group) {
     case 'prisma':   return styles.barFillPrisma;
     case 'xray':     return styles.barFillXray;
+    case 'singbox':  return styles.barFillSingbox;
     default:         return styles.barFillBaseline;
   }
 }
@@ -125,6 +126,7 @@ function groupLabelClass(group: string): string {
   switch (group) {
     case 'prisma':   return styles.groupLabelPrisma;
     case 'xray':     return styles.groupLabelXray;
+    case 'singbox':  return styles.groupLabelSingbox;
     default:         return styles.groupLabelBaseline;
   }
 }
@@ -176,6 +178,10 @@ function Legend(): ReactNode {
       <span className={styles.legendItem}>
         <span className={`${styles.legendDot} ${styles.legendXray}`} />
         Xray-core
+      </span>
+      <span className={styles.legendItem}>
+        <span className={`${styles.legendDot} ${styles.legendSingbox}`} />
+        sing-box
       </span>
       <span className={styles.legendItem}>
         <span className={`${styles.legendDot} ${styles.legendBaseline}`} />
@@ -287,12 +293,193 @@ function LatencyChart({scenarios}: {scenarios: Scenario[]}): ReactNode {
   );
 }
 
-function ResourceTable({scenarios}: {scenarios: Scenario[]}): ReactNode {
+function FilterTabs({activeFilter, onFilterChange}: {activeFilter: string; onFilterChange: (f: string) => void}): ReactNode {
+  const tabs = [
+    {key: 'all', label: 'All'},
+    {key: 'prisma', label: 'Prisma'},
+    {key: 'singbox', label: 'sing-box'},
+    {key: 'xray', label: 'Xray-core'},
+  ];
+  return (
+    <div className={styles.filterTabs}>
+      {tabs.map(tab => (
+        <button
+          key={tab.key}
+          type="button"
+          className={`${styles.filterTab} ${activeFilter === tab.key ? styles.filterTabActive : ''} ${tab.key !== 'all' ? styles[`filterTab_${tab.key}`] : ''}`}
+          onClick={() => onFilterChange(tab.key)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PlatformSummary({scenarios}: {scenarios: Scenario[]}): ReactNode {
+  const groups = ['prisma', 'singbox', 'xray'] as const;
+  const groupNames: Record<string, string> = {prisma: 'Prisma', singbox: 'sing-box', xray: 'Xray-core'};
+  const cardClasses: Record<string, string> = {
+    prisma: styles.platformCardPrisma,
+    singbox: styles.platformCardSingbox,
+    xray: styles.platformCardXray,
+  };
+
+  return (
+    <section className={styles.section}>
+      <Heading as="h2" className={styles.sectionTitle}>
+        {translate({id: 'benchmarks.platforms.title', message: 'Platform Overview'})}
+      </Heading>
+      <div className={styles.platformCards}>
+        {groups.map(group => {
+          const groupScenarios = scenarios.filter(s => s.group === group);
+          if (groupScenarios.length === 0) return null;
+
+          const bestDl = groupScenarios.reduce((a, b) => a.download_mbps > b.download_mbps ? a : b);
+          const avgLatency = groupScenarios.reduce((sum, s) => sum + s.latency_ms, 0) / groupScenarios.length;
+          const minMemory = Math.min(...groupScenarios.map(s => s.memory_idle_kb));
+          const maxSecurity = Math.max(...groupScenarios.map(s => s.security_score));
+          const bestSecTier = groupScenarios.reduce((a, b) => a.security_score > b.security_score ? a : b).security_tier;
+
+          return (
+            <div className={`${styles.platformCard} ${cardClasses[group]}`} key={group}>
+              <div className={styles.platformCardTitle}>{groupNames[group]}</div>
+              <div className={styles.platformCardBest}>Best: {bestDl.name}</div>
+              <div className={styles.platformStat}>{fmt(bestDl.download_mbps, 0)} Mbps download</div>
+              <div className={styles.platformStat}>{fmt(avgLatency, 2)} ms avg latency</div>
+              <div className={styles.platformStat}>{minMemory.toLocaleString()} KB min memory</div>
+              <div className={styles.platformStat}>Security: {bestSecTier} ({maxSecurity})</div>
+              <div className={styles.platformCardCount}>{groupScenarios.length} scenarios</div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function HeadToHead({scenarios}: {scenarios: Scenario[]}): ReactNode {
+  const groups = ['prisma', 'singbox', 'xray'] as const;
+  const baseline = scenarios.find(s => s.group === 'baseline');
+
+  const bestByGroup = groups.map(group => {
+    const groupScenarios = scenarios.filter(s => s.group === group);
+    if (groupScenarios.length === 0) return null;
+    return groupScenarios.reduce((a, b) => a.download_mbps > b.download_mbps ? a : b);
+  }).filter((s): s is Scenario => s !== null);
+
+  if (bestByGroup.length < 2) return null;
+
+  const metrics: {key: string; label: string; getValue: (s: Scenario) => number; format: (v: number) => string; unit: string; lowerBetter?: boolean}[] = [
+    {key: 'download', label: 'Download', getValue: s => s.download_mbps, format: v => fmt(v, 0), unit: 'Mbps'},
+    {key: 'upload', label: 'Upload', getValue: s => s.upload_mbps, format: v => fmt(v, 0), unit: 'Mbps'},
+    {key: 'latency', label: 'Latency', getValue: s => s.latency_ms, format: v => fmt(v, 2), unit: 'ms', lowerBetter: true},
+    {key: 'memory', label: 'Memory', getValue: s => s.memory_idle_kb, format: v => v.toLocaleString(), unit: 'KB', lowerBetter: true},
+    {key: 'security', label: 'Security', getValue: s => s.security_score, format: v => `${v}`, unit: ''},
+  ];
+
+  return (
+    <section className={styles.section}>
+      <Heading as="h2" className={styles.sectionTitle}>
+        {translate({id: 'benchmarks.h2h.title', message: 'Head-to-Head Comparison'})}
+      </Heading>
+      <p style={{color: 'var(--ifm-font-color-secondary)', fontSize: '0.9rem', marginBottom: '1rem'}}>
+        {translate({id: 'benchmarks.h2h.description', message: 'Best scenario from each platform compared side-by-side.'})}
+      </p>
+      <div style={{overflowX: 'auto'}}>
+        <table className={`${styles.dataTable} ${styles.h2hTable}`}>
+          <thead>
+            <tr>
+              <th>{translate({id: 'benchmarks.h2h.metric', message: 'Metric'})}</th>
+              {bestByGroup.map(s => (
+                <th key={s.label} className={groupLabelClass(s.group)}>{s.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.map(m => {
+              const values = bestByGroup.map(s => m.getValue(s));
+              const winnerIdx = m.lowerBetter
+                ? values.indexOf(Math.min(...values.filter(v => v > 0)))
+                : values.indexOf(Math.max(...values));
+              return (
+                <tr key={m.key}>
+                  <td>{m.label}</td>
+                  {bestByGroup.map((s, i) => (
+                    <td key={s.label} className={i === winnerIdx ? styles.h2hWinner : ''}>
+                      {m.format(m.getValue(s))} {m.unit}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+            {baseline && baseline.download_mbps > 0 && (
+              <tr>
+                <td>vs Baseline</td>
+                {bestByGroup.map(s => (
+                  <td key={s.label}>
+                    {Math.round((s.download_mbps / baseline.download_mbps) * 100)}%
+                  </td>
+                ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ResourceSection({scenarios}: {scenarios: Scenario[]}): ReactNode {
+  const proxied = scenarios.filter(s => s.group !== 'baseline');
+  const sortedByCpu = [...proxied].sort((a, b) => a.cpu_avg_pct - b.cpu_avg_pct);
+  const sortedByMem = [...proxied].sort((a, b) => a.memory_idle_kb - b.memory_idle_kb);
+  const maxCpu = Math.max(...proxied.map(s => s.cpu_avg_pct));
+  const maxMem = Math.max(...proxied.map(s => s.memory_idle_kb));
+
   return (
     <section className={styles.section}>
       <Heading as="h2" className={styles.sectionTitle}>
         {translate({id: 'benchmarks.resources.title', message: 'Resource Usage'})}
       </Heading>
+      <Legend />
+
+      <div className={styles.chartGroup}>
+        <div className={styles.chartGroupTitle}>
+          {translate({id: 'benchmarks.resources.cpuChart', message: 'CPU Usage (%) — lower is better'})}
+        </div>
+        {sortedByCpu.map(s => (
+          <div className={styles.barRow} key={`cpu-${s.label}`}>
+            <span className={styles.barLabel}>{s.name}</span>
+            <div className={styles.barTrack}>
+              <div
+                className={`${styles.barFill} ${groupBarClass(s.group)}`}
+                style={{width: `${maxCpu > 0 ? (s.cpu_avg_pct / maxCpu) * 100 : 0}%`}}
+              />
+            </div>
+            <span className={styles.barValue}>{fmt(s.cpu_avg_pct)}%</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.chartGroup}>
+        <div className={styles.chartGroupTitle}>
+          {translate({id: 'benchmarks.resources.memChart', message: 'Memory Idle (KB) — lower is better'})}
+        </div>
+        {sortedByMem.map(s => (
+          <div className={styles.barRow} key={`mem-${s.label}`}>
+            <span className={styles.barLabel}>{s.name}</span>
+            <div className={styles.barTrack}>
+              <div
+                className={`${styles.barFill} ${groupBarClass(s.group)}`}
+                style={{width: `${maxMem > 0 ? (s.memory_idle_kb / maxMem) * 100 : 0}%`}}
+              />
+            </div>
+            <span className={styles.barValue}>{s.memory_idle_kb.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+
       <div style={{overflowX: 'auto'}}>
         <table className={styles.dataTable}>
           <thead>
@@ -323,9 +510,82 @@ function ResourceTable({scenarios}: {scenarios: Scenario[]}): ReactNode {
   );
 }
 
-function SecurityTable({scenarios}: {scenarios: Scenario[]}): ReactNode {
+function EfficiencyChart({scenarios}: {scenarios: Scenario[]}): ReactNode {
+  const proxied = scenarios.filter(s => s.group !== 'baseline' && s.memory_load_kb > 0);
+
+  const withEfficiency = proxied.map(s => ({
+    ...s,
+    mbpsPerMb: s.download_mbps / (s.memory_load_kb / 1024),
+    mbpsPerCpu: s.cpu_avg_pct > 0 ? s.concurrent_mbps / s.cpu_avg_pct : 0,
+  }));
+
+  const sortedByMbpsMb = [...withEfficiency].sort((a, b) => b.mbpsPerMb - a.mbpsPerMb);
+  const sortedByMbpsCpu = [...withEfficiency].filter(s => s.mbpsPerCpu > 0).sort((a, b) => b.mbpsPerCpu - a.mbpsPerCpu);
+  const maxMbpsMb = Math.max(...sortedByMbpsMb.map(s => s.mbpsPerMb));
+  const maxMbpsCpu = sortedByMbpsCpu.length > 0 ? Math.max(...sortedByMbpsCpu.map(s => s.mbpsPerCpu)) : 1;
+
+  return (
+    <section className={styles.section}>
+      <Heading as="h2" className={styles.sectionTitle}>
+        {translate({id: 'benchmarks.efficiency.title', message: 'Throughput Efficiency'})}
+      </Heading>
+      <p style={{color: 'var(--ifm-font-color-secondary)', fontSize: '0.9rem', marginBottom: '1rem'}}>
+        {translate({id: 'benchmarks.efficiency.description', message: 'Which proxy delivers the most throughput per unit of resource consumed.'})}
+      </p>
+      <Legend />
+
+      <div className={styles.chartGroup}>
+        <div className={styles.chartGroupTitle}>
+          {translate({id: 'benchmarks.efficiency.perMb', message: 'Mbps per MB RAM (higher is better)'})}
+        </div>
+        {sortedByMbpsMb.map(s => (
+          <div className={styles.barRow} key={`eff-mb-${s.label}`}>
+            <span className={styles.barLabel}>{s.name}</span>
+            <div className={styles.barTrack}>
+              <div
+                className={`${styles.barFill} ${groupBarClass(s.group)}`}
+                style={{width: `${(s.mbpsPerMb / maxMbpsMb) * 100}%`}}
+              />
+            </div>
+            <span className={styles.barValue}>{fmt(s.mbpsPerMb, 1)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.chartGroup}>
+        <div className={styles.chartGroupTitle}>
+          {translate({id: 'benchmarks.efficiency.perCpu', message: 'Mbps per CPU% (higher is better)'})}
+        </div>
+        {sortedByMbpsCpu.map(s => (
+          <div className={styles.barRow} key={`eff-cpu-${s.label}`}>
+            <span className={styles.barLabel}>{s.name}</span>
+            <div className={styles.barTrack}>
+              <div
+                className={`${styles.barFill} ${groupBarClass(s.group)}`}
+                style={{width: `${(s.mbpsPerCpu / maxMbpsCpu) * 100}%`}}
+              />
+            </div>
+            <span className={styles.barValue}>{fmt(s.mbpsPerCpu, 1)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SecuritySection({scenarios}: {scenarios: Scenario[]}): ReactNode {
   const proxied = scenarios.filter(s => s.group !== 'baseline');
   const sorted = [...proxied].sort((a, b) => b.security_score - a.security_score);
+  const maxScore = Math.max(...sorted.map(s => s.security_score), 1);
+
+  function scoreTierClass(tier: string): string {
+    switch (tier) {
+      case 'S': return styles.barFillSecurityS;
+      case 'A': return styles.barFillSecurityA;
+      case 'B': return styles.barFillSecurityB;
+      default:  return styles.barFillSecurityC;
+    }
+  }
 
   return (
     <section className={styles.section}>
@@ -338,6 +598,30 @@ function SecurityTable({scenarios}: {scenarios: Scenario[]}): ReactNode {
           message: 'Composite score (0-100) based on encryption depth, forward secrecy, traffic analysis resistance, protocol detection resistance, anti-replay, and auth strength.',
         })}
       </p>
+
+      <div className={styles.chartGroup}>
+        <div className={styles.chartGroupTitle}>
+          {translate({id: 'benchmarks.security.chart', message: 'Security Score (higher is better)'})}
+        </div>
+        {sorted.map(s => (
+          <div className={styles.barRow} key={`sec-${s.label}`}>
+            <span className={styles.barLabel}>{s.name}</span>
+            <div className={styles.barTrack}>
+              <div
+                className={`${styles.barFill} ${scoreTierClass(s.security_tier)}`}
+                style={{width: `${(s.security_score / 100) * 100}%`}}
+              />
+            </div>
+            <span className={styles.barValue}>
+              <span className={`${styles.tierBadge} ${tierClass(s.security_tier)}`} style={{width: '22px', height: '22px', fontSize: '0.75rem', marginRight: '4px'}}>
+                {s.security_tier}
+              </span>
+              {s.security_score}
+            </span>
+          </div>
+        ))}
+      </div>
+
       <div style={{overflowX: 'auto'}}>
         <table className={styles.dataTable}>
           <thead>
@@ -398,9 +682,9 @@ function UseCaseCards({scenarios}: {scenarios: Scenario[]}): ReactNode {
               {winner && (
                 <div
                   className={`${styles.cardWinner} ${
-                    winner.group === 'prisma'
-                      ? styles.cardWinnerPrisma
-                      : styles.cardWinnerXray
+                    winner.group === 'prisma' ? styles.cardWinnerPrisma
+                    : winner.group === 'singbox' ? styles.cardWinnerSingbox
+                    : styles.cardWinnerXray
                   }`}
                 >
                   {winner.name} ({fmt(winnerScore, 0)}%)
@@ -445,6 +729,7 @@ export default function BenchmarksPage(): ReactNode {
   const [data, setData] = useState<BenchmarkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string>('all');
 
   function loadData() {
     setLoading(true);
@@ -502,7 +787,7 @@ export default function BenchmarksPage(): ReactNode {
         title={translate({id: 'benchmarks.page.title', message: 'Benchmarks'})}
         description={translate({
           id: 'benchmarks.page.description',
-          message: 'Performance benchmarks comparing Prisma Proxy against Xray-core',
+          message: 'Performance benchmarks comparing Prisma Proxy against Xray-core and sing-box',
         })}
       >
         <main className={styles.loading}>
@@ -519,7 +804,7 @@ export default function BenchmarksPage(): ReactNode {
         title={translate({id: 'benchmarks.page.title', message: 'Benchmarks'})}
         description={translate({
           id: 'benchmarks.page.description',
-          message: 'Performance benchmarks comparing Prisma Proxy against Xray-core',
+          message: 'Performance benchmarks comparing Prisma Proxy against Xray-core and sing-box',
         })}
       >
         <main className={`container ${styles.error}`}>
@@ -545,9 +830,13 @@ export default function BenchmarksPage(): ReactNode {
   }
 
   const sortedScenarios = [...data.scenarios].sort((a, b) => {
-    const order: Record<string, number> = {prisma: 0, xray: 1, baseline: 2};
+    const order: Record<string, number> = {prisma: 0, singbox: 1, xray: 2, baseline: 3};
     return (order[a.group] ?? 9) - (order[b.group] ?? 9);
   });
+
+  const filteredScenarios = activeFilter === 'all'
+    ? sortedScenarios
+    : sortedScenarios.filter(s => s.group === 'baseline' || s.group === activeFilter);
 
   const updatedDate = new Date(data.timestamp).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -563,7 +852,7 @@ export default function BenchmarksPage(): ReactNode {
       title={translate({id: 'benchmarks.page.title', message: 'Benchmarks'})}
       description={translate({
         id: 'benchmarks.page.description',
-        message: 'Performance benchmarks comparing Prisma Proxy against Xray-core',
+        message: 'Performance benchmarks comparing Prisma Proxy against Xray-core and sing-box',
       })}
     >
       <main className={`container ${styles.page}`}>
@@ -575,7 +864,7 @@ export default function BenchmarksPage(): ReactNode {
           <p className={styles.subtitle}>
             {translate({
               id: 'benchmarks.subtitle',
-              message: 'Prisma Proxy vs Xray-core — automated weekly comparison',
+              message: 'Prisma Proxy vs Xray-core vs sing-box — automated weekly comparison',
             })}
           </p>
           <div className={styles.meta}>
@@ -596,12 +885,26 @@ export default function BenchmarksPage(): ReactNode {
           </div>
         </div>
 
+        {/* Filter tabs */}
+        <FilterTabs activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+
+        {/* Platform summary */}
+        <PlatformSummary scenarios={sortedScenarios} />
+
         {/* Charts and tables */}
-        <ThroughputChart scenarios={sortedScenarios} />
-        <LatencyChart scenarios={sortedScenarios} />
-        <ResourceTable scenarios={sortedScenarios} />
-        <SecurityTable scenarios={sortedScenarios} />
-        <UseCaseCards scenarios={sortedScenarios} />
+        <ThroughputChart scenarios={filteredScenarios} />
+
+        {/* Head-to-head comparison */}
+        <HeadToHead scenarios={sortedScenarios} />
+
+        <LatencyChart scenarios={filteredScenarios} />
+        <ResourceSection scenarios={filteredScenarios} />
+
+        {/* Throughput Efficiency */}
+        <EfficiencyChart scenarios={filteredScenarios} />
+
+        <SecuritySection scenarios={filteredScenarios} />
+        <UseCaseCards scenarios={filteredScenarios} />
         <HistorySection />
       </main>
     </Layout>
