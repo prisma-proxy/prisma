@@ -451,14 +451,20 @@ async fn main() -> anyhow::Result<()> {
             dir,
         } => {
             // Auto-detect token: --token flag > PRISMA_MGMT_TOKEN env > server.toml
-            let token = token.or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok()).or_else(|| {
-                api_client::ApiClient::resolve(None, None, false)
-                    .ok()
-                    .and_then(|c| {
-                        let t = c.token();
-                        if t.is_empty() { None } else { Some(t.to_string()) }
-                    })
-            });
+            let token = token
+                .or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok())
+                .or_else(|| {
+                    api_client::ApiClient::resolve(None, None, false)
+                        .ok()
+                        .and_then(|c| {
+                            let t = c.token();
+                            if t.is_empty() {
+                                None
+                            } else {
+                                Some(t.to_string())
+                            }
+                        })
+                });
             dashboard::run_dashboard(mgmt_url, token, port, bind, no_open, update, dir).await?;
         }
         Commands::Completions { shell } => {
@@ -722,12 +728,10 @@ async fn run_speed_test(
     config_path: &str,
 ) -> anyhow::Result<()> {
     use prisma_core::config::load_client_config;
-    use prisma_core::congestion::CongestionMode;
     use prisma_core::crypto::aead::AeadCipher;
     use prisma_core::protocol::codec::*;
     use prisma_core::protocol::types::*;
-    use prisma_core::router::Router;
-    use prisma_core::types::{CipherSuite, ClientId, MAX_FRAME_SIZE};
+    use prisma_core::types::MAX_FRAME_SIZE;
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -741,74 +745,15 @@ async fn run_speed_test(
     println!("  Client ID: {}", config.identity.client_id);
     println!();
 
-    let server_addr = if server.contains(':') {
-        server.to_string()
-    } else {
-        format!("{}:8443", server)
-    };
-
-    let client_id = ClientId::from_uuid(
-        uuid::Uuid::parse_str(&config.identity.client_id)
-            .map_err(|e| anyhow::anyhow!("Invalid client_id: {}", e))?,
-    );
-    let auth_secret = prisma_core::util::hex_decode_32(&config.identity.auth_secret)
-        .map_err(|e| anyhow::anyhow!("Invalid auth_secret: {}", e))?;
-    let cipher_suite = match config.cipher_suite.as_str() {
-        "aes-256-gcm" => CipherSuite::Aes256Gcm,
-        _ => CipherSuite::ChaCha20Poly1305,
-    };
-
-    let congestion_mode = CongestionMode::from_config(
-        &config.congestion.mode,
-        config.congestion.target_bandwidth.as_deref(),
-    );
+    // Reuse the shared ProxyContext builder
+    let ctx = diagnostics::build_proxy_context_pub(&config, Some(server))?;
+    let client_id = ctx.client_id;
+    let auth_secret = ctx.auth_secret;
+    let cipher_suite = ctx.cipher_suite;
 
     // Connect to server
-    println!("Connecting to {}...", server_addr);
+    println!("Connecting to {}...", ctx.server_addr);
     let connect_start = std::time::Instant::now();
-
-    let ctx = prisma_client::proxy::ProxyContext {
-        server_addr: server_addr.clone(),
-        client_id,
-        auth_secret,
-        cipher_suite,
-        use_quic: config.transport == "quic",
-        skip_cert_verify: config.skip_cert_verify,
-        tls_on_tcp: config.tls_on_tcp,
-        alpn_protocols: config.alpn_protocols.clone(),
-        tls_server_name: config.tls_server_name.clone(),
-        use_ws: config.transport == "ws",
-        ws_url: config.ws_url.clone(),
-        ws_extra_headers: config.ws_extra_headers.clone(),
-        use_grpc: config.transport == "grpc",
-        grpc_url: config.grpc_url.clone(),
-        use_xhttp: config.transport == "xhttp",
-        xhttp_mode: config.xhttp_mode.clone(),
-        xhttp_stream_url: config.xhttp_stream_url.clone(),
-        xhttp_upload_url: config.xhttp_upload_url.clone(),
-        xhttp_download_url: config.xhttp_download_url.clone(),
-        xhttp_extra_headers: config.xhttp_extra_headers.clone(),
-        use_xporta: config.transport == "xporta",
-        xporta_config: config.xporta.clone(),
-        user_agent: config.user_agent.clone(),
-        referer: config.referer.clone(),
-        congestion_mode,
-        port_hopping: config.port_hopping.clone(),
-        salamander_password: config.salamander_password.clone(),
-        udp_fec: None,
-        dns_config: prisma_core::dns::DnsConfig::default(),
-        dns_resolver: prisma_client::dns_resolver::DnsResolver::new(
-            &prisma_core::dns::DnsConfig::default(),
-        ),
-        router: Arc::new(Router::new(vec![])),
-        // v4 fields
-        protocol_version: config.protocol_version.clone(),
-        fingerprint: config.fingerprint.clone(),
-        quic_version: config.quic_version.clone(),
-        traffic_shaping: config.traffic_shaping.clone(),
-        use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
-        metrics: prisma_client::metrics::ClientMetrics::new(),
-    };
 
     let transport = ctx.connect().await?;
     let rtt = connect_start.elapsed();

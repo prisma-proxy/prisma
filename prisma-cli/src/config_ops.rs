@@ -10,8 +10,8 @@ pub fn get_config(client: &ApiClient) -> Result<()> {
         return Ok(());
     }
 
-    // Pretty-print the config as key-value pairs
-    print_config_section("", &data);
+    // Pretty-print the config as key-value pairs with sections
+    print_config_section("", &data, 0);
     Ok(())
 }
 
@@ -22,7 +22,10 @@ pub fn set_config(client: &ApiClient, key: &str, value: &str) -> Result<()> {
     // Auto-coerce value types based on field name
     let typed_value = coerce_value(&field, value);
 
-    let body = serde_json::json!({ field: typed_value });
+    // Use a Map to set the dynamic key — json!({field: v}) uses "field" literally
+    let mut map = serde_json::Map::new();
+    map.insert(field, typed_value);
+    let body = serde_json::Value::Object(map);
     client.patch("/api/config", &body)?;
 
     if !client.is_json() {
@@ -176,14 +179,20 @@ pub fn backup_delete(client: &ApiClient, name: &str) -> Result<()> {
 
 fn coerce_value(field: &str, value: &str) -> serde_json::Value {
     // Boolean fields
-    let bool_fields = [
+    static BOOL_FIELDS: &[&str] = &[
         "port_forwarding_enabled",
         "camouflage_enabled",
         "camouflage_tls_on_tcp",
         "anti_rtt_enabled",
         "allow_transport_only_cipher",
+        "cdn_enabled",
+        "cdn_expose_management_api",
+        "cdn_padding_header",
+        "cdn_enable_sse_disguise",
+        "prisma_tls_enabled",
+        "management_api_enabled",
     ];
-    if bool_fields.contains(&field) {
+    if BOOL_FIELDS.contains(&field) {
         return match value.to_lowercase().as_str() {
             "true" | "yes" | "1" => serde_json::Value::Bool(true),
             "false" | "no" | "0" => serde_json::Value::Bool(false),
@@ -192,21 +201,42 @@ fn coerce_value(field: &str, value: &str) -> serde_json::Value {
     }
 
     // u32 fields
-    let u32_fields = [
+    static U32_FIELDS: &[&str] = &[
         "max_connections",
         "traffic_shaping_timing_jitter_ms",
         "traffic_shaping_chaff_interval_ms",
         "traffic_shaping_coalesce_window_ms",
         "anti_rtt_normalization_ms",
     ];
-    if u32_fields.contains(&field) {
+    if U32_FIELDS.contains(&field) {
         if let Ok(n) = value.parse::<u32>() {
             return serde_json::Value::Number(n.into());
         }
     }
 
+    // u16 fields
+    static U16_FIELDS: &[&str] = &[
+        "port_hopping_base_port",
+        "port_hopping_range",
+        "port_forwarding_port_range_start",
+        "port_forwarding_port_range_end",
+        "padding_min",
+        "padding_max",
+    ];
+    if U16_FIELDS.contains(&field) {
+        if let Ok(n) = value.parse::<u16>() {
+            return serde_json::Value::Number(n.into());
+        }
+    }
+
     // u64 fields
-    if field == "connection_timeout_secs" {
+    static U64_FIELDS: &[&str] = &[
+        "connection_timeout_secs",
+        "prisma_tls_auth_rotation_hours",
+        "port_hopping_interval_secs",
+        "port_hopping_grace_period_secs",
+    ];
+    if U64_FIELDS.contains(&field) {
         if let Ok(n) = value.parse::<u64>() {
             return serde_json::Value::Number(n.into());
         }
@@ -216,20 +246,25 @@ fn coerce_value(field: &str, value: &str) -> serde_json::Value {
     serde_json::Value::String(value.to_string())
 }
 
-fn print_config_section(prefix: &str, value: &serde_json::Value) {
+fn print_config_section(prefix: &str, value: &serde_json::Value, depth: usize) {
     match value {
         serde_json::Value::Object(map) => {
             for (k, v) in map {
-                let key = if prefix.is_empty() {
+                let full_key = if prefix.is_empty() {
                     k.clone()
                 } else {
                     format!("{}.{}", prefix, k)
                 };
                 match v {
                     serde_json::Value::Object(_) => {
-                        println!("[{}]", key);
-                        print_config_section(&key, v);
-                        println!();
+                        println!("\x1b[36m[{}]\x1b[0m", full_key);
+                        print_config_section(&full_key, v, depth + 1);
+                        if depth == 0 {
+                            println!();
+                        }
+                    }
+                    serde_json::Value::Array(arr) if arr.iter().any(|i| i.is_object()) => {
+                        println!("  {} = ({} items)", k, arr.len());
                     }
                     _ => {
                         println!("  {} = {}", k, format_value(v));
@@ -245,11 +280,22 @@ fn print_config_section(prefix: &str, value: &serde_json::Value) {
 
 fn format_value(v: &serde_json::Value) -> String {
     match v {
-        serde_json::Value::String(s) => format!("\"{}\"", s),
-        serde_json::Value::Null => "null".to_string(),
+        serde_json::Value::String(s) => format!("\x1b[33m\"{}\"\x1b[0m", s),
+        serde_json::Value::Bool(b) => {
+            if *b {
+                "\x1b[32mtrue\x1b[0m".to_string()
+            } else {
+                "\x1b[31mfalse\x1b[0m".to_string()
+            }
+        }
+        serde_json::Value::Null => "\x1b[90mnull\x1b[0m".to_string(),
         serde_json::Value::Array(arr) => {
-            let items: Vec<String> = arr.iter().map(format_value).collect();
-            format!("[{}]", items.join(", "))
+            if arr.is_empty() {
+                "[]".to_string()
+            } else {
+                let items: Vec<String> = arr.iter().map(format_value).collect();
+                format!("[{}]", items.join(", "))
+            }
         }
         other => other.to_string(),
     }
