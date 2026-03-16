@@ -1,9 +1,9 @@
 [workspace]
-members = ["prisma-core", "prisma-server", "prisma-client", "prisma-cli", "prisma-mgmt"]
+members = ["prisma-core", "prisma-server", "prisma-client", "prisma-cli", "prisma-mgmt", "prisma-ffi"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 license = "GPLv3.0"
 
@@ -135,6 +135,13 @@ proptest = "1"
 insta = { version = "1", features = ["yaml"] }
 tokio-test = "0.4"
 rcgen = "0.13"
+
+# FFI / GUI extras
+semver = "1"
+base64 = "0.22"
+dirs = "5"
+once_cell = "1"
+qrcode = "0.14"
 
 [profile.release]
 strip = true

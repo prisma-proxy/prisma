@@ -16,6 +16,7 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **Port forwarding** — frp-style reverse proxy over encrypted tunnels
 - **Web dashboard** — real-time monitoring with Next.js + shadcn/ui
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
+- **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
 
 ## Quick Start
 
@@ -69,14 +70,19 @@ cargo build --release
 
 ```
 prisma/
-├── prisma-core/       # Shared library: crypto, protocol, config, DNS, routing, GeoIP
-├── prisma-server/     # Proxy server (TCP, QUIC, CDN inbound)
-├── prisma-client/     # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
-├── prisma-mgmt/       # Management API (REST + WebSocket via axum)
-├── prisma-cli/        # CLI with key/cert generation, init, validate
-├── prisma-dashboard/  # Web dashboard (Next.js + shadcn/ui)
-├── prisma-docs/       # Documentation site (Docusaurus)
-└── scripts/           # Install scripts and benchmarks
+├── prisma-core/         # Shared library: crypto, protocol, config, DNS, routing, GeoIP
+├── prisma-server/       # Proxy server (TCP, QUIC, CDN inbound)
+├── prisma-client/       # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
+├── prisma-mgmt/         # Management API (REST + WebSocket via axum)
+├── prisma-cli/          # CLI with key/cert generation, init, validate
+├── prisma-ffi/          # C FFI library used by all native GUI clients
+├── prisma-gui-windows/  # Windows GUI (Rust + Win32/GDI, system tray)
+├── prisma-gui-android/  # Android app (Kotlin + Jetpack Compose + JNI)
+├── prisma-gui-ios/      # iOS app (Swift + SwiftUI + NetworkExtension)
+├── prisma-gui-macos/    # macOS menu bar app (Swift + AppKit)
+├── prisma-dashboard/    # Web dashboard (Next.js + shadcn/ui)
+├── prisma-docs/         # Documentation site (Docusaurus)
+└── scripts/             # Install scripts and benchmarks
 ```
 
 ## Documentation
@@ -95,6 +101,7 @@ Full documentation is available at **[yamimega.github.io/prisma](https://yamimeg
 - [PrismaVeil Protocol](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — wire protocol specification
 - [Dashboard](https://yamimega.github.io/prisma/docs/features/dashboard) — web UI setup
 - [Management API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API reference
+- [GUI Clients](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows, Android, iOS, macOS apps
 
 ## Development
 
@@ -105,6 +112,16 @@ cargo test --workspace
 # Lint
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
+
+# Build FFI library + Windows GUI
+cargo build --release -p prisma-ffi -p prisma-gui-windows
+
+# Build Android app (requires Android SDK + NDK)
+cd prisma-gui-android && ./gradlew assembleRelease
+
+# Build iOS / macOS apps (requires Xcode on macOS)
+xcodebuild -project prisma-gui-ios/PrismaIOS.xcodeproj -scheme PrismaIOS
+xcodebuild -project prisma-gui-macos/PrismaMacOS.xcodeproj -scheme PrismaMacOS
 
 # Build dashboard
 cd prisma-dashboard && npm ci && npm run build

@@ -38,3 +38,10 @@ benchmark-results/
 
 # Misc
 prisma-plan.md
+
+# prisma-gui (Tauri + Vite)
+/prisma-gui/node_modules/
+/prisma-gui/dist/
+/prisma-gui/.vite/
+/prisma-gui/src-tauri/target/
+/prisma-gui/src-tauri/gen/

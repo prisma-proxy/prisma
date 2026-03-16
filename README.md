@@ -16,6 +16,7 @@
 - **端口转发** — 通过加密隧道实现类 frp 的反向代理
 - **Web 仪表板** — 基于 Next.js + shadcn/ui 的实时监控
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
+- **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
 
 ## 快速开始
 
@@ -69,14 +70,19 @@ cargo build --release
 
 ```
 prisma/
-├── prisma-core/       # 共享库：加密、协议、配置、DNS、路由、GeoIP
-├── prisma-server/     # 代理服务端（TCP、QUIC、CDN 入站）
-├── prisma-client/     # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
-├── prisma-mgmt/       # 管理 API（基于 axum 的 REST + WebSocket）
-├── prisma-cli/        # CLI 工具：密钥/证书生成、初始化、校验
-├── prisma-dashboard/  # Web 仪表板（Next.js + shadcn/ui）
-├── prisma-docs/       # 文档站点（Docusaurus）
-└── scripts/           # 安装脚本和基准测试
+├── prisma-core/         # 共享库：加密、协议、配置、DNS、路由、GeoIP
+├── prisma-server/       # 代理服务端（TCP、QUIC、CDN 入站）
+├── prisma-client/       # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
+├── prisma-mgmt/         # 管理 API（基于 axum 的 REST + WebSocket）
+├── prisma-cli/          # CLI 工具：密钥/证书生成、初始化、校验
+├── prisma-ffi/          # C FFI 库，供所有原生 GUI 客户端调用
+├── prisma-gui-windows/  # Windows GUI（Rust + Win32/GDI，系统托盘）
+├── prisma-gui-android/  # Android 应用（Kotlin + Jetpack Compose + JNI）
+├── prisma-gui-ios/      # iOS 应用（Swift + SwiftUI + NetworkExtension）
+├── prisma-gui-macos/    # macOS 菜单栏应用（Swift + AppKit）
+├── prisma-dashboard/    # Web 仪表板（Next.js + shadcn/ui）
+├── prisma-docs/         # 文档站点（Docusaurus）
+└── scripts/             # 安装脚本和基准测试
 ```
 
 ## 文档
@@ -95,6 +101,7 @@ prisma/
 - [PrismaVeil 协议](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — 线路协议规范
 - [仪表板](https://yamimega.github.io/prisma/docs/features/dashboard) — Web UI 配置
 - [管理 API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API 参考
+- [GUI 客户端](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows、Android、iOS、macOS 应用
 
 ## 开发
 
@@ -105,6 +112,16 @@ cargo test --workspace
 # 代码检查
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
+
+# 构建 FFI 库 + Windows GUI
+cargo build --release -p prisma-ffi -p prisma-gui-windows
+
+# 构建 Android 应用（需要 Android SDK + NDK）
+cd prisma-gui-android && ./gradlew assembleRelease
+
+# 构建 iOS / macOS 应用（需要 macOS 上的 Xcode）
+xcodebuild -project prisma-gui-ios/PrismaIOS.xcodeproj -scheme PrismaIOS
+xcodebuild -project prisma-gui-macos/PrismaMacOS.xcodeproj -scheme PrismaMacOS
 
 # 构建仪表板
 cd prisma-dashboard && npm ci && npm run build
