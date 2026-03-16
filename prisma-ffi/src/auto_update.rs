@@ -39,7 +39,9 @@ pub fn check() -> Result<Option<UpdateInfo>> {
     if remote > current {
         // Find platform-specific asset
         let target_suffix = platform_asset_suffix();
-        let url = resp.assets.iter()
+        let url = resp
+            .assets
+            .iter()
             .find(|a| a.name.contains(target_suffix))
             .map(|a| a.browser_download_url.clone())
             .unwrap_or_default();
@@ -67,7 +69,11 @@ pub fn apply(download_url: &str, expected_sha256: &str) -> Result<()> {
     hasher.update(&buf);
     let result = format!("{:x}", hasher.finalize());
     if result != expected_sha256.to_lowercase() {
-        anyhow::bail!("SHA256 mismatch: expected {}, got {}", expected_sha256, result);
+        anyhow::bail!(
+            "SHA256 mismatch: expected {}, got {}",
+            expected_sha256,
+            result
+        );
     }
 
     // Write to temp location and schedule replacement on next launch
@@ -80,13 +86,28 @@ pub fn apply(download_url: &str, expected_sha256: &str) -> Result<()> {
 
 fn platform_asset_suffix() -> &'static str {
     #[cfg(target_os = "windows")]
-    { "windows" }
+    {
+        "windows"
+    }
     #[cfg(target_os = "macos")]
-    { "macos" }
+    {
+        "macos"
+    }
     #[cfg(target_os = "android")]
-    { "android" }
+    {
+        "android"
+    }
     #[cfg(target_os = "ios")]
-    { "ios" }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android", target_os = "ios")))]
-    { "linux" }
+    {
+        "ios"
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "android",
+        target_os = "ios"
+    )))]
+    {
+        "linux"
+    }
 }

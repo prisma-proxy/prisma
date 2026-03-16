@@ -6,9 +6,8 @@ use bytes::{Buf, Bytes, BytesMut};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::mpsc;
 
-type ReserveFut<T> = Pin<
-    Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>,
->;
+type ReserveFut<T> =
+    Pin<Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>>;
 
 /// Generic adapter that bridges a pair of `mpsc` channels into `AsyncRead + AsyncWrite`.
 ///

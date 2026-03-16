@@ -37,7 +37,12 @@ impl ProfileManager {
             {
                 PathBuf::from("/data/data/com.prisma.client/files")
             }
-            #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios", target_os = "android")))]
+            #[cfg(not(any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "android"
+            )))]
             {
                 dirs::config_dir().unwrap_or_else(|| PathBuf::from("."))
             }

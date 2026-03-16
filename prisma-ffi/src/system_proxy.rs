@@ -3,8 +3,6 @@ use anyhow::Result;
 #[cfg(target_os = "windows")]
 mod platform {
     use anyhow::Result;
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
 
     const INTERNET_OPTION_SETTINGS_CHANGED: u32 = 39;
     const INTERNET_OPTION_REFRESH: u32 = 37;
@@ -23,9 +21,8 @@ mod platform {
         use winreg::RegKey;
 
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let (key, _) = hkcu.create_subkey(
-            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-        )?;
+        let (key, _) =
+            hkcu.create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")?;
         key.set_value("ProxyEnable", &1u32)?;
         key.set_value("ProxyServer", &format!("{}:{}", host, port))?;
 
@@ -51,9 +48,8 @@ mod platform {
         use winreg::RegKey;
 
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let (key, _) = hkcu.create_subkey(
-            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-        )?;
+        let (key, _) =
+            hkcu.create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")?;
         key.set_value("ProxyEnable", &0u32)?;
 
         unsafe {
@@ -87,7 +83,9 @@ mod platform {
         let services = String::from_utf8_lossy(&output.stdout);
         for service in services.lines().skip(1) {
             let service = service.trim_start_matches('*').trim();
-            if service.is_empty() { continue; }
+            if service.is_empty() {
+                continue;
+            }
             let _ = Command::new("networksetup")
                 .args(["-setsocksfirewallproxy", service, host, &port.to_string()])
                 .output();
@@ -105,7 +103,9 @@ mod platform {
         let services = String::from_utf8_lossy(&output.stdout);
         for service in services.lines().skip(1) {
             let service = service.trim_start_matches('*').trim();
-            if service.is_empty() { continue; }
+            if service.is_empty() {
+                continue;
+            }
             let _ = Command::new("networksetup")
                 .args(["-setsocksfirewallproxystate", service, "off"])
                 .output();

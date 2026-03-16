@@ -7,16 +7,15 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
+mod auto_update;
 mod connection;
+mod geo;
 mod profiles;
 mod qr;
 mod runtime;
 mod stats_poller;
 mod system_proxy;
-mod auto_update;
-mod geo;
 
 use connection::ConnectionManager;
 use profiles::ProfileManager;
@@ -47,7 +46,8 @@ pub const PRISMA_MODE_PER_APP: u32 = 0x08;
 
 // ── Callback ──────────────────────────────────────────────────────────────────
 
-pub type PrismaCallback = Option<unsafe extern "C" fn(event_json: *const c_char, userdata: *mut c_void)>;
+pub type PrismaCallback =
+    Option<unsafe extern "C" fn(event_json: *const c_char, userdata: *mut c_void)>;
 
 // ── Opaque handle ────────────────────────────────────────────────────────────
 
@@ -79,14 +79,6 @@ impl PrismaClient {
 
 // ── Helper macros ────────────────────────────────────────────────────────────
 
-macro_rules! check_ptr {
-    ($ptr:expr) => {
-        if $ptr.is_null() {
-            return PRISMA_ERR_INVALID_CONFIG;
-        }
-    };
-}
-
 macro_rules! cstr_to_str {
     ($ptr:expr) => {{
         if $ptr.is_null() {
@@ -111,7 +103,10 @@ pub extern "C" fn prisma_create() -> *mut PrismaClient {
     let client = Box::new(PrismaClient {
         runtime,
         connection: Arc::new(Mutex::new(ConnectionManager::new())),
-        callback: Arc::new(Mutex::new(CallbackHolder { func: None, userdata: std::ptr::null_mut() })),
+        callback: Arc::new(Mutex::new(CallbackHolder {
+            func: None,
+            userdata: std::ptr::null_mut(),
+        })),
         stats_poller: Arc::new(Mutex::new(None)),
     });
     Box::into_raw(client)
@@ -123,7 +118,9 @@ pub extern "C" fn prisma_create() -> *mut PrismaClient {
 /// `handle` must be a valid pointer returned by `prisma_create`.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_destroy(handle: *mut PrismaClient) {
-    if handle.is_null() { return; }
+    if handle.is_null() {
+        return;
+    }
     let client = unsafe { Box::from_raw(handle) };
     // Stop stats poller
     if let Ok(mut poller_guard) = client.stats_poller.lock() {
@@ -148,7 +145,9 @@ pub unsafe extern "C" fn prisma_connect(
     config_json: *const c_char,
     modes: u32,
 ) -> c_int {
-    if handle.is_null() { return PRISMA_ERR_INVALID_CONFIG; }
+    if handle.is_null() {
+        return PRISMA_ERR_INVALID_CONFIG;
+    }
     let client = unsafe { &*handle };
     let config_str = cstr_to_str!(config_json);
 
@@ -190,11 +189,8 @@ pub unsafe extern "C" fn prisma_connect(
             // Start stats poller
             let cb_arc2 = Arc::clone(&client.callback);
             let conn_arc = Arc::clone(&client.connection);
-            let poller = stats_poller::StatsPoller::start(
-                Arc::clone(&client.runtime),
-                conn_arc,
-                cb_arc2,
-            );
+            let poller =
+                stats_poller::StatsPoller::start(Arc::clone(&client.runtime), conn_arc, cb_arc2);
             *client.stats_poller.lock().unwrap() = Some(poller);
             client.fire_event(r#"{"type":"status_changed","status":"connected"}"#);
             PRISMA_OK
@@ -215,7 +211,9 @@ pub unsafe extern "C" fn prisma_connect(
 /// `handle` must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_disconnect(handle: *mut PrismaClient) -> c_int {
-    if handle.is_null() { return PRISMA_ERR_INVALID_CONFIG; }
+    if handle.is_null() {
+        return PRISMA_ERR_INVALID_CONFIG;
+    }
     let client = unsafe { &*handle };
 
     // Stop stats poller first
@@ -245,7 +243,9 @@ pub unsafe extern "C" fn prisma_disconnect(handle: *mut PrismaClient) -> c_int {
 /// `handle` must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_get_status(handle: *mut PrismaClient) -> c_int {
-    if handle.is_null() { return PRISMA_STATUS_DISCONNECTED; }
+    if handle.is_null() {
+        return PRISMA_STATUS_DISCONNECTED;
+    }
     let client = unsafe { &*handle };
     match client.connection.lock() {
         Ok(conn) => conn.status() as c_int,
@@ -260,7 +260,9 @@ pub unsafe extern "C" fn prisma_get_status(handle: *mut PrismaClient) -> c_int {
 /// `handle` must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_get_stats_json(handle: *mut PrismaClient) -> *mut c_char {
-    if handle.is_null() { return std::ptr::null_mut(); }
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
     let client = unsafe { &*handle };
     match client.connection.lock() {
         Ok(conn) => {
@@ -280,7 +282,9 @@ pub unsafe extern "C" fn prisma_get_stats_json(handle: *mut PrismaClient) -> *mu
 /// `s` must be a pointer returned by a prisma_* function (or NULL).
 #[no_mangle]
 pub unsafe extern "C" fn prisma_free_string(s: *mut c_char) {
-    if s.is_null() { return; }
+    if s.is_null() {
+        return;
+    }
     unsafe { drop(CString::from_raw(s)) };
 }
 
@@ -294,7 +298,9 @@ pub unsafe extern "C" fn prisma_set_callback(
     callback: PrismaCallback,
     userdata: *mut c_void,
 ) {
-    if handle.is_null() { return; }
+    if handle.is_null() {
+        return;
+    }
     let client = unsafe { &*handle };
     if let Ok(mut holder) = client.callback.lock() {
         holder.func = callback;
@@ -350,7 +356,9 @@ pub unsafe extern "C" fn prisma_profile_delete(id: *const c_char) -> c_int {
 /// `profile_json` must be a valid non-null C string.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_profile_to_qr_svg(profile_json: *const c_char) -> *mut c_char {
-    if profile_json.is_null() { return std::ptr::null_mut(); }
+    if profile_json.is_null() {
+        return std::ptr::null_mut();
+    }
     let json_str = match unsafe { CStr::from_ptr(profile_json) }.to_str() {
         Ok(s) => s,
         Err(_) => return std::ptr::null_mut(),
@@ -374,7 +382,9 @@ pub unsafe extern "C" fn prisma_profile_from_qr(
     data: *const c_char,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    if data.is_null() || out_json.is_null() { return PRISMA_ERR_INVALID_CONFIG; }
+    if data.is_null() || out_json.is_null() {
+        return PRISMA_ERR_INVALID_CONFIG;
+    }
     let data_str = match unsafe { CStr::from_ptr(data) }.to_str() {
         Ok(s) => s,
         Err(_) => return PRISMA_ERR_INVALID_CONFIG,
@@ -464,7 +474,9 @@ pub unsafe extern "C" fn prisma_speed_test(
     duration_secs: u32,
     direction: *const c_char,
 ) -> c_int {
-    if handle.is_null() { return PRISMA_ERR_INVALID_CONFIG; }
+    if handle.is_null() {
+        return PRISMA_ERR_INVALID_CONFIG;
+    }
     let client = unsafe { &*handle };
     let server_str = cstr_to_str!(server);
     let dir_str = cstr_to_str!(direction);

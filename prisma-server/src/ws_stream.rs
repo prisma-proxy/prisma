@@ -9,9 +9,8 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::mpsc;
 
-type ReserveFut<T> = Pin<
-    Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>,
->;
+type ReserveFut<T> =
+    Pin<Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>>;
 
 /// Adapter that bridges an axum WebSocket (Stream/Sink) into AsyncRead + AsyncWrite.
 ///

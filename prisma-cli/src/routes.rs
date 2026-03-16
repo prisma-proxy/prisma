@@ -127,8 +127,8 @@ pub fn delete(client: &ApiClient, id: &str) -> Result<()> {
 
 pub fn setup(client: &ApiClient, preset: &str, clear: bool) -> Result<()> {
     let rules: &[(&str, &str, &str, u32)] = match preset {
-        "block-ads" => &PRESET_BLOCK_ADS,
-        "privacy" => &PRESET_PRIVACY,
+        "block-ads" => PRESET_BLOCK_ADS,
+        "privacy" => PRESET_PRIVACY,
         "allow-all" => &[("allow-all", "All", "Allow", 1000)],
         "block-all" => &[("block-all", "All", "Block", 1000)],
         _ => anyhow::bail!(
@@ -179,8 +179,8 @@ pub fn setup(client: &ApiClient, preset: &str, clear: bool) -> Result<()> {
         println!("Applied preset '{}': {} rule(s) created.", preset, created);
         println!();
         println!(
-            "  {:<5}  {:<32}  {:<16}  {}",
-            "Pri", "Name", "Condition", "Action"
+            "  {:<5}  {:<32}  {:<16}  Action",
+            "Pri", "Name", "Condition"
         );
         println!("  {}", "-".repeat(65));
         for (name, condition, action, priority) in rules {
@@ -198,7 +198,12 @@ pub fn setup(client: &ApiClient, preset: &str, clear: bool) -> Result<()> {
 static PRESET_BLOCK_ADS: &[(&str, &str, &str, u32)] = &[
     ("block-ads-wildcard", "DomainMatch:*.ads.*", "Block", 10),
     ("block-ad-wildcard", "DomainMatch:*.ad.*", "Block", 11),
-    ("block-doubleclick", "DomainMatch:*.doubleclick.net", "Block", 12),
+    (
+        "block-doubleclick",
+        "DomainMatch:*.doubleclick.net",
+        "Block",
+        12,
+    ),
     (
         "block-googlesyndication",
         "DomainMatch:*.googlesyndication.com",
@@ -206,9 +211,19 @@ static PRESET_BLOCK_ADS: &[(&str, &str, &str, u32)] = &[
         13,
     ),
     ("block-adnxs", "DomainMatch:*.adnxs.com", "Block", 14),
-    ("block-advertising", "DomainMatch:*.advertising.com", "Block", 15),
+    (
+        "block-advertising",
+        "DomainMatch:*.advertising.com",
+        "Block",
+        15,
+    ),
     ("block-adsystem", "DomainMatch:*.adsystem.com", "Block", 16),
-    ("block-adservice", "DomainMatch:*.adservice.com", "Block", 17),
+    (
+        "block-adservice",
+        "DomainMatch:*.adservice.com",
+        "Block",
+        17,
+    ),
     ("block-adserver", "DomainMatch:*.adserver.*", "Block", 18),
     ("block-pagead", "DomainMatch:*.pagead.*", "Block", 19),
 ];
@@ -217,7 +232,12 @@ static PRESET_PRIVACY: &[(&str, &str, &str, u32)] = &[
     // Ads (same as block-ads)
     ("block-ads-wildcard", "DomainMatch:*.ads.*", "Block", 10),
     ("block-ad-wildcard", "DomainMatch:*.ad.*", "Block", 11),
-    ("block-doubleclick", "DomainMatch:*.doubleclick.net", "Block", 12),
+    (
+        "block-doubleclick",
+        "DomainMatch:*.doubleclick.net",
+        "Block",
+        12,
+    ),
     (
         "block-googlesyndication",
         "DomainMatch:*.googlesyndication.com",
@@ -225,9 +245,19 @@ static PRESET_PRIVACY: &[(&str, &str, &str, u32)] = &[
         13,
     ),
     ("block-adnxs", "DomainMatch:*.adnxs.com", "Block", 14),
-    ("block-advertising", "DomainMatch:*.advertising.com", "Block", 15),
+    (
+        "block-advertising",
+        "DomainMatch:*.advertising.com",
+        "Block",
+        15,
+    ),
     ("block-adsystem", "DomainMatch:*.adsystem.com", "Block", 16),
-    ("block-adservice", "DomainMatch:*.adservice.com", "Block", 17),
+    (
+        "block-adservice",
+        "DomainMatch:*.adservice.com",
+        "Block",
+        17,
+    ),
     ("block-adserver", "DomainMatch:*.adserver.*", "Block", 18),
     ("block-pagead", "DomainMatch:*.pagead.*", "Block", 19),
     // Analytics & telemetry

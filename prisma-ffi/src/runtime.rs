@@ -1,6 +1,6 @@
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
-use anyhow::Result;
 
 pub struct PrismaRuntime {
     inner: Arc<Runtime>,
@@ -12,7 +12,9 @@ impl PrismaRuntime {
             .enable_all()
             .thread_name("prisma-ffi")
             .build()?;
-        Ok(Self { inner: Arc::new(rt) })
+        Ok(Self {
+            inner: Arc::new(rt),
+        })
     }
 
     pub fn spawn<F>(&self, fut: F) -> tokio::task::JoinHandle<F::Output>
@@ -23,10 +25,12 @@ impl PrismaRuntime {
         self.inner.spawn(fut)
     }
 
+    #[allow(dead_code)]
     pub fn block_on<F: std::future::Future>(&self, fut: F) -> F::Output {
         self.inner.block_on(fut)
     }
 
+    #[allow(dead_code)]
     pub fn handle(&self) -> tokio::runtime::Handle {
         self.inner.handle().clone()
     }

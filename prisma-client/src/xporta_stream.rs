@@ -19,9 +19,8 @@ use prisma_core::xporta::encoding::{
 use prisma_core::xporta::reassembler::Reassembler;
 use prisma_core::xporta::types::XPortaEncoding;
 
-type ReserveFut<T> = Pin<
-    Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>,
->;
+type ReserveFut<T> =
+    Pin<Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>>;
 
 /// Client-side XPorta stream -- provides AsyncRead + AsyncWrite over multiple short HTTP requests.
 pub struct XPortaClientStream {

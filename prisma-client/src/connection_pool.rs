@@ -43,6 +43,7 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new(config: XmuxConfig, ctx: ProxyContext) -> Self {
         Self {
             config,

@@ -78,7 +78,7 @@ export const DEFAULT_WIZARD: WizardState = {
   portHopRange: 5000,
   portHopInterval: 30,
   tunEnabled: false,
-  tunDevice: "prisma-tun",
+  tunDevice: "prisma-tun0",
   tunMtu: 1500,
   tunIncludeRoutes: [],
   tunExcludeRoutes: [],
@@ -88,75 +88,107 @@ export const DEFAULT_WIZARD: WizardState = {
   tags: [],
 };
 
-/** Maps WizardState → ClientConfig JSON object */
+/**
+ * Maps WizardState → ClientConfig JSON matching the Rust ClientConfig struct.
+ *
+ * Rust struct uses flat top-level fields, NOT nested transport objects.
+ */
 export function buildClientConfig(w: WizardState): Record<string, unknown> {
-  const transport: Record<string, unknown> = { type: w.transport };
+  const config: Record<string, unknown> = {
+    // Required fields
+    server_addr: `${w.serverHost}:${w.serverPort}`,
+    socks5_listen_addr: `127.0.0.1:${w.socks5Port}`,
+    identity: {
+      client_id: w.clientId,
+      auth_secret: w.authSecret,
+    },
 
-  switch (w.transport) {
-    case "quic":
-      if (w.cipher) transport.cipher = w.cipher;
-      if (w.fingerprint) transport.fingerprint = w.fingerprint;
-      transport.version = w.quicVersion;
-      if (w.sniSlicing) transport.sni_slicing = true;
-      break;
-    case "ws":
-      transport.url = w.wsUrl;
-      if (w.wsHost) transport.host = w.wsHost;
-      break;
-    case "grpc":
-      transport.url = w.grpcUrl;
-      break;
-    case "xhttp":
-      transport.mode = w.xhttpMode;
-      transport.upload_url = w.xhttpUploadUrl;
-      transport.download_url = w.xhttpDownloadUrl;
-      transport.stream_url = w.xhttpStreamUrl;
-      break;
-    case "xporta":
-      transport.base_url = w.xportaBaseUrl;
-      transport.encoding = w.xportaEncoding;
-      transport.poll_timeout = w.xportaPollTimeout;
-      break;
-    // tcp: no sub-fields
+    // Transport — plain string, not an object
+    transport: w.transport,
+    cipher_suite: w.cipher,
+    protocol_version: w.protocolVersion,
+  };
+
+  // Optional HTTP listen addr
+  if (w.httpPort) {
+    config.http_listen_addr = `127.0.0.1:${parseInt(w.httpPort, 10)}`;
   }
 
-  transport.congestion = w.congestion;
-  if (w.targetBandwidth) transport.target_bandwidth = w.targetBandwidth;
-  if (w.portHopping) {
-    transport.port_hopping = {
-      base: w.portHopBase,
-      range: w.portHopRange,
-      interval: w.portHopInterval,
+  // Fingerprint
+  if (w.fingerprint) config.fingerprint = w.fingerprint;
+
+  // QUIC-specific top-level fields
+  if (w.transport === "quic") {
+    config.quic_version = w.quicVersion;
+    if (w.sniSlicing) config.sni_slicing = true;
+  }
+
+  // WebSocket top-level fields
+  if (w.transport === "ws") {
+    config.ws_url = w.wsUrl;
+    if (w.wsHost) config.ws_host = w.wsHost;
+  }
+
+  // gRPC top-level field
+  if (w.transport === "grpc") {
+    config.grpc_url = w.grpcUrl;
+  }
+
+  // XHTTP top-level fields
+  if (w.transport === "xhttp") {
+    config.xhttp_mode = w.xhttpMode;
+    config.xhttp_upload_url = w.xhttpUploadUrl;
+    config.xhttp_download_url = w.xhttpDownloadUrl;
+    config.xhttp_stream_url = w.xhttpStreamUrl;
+  }
+
+  // XPorta — nested object matching XPortaClientConfig
+  if (w.transport === "xporta" && w.xportaBaseUrl) {
+    config.xporta = {
+      base_url: w.xportaBaseUrl,
+      encoding: w.xportaEncoding,
+      poll_timeout_secs: w.xportaPollTimeout,
     };
   }
 
-  const config: Record<string, unknown> = {
-    server_host: w.serverHost,
-    server_port: w.serverPort,
-    client_id: w.clientId,
-    auth_secret: w.authSecret,
-    protocol_version: w.protocolVersion,
-    transport,
-    socks5_port: w.socks5Port,
+  // Congestion — nested CongestionConfig
+  config.congestion = {
+    mode: w.congestion,
+    ...(w.targetBandwidth ? { target_bandwidth: w.targetBandwidth } : {}),
   };
 
-  if (w.httpPort) config.http_port = parseInt(w.httpPort, 10);
+  // Port hopping — nested PortHoppingConfig
+  if (w.portHopping) {
+    config.port_hopping = {
+      enabled: true,
+      base_port: w.portHopBase,
+      port_range: w.portHopRange,
+      interval_secs: w.portHopInterval,
+    };
+  }
 
+  // TUN — nested TunConfig (field is device_name, not device)
   if (w.tunEnabled) {
     config.tun = {
       enabled: true,
-      device: w.tunDevice,
+      device_name: w.tunDevice,
       mtu: w.tunMtu,
-      include_routes: w.tunIncludeRoutes,
+      include_routes: w.tunIncludeRoutes.length > 0 ? w.tunIncludeRoutes : ["0.0.0.0/0"],
       exclude_routes: w.tunExcludeRoutes,
     };
   }
 
+  // DNS — nested DnsConfig (mode is a lowercase enum string)
   config.dns = {
     mode: w.dnsMode,
     upstream: w.dnsUpstream,
     ...(w.dnsMode === "fake" ? { fake_ip_range: w.fakeIpRange } : {}),
   };
+
+  // PrismaAuth secret (v4)
+  if (w.prismaAuthSecret) {
+    config.prisma_auth_secret = w.prismaAuthSecret;
+  }
 
   return config;
 }
@@ -164,44 +196,62 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
 /** Maps a stored ClientConfig back to WizardState (for editing) */
 export function parseProfileToWizard(name: string, config: unknown): WizardState {
   const c = (config ?? {}) as Record<string, unknown>;
-  const t = (c.transport ?? {}) as Record<string, unknown>;
+  const identity = (c.identity ?? {}) as Record<string, unknown>;
   const tun = (c.tun ?? {}) as Record<string, unknown>;
   const dns = (c.dns ?? {}) as Record<string, unknown>;
-  const ph = (t.port_hopping ?? {}) as Record<string, unknown>;
+  const congestion = (c.congestion ?? {}) as Record<string, unknown>;
+  const ph = (c.port_hopping ?? {}) as Record<string, unknown>;
+  const xporta = (c.xporta ?? {}) as Record<string, unknown>;
+
+  // Parse server_addr "host:port"
+  const serverAddr = String(c.server_addr ?? "");
+  const lastColon = serverAddr.lastIndexOf(":");
+  const serverHost = lastColon > 0 ? serverAddr.slice(0, lastColon) : serverAddr;
+  const serverPort = lastColon > 0 ? Number(serverAddr.slice(lastColon + 1)) || 443 : 443;
+
+  // Parse socks5_listen_addr "host:port"
+  const socksAddr = String(c.socks5_listen_addr ?? "");
+  const socksColon = socksAddr.lastIndexOf(":");
+  const socks5Port = socksColon > 0 ? Number(socksAddr.slice(socksColon + 1)) || 1080 : 1080;
+
+  // Parse http_listen_addr
+  const httpAddr = c.http_listen_addr ? String(c.http_listen_addr) : "";
+  const httpColon = httpAddr.lastIndexOf(":");
+  const httpPort = httpColon > 0 ? httpAddr.slice(httpColon + 1) : "";
 
   return {
     name,
-    serverHost: String(c.server_host ?? ""),
-    serverPort: Number(c.server_port ?? 443),
-    socks5Port: Number(c.socks5_port ?? 1080),
-    httpPort: c.http_port ? String(c.http_port) : "",
-    clientId: String(c.client_id ?? ""),
-    authSecret: String(c.auth_secret ?? ""),
-    prismaAuthSecret: "",
+    serverHost,
+    serverPort,
+    socks5Port,
+    httpPort,
+    clientId: String(identity.client_id ?? ""),
+    authSecret: String(identity.auth_secret ?? ""),
+    prismaAuthSecret: String(c.prisma_auth_secret ?? ""),
     protocolVersion: (c.protocol_version as "v4" | "v3") ?? "v4",
-    transport: (t.type as WizardState["transport"]) ?? "quic",
-    cipher: String(t.cipher ?? "chacha20-poly1305"),
-    fingerprint: String(t.fingerprint ?? ""),
-    quicVersion: String(t.version ?? "v1"),
-    sniSlicing: Boolean(t.sni_slicing),
-    wsUrl: String(t.url ?? "/ws"),
-    wsHost: String(t.host ?? ""),
-    grpcUrl: String(t.url ?? "/prisma.Proxy/Relay"),
-    xhttpMode: String(t.mode ?? "auto"),
-    xhttpUploadUrl: String(t.upload_url ?? "/up"),
-    xhttpDownloadUrl: String(t.download_url ?? "/down"),
-    xhttpStreamUrl: String(t.stream_url ?? "/stream"),
-    xportaBaseUrl: String(t.base_url ?? ""),
-    xportaEncoding: String(t.encoding ?? "base64"),
-    xportaPollTimeout: Number(t.poll_timeout ?? 30),
-    congestion: (t.congestion as WizardState["congestion"]) ?? "bbr",
-    targetBandwidth: String(t.target_bandwidth ?? ""),
-    portHopping: Object.keys(ph).length > 0,
-    portHopBase: Number(ph.base ?? 40000),
-    portHopRange: Number(ph.range ?? 5000),
-    portHopInterval: Number(ph.interval ?? 30),
+    transport: (c.transport as WizardState["transport"]) ?? "quic",
+    cipher: String(c.cipher_suite ?? "chacha20-poly1305"),
+    fingerprint: String(c.fingerprint ?? ""),
+    quicVersion: String(c.quic_version ?? "v1"),
+    sniSlicing: Boolean(c.sni_slicing),
+    wsUrl: String(c.ws_url ?? "/ws"),
+    wsHost: String(c.ws_host ?? ""),
+    grpcUrl: String(c.grpc_url ?? "/prisma.Proxy/Relay"),
+    xhttpMode: String(c.xhttp_mode ?? "auto"),
+    xhttpUploadUrl: String(c.xhttp_upload_url ?? "/up"),
+    xhttpDownloadUrl: String(c.xhttp_download_url ?? "/down"),
+    xhttpStreamUrl: String(c.xhttp_stream_url ?? "/stream"),
+    xportaBaseUrl: String(xporta.base_url ?? ""),
+    xportaEncoding: String(xporta.encoding ?? "base64"),
+    xportaPollTimeout: Number(xporta.poll_timeout_secs ?? 30),
+    congestion: (congestion.mode as WizardState["congestion"]) ?? "bbr",
+    targetBandwidth: String(congestion.target_bandwidth ?? ""),
+    portHopping: Boolean(ph.enabled),
+    portHopBase: Number(ph.base_port ?? 40000),
+    portHopRange: Number(ph.port_range ?? 5000),
+    portHopInterval: Number(ph.interval_secs ?? 30),
     tunEnabled: Boolean(tun.enabled),
-    tunDevice: String(tun.device ?? "prisma-tun"),
+    tunDevice: String(tun.device_name ?? "prisma-tun0"),
     tunMtu: Number(tun.mtu ?? 1500),
     tunIncludeRoutes: (tun.include_routes as string[]) ?? [],
     tunExcludeRoutes: (tun.exclude_routes as string[]) ?? [],

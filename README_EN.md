@@ -75,11 +75,8 @@ prisma/
 ├── prisma-client/       # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
 ├── prisma-mgmt/         # Management API (REST + WebSocket via axum)
 ├── prisma-cli/          # CLI with key/cert generation, init, validate
-├── prisma-ffi/          # C FFI library used by all native GUI clients
-├── prisma-gui-windows/  # Windows GUI (Rust + Win32/GDI, system tray)
-├── prisma-gui-android/  # Android app (Kotlin + Jetpack Compose + JNI)
-├── prisma-gui-ios/      # iOS app (Swift + SwiftUI + NetworkExtension)
-├── prisma-gui-macos/    # macOS menu bar app (Swift + AppKit)
+├── prisma-ffi/          # C FFI library for GUI clients
+├── prisma-gui/          # Cross-platform GUI (Tauri 2 + React + TypeScript)
 ├── prisma-dashboard/    # Web dashboard (Next.js + shadcn/ui)
 ├── prisma-docs/         # Documentation site (Docusaurus)
 └── scripts/             # Install scripts and benchmarks
@@ -113,15 +110,11 @@ cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 
-# Build FFI library + Windows GUI
-cargo build --release -p prisma-ffi -p prisma-gui-windows
+# Build FFI library
+cargo build --release -p prisma-ffi
 
-# Build Android app (requires Android SDK + NDK)
-cd prisma-gui-android && ./gradlew assembleRelease
-
-# Build iOS / macOS apps (requires Xcode on macOS)
-xcodebuild -project prisma-gui-ios/PrismaIOS.xcodeproj -scheme PrismaIOS
-xcodebuild -project prisma-gui-macos/PrismaMacOS.xcodeproj -scheme PrismaMacOS
+# Build GUI (requires Node.js)
+cd prisma-gui && npm install && npm run tauri build
 
 # Build dashboard
 cd prisma-dashboard && npm ci && npm run build

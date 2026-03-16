@@ -75,11 +75,8 @@ prisma/
 ├── prisma-client/       # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
 ├── prisma-mgmt/         # 管理 API（基于 axum 的 REST + WebSocket）
 ├── prisma-cli/          # CLI 工具：密钥/证书生成、初始化、校验
-├── prisma-ffi/          # C FFI 库，供所有原生 GUI 客户端调用
-├── prisma-gui-windows/  # Windows GUI（Rust + Win32/GDI，系统托盘）
-├── prisma-gui-android/  # Android 应用（Kotlin + Jetpack Compose + JNI）
-├── prisma-gui-ios/      # iOS 应用（Swift + SwiftUI + NetworkExtension）
-├── prisma-gui-macos/    # macOS 菜单栏应用（Swift + AppKit）
+├── prisma-ffi/          # C FFI 库，供 GUI 客户端调用
+├── prisma-gui/          # 跨平台 GUI（Tauri 2 + React + TypeScript）
 ├── prisma-dashboard/    # Web 仪表板（Next.js + shadcn/ui）
 ├── prisma-docs/         # 文档站点（Docusaurus）
 └── scripts/             # 安装脚本和基准测试
@@ -113,15 +110,11 @@ cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 
-# 构建 FFI 库 + Windows GUI
-cargo build --release -p prisma-ffi -p prisma-gui-windows
+# 构建 FFI 库
+cargo build --release -p prisma-ffi
 
-# 构建 Android 应用（需要 Android SDK + NDK）
-cd prisma-gui-android && ./gradlew assembleRelease
-
-# 构建 iOS / macOS 应用（需要 macOS 上的 Xcode）
-xcodebuild -project prisma-gui-ios/PrismaIOS.xcodeproj -scheme PrismaIOS
-xcodebuild -project prisma-gui-macos/PrismaMacOS.xcodeproj -scheme PrismaMacOS
+# 构建 GUI（需要 Node.js）
+cd prisma-gui && npm install && npm run tauri build
 
 # 构建仪表板
 cd prisma-dashboard && npm ci && npm run build

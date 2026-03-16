@@ -4,6 +4,7 @@ use tokio::task::JoinHandle;
 use crate::connection::ConnectionManager;
 
 pub struct StatsPoller {
+    #[allow(dead_code)]
     handle: JoinHandle<()>,
     stop_tx: tokio::sync::oneshot::Sender<()>,
 }

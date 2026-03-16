@@ -10,9 +10,8 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
-type ReserveFut<T> = Pin<
-    Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>,
->;
+type ReserveFut<T> =
+    Pin<Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>>;
 
 /// Adapter that bridges a tokio-tungstenite WebSocket into AsyncRead + AsyncWrite.
 pub struct WsStream {

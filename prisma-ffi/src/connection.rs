@@ -1,23 +1,16 @@
-use std::sync::Arc;
 use anyhow::Result;
-use tokio::sync::watch;
+use std::sync::Arc;
 
 use crate::runtime::PrismaRuntime;
-use crate::{PRISMA_STATUS_DISCONNECTED, PRISMA_STATUS_CONNECTING, PRISMA_STATUS_CONNECTED, PRISMA_STATUS_ERROR};
+use crate::{PRISMA_STATUS_CONNECTED, PRISMA_STATUS_CONNECTING, PRISMA_STATUS_DISCONNECTED};
 
+#[derive(Default)]
 pub struct ConnectionStats {
     pub bytes_up: u64,
     pub bytes_down: u64,
     pub speed_up_bps: u64,
     pub speed_down_bps: u64,
     pub uptime_secs: u64,
-    pub ping_ms: u64,
-}
-
-impl Default for ConnectionStats {
-    fn default() -> Self {
-        Self { bytes_up: 0, bytes_down: 0, speed_up_bps: 0, speed_down_bps: 0, uptime_secs: 0, ping_ms: 0 }
-    }
 }
 
 pub struct ConnectionManager {
@@ -64,8 +57,6 @@ impl ConnectionManager {
         self.stop_tx = Some(stop_tx);
         self.start_time = Some(std::time::Instant::now());
 
-        let stats_arc = Arc::clone(&self.stats);
-
         // Serialize config to TOML file in a temp location and run client
         let config_json = serde_json::to_string(&config)?;
 
@@ -75,8 +66,10 @@ impl ConnectionManager {
             let config_path = tmp_dir.join("prisma_ffi_client.json");
 
             if let Err(e) = tokio::fs::write(&config_path, &config_json).await {
-                on_event(format!(r#"{{"type":"error","code":"config_write","msg":{}}}"#,
-                    serde_json::to_string(&e.to_string()).unwrap_or_default()));
+                on_event(format!(
+                    r#"{{"type":"error","code":"config_write","msg":{}}}"#,
+                    serde_json::to_string(&e.to_string()).unwrap_or_default()
+                ));
                 return;
             }
 
@@ -103,12 +96,11 @@ impl ConnectionManager {
                 let _ = crate::system_proxy::clear();
             }
 
-            match run_result {
-                Ok(_) => {},
-                Err(e) => {
-                    on_event(format!(r#"{{"type":"error","code":"run_error","msg":{}}}"#,
-                        serde_json::to_string(&e.to_string()).unwrap_or_default()));
-                }
+            if let Err(e) = run_result {
+                on_event(format!(
+                    r#"{{"type":"error","code":"run_error","msg":{}}}"#,
+                    serde_json::to_string(&e.to_string()).unwrap_or_default()
+                ));
             }
 
             // Clean up temp file
@@ -139,10 +131,6 @@ impl ConnectionManager {
             Err(_) => r#"{"type":"stats","bytes_up":0,"bytes_down":0,"speed_up_bps":0,"speed_down_bps":0,"uptime_secs":0}"#.to_string(),
         }
     }
-
-    pub fn stats_arc(&self) -> Arc<std::sync::Mutex<ConnectionStats>> {
-        Arc::clone(&self.stats)
-    }
 }
 
 /// Run a basic speed test by downloading/uploading data through the local SOCKS5 proxy.
@@ -154,13 +142,17 @@ pub async fn run_speed_test(
     // Simplified: measure throughput over SOCKS5
     let duration = std::time::Duration::from_secs(duration_secs as u64);
     let start = std::time::Instant::now();
-    let mut bytes_received: u64 = 0;
+    let bytes_received: u64 = 0;
 
     // Simulate measurement (real impl would use reqwest through SOCKS5)
     tokio::time::sleep(std::cmp::min(duration, std::time::Duration::from_secs(5))).await;
 
     let elapsed = start.elapsed().as_secs_f64();
-    let download_mbps = if elapsed > 0.0 { (bytes_received as f64 * 8.0) / (elapsed * 1_000_000.0) } else { 0.0 };
+    let download_mbps = if elapsed > 0.0 {
+        (bytes_received as f64 * 8.0) / (elapsed * 1_000_000.0)
+    } else {
+        0.0
+    };
     let upload_mbps = download_mbps * 0.3; // Placeholder ratio
 
     Ok((download_mbps, upload_mbps))
