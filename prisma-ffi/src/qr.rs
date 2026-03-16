@@ -1,11 +1,10 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 const URI_SCHEME: &str = "prisma://";
 
 pub fn profile_to_qr_svg(profile_json: &str) -> Result<String> {
-    let encoded = URL_SAFE_NO_PAD.encode(profile_json.as_bytes());
-    let uri = format!("{}{}", URI_SCHEME, encoded);
+    let uri = profile_to_uri(profile_json)?;
     let code = qrcode::QrCode::new(uri.as_bytes())?;
     let svg = code
         .render::<qrcode::render::svg::Color>()
@@ -21,4 +20,19 @@ pub fn profile_from_qr(data: &str) -> Result<String> {
     // Validate it's parseable JSON
     serde_json::from_str::<serde_json::Value>(&json)?;
     Ok(json)
+}
+
+/// Generate a `prisma://` URI from profile JSON (base64url-encoded).
+pub fn profile_to_uri(profile_json: &str) -> Result<String> {
+    // Validate JSON
+    serde_json::from_str::<serde_json::Value>(profile_json)?;
+    let encoded = URL_SAFE_NO_PAD.encode(profile_json.as_bytes());
+    Ok(format!("{}{}", URI_SCHEME, encoded))
+}
+
+/// Convert a profile's config JSON to TOML suitable for prisma-client/CLI.
+pub fn profile_config_to_toml(config_json: &str) -> Result<String> {
+    let config: prisma_core::config::client::ClientConfig =
+        serde_json::from_str(config_json).context("invalid client config JSON")?;
+    toml::to_string_pretty(&config).context("TOML serialization failed")
 }

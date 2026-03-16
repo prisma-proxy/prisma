@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown, ArrowDown, ArrowUp, Timer, Database } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -10,7 +11,7 @@ import SpeedGraph from "@/components/SpeedGraph";
 import { useStore } from "@/store";
 import { useConnection } from "@/hooks/useConnection";
 import { useConnectionHistory } from "@/store/connectionHistory";
-import { fmtBytes, fmtRelativeTime } from "@/lib/format";
+import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtUptime } from "@/lib/format";
 import { api } from "@/lib/commands";
 import { MODE_SOCKS5, MODE_SYSTEM_PROXY, MODE_TUN, MODE_PER_APP } from "@/lib/types";
 
@@ -18,6 +19,7 @@ export default function Home() {
   const { t } = useTranslation();
   const connected = useStore((s) => s.connected);
   const connecting = useStore((s) => s.connecting);
+  const stats = useStore((s) => s.stats);
   const profiles = useStore((s) => s.profiles);
   const proxyModes = useStore((s) => s.proxyModes);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
@@ -78,7 +80,8 @@ export default function Home() {
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
+    <ScrollArea className="h-full">
+    <div className="p-4 sm:p-6 pb-12 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -121,6 +124,40 @@ export default function Home() {
           <SpeedGraph />
         </CardContent>
       </Card>
+
+      {/* Session stats */}
+      {connected && stats && (
+        <div className="grid grid-cols-4 gap-2">
+          <Card>
+            <CardContent className="py-2 px-3 flex flex-col items-center">
+              <ArrowDown size={14} className="text-green-400 mb-0.5" />
+              <p className="text-sm font-bold">{fmtSpeed(stats.speed_down_bps)}</p>
+              <p className="text-[10px] text-muted-foreground">{t("home.download")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-2 px-3 flex flex-col items-center">
+              <ArrowUp size={14} className="text-blue-400 mb-0.5" />
+              <p className="text-sm font-bold">{fmtSpeed(stats.speed_up_bps)}</p>
+              <p className="text-[10px] text-muted-foreground">{t("home.upload")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-2 px-3 flex flex-col items-center">
+              <Database size={14} className="text-purple-400 mb-0.5" />
+              <p className="text-sm font-bold">{fmtBytes(stats.bytes_down + stats.bytes_up)}</p>
+              <p className="text-[10px] text-muted-foreground">{t("home.transferred")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-2 px-3 flex flex-col items-center">
+              <Timer size={14} className="text-yellow-400 mb-0.5" />
+              <p className="text-sm font-bold font-mono">{fmtUptime(stats.uptime_secs)}</p>
+              <p className="text-[10px] text-muted-foreground">{t("home.uptime")}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Proxy modes */}
       <div className="space-y-1">
@@ -188,5 +225,6 @@ export default function Home() {
         </div>
       )}
     </div>
+    </ScrollArea>
   );
 }

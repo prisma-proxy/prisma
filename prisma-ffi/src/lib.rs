@@ -91,6 +91,18 @@ macro_rules! cstr_to_str {
     }};
 }
 
+/// Like `cstr_to_str!` but returns `Option<&str>` instead of early-returning an error code.
+/// Useful in functions that return pointers rather than error codes.
+macro_rules! cstr_to_str_opt {
+    ($ptr:expr) => {{
+        if $ptr.is_null() {
+            None
+        } else {
+            unsafe { CStr::from_ptr($ptr) }.to_str().ok()
+        }
+    }};
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 /// Create a new PrismaClient handle. Returns NULL on allocation failure.
@@ -316,13 +328,10 @@ pub unsafe extern "C" fn prisma_set_callback(
 /// List all profiles as a JSON array. Caller must call `prisma_free_string`.
 #[no_mangle]
 pub extern "C" fn prisma_profiles_list_json() -> *mut c_char {
-    match ProfileManager::list_json() {
-        Ok(json) => match CString::new(json) {
-            Ok(s) => s.into_raw(),
-            Err(_) => std::ptr::null_mut(),
-        },
-        Err(_) => std::ptr::null_mut(),
-    }
+    ProfileManager::list_json()
+        .ok()
+        .and_then(|json| CString::new(json).ok())
+        .map_or(std::ptr::null_mut(), CString::into_raw)
 }
 
 /// Save a profile from JSON.
@@ -359,18 +368,12 @@ pub unsafe extern "C" fn prisma_profile_delete(id: *const c_char) -> c_int {
 /// `profile_json` must be a valid non-null C string.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_profile_to_qr_svg(profile_json: *const c_char) -> *mut c_char {
-    if profile_json.is_null() {
-        return std::ptr::null_mut();
-    }
-    let json_str = match unsafe { CStr::from_ptr(profile_json) }.to_str() {
-        Ok(s) => s,
-        Err(_) => return std::ptr::null_mut(),
+    let json_str = match cstr_to_str_opt!(profile_json) {
+        Some(s) => s,
+        None => return std::ptr::null_mut(),
     };
     match qr::profile_to_qr_svg(json_str) {
-        Ok(svg) => match CString::new(svg) {
-            Ok(s) => s.into_raw(),
-            Err(_) => std::ptr::null_mut(),
-        },
+        Ok(svg) => CString::new(svg).map_or(std::ptr::null_mut(), CString::into_raw),
         Err(_) => std::ptr::null_mut(),
     }
 }
@@ -392,15 +395,50 @@ pub unsafe extern "C" fn prisma_profile_from_qr(
         Ok(s) => s,
         Err(_) => return PRISMA_ERR_INVALID_CONFIG,
     };
-    match qr::profile_from_qr(data_str) {
-        Ok(json) => match CString::new(json) {
-            Ok(s) => {
-                unsafe { *out_json = s.into_raw() };
-                PRISMA_OK
-            }
-            Err(_) => PRISMA_ERR_INTERNAL,
-        },
-        Err(_) => PRISMA_ERR_INVALID_CONFIG,
+    let json = match qr::profile_from_qr(data_str) {
+        Ok(j) => j,
+        Err(_) => return PRISMA_ERR_INVALID_CONFIG,
+    };
+    match CString::new(json) {
+        Ok(s) => {
+            unsafe { *out_json = s.into_raw() };
+            PRISMA_OK
+        }
+        Err(_) => PRISMA_ERR_INTERNAL,
+    }
+}
+
+// ── Profile sharing ──────────────────────────────────────────────────────
+
+/// Generate a `prisma://` URI from profile JSON. Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `profile_json` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_profile_to_uri(profile_json: *const c_char) -> *mut c_char {
+    let json_str = match cstr_to_str_opt!(profile_json) {
+        Some(s) => s,
+        None => return std::ptr::null_mut(),
+    };
+    match qr::profile_to_uri(json_str) {
+        Ok(uri) => CString::new(uri).map_or(std::ptr::null_mut(), CString::into_raw),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Convert a profile config JSON to TOML string. Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `config_json` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_profile_config_to_toml(config_json: *const c_char) -> *mut c_char {
+    let json_str = match cstr_to_str_opt!(config_json) {
+        Some(s) => s,
+        None => return std::ptr::null_mut(),
+    };
+    match qr::profile_config_to_toml(json_str) {
+        Ok(toml) => CString::new(toml).map_or(std::ptr::null_mut(), CString::into_raw),
+        Err(_) => std::ptr::null_mut(),
     }
 }
 
@@ -435,16 +473,12 @@ pub extern "C" fn prisma_clear_system_proxy() -> c_int {
 /// Caller must call `prisma_free_string`.
 #[no_mangle]
 pub extern "C" fn prisma_check_update_json() -> *mut c_char {
-    match auto_update::check() {
-        Ok(Some(info)) => match serde_json::to_string(&info) {
-            Ok(json) => match CString::new(json) {
-                Ok(s) => s.into_raw(),
-                Err(_) => std::ptr::null_mut(),
-            },
-            Err(_) => std::ptr::null_mut(),
-        },
-        _ => std::ptr::null_mut(),
-    }
+    auto_update::check()
+        .ok()
+        .flatten()
+        .and_then(|info| serde_json::to_string(&info).ok())
+        .and_then(|json| CString::new(json).ok())
+        .map_or(std::ptr::null_mut(), CString::into_raw)
 }
 
 /// Download and apply an update.
@@ -487,9 +521,9 @@ pub unsafe extern "C" fn prisma_speed_test(
     let server_owned = server_str.to_owned();
     let dir_owned = dir_str.to_owned();
     let cb_arc = Arc::clone(&client.callback);
+    let runtime = Arc::clone(&client.runtime);
 
-    client.runtime.spawn(async move {
-        // Simulate a speed test with HTTP download/upload measurement
+    runtime.spawn(async move {
         let result = connection::run_speed_test(&server_owned, duration_secs, &dir_owned).await;
         let event = match result {
             Ok((dl, ul)) => format!(

@@ -450,6 +450,15 @@ async fn main() -> anyhow::Result<()> {
             update,
             dir,
         } => {
+            // Auto-detect token: --token flag > PRISMA_MGMT_TOKEN env > server.toml
+            let token = token.or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok()).or_else(|| {
+                api_client::ApiClient::resolve(None, None, false)
+                    .ok()
+                    .and_then(|c| {
+                        let t = c.token();
+                        if t.is_empty() { None } else { Some(t.to_string()) }
+                    })
+            });
             dashboard::run_dashboard(mgmt_url, token, port, bind, no_open, update, dir).await?;
         }
         Commands::Completions { shell } => {

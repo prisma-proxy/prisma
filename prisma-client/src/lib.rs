@@ -63,7 +63,6 @@ async fn run_inner(
     config: prisma_core::config::client::ClientConfig,
     metrics: ClientMetrics,
 ) -> Result<()> {
-
     info!("Prisma client starting");
     info!(socks5 = %config.socks5_listen_addr, server = %config.server_addr);
     if let Some(ref http_addr) = config.http_listen_addr {

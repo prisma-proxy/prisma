@@ -12,7 +12,7 @@ function getFeatures() {
     {
       title: translate({id: 'homepage.features.multiTransport.title', message: 'Multi-Transport'}),
       icon: '🔀',
-      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP+TLS, WebSocket, gRPC, XHTTP, XPorta — auto-fallback across transports when censors block one.'}),
+      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta — auto-fallback across transports when censors block one.'}),
     },
     {
       title: translate({id: 'homepage.features.prismaTls.title', message: 'PrismaTLS'}),

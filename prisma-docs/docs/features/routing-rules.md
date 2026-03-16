@@ -117,10 +117,10 @@ action = "block"
 
 [[routing.rules]]
 type = "all"
-action = "allow"
+action = "direct"
 ```
 
-Server-side rules use the same `type`/`value` syntax as client rules. The `action` values are mapped: `block` → Block, anything else → Allow.
+Server-side rules use the same `type`/`value` syntax as client rules. Valid `action` values are `proxy`, `direct`, and `block` — the same as client-side rules.
 
 ### Dynamic rules (Management API)
 

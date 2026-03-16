@@ -16,7 +16,11 @@
     "modePerApp": "分应用",
     "connect": "连接",
     "disconnect": "断开",
-    "connecting": "连接中…"
+    "connecting": "连接中…",
+    "download": "下载",
+    "upload": "上传",
+    "transferred": "已传输",
+    "uptime": "运行时间"
   },
   "profiles": {
     "title": "配置文件",
@@ -44,18 +48,30 @@
     "importSuccess": "已导入 {{count}} 个配置",
     "importFailed": "导入失败",
     "share": "分享",
-    "copiedToClipboard": "配置已复制到剪贴板",
+    "shareTitle": "分享 \"{{name}}\"",
+    "shareToml": "TOML",
+    "shareUri": "URI",
+    "shareQr": "二维码",
+    "shareTomlDesc": "客户端配置，适用于 prisma-client / CLI。粘贴到 client.toml 文件中即可使用。",
+    "shareUriDesc": "分享此 prisma:// 链接，在其他 Prisma GUI 应用中导入。",
+    "shareQrDesc": "使用其他 Prisma GUI 应用扫描此二维码即可导入。",
+    "copyToClipboard": "复制",
+    "copied": "已复制！",
+    "copiedToClipboard": "已复制到剪贴板",
     "exportFailed": "导出失败",
     "importQrTitle": "通过二维码/URI导入",
     "importQrLabel": "粘贴 prisma:// URI 或 JSON",
     "deleteTitle": "删除配置",
-    "deleteMessage": "确定删除 \"{{name}}\"？此操作不可撤销。"
+    "deleteMessage": "确定删除 \"{{name}}\"？此操作不可撤销。",
+    "sessions": "次连接",
+    "peak": "峰值"
   },
   "rules": {
     "title": "规则",
     "addRule": "添加规则",
     "noRules": "暂无规则",
     "inMemoryNote": "规则仅保存在内存中。如需持久化，请将规则包含在配置文件的 JSON 中。",
+    "persistNote": "规则保存在本地。连接时将作为路由覆盖规则生效。",
     "type": "类型",
     "match": "匹配",
     "action": "动作",
@@ -85,7 +101,13 @@
     "measuringLatency": "测量延迟中…",
     "measuringDownload": "测量下载速度中…",
     "measuringUpload": "测量上传速度中…",
-    "notConnected": "未连接代理 — 测试结果为直连速度。"
+    "notConnected": "未连接代理 — 测试结果为直连速度。",
+    "history": "历史记录",
+    "avgDownload": "平均 ↓ Mbps",
+    "avgUpload": "平均 ↑ Mbps",
+    "bestDownload": "最佳 ↓ Mbps",
+    "proxy": "代理",
+    "direct": "直连"
   },
   "settings": {
     "title": "设置",

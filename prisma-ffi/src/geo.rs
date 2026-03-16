@@ -14,13 +14,11 @@ pub struct CountryInfo {
 }
 
 #[allow(dead_code)]
-pub fn lookup_country(ip: &str) -> Option<String> {
-    let _ = ip;
+pub fn lookup_country(_ip: &str) -> Option<String> {
     None
 }
 
 #[allow(dead_code)]
-pub fn country_cidrs(country_code: &str) -> Vec<String> {
-    let _ = country_code;
+pub fn country_cidrs(_country_code: &str) -> Vec<String> {
     Vec::new()
 }

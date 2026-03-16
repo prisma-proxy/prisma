@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, QrCode, Trash2, Download, Upload, Search, Share2 } from "lucide-react";
+import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,10 +21,12 @@ import { useProfileMetrics } from "@/store/profileMetrics";
 import { useConnection } from "@/hooks/useConnection";
 import { notify } from "@/store/notifications";
 import { api } from "@/lib/commands";
-import { fmtBytes, fmtRelativeTime } from "@/lib/format";
+import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtDuration } from "@/lib/format";
 import { parseProfileToWizard } from "@/lib/buildConfig";
 import type { WizardState } from "@/lib/buildConfig";
 import type { Profile } from "@/lib/types";
+
+type ShareTab = "toml" | "uri" | "qr";
 
 export default function Profiles() {
   const { t } = useTranslation();
@@ -43,9 +45,14 @@ export default function Profiles() {
   const [editingId,    setEditingId]    = useState<string | null>(null);
   const [editingCreatedAt, setEditingCreatedAt] = useState<string>("");
 
-  // QR export
-  const [qrOpen, setQrOpen] = useState(false);
-  const [qrSvg,  setQrSvg]  = useState("");
+  // Share dialog
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTab,  setShareTab]  = useState<ShareTab>("toml");
+  const [shareToml, setShareToml] = useState("");
+  const [shareUri,  setShareUri]  = useState("");
+  const [shareQrSvg, setShareQrSvg] = useState("");
+  const [shareName, setShareName] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
 
   // QR import
   const [qrImportOpen, setQrImportOpen] = useState(false);
@@ -135,20 +142,35 @@ export default function Profiles() {
     }
   }
 
-  async function handleQr(p: Profile) {
-    try {
-      const svg = await api.profileToQr(JSON.stringify(p));
-      setQrSvg(svg);
-      setQrOpen(true);
-    } catch (e) {
-      notify.error(String(e));
-    }
+  async function openShareDialog(p: Profile) {
+    setShareName(p.name);
+    setShareToml("");
+    setShareUri("");
+    setShareQrSvg("");
+    setShareCopied(false);
+    setShareTab("toml");
+    setShareOpen(true);
+
+    // Load all three formats in parallel
+    const configJson = JSON.stringify(p.config);
+    const profileJson = JSON.stringify(p);
+    const [tomlRes, uriRes, qrRes] = await Promise.allSettled([
+      api.profileConfigToToml(configJson),
+      api.profileToUri(profileJson),
+      api.profileToQr(profileJson),
+    ]);
+    if (tomlRes.status === "fulfilled") setShareToml(tomlRes.value);
+    if (uriRes.status === "fulfilled")  setShareUri(uriRes.value);
+    if (qrRes.status === "fulfilled")   setShareQrSvg(qrRes.value);
   }
 
-  async function handleShare(p: Profile) {
+  async function handleCopyShare() {
+    const text = shareTab === "toml" ? shareToml : shareUri;
+    if (!text) return;
     try {
-      const shareData = JSON.stringify({ name: p.name, tags: p.tags, config: p.config }, null, 2);
-      await navigator.clipboard.writeText(shareData);
+      await navigator.clipboard.writeText(text);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
       notify.success(t("profiles.copiedToClipboard"));
     } catch {
       notify.error("Clipboard not available");
@@ -306,13 +328,24 @@ export default function Profiles() {
                     }
                   </div>
                   {/* Per-profile metrics */}
-                  <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                    {metrics.lastLatencyMs != null && <span>{metrics.lastLatencyMs}ms</span>}
-                    {metrics.lastConnectedAt && <span>{fmtRelativeTime(metrics.lastConnectedAt)}</span>}
-                    {(metrics.totalBytesUp > 0 || metrics.totalBytesDown > 0) && (
-                      <span>↑{fmtBytes(metrics.totalBytesUp)} ↓{fmtBytes(metrics.totalBytesDown)}</span>
-                    )}
-                  </div>
+                  {metrics.connectCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[10px] text-muted-foreground">
+                      {metrics.lastLatencyMs != null && <span>{metrics.lastLatencyMs}ms</span>}
+                      {metrics.lastConnectedAt && <span>{fmtRelativeTime(metrics.lastConnectedAt)}</span>}
+                      {(metrics.totalBytesUp > 0 || metrics.totalBytesDown > 0) && (
+                        <span>↑{fmtBytes(metrics.totalBytesUp)} ↓{fmtBytes(metrics.totalBytesDown)}</span>
+                      )}
+                      {metrics.connectCount > 1 && (
+                        <span>{metrics.connectCount} {t("profiles.sessions")}</span>
+                      )}
+                      {metrics.totalUptimeSecs > 0 && (
+                        <span>{fmtDuration(metrics.totalUptimeSecs)}</span>
+                      )}
+                      {metrics.peakSpeedDownBps > 0 && (
+                        <span>{t("profiles.peak")} ↓{fmtSpeed(metrics.peakSpeedDownBps)}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Action dropdown */}
@@ -334,11 +367,8 @@ export default function Profiles() {
                     <DropdownMenuItem onSelect={() => handleDuplicate(p)}>
                       <Copy size={14} className="mr-2" /> {t("profiles.duplicate")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => handleShare(p)}>
+                    <DropdownMenuItem onSelect={() => openShareDialog(p)}>
                       <Share2 size={14} className="mr-2" /> {t("profiles.share")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => handleQr(p)}>
-                      <QrCode size={14} className="mr-2" /> {t("profiles.qrCode")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => confirmDelete(p)} className="text-destructive">
                       <Trash2 size={14} className="mr-2" /> {t("profiles.delete")}
@@ -359,11 +389,83 @@ export default function Profiles() {
         onSave={handleSave}
       />
 
-      {/* QR export dialog */}
-      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader><DialogTitle>{t("profiles.qrCode")}</DialogTitle></DialogHeader>
-          {qrSvg && <QrDisplay svg={qrSvg} />}
+      {/* Share dialog */}
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("profiles.shareTitle", { name: shareName })}</DialogTitle>
+          </DialogHeader>
+
+          {/* Tab buttons */}
+          <div className="flex gap-1 border-b pb-2">
+            <Button
+              size="sm"
+              variant={shareTab === "toml" ? "default" : "ghost"}
+              onClick={() => { setShareTab("toml"); setShareCopied(false); }}
+            >
+              <FileCode size={14} className="mr-1.5" /> {t("profiles.shareToml")}
+            </Button>
+            <Button
+              size="sm"
+              variant={shareTab === "uri" ? "default" : "ghost"}
+              onClick={() => { setShareTab("uri"); setShareCopied(false); }}
+            >
+              <Link size={14} className="mr-1.5" /> {t("profiles.shareUri")}
+            </Button>
+            <Button
+              size="sm"
+              variant={shareTab === "qr" ? "default" : "ghost"}
+              onClick={() => { setShareTab("qr"); setShareCopied(false); }}
+            >
+              <QrCode size={14} className="mr-1.5" /> {t("profiles.shareQr")}
+            </Button>
+          </div>
+
+          {/* Content */}
+          {shareTab === "toml" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{t("profiles.shareTomlDesc")}</p>
+              <Textarea
+                readOnly
+                rows={10}
+                value={shareToml}
+                className="font-mono text-xs"
+                onFocus={(e) => e.target.select()}
+              />
+            </div>
+          )}
+
+          {shareTab === "uri" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{t("profiles.shareUriDesc")}</p>
+              <Textarea
+                readOnly
+                rows={3}
+                value={shareUri}
+                className="font-mono text-xs break-all"
+                onFocus={(e) => e.target.select()}
+              />
+            </div>
+          )}
+
+          {shareTab === "qr" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{t("profiles.shareQrDesc")}</p>
+              {shareQrSvg ? <QrDisplay svg={shareQrSvg} /> : (
+                <p className="text-xs text-muted-foreground text-center py-4">{t("common.loading")}</p>
+              )}
+            </div>
+          )}
+
+          {/* Copy button (for toml and uri tabs) */}
+          {shareTab !== "qr" && (
+            <DialogFooter>
+              <Button onClick={handleCopyShare} disabled={shareTab === "toml" ? !shareToml : !shareUri}>
+                {shareCopied ? <Check size={14} className="mr-1.5" /> : <Copy size={14} className="mr-1.5" />}
+                {shareCopied ? t("profiles.copied") : t("profiles.copyToClipboard")}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 

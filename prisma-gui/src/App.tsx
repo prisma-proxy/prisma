@@ -23,7 +23,7 @@ export default function App() {
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {!isMobile && <Sidebar />}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto pb-8">
+        <main className="flex-1 overflow-hidden">
           <Routes>
             <Route path="/"          element={<Home />} />
             <Route path="/profiles"  element={<Profiles />} />

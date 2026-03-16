@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStore } from "@/store";
 import { useSettings, type AppSettings } from "@/store/settings";
@@ -217,7 +218,9 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
+    <>
+    <ScrollArea className="h-full">
+    <div className="p-4 sm:p-6 pb-12 space-y-6 max-w-2xl">
       <h1 className="font-bold text-lg">{t("settings.title")}</h1>
 
       {/* Appearance */}
@@ -477,6 +480,9 @@ export default function Settings() {
         </div>
       </div>
 
+    </div>
+    </ScrollArea>
+
       {/* Confirm dialogs */}
       <ConfirmDialog
         open={confirmResetOpen}
@@ -494,6 +500,6 @@ export default function Settings() {
         confirmLabel={t("settings.clearAllData")}
         onConfirm={handleClearAllData}
       />
-    </div>
+    </>
   );
 }

@@ -31,6 +31,12 @@ export const api = {
   profileFromQr:    (data: string) =>
     invoke<string>("profile_from_qr", { data }),
 
+  profileToUri:     (profileJson: string) =>
+    invoke<string>("profile_to_uri", { profileJson }),
+
+  profileConfigToToml: (configJson: string) =>
+    invoke<string>("profile_config_to_toml", { configJson }),
+
   checkUpdate:      () =>
     invoke<UpdateInfo | null>("check_update"),
 

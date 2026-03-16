@@ -650,7 +650,7 @@ action = "block"
 
 [[routing.rules]]
 type = "all"
-action = "allow"
+action = "direct"
 ```
 
 ### Client (XPorta — maximum stealth)

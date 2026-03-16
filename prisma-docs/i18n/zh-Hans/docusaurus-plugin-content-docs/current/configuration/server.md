@@ -208,7 +208,7 @@ alpn_protocols = ["h2", "http/1.1"]
 # action = "block"
 # [[routing.rules]]
 # type = "all"
-# action = "allow"
+# action = "direct"
 ```
 
 ## 验证规则

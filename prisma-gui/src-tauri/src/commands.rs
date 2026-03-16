@@ -103,6 +103,22 @@ pub fn profile_from_qr(data: String) -> Result<String, String> {
     }
 }
 
+// ── profile sharing ───────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn profile_to_uri(profile_json: String) -> Result<String, String> {
+    let cstr = CString::new(profile_json).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_profile_to_uri(cstr.as_ptr()) };
+    unsafe { read_owned_cstr(ptr) }.ok_or_else(|| "URI generation failed".into())
+}
+
+#[tauri::command]
+pub fn profile_config_to_toml(config_json: String) -> Result<String, String> {
+    let cstr = CString::new(config_json).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_profile_config_to_toml(cstr.as_ptr()) };
+    unsafe { read_owned_cstr(ptr) }.ok_or_else(|| "TOML conversion failed".into())
+}
+
 // ── system proxy ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -143,7 +159,7 @@ pub fn apply_update(url: String, sha: String) -> Result<(), String> {
 pub fn refresh_tray_profiles(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(desktop)]
     crate::tray::refresh_profiles(&app).map_err(|e| e.to_string())?;
-    let _ = app; // suppress unused warning on mobile
+    let _ = &app; // suppress unused warning on mobile
     Ok(())
 }
 

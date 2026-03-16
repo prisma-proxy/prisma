@@ -2,14 +2,13 @@ use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::connection::ConnectionManager;
+use crate::CallbackHolder;
 
 pub struct StatsPoller {
     #[allow(dead_code)]
     handle: JoinHandle<()>,
     stop_tx: tokio::sync::oneshot::Sender<()>,
 }
-
-type CallbackHolder = crate::CallbackHolder;
 
 impl StatsPoller {
     pub fn start(

@@ -650,7 +650,7 @@ action = "block"
 
 [[routing.rules]]
 type = "all"
-action = "allow"
+action = "direct"
 ```
 
 ### 客户端（XPorta — 最高隐蔽性）

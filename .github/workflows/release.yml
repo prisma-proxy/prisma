@@ -174,9 +174,6 @@ jobs:
           - label: macOS (Universal)
             os: macos-latest
             target: universal-apple-darwin
-          - label: Linux x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -203,49 +200,27 @@ jobs:
         run: npm ci
         working-directory: prisma-gui
 
-      # Linux: install system libs required by Tauri
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
-
       - name: Install Tauri CLI
         run: npm install -g @tauri-apps/cli@^2
 
       - name: Build Tauri app
         run: tauri build ${{ matrix.target == 'universal-apple-darwin' && '--target universal-apple-darwin' || '' }}
         working-directory: prisma-gui
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ''
 
-      # Collect the platform-specific installers
-      - name: Collect artifacts (Windows)
+      # Collect portable binary
+      - name: Collect artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path gui-artifacts
-          Get-ChildItem -Recurse prisma-gui/src-tauri/target/release/bundle -Include *.msi,*.exe | ForEach-Object {
-            Copy-Item $_.FullName gui-artifacts/
-          }
+          Copy-Item "prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release/Prisma.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
           Get-ChildItem gui-artifacts/
 
-      - name: Collect artifacts (macOS)
+      - name: Collect artifact (macOS)
         if: runner.os == 'macOS'
         run: |
           mkdir -p gui-artifacts
-          find prisma-gui/src-tauri/target -name '*.dmg' -exec cp {} gui-artifacts/ \;
-          ls -la gui-artifacts/
-
-      - name: Collect artifacts (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p gui-artifacts
-          find prisma-gui/src-tauri/target/release/bundle -name '*.deb' -o -name '*.AppImage' | while read f; do
-            cp "$f" gui-artifacts/
-          done
+          cp prisma-gui/src-tauri/target/universal-apple-darwin/release/Prisma gui-artifacts/prisma-gui-macos-universal
           ls -la gui-artifacts/
 
       - name: Upload GUI artifacts
@@ -270,15 +245,8 @@ jobs:
       - name: Collect binaries
         run: |
           mkdir -p release
-          # CLI binaries
+          # CLI binaries + GUI portable binaries (all named prisma-*)
           find artifacts -type f \( -name 'prisma-*' \) -exec cp {} release/ \;
-          # GUI installers (.msi, .dmg, .deb, .AppImage, .exe from NSIS)
-          find artifacts -type f \( -name '*.msi' -o -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.exe' \) | while read f; do
-            bn=$(basename "$f")
-            # Skip CLI .exe files already copied above
-            case "$bn" in prisma-windows-*) continue ;; esac
-            cp "$f" "release/$bn"
-          done
           ls -la release/
           count=$(find release -type f ! -name '*.sha256' ! -name 'checksums-*' | wc -l)
           if [ "$count" -eq 0 ]; then
@@ -292,10 +260,9 @@ jobs:
           cd release
           # Checksums for CLI binaries (from individual .sha256 files)
           cat *.sha256 2>/dev/null > checksums-sha256.txt || true
-          # Add checksums for GUI installers
-          for f in *.msi *.dmg *.deb *.AppImage *.exe; do
+          # Add checksums for GUI portable binaries
+          for f in prisma-gui-*; do
             [ -f "$f" ] || continue
-            # Skip if already covered by a .sha256 sidecar
             [ -f "${f}.sha256" ] && continue
             sha256sum "$f" >> checksums-sha256.txt
           done
@@ -410,25 +377,12 @@ jobs:
             echo "| 🪟 Windows | ARM64 | [prisma-windows-arm64.exe](${BASE_URL}/prisma-windows-arm64.exe) |"
             echo "| 😈 FreeBSD | x86\_64 | [prisma-freebsd-amd64](${BASE_URL}/prisma-freebsd-amd64) |"
             echo ""
-            echo "### Desktop App (GUI)"
+            echo "### Desktop App (GUI) — Portable"
             echo ""
-            echo "| Platform | Installer |"
-            echo "|----------|-----------|"
-
-            # Dynamically list GUI artifacts that made it into release/
-            for ext in msi dmg deb AppImage; do
-              for f in release/*."$ext"; do
-                [ -f "$f" ] || continue
-                bn=$(basename "$f")
-                case "$ext" in
-                  msi)      plat="🪟 Windows" ;;
-                  dmg)      plat="🍎 macOS" ;;
-                  deb)      plat="🐧 Linux (deb)" ;;
-                  AppImage) plat="🐧 Linux (AppImage)" ;;
-                esac
-                echo "| ${plat} | [${bn}](${BASE_URL}/${bn}) |"
-              done
-            done
+            echo "| Platform | Binary |"
+            echo "|----------|--------|"
+            echo "| 🪟 Windows | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
+            echo "| 🍎 macOS (Universal) | [prisma-gui-macos-universal](${BASE_URL}/prisma-gui-macos-universal) |"
 
             echo ""
             echo "> Verify integrity: \`sha256sum -c checksums-sha256.txt\` (Linux/macOS) · \`Get-FileHash\` (Windows)"

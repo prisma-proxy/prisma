@@ -117,10 +117,10 @@ action = "block"
 
 [[routing.rules]]
 type = "all"
-action = "allow"
+action = "direct"
 ```
 
-服务端规则使用与客户端规则相同的 `type`/`value` 语法。`action` 值会被映射：`block` → Block，其他 → Allow。
+服务端规则使用与客户端规则相同的 `type`/`value` 语法。有效的 `action` 值为 `proxy`、`direct` 和 `block` — 与客户端规则相同。
 
 ### 动态规则（管理 API）
 

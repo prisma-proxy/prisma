@@ -202,7 +202,7 @@ pub async fn diff_backup(
         .map(|change| {
             let value = change.value().to_string();
             let (tag, old_value, new_value) = match change.tag() {
-                ChangeTag::Equal => ("equal", None, None),
+                ChangeTag::Equal => ("equal", Some(value.clone()), Some(value)),
                 ChangeTag::Delete => ("delete", Some(value), None),
                 ChangeTag::Insert => ("insert", None, Some(value)),
             };

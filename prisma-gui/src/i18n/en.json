@@ -16,7 +16,11 @@
     "modePerApp": "Per-App",
     "connect": "Connect",
     "disconnect": "Disconnect",
-    "connecting": "Connecting…"
+    "connecting": "Connecting…",
+    "download": "Download",
+    "upload": "Upload",
+    "transferred": "Transferred",
+    "uptime": "Uptime"
   },
   "profiles": {
     "title": "Profiles",
@@ -44,18 +48,30 @@
     "importSuccess": "Imported {{count}} profile(s)",
     "importFailed": "Import failed",
     "share": "Share",
-    "copiedToClipboard": "Profile copied to clipboard",
+    "shareTitle": "Share \"{{name}}\"",
+    "shareToml": "TOML",
+    "shareUri": "URI",
+    "shareQr": "QR Code",
+    "shareTomlDesc": "Client config for prisma-client / CLI. Paste into your client.toml file.",
+    "shareUriDesc": "Share this prisma:// link to import in another Prisma GUI app.",
+    "shareQrDesc": "Scan this QR code with another Prisma GUI app to import.",
+    "copyToClipboard": "Copy",
+    "copied": "Copied!",
+    "copiedToClipboard": "Copied to clipboard",
     "exportFailed": "Export failed",
     "importQrTitle": "Import via QR / URI",
     "importQrLabel": "Paste a prisma:// URI or JSON",
     "deleteTitle": "Delete Profile",
-    "deleteMessage": "Delete \"{{name}}\"? This cannot be undone."
+    "deleteMessage": "Delete \"{{name}}\"? This cannot be undone.",
+    "sessions": "sessions",
+    "peak": "peak"
   },
   "rules": {
     "title": "Rules",
     "addRule": "Add Rule",
     "noRules": "No rules",
     "inMemoryNote": "Rules are in-memory only. To persist them, include them in your profile's config JSON.",
+    "persistNote": "Rules are saved locally. They apply as routing overrides when connected.",
     "type": "Type",
     "match": "Match",
     "action": "Action",
@@ -85,7 +101,13 @@
     "measuringLatency": "Measuring latency…",
     "measuringDownload": "Measuring download…",
     "measuringUpload": "Measuring upload…",
-    "notConnected": "Not connected to a proxy — results reflect your direct connection."
+    "notConnected": "Not connected to a proxy — results reflect your direct connection.",
+    "history": "History",
+    "avgDownload": "Avg ↓ Mbps",
+    "avgUpload": "Avg ↑ Mbps",
+    "bestDownload": "Best ↓ Mbps",
+    "proxy": "proxy",
+    "direct": "direct"
   },
   "settings": {
     "title": "Settings",

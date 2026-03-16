@@ -121,6 +121,10 @@ impl ApiClient {
         self.json
     }
 
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
     pub fn ws_url(&self, path: &str) -> String {
         let base = self
             .url

@@ -14,10 +14,7 @@ unsafe extern "C" fn on_ffi_event(
     if json.is_null() { return; }
     let s = CStr::from_ptr(json).to_string_lossy().to_string();
     if let Some(handle) = state::APP_HANDLE.get() {
-        // Forward to frontend
-        let _ = handle.emit("prisma://event", s.clone());
-
-        // Update tray (desktop only)
+        // Update tray (desktop only) — parse before emit to avoid clone
         #[cfg(desktop)]
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&s) {
             match parsed["type"].as_str() {
@@ -33,6 +30,9 @@ unsafe extern "C" fn on_ffi_event(
                 _ => {}
             }
         }
+
+        // Forward to frontend
+        let _ = handle.emit("prisma://event", s);
     }
 }
 
@@ -78,6 +78,8 @@ pub fn run() {
             commands::delete_profile,
             commands::profile_to_qr,
             commands::profile_from_qr,
+            commands::profile_to_uri,
+            commands::profile_config_to_toml,
             commands::check_update,
             commands::apply_update,
             commands::speed_test,

@@ -11,36 +11,27 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
-
-interface Rule {
-  id:     string;
-  type:   "DOMAIN" | "IP-CIDR" | "GEOIP" | "FINAL";
-  match:  string;
-  action: "PROXY" | "DIRECT" | "REJECT";
-}
+import { useRules } from "@/store/rules";
+import type { Rule } from "@/store/rules";
 
 const RULE_TYPES   = ["DOMAIN", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 
 export default function Rules() {
   const { t } = useTranslation();
-  const [rules,  setRules]  = useState<Rule[]>([]);
+  const rules = useRules((s) => s.rules);
+  const addRule = useRules((s) => s.add);
+  const removeRule = useRules((s) => s.remove);
+
   const [open,   setOpen]   = useState(false);
   const [type,   setType]   = useState<Rule["type"]>("DOMAIN");
   const [match,  setMatch]  = useState("");
   const [action, setAction] = useState<Rule["action"]>("PROXY");
 
   function handleAdd() {
-    setRules((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), type, match, action },
-    ]);
+    addRule({ id: crypto.randomUUID(), type, match, action });
     setMatch("");
     setOpen(false);
-  }
-
-  function handleDelete(id: string) {
-    setRules((prev) => prev.filter((r) => r.id !== id));
   }
 
   return (
@@ -55,7 +46,7 @@ export default function Rules() {
       <Alert className="border-blue-600/30 bg-blue-600/10">
         <Info size={14} className="text-blue-400" />
         <AlertDescription className="text-blue-300 text-xs">
-          {t("rules.inMemoryNote")}
+          {t("rules.persistNote")}
         </AlertDescription>
       </Alert>
 
@@ -90,7 +81,7 @@ export default function Rules() {
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Button size="icon" variant="ghost" onClick={() => handleDelete(r.id)}>
+                  <Button size="icon" variant="ghost" onClick={() => removeRule(r.id)}>
                     <Trash2 size={14} className="text-destructive" />
                   </Button>
                 </TableCell>

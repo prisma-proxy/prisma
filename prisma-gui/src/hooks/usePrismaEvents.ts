@@ -73,12 +73,12 @@ export function usePrismaEvents() {
           } else if (data.status === "connecting") {
             store.setConnecting(true);
           } else {
-            // Disconnected — record session bytes
+            // Disconnected — record session bytes + uptime
             {
               const { activeProfileIdx, profiles, stats } = store;
               const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
               if (profile && stats) {
-                useProfileMetrics.getState().recordDisconnect(profile.id, stats.bytes_up, stats.bytes_down);
+                useProfileMetrics.getState().recordDisconnect(profile.id, stats.bytes_up, stats.bytes_down, stats.uptime_secs);
                 useConnectionHistory.getState().add({
                   profileId: profile.id,
                   profileName: profile.name,
@@ -94,9 +94,17 @@ export function usePrismaEvents() {
           }
           break;
 
-        case "stats":
-          store.setStats(data as unknown as Stats);
+        case "stats": {
+          const s = data as unknown as Stats;
+          store.setStats(s);
+          // Track peak speeds for the active profile
+          const { activeProfileIdx: aidx, profiles: profs } = store;
+          const activeProf = aidx !== null ? profs[aidx] : profs[0];
+          if (activeProf) {
+            useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
+          }
           break;
+        }
 
         case "log":
           store.addLog({

@@ -1,4 +1,4 @@
-use tauri::{App, AppHandle, Emitter, Manager, Wry};
+use tauri::{App, AppHandle, Emitter, Manager};
 use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::image::Image;
@@ -89,21 +89,17 @@ pub fn update_tooltip(handle: &AppHandle, up_bps: f64, down_bps: f64) {
 }
 
 pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
-    use std::ffi::CStr;
-
     let ptr = prisma_ffi::prisma_profiles_list_json();
-    let profiles_json = if ptr.is_null() {
-        "[]".to_string()
+    let profiles: Vec<serde_json::Value> = if ptr.is_null() {
+        Vec::new()
     } else {
-        unsafe {
-            let s = CStr::from_ptr(ptr).to_string_lossy().to_string();
+        let s = unsafe {
+            let s = std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string();
             prisma_ffi::prisma_free_string(ptr as *mut _);
             s
-        }
+        };
+        serde_json::from_str(&s).unwrap_or_default()
     };
-
-    let profiles: Vec<serde_json::Value> =
-        serde_json::from_str(&profiles_json).unwrap_or_default();
 
     let connect_label = crate::state::TRAY_CONNECT_ITEM
         .lock()
@@ -151,7 +147,3 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
 
     Ok(())
 }
-
-// Keep the Wry type referenced so the module compiles even if unused on mobile
-#[allow(dead_code)]
-fn _wry_phantom(_: Wry) {}

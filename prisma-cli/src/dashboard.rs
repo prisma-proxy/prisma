@@ -251,7 +251,11 @@ async fn proxy_request(
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    let client = reqwest::Client::new();
+    // Accept self-signed certs since the mgmt API typically uses self-signed TLS
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let path = req.uri().path();
     let query = req
         .uri()
@@ -271,12 +275,16 @@ async fn proxy_request(
         builder = builder.header("Authorization", format!("Bearer {}", t));
     }
 
-    // Forward request headers (except host)
+    // Forward request headers (except host and authorization when proxy injects its own)
     for (key, value) in req.headers() {
-        if key != "host" {
-            if let Ok(v) = value.to_str() {
-                builder = builder.header(key.as_str(), v);
-            }
+        if key == "host" {
+            continue;
+        }
+        if key == "authorization" && token.is_some() {
+            continue;
+        }
+        if let Ok(v) = value.to_str() {
+            builder = builder.header(key.as_str(), v);
         }
     }
 

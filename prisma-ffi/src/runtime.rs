@@ -1,20 +1,17 @@
 use anyhow::Result;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub struct PrismaRuntime {
-    inner: Arc<Runtime>,
+    inner: Runtime,
 }
 
 impl PrismaRuntime {
     pub fn new() -> Result<Self> {
-        let rt = tokio::runtime::Builder::new_multi_thread()
+        let inner = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_name("prisma-ffi")
             .build()?;
-        Ok(Self {
-            inner: Arc::new(rt),
-        })
+        Ok(Self { inner })
     }
 
     pub fn spawn<F>(&self, fut: F) -> tokio::task::JoinHandle<F::Output>

@@ -55,7 +55,8 @@ impl ConnectionManager {
         let config_json = serde_json::to_string(&config)?;
 
         // Create broadcast channel for log forwarding
-        let (log_tx, mut log_rx) = tokio::sync::broadcast::channel::<prisma_core::state::LogEntry>(256);
+        let (log_tx, mut log_rx) =
+            tokio::sync::broadcast::channel::<prisma_core::state::LogEntry>(256);
 
         // Shared metrics for traffic counting
         let metrics = self.metrics.clone();
@@ -141,10 +142,7 @@ impl ConnectionManager {
     }
 
     pub fn get_stats_json(&mut self) -> String {
-        let uptime_secs = self
-            .start_time
-            .map(|t| t.elapsed().as_secs())
-            .unwrap_or(0);
+        let uptime_secs = self.start_time.map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
         let bytes_up = self.metrics.get_up();
         let bytes_down = self.metrics.get_down();
