@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export interface AppSettings {
+  language: "en" | "zh-CN";
+  theme: "system" | "light" | "dark";
   startOnBoot: boolean;
   minimizeToTray: boolean;
   socks5Port: number;
@@ -21,10 +23,12 @@ interface SettingsStore extends AppSettings {
 export const useSettings = create<SettingsStore>()(
   persist(
     (set) => ({
+      language: "en",
+      theme: "system",
       startOnBoot: false,
       minimizeToTray: true,
-      socks5Port: 1080,
-      httpPort: null,
+      socks5Port: 0,
+      httpPort: 8080,
       dnsMode: "direct",
       dnsUpstream: "8.8.8.8:53",
       fakeIpRange: "198.18.0.0/15",

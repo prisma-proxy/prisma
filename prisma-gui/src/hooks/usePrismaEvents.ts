@@ -1,7 +1,12 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
-import { toast } from "sonner";
+import { notify } from "../store/notifications";
 import { useStore } from "../store";
+import { useProfileMetrics } from "../store/profileMetrics";
+import { useConnectionHistory } from "../store/connectionHistory";
+import { useSettings } from "../store/settings";
+import { api } from "../lib/commands";
+import { MODE_SYSTEM_PROXY } from "../lib/types";
 import type { Stats, LogEntry, SpeedTestResult } from "../lib/types";
 
 interface PrismaEvent {
@@ -22,17 +27,6 @@ interface PrismaEvent {
 }
 
 export function usePrismaEvents() {
-  const {
-    setConnected,
-    setConnecting,
-    setManualDisconnect,
-    setStats,
-    addLog,
-    setUpdateAvailable,
-    setSpeedTestResult,
-    setSpeedTestRunning,
-  } = useStore();
-
   useEffect(() => {
     const unlisten = listen<string>("prisma://event", (event) => {
       let data: PrismaEvent;
@@ -42,26 +36,70 @@ export function usePrismaEvents() {
         return;
       }
 
+      const store = useStore.getState();
+
       switch (data.type) {
         case "status_changed":
-          // Any status change resets the manual-disconnect flag
-          setManualDisconnect(false);
+          store.setManualDisconnect(false);
           if (data.status === "connected") {
-            setConnected(true);
-            toast.success("Connected");
+            store.setConnected(true);
+            // Record connect latency for profile metrics
+            {
+              const { connectStartTime, activeProfileIdx, profiles } = store;
+              if (connectStartTime) {
+                const latencyMs = Date.now() - connectStartTime;
+                const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
+                if (profile) {
+                  useProfileMetrics.getState().recordConnect(profile.id, latencyMs);
+                  useConnectionHistory.getState().add({
+                    profileId: profile.id,
+                    profileName: profile.name,
+                    action: "connect",
+                    timestamp: Date.now(),
+                    latencyMs,
+                  });
+                }
+                store.setConnectStartTime(null);
+              }
+            }
+            // Set OS-level system proxy if MODE_SYSTEM_PROXY is active
+            if (store.proxyModes & MODE_SYSTEM_PROXY) {
+              const httpPort = useSettings.getState().httpPort;
+              if (httpPort && httpPort > 0) {
+                api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
+              }
+            }
+            notify.success("Connected");
           } else if (data.status === "connecting") {
-            setConnecting(true);
+            store.setConnecting(true);
           } else {
-            setConnected(false);
+            // Disconnected — record session bytes
+            {
+              const { activeProfileIdx, profiles, stats } = store;
+              const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
+              if (profile && stats) {
+                useProfileMetrics.getState().recordDisconnect(profile.id, stats.bytes_up, stats.bytes_down);
+                useConnectionHistory.getState().add({
+                  profileId: profile.id,
+                  profileName: profile.name,
+                  action: "disconnect",
+                  timestamp: Date.now(),
+                  sessionBytes: { up: stats.bytes_up, down: stats.bytes_down },
+                });
+              }
+            }
+            // Clear OS-level system proxy on disconnect
+            api.clearSystemProxy().catch(() => {});
+            store.setConnected(false);
           }
           break;
 
         case "stats":
-          setStats(data as unknown as Stats);
+          store.setStats(data as unknown as Stats);
           break;
 
         case "log":
-          addLog({
+          store.addLog({
             level: (data.level ?? "INFO") as LogEntry["level"],
             msg:   data.msg ?? "",
             time:  data.time ?? Date.now(),
@@ -70,25 +108,25 @@ export function usePrismaEvents() {
 
         case "update_available":
           if (data.version) {
-            setUpdateAvailable(data.version);
-            toast.info(`Update available: v${data.version}`);
+            store.setUpdateAvailable(data.version);
+            notify.info(`Update available: v${data.version}`);
           }
           break;
 
         case "speed_test_result":
-          setSpeedTestResult({
+          store.setSpeedTestResult({
             download_mbps: data.download_mbps ?? 0,
             upload_mbps:   data.upload_mbps   ?? 0,
           } as SpeedTestResult);
           break;
 
         case "error":
-          setSpeedTestRunning(false);
-          toast.error(data.msg ?? `Error: ${data.code ?? "unknown"}`);
+          store.setSpeedTestRunning(false);
+          notify.error(data.msg ?? `Error: ${data.code ?? "unknown"}`);
           break;
       }
     });
 
     return () => { unlisten.then((f) => f()); };
-  }, [setConnected, setConnecting, setManualDisconnect, setStats, addLog, setUpdateAvailable, setSpeedTestResult, setSpeedTestRunning]);
+  }, []);
 }

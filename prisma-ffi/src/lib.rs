@@ -96,6 +96,9 @@ macro_rules! cstr_to_str {
 /// Create a new PrismaClient handle. Returns NULL on allocation failure.
 #[no_mangle]
 pub extern "C" fn prisma_create() -> *mut PrismaClient {
+    // Install rustls CryptoProvider (idempotent — ignores if already set)
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let runtime = match PrismaRuntime::new() {
         Ok(r) => Arc::new(r),
         Err(_) => return std::ptr::null_mut(),
@@ -184,7 +187,7 @@ pub unsafe extern "C" fn prisma_connect(
         }
     };
 
-    match conn.connect(Arc::clone(&client.runtime), config, modes, Box::new(fire)) {
+    match conn.connect(Arc::clone(&client.runtime), config, modes, Arc::new(fire)) {
         Ok(_) => {
             // Start stats poller
             let cb_arc2 = Arc::clone(&client.callback);
@@ -265,7 +268,7 @@ pub unsafe extern "C" fn prisma_get_stats_json(handle: *mut PrismaClient) -> *mu
     }
     let client = unsafe { &*handle };
     match client.connection.lock() {
-        Ok(conn) => {
+        Ok(mut conn) => {
             let json = conn.get_stats_json();
             match CString::new(json) {
                 Ok(s) => s.into_raw(),

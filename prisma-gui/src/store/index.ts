@@ -9,6 +9,7 @@ interface PrismaStore {
   activeProfileIdx: number | null;
   activeProfileJson: string;
   manualDisconnect: boolean;
+  connectStartTime: number | null;
 
   // Stats
   stats: Stats | null;
@@ -34,6 +35,7 @@ interface PrismaStore {
   setActiveProfileIdx: (idx: number | null) => void;
   setActiveProfileJson: (json: string) => void;
   setManualDisconnect: (v: boolean) => void;
+  setConnectStartTime: (t: number | null) => void;
   setStats: (s: Stats) => void;
   setProfiles: (p: Profile[]) => void;
   addLog: (entry: LogEntry) => void;
@@ -50,10 +52,11 @@ const MAX_LOGS = 500;
 export const useStore = create<PrismaStore>((set) => ({
   connected: false,
   connecting: false,
-  proxyModes: 0x01, // SOCKS5 by default
+  proxyModes: 0x02, // System proxy by default
   activeProfileIdx: null,
   activeProfileJson: "",
   manualDisconnect: false,
+  connectStartTime: null,
 
   stats: null,
   speedSamplesUp: [],
@@ -74,6 +77,7 @@ export const useStore = create<PrismaStore>((set) => ({
   setActiveProfileIdx:  (idx)  => set({ activeProfileIdx: idx }),
   setActiveProfileJson: (json) => set({ activeProfileJson: json }),
   setManualDisconnect:  (v)    => set({ manualDisconnect: v }),
+  setConnectStartTime:  (t)    => set({ connectStartTime: t }),
 
   setStats: (s) =>
     set((state) => ({

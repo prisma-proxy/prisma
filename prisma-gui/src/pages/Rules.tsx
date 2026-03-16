@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ const RULE_TYPES   = ["DOMAIN", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 
 export default function Rules() {
+  const { t } = useTranslation();
   const [rules,  setRules]  = useState<Rule[]>([]);
   const [open,   setOpen]   = useState(false);
   const [type,   setType]   = useState<Rule["type"]>("DOMAIN");
@@ -44,16 +46,16 @@ export default function Rules() {
   return (
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
-        <h1 className="font-bold text-lg">Rules</h1>
+        <h1 className="font-bold text-lg">{t("rules.title")}</h1>
         <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus /> Add Rule
+          <Plus /> {t("rules.addRule")}
         </Button>
       </div>
 
       <Alert className="border-blue-600/30 bg-blue-600/10">
         <Info size={14} className="text-blue-400" />
         <AlertDescription className="text-blue-300 text-xs">
-          Rules are in-memory only. To persist them, include them in your profile&apos;s config JSON.
+          {t("rules.inMemoryNote")}
         </AlertDescription>
       </Alert>
 
@@ -61,9 +63,9 @@ export default function Rules() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Match</TableHead>
-              <TableHead>Action</TableHead>
+              <TableHead>{t("rules.type")}</TableHead>
+              <TableHead>{t("rules.match")}</TableHead>
+              <TableHead>{t("rules.action")}</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -71,7 +73,7 @@ export default function Rules() {
             {rules.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  No rules
+                  {t("rules.noRules")}
                 </TableCell>
               </TableRow>
             )}
@@ -100,10 +102,10 @@ export default function Rules() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Rule</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("rules.addRule")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label>Type</Label>
+              <Label>{t("rules.type")}</Label>
               <Select value={type} onValueChange={(v) => setType(v as Rule["type"])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -112,11 +114,11 @@ export default function Rules() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Match</Label>
-              <Input value={match} onChange={(e) => setMatch(e.target.value)} placeholder="e.g. example.com" />
+              <Label>{t("rules.match")}</Label>
+              <Input value={match} onChange={(e) => setMatch(e.target.value)} placeholder={t("rules.matchPlaceholder")} />
             </div>
             <div className="space-y-1">
-              <Label>Action</Label>
+              <Label>{t("rules.action")}</Label>
               <Select value={action} onValueChange={(v) => setAction(v as Rule["action"])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -126,8 +128,8 @@ export default function Rules() {
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-            <Button onClick={handleAdd}>Add</Button>
+            <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
+            <Button onClick={handleAdd}>{t("rules.addRule")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

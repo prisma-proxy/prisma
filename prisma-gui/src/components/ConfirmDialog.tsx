@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogClose,
@@ -14,8 +15,10 @@ interface ConfirmDialogProps {
 }
 
 export default function ConfirmDialog({
-  open, onOpenChange, title, message, confirmLabel = "Confirm", onConfirm,
+  open, onOpenChange, title, message, confirmLabel, onConfirm,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -25,10 +28,10 @@ export default function ConfirmDialog({
         <p className="text-sm text-muted-foreground">{message}</p>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="ghost">Cancel</Button>
+            <Button variant="ghost">{t("common.cancel")}</Button>
           </DialogClose>
           <Button variant="destructive" onClick={() => { onConfirm(); onOpenChange(false); }}>
-            {confirmLabel}
+            {confirmLabel ?? t("common.confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

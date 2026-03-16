@@ -2614,6 +2614,7 @@ dependencies = [
  "prisma-client",
  "prisma-core",
  "qrcode",
+ "rustls",
  "semver",
  "serde",
  "serde_json",

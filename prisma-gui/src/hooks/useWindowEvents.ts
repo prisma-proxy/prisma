@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../store/settings";
 
 export function useWindowEvents() {
@@ -7,10 +8,12 @@ export function useWindowEvents() {
 
   useEffect(() => {
     const win = getCurrentWindow();
-    const unlisten = win.onCloseRequested((event) => {
+    const unlisten = win.onCloseRequested(async (event) => {
+      event.preventDefault();
       if (minimizeToTray) {
-        event.preventDefault();
-        win.hide();
+        await win.hide();
+      } else {
+        await invoke("quit_app");
       }
     });
     return () => { unlisten.then((f) => f()); };

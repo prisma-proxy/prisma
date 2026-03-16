@@ -12,7 +12,9 @@ fn icon_connecting()  -> Image<'static> { Image::new(include_bytes!("../icons/tr
 pub fn setup(app: &App) -> tauri::Result<()> {
     let connect = MenuItem::with_id(app, "tray-connect", "Connect", true, None::<&str>)?;
     // Store for label updates in update_status
-    crate::state::TRAY_CONNECT_ITEM.set(connect.clone()).ok();
+    if let Ok(mut guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
+        *guard = Some(connect.clone());
+    }
 
     let show = MenuItem::with_id(app, "tray-show", "Show Window", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit Prisma",  true, None::<&str>)?;
@@ -66,9 +68,11 @@ pub fn update_status(handle: &AppHandle, status: i32) {
         let _ = tray.set_icon(Some(icon));
     }
 
-    if let Some(item) = crate::state::TRAY_CONNECT_ITEM.get() {
-        let label = if status == 2 { "Disconnect" } else { "Connect" };
-        let _ = item.set_text(label);
+    if let Ok(guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
+        if let Some(item) = guard.as_ref() {
+            let label = if status == 2 { "Disconnect" } else { "Connect" };
+            let _ = item.set_text(label);
+        }
     }
 }
 
@@ -78,7 +82,7 @@ pub fn update_tooltip(handle: &AppHandle, up_bps: f64, down_bps: f64) {
         else if bps < 1_048_576.0 { format!("{:.1} KB/s", bps / 1_024.0) }
         else                      { format!("{:.1} MB/s", bps / 1_048_576.0) }
     }
-    let tooltip = format!("Prisma  \u{2191} {}  \u{2193} {}", fmt(up_bps), fmt(down_bps));
+    let tooltip = format!("Prisma  Up: {}  Down: {}", fmt(up_bps), fmt(down_bps));
     if let Some(tray) = handle.tray_by_id("prisma-tray") {
         let _ = tray.set_tooltip(Some(&tooltip));
     }
@@ -102,11 +106,16 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
         serde_json::from_str(&profiles_json).unwrap_or_default();
 
     let connect_label = crate::state::TRAY_CONNECT_ITEM
-        .get()
-        .and_then(|item| item.text().ok())
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().and_then(|item| item.text().ok()))
         .unwrap_or_else(|| "Connect".to_string());
 
     let connect = MenuItem::with_id(app, "tray-connect", connect_label, true, None::<&str>)?;
+    // Update the stored reference so update_status writes to the new item
+    if let Ok(mut guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
+        *guard = Some(connect.clone());
+    }
     let show    = MenuItem::with_id(app, "tray-show",    "Show Window", true, None::<&str>)?;
     let quit    = MenuItem::with_id(app, "tray-quit",    "Quit Prisma", true, None::<&str>)?;
 

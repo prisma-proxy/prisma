@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { toast } from "sonner";
-import { Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -8,37 +8,30 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import StatusBadge from "@/components/StatusBadge";
 import SpeedGraph from "@/components/SpeedGraph";
 import { useStore } from "@/store";
+import { useConnection } from "@/hooks/useConnection";
+import { useConnectionHistory } from "@/store/connectionHistory";
+import { fmtBytes, fmtRelativeTime } from "@/lib/format";
 import { api } from "@/lib/commands";
 import { MODE_SOCKS5, MODE_SYSTEM_PROXY, MODE_TUN, MODE_PER_APP } from "@/lib/types";
 
-function fmtBytes(n: number) {
-  if (n < 1024)        return `${n} B`;
-  if (n < 1048576)     return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1073741824)  return `${(n / 1048576).toFixed(1)} MB`;
-  return `${(n / 1073741824).toFixed(2)} GB`;
-}
-
-function fmtUptime(secs: number) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
-}
-
 export default function Home() {
+  const { t } = useTranslation();
   const connected = useStore((s) => s.connected);
   const connecting = useStore((s) => s.connecting);
-  const stats = useStore((s) => s.stats);
   const profiles = useStore((s) => s.profiles);
   const proxyModes = useStore((s) => s.proxyModes);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
   const setProxyModes = useStore((s) => s.setProxyModes);
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
   const setProfiles = useStore((s) => s.setProfiles);
-  const setManualDisconnect = useStore((s) => s.setManualDisconnect);
 
-  const [busy,    setBusy]    = useState(false);
+  const { connectTo, disconnect } = useConnection();
+  const events = useConnectionHistory((s) => s.events);
+  const recentEvents = events.slice(-10).reverse();
+
+  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     api.listProfiles()
@@ -51,27 +44,21 @@ export default function Home() {
     if (connected) {
       try {
         setBusy(true);
-        setManualDisconnect(true);
-        await api.disconnect();
-      } catch (e) {
-        toast.error(String(e));
-        setManualDisconnect(false);
+        await disconnect();
       } finally {
         setBusy(false);
       }
     } else {
       const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
-      if (!profile) { toast.error("No profile selected"); return; }
+      if (!profile) return;
       try {
         setBusy(true);
-        await api.connect(JSON.stringify(profile.config), proxyModes);
-      } catch (e) {
-        toast.error(String(e));
+        await connectTo(profile, proxyModes);
       } finally {
         setBusy(false);
       }
     }
-  }, [connected, activeProfileIdx, profiles, proxyModes, setManualDisconnect]);
+  }, [connected, activeProfileIdx, profiles, proxyModes, connectTo, disconnect]);
 
   const modeValues: string[] = [];
   if (proxyModes & MODE_SOCKS5)       modeValues.push("socks5");
@@ -85,7 +72,7 @@ export default function Home() {
     if (vals.includes("sys"))    flags |= MODE_SYSTEM_PROXY;
     if (vals.includes("tun"))    flags |= MODE_TUN;
     if (vals.includes("app"))    flags |= MODE_PER_APP;
-    setProxyModes(flags || MODE_SOCKS5);
+    setProxyModes(flags || MODE_SYSTEM_PROXY);
   }, [setProxyModes]);
 
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
@@ -102,13 +89,13 @@ export default function Home() {
         {/* Profile picker */}
         {loading ? (
           <Button variant="outline" size="sm" disabled className="max-w-[160px]">
-            <RefreshCw size={12} className="animate-spin mr-1" /> Loading…
+            <RefreshCw size={12} className="animate-spin mr-1" /> {t("common.loading")}
           </Button>
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="max-w-[160px] truncate">
-                {activeProfile?.name ?? "No profile"}
+                {activeProfile?.name ?? t("profiles.noProfile")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -118,7 +105,7 @@ export default function Home() {
                 </DropdownMenuItem>
               ))}
               {profiles.length === 0 && (
-                <DropdownMenuItem disabled>No profiles</DropdownMenuItem>
+                <DropdownMenuItem disabled>{t("profiles.noProfiles")}</DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -128,32 +115,16 @@ export default function Home() {
       {/* Speed graph */}
       <Card>
         <CardHeader className="pb-2 pt-4 px-4">
-          <CardTitle className="text-sm font-medium">Speed (Mbps)</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("home.speedGraph")}</CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4">
           <SpeedGraph />
         </CardContent>
       </Card>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <Card className="p-3">
-          <p className="text-muted-foreground text-xs">Downloaded</p>
-          <p className="font-medium">{stats ? fmtBytes(stats.bytes_down) : "—"}</p>
-        </Card>
-        <Card className="p-3">
-          <p className="text-muted-foreground text-xs">Uploaded</p>
-          <p className="font-medium">{stats ? fmtBytes(stats.bytes_up) : "—"}</p>
-        </Card>
-        <Card className="p-3 col-span-2">
-          <p className="text-muted-foreground text-xs">Uptime</p>
-          <p className="font-medium font-mono">{stats ? fmtUptime(stats.uptime_secs) : "—"}</p>
-        </Card>
-      </div>
-
       {/* Proxy modes */}
       <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Proxy modes</p>
+        <p className="text-xs text-muted-foreground">{t("home.proxyModes")}</p>
         <ToggleGroup
           type="multiple"
           value={modeValues}
@@ -162,9 +133,9 @@ export default function Home() {
           size="sm"
         >
           <ToggleGroupItem value="socks5">SOCKS5</ToggleGroupItem>
-          <ToggleGroupItem value="sys">System</ToggleGroupItem>
+          <ToggleGroupItem value="sys">{t("home.modeSystem")}</ToggleGroupItem>
           <ToggleGroupItem value="tun">TUN</ToggleGroupItem>
-          <ToggleGroupItem value="app">Per-App</ToggleGroupItem>
+          <ToggleGroupItem value="app">{t("home.modePerApp")}</ToggleGroupItem>
         </ToggleGroup>
       </div>
 
@@ -176,13 +147,46 @@ export default function Home() {
         onClick={handleConnect}
       >
         {connecting ? (
-          <><RefreshCw className="animate-spin" /> Connecting…</>
+          <><RefreshCw className="animate-spin" /> {t("home.connecting")}</>
         ) : connected ? (
-          <><WifiOff /> Disconnect</>
+          <><WifiOff /> {t("home.disconnect")}</>
         ) : (
-          <><Wifi /> Connect</>
+          <><Wifi /> {t("home.connect")}</>
         )}
       </Button>
+
+      {/* Connection history */}
+      {recentEvents.length > 0 && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setHistoryOpen((v) => !v)}
+          >
+            <Clock size={12} />
+            <span>{t("history.recentActivity")}</span>
+            <ArrowUpDown size={10} />
+          </button>
+          {historyOpen && (
+            <div className="space-y-1">
+              {recentEvents.map((ev, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className={ev.action === "connect" ? "text-green-500" : "text-gray-500"}>
+                    {ev.action === "connect" ? "●" : "○"}
+                  </span>
+                  <span className="font-medium text-foreground">{ev.profileName}</span>
+                  <span>{ev.action === "connect" ? t("history.connected") : t("history.disconnected")}</span>
+                  {ev.latencyMs != null && <span>{ev.latencyMs}ms</span>}
+                  {ev.sessionBytes && (
+                    <span>↑{fmtBytes(ev.sessionBytes.up)} ↓{fmtBytes(ev.sessionBytes.down)}</span>
+                  )}
+                  <span className="ml-auto">{fmtRelativeTime(new Date(ev.timestamp).toISOString())}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

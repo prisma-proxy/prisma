@@ -5,6 +5,7 @@ import { useWindowEvents } from "./hooks/useWindowEvents";
 import { useAutoReconnect } from "./hooks/useAutoReconnect";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
+import StatusBar from "./components/StatusBar";
 import Home from "./pages/Home";
 import Profiles from "./pages/Profiles";
 import Rules from "./pages/Rules";
@@ -21,16 +22,19 @@ export default function App() {
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {!isMobile && <Sidebar />}
-      <main className="flex-1 overflow-auto">
-        <Routes>
-          <Route path="/"          element={<Home />} />
-          <Route path="/profiles"  element={<Profiles />} />
-          <Route path="/rules"     element={<Rules />} />
-          <Route path="/logs"      element={<Logs />} />
-          <Route path="/speedtest" element={<SpeedTest />} />
-          <Route path="/settings"  element={<Settings />} />
-        </Routes>
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 overflow-auto pb-8">
+          <Routes>
+            <Route path="/"          element={<Home />} />
+            <Route path="/profiles"  element={<Profiles />} />
+            <Route path="/rules"     element={<Rules />} />
+            <Route path="/logs"      element={<Logs />} />
+            <Route path="/speedtest" element={<SpeedTest />} />
+            <Route path="/settings"  element={<Settings />} />
+          </Routes>
+        </main>
+        <StatusBar />
+      </div>
       {isMobile && <BottomNav />}
     </div>
   );

@@ -1,0 +1,47 @@
+import { useCallback } from "react";
+import { useStore } from "@/store";
+import { notify } from "@/store/notifications";
+import { api } from "@/lib/commands";
+import type { Profile } from "@/lib/types";
+
+export function useConnection() {
+  const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
+  const setManualDisconnect = useStore((s) => s.setManualDisconnect);
+  const setConnectStartTime = useStore((s) => s.setConnectStartTime);
+  const profiles = useStore((s) => s.profiles);
+
+  const connectTo = useCallback(async (profile: Profile, modes: number) => {
+    const idx = profiles.findIndex((p) => p.id === profile.id);
+    if (idx >= 0) setActiveProfileIdx(idx);
+    setConnectStartTime(Date.now());
+    try {
+      await api.connect(JSON.stringify(profile.config), modes);
+    } catch (e) {
+      notify.error(String(e));
+      setConnectStartTime(null);
+    }
+  }, [profiles, setActiveProfileIdx, setConnectStartTime]);
+
+  const disconnect = useCallback(async () => {
+    try {
+      setManualDisconnect(true);
+      await api.disconnect();
+    } catch (e) {
+      notify.error(String(e));
+      setManualDisconnect(false);
+    }
+  }, [setManualDisconnect]);
+
+  const switchTo = useCallback(async (profile: Profile, modes: number) => {
+    try {
+      setManualDisconnect(true);
+      await api.disconnect();
+    } catch {
+      // Continue even if disconnect fails
+    }
+    setManualDisconnect(false);
+    await connectTo(profile, modes);
+  }, [connectTo, setManualDisconnect]);
+
+  return { connectTo, disconnect, switchTo };
+}

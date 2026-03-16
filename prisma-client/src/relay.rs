@@ -8,6 +8,7 @@ use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
 use prisma_core::types::MAX_FRAME_SIZE;
 
+use crate::metrics::ClientMetrics;
 use crate::tunnel::TunnelConnection;
 
 /// Bidirectional relay between SOCKS5 client and encrypted tunnel.
@@ -19,7 +20,11 @@ use crate::tunnel::TunnelConnection;
 /// - FrameEncoder with zero-copy in-place encryption (no heap allocations)
 /// - FrameDecoder with in-place decryption
 /// - Write coalescing (single syscall per frame)
-pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<()> {
+pub async fn relay(
+    socks_stream: TcpStream,
+    tunnel: TunnelConnection,
+    metrics: ClientMetrics,
+) -> Result<()> {
     let (mut socks_read, mut socks_write) = socks_stream.into_split();
     let (mut tunnel_read, mut tunnel_write) = tokio::io::split(tunnel.stream);
 
@@ -29,12 +34,14 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
     let mut client_keys = tunnel.session_keys.clone();
     let padding_range = client_keys.padding_range;
     let cipher_s2t = cipher.clone();
+    let metrics_up = metrics.clone();
     let socks_to_tunnel = async move {
         let mut encoder = FrameEncoder::new();
         loop {
             match socks_read.read(encoder.payload_mut()).await {
                 Ok(0) => break,
                 Ok(n) => {
+                    metrics_up.add_up(n as u64);
                     let nonce = client_keys.next_client_nonce();
 
                     match encoder.seal_data_frame(cipher_s2t.as_ref(), &nonce, n, 0, &padding_range)
@@ -85,6 +92,7 @@ pub async fn relay(socks_stream: TcpStream, tunnel: TunnelConnection) -> Result<
             ) {
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
+                        metrics.add_down(payload.len() as u64);
                         if socks_write.write_all(payload).await.is_err() {
                             break;
                         }
@@ -120,6 +128,7 @@ pub async fn relay_tun_tcp_encrypted<R, W>(
     mut tunnel_write: W,
     cipher: Box<dyn prisma_core::crypto::aead::AeadCipher>,
     mut session_keys: prisma_core::protocol::types::SessionKeys,
+    metrics: ClientMetrics,
 ) -> Result<()>
 where
     R: tokio::io::AsyncRead + Unpin + Send,
@@ -145,6 +154,7 @@ where
                     (n, closed)
                 };
                 if n > 0 {
+                    metrics.add_up(n as u64);
                     let nonce = session_keys.next_client_nonce();
                     match encoder.seal_data_frame(
                         cipher.as_ref(),
@@ -185,6 +195,7 @@ where
                             Ok((cmd, payload, _nonce)) => {
                                 match cmd {
                                     CMD_DATA => {
+                                        metrics.add_down(payload.len() as u64);
                                         let mut s = stack.lock().await;
                                         s.write_to_socket(handle, payload);
                                     }
@@ -210,15 +221,42 @@ where
 
 /// Direct relay between local client and outbound connection (no encryption).
 /// Used when routing rules select "direct" action.
-pub async fn relay_direct(local: TcpStream, outbound: TcpStream) -> Result<()> {
+pub async fn relay_direct(
+    local: TcpStream,
+    outbound: TcpStream,
+    metrics: ClientMetrics,
+) -> Result<()> {
     let (mut local_read, mut local_write) = local.into_split();
     let (mut out_read, mut out_write) = outbound.into_split();
 
+    let metrics_up = metrics.clone();
     let l2o = async move {
-        let _ = tokio::io::copy(&mut local_read, &mut out_write).await;
+        let mut buf = vec![0u8; 32768];
+        loop {
+            match local_read.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    metrics_up.add_up(n as u64);
+                    if out_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
     };
     let o2l = async move {
-        let _ = tokio::io::copy(&mut out_read, &mut local_write).await;
+        let mut buf = vec![0u8; 32768];
+        loop {
+            match out_read.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    metrics.add_down(n as u64);
+                    if local_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
     };
 
     tokio::select! {

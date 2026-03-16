@@ -288,6 +288,7 @@ async fn relay_tun_tcp(
         tunnel_write,
         cipher,
         session_keys,
+        ctx.metrics.clone(),
     )
     .await
 }

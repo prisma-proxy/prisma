@@ -1,12 +1,16 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { notify } from "../store/notifications";
 import { useStore } from "../store";
 import { useSettings } from "../store/settings";
 import { api } from "../lib/commands";
 
 export function useAutoReconnect() {
-  const { connected, connecting, manualDisconnect, activeProfileIdx, profiles, proxyModes } =
-    useStore();
+  const connected = useStore((s) => s.connected);
+  const connecting = useStore((s) => s.connecting);
+  const manualDisconnect = useStore((s) => s.manualDisconnect);
+  const activeProfileIdx = useStore((s) => s.activeProfileIdx);
+  const profiles = useStore((s) => s.profiles);
+  const proxyModes = useStore((s) => s.proxyModes);
   const { autoReconnect, reconnectDelaySecs, reconnectMaxAttempts } = useSettings();
   const attemptsRef = useRef(0);
 
@@ -25,7 +29,7 @@ export function useAutoReconnect() {
         activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
       if (!profile) return;
       try {
-        toast.info(`Auto-reconnecting… (attempt ${attemptsRef.current})`);
+        notify.info(`Auto-reconnecting… (attempt ${attemptsRef.current})`);
         await api.connect(JSON.stringify(profile.config), proxyModes);
       } catch {
         // Next disconnect event will trigger another attempt

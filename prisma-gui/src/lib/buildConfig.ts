@@ -1,17 +1,22 @@
 // WizardState — the full shape collected across wizard steps 1–5
 export interface WizardState {
-  // Step 1
+  // Step 1 — Connection
   name: string;
   serverHost: string;
   serverPort: number;
-  socks5Port: number;
-  httpPort: string; // empty = disabled
-  // Step 2
+  skipCertVerify: boolean;
+  tlsOnTcp: boolean;
+  tlsServerName: string;
+  alpnProtocols: string;
+
+  // Step 2 — Authentication
   clientId: string;
   authSecret: string;
   prismaAuthSecret: string;
   protocolVersion: "v4" | "v3";
-  // Step 3 — transport + sub-fields
+  transportOnlyCipher: boolean;
+
+  // Step 3 — Transport + sub-fields
   transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp";
   cipher: string;
   fingerprint: string;
@@ -19,11 +24,13 @@ export interface WizardState {
   sniSlicing: boolean;
   wsUrl: string;
   wsHost: string;
+  wsExtraHeaders: string;
   grpcUrl: string;
   xhttpMode: string;
   xhttpUploadUrl: string;
   xhttpDownloadUrl: string;
   xhttpStreamUrl: string;
+  xhttpExtraHeaders: string;
   xportaBaseUrl: string;
   xportaEncoding: string;
   xportaPollTimeout: number;
@@ -33,7 +40,38 @@ export interface WizardState {
   portHopBase: number;
   portHopRange: number;
   portHopInterval: number;
-  // Step 4
+  portHopGracePeriod: number;
+  // Salamander
+  salamanderPassword: string;
+  // User-Agent / Referer
+  userAgent: string;
+  referer: string;
+  // XMUX
+  xmuxEnabled: boolean;
+  xmuxMaxConnsMin: number;
+  xmuxMaxConnsMax: number;
+  xmuxMaxConcurrencyMin: number;
+  xmuxMaxConcurrencyMax: number;
+  xmuxMaxLifetimeMin: number;
+  xmuxMaxLifetimeMax: number;
+  xmuxMaxRequestsMin: number;
+  xmuxMaxRequestsMax: number;
+  // Transport mode / fallback
+  transportMode: string;
+  fallbackOrder: string;
+  // Entropy camouflage
+  entropyCamouflage: boolean;
+  // Traffic shaping
+  trafficPaddingMode: string;
+  trafficTimingJitter: number;
+  trafficChaffInterval: number;
+  trafficCoalesceWindow: number;
+  // UDP FEC
+  fecEnabled: boolean;
+  fecDataShards: number;
+  fecParityShards: number;
+
+  // Step 4 — Routing, TUN, DNS, Logging, Port Forwards
   tunEnabled: boolean;
   tunDevice: string;
   tunMtu: number;
@@ -42,6 +80,12 @@ export interface WizardState {
   dnsMode: "direct" | "fake" | "smart" | "tunnel";
   dnsUpstream: string;
   fakeIpRange: string;
+  logLevel: string;
+  logFormat: string;
+  portForwards: string; // multiline "name,local_addr,remote_port" per line
+  routingGeoipPath: string;
+  routingRules: string; // JSON array string for advanced users
+
   // Step 5
   tags: string[];
 }
@@ -50,33 +94,61 @@ export const DEFAULT_WIZARD: WizardState = {
   name: "",
   serverHost: "",
   serverPort: 443,
-  socks5Port: 1080,
-  httpPort: "",
+  skipCertVerify: false,
+  tlsOnTcp: false,
+  tlsServerName: "",
+  alpnProtocols: "h2,http/1.1",
   clientId: "",
   authSecret: "",
   prismaAuthSecret: "",
   protocolVersion: "v4",
+  transportOnlyCipher: false,
   transport: "quic",
   cipher: "chacha20-poly1305",
-  fingerprint: "",
-  quicVersion: "v1",
+  fingerprint: "chrome",
+  quicVersion: "auto",
   sniSlicing: false,
   wsUrl: "/ws",
   wsHost: "",
+  wsExtraHeaders: "",
   grpcUrl: "/prisma.Proxy/Relay",
   xhttpMode: "auto",
   xhttpUploadUrl: "/up",
   xhttpDownloadUrl: "/down",
   xhttpStreamUrl: "/stream",
+  xhttpExtraHeaders: "",
   xportaBaseUrl: "",
-  xportaEncoding: "base64",
-  xportaPollTimeout: 30,
+  xportaEncoding: "json",
+  xportaPollTimeout: 55,
   congestion: "bbr",
   targetBandwidth: "",
   portHopping: false,
   portHopBase: 40000,
   portHopRange: 5000,
   portHopInterval: 30,
+  portHopGracePeriod: 5,
+  salamanderPassword: "",
+  userAgent: "",
+  referer: "",
+  xmuxEnabled: false,
+  xmuxMaxConnsMin: 1,
+  xmuxMaxConnsMax: 4,
+  xmuxMaxConcurrencyMin: 8,
+  xmuxMaxConcurrencyMax: 16,
+  xmuxMaxLifetimeMin: 300,
+  xmuxMaxLifetimeMax: 600,
+  xmuxMaxRequestsMin: 100,
+  xmuxMaxRequestsMax: 200,
+  transportMode: "auto",
+  fallbackOrder: "quic-v2,prisma-tls,ws-cdn,xporta",
+  entropyCamouflage: false,
+  trafficPaddingMode: "none",
+  trafficTimingJitter: 0,
+  trafficChaffInterval: 0,
+  trafficCoalesceWindow: 0,
+  fecEnabled: false,
+  fecDataShards: 10,
+  fecParityShards: 3,
   tunEnabled: false,
   tunDevice: "prisma-tun0",
   tunMtu: 1500,
@@ -85,19 +157,54 @@ export const DEFAULT_WIZARD: WizardState = {
   dnsMode: "direct",
   dnsUpstream: "8.8.8.8:53",
   fakeIpRange: "198.18.0.0/15",
+  logLevel: "info",
+  logFormat: "pretty",
+  portForwards: "",
+  routingGeoipPath: "",
+  routingRules: "",
   tags: [],
 };
+
+/** Parse "Key: Value" lines into [key, value] tuples */
+function parseHeaderLines(text: string): [string, string][] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const idx = l.indexOf(":");
+      if (idx < 0) return [l, ""] as [string, string];
+      return [l.slice(0, idx).trim(), l.slice(idx + 1).trim()] as [string, string];
+    });
+}
+
+/** Parse port forward lines: "name,local_addr,remote_port" */
+function parsePortForwards(text: string): { name: string; local_addr: string; remote_port: number }[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const parts = l.split(",").map((p) => p.trim());
+      return {
+        name: parts[0] || "",
+        local_addr: parts[1] || "",
+        remote_port: parseInt(parts[2] || "0", 10),
+      };
+    })
+    .filter((pf) => pf.name && pf.local_addr && pf.remote_port > 0);
+}
 
 /**
  * Maps WizardState → ClientConfig JSON matching the Rust ClientConfig struct.
  *
  * Rust struct uses flat top-level fields, NOT nested transport objects.
+ * Proxy ports (socks5, http) come from the global settings store, not per-profile.
  */
-export function buildClientConfig(w: WizardState): Record<string, unknown> {
+export function buildClientConfig(w: WizardState, ports: { socks5Port: number; httpPort: number | null }): Record<string, unknown> {
   const config: Record<string, unknown> = {
     // Required fields
     server_addr: `${w.serverHost}:${w.serverPort}`,
-    socks5_listen_addr: `127.0.0.1:${w.socks5Port}`,
     identity: {
       client_id: w.clientId,
       auth_secret: w.authSecret,
@@ -107,26 +214,50 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     transport: w.transport,
     cipher_suite: w.cipher,
     protocol_version: w.protocolVersion,
+    fingerprint: w.fingerprint,
+    quic_version: w.quicVersion,
+    transport_mode: w.transportMode,
   };
 
-  // Optional HTTP listen addr
-  if (w.httpPort) {
-    config.http_listen_addr = `127.0.0.1:${parseInt(w.httpPort, 10)}`;
+  // Proxy listen addresses from global settings
+  config.socks5_listen_addr = `127.0.0.1:${ports.socks5Port || 1080}`;
+  if (ports.httpPort && ports.httpPort > 0) {
+    config.http_listen_addr = `127.0.0.1:${ports.httpPort}`;
   }
 
-  // Fingerprint
-  if (w.fingerprint) config.fingerprint = w.fingerprint;
+  // TLS options
+  if (w.skipCertVerify) config.skip_cert_verify = true;
+  if (w.tlsOnTcp) config.tls_on_tcp = true;
+  if (w.tlsServerName) config.tls_server_name = w.tlsServerName;
+  if (w.transportOnlyCipher) config.transport_only_cipher = true;
 
-  // QUIC-specific top-level fields
+  // ALPN
+  const alpn = w.alpnProtocols
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (alpn.length > 0) config.alpn_protocols = alpn;
+
+  // Fallback order
+  const fo = w.fallbackOrder
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (fo.length > 0) config.fallback_order = fo;
+
+  // QUIC-specific
   if (w.transport === "quic") {
-    config.quic_version = w.quicVersion;
     if (w.sniSlicing) config.sni_slicing = true;
+    if (w.salamanderPassword) config.salamander_password = w.salamanderPassword;
+    if (w.entropyCamouflage) config.entropy_camouflage = true;
   }
 
   // WebSocket top-level fields
   if (w.transport === "ws") {
     config.ws_url = w.wsUrl;
     if (w.wsHost) config.ws_host = w.wsHost;
+    const wsHeaders = parseHeaderLines(w.wsExtraHeaders);
+    if (wsHeaders.length > 0) config.ws_extra_headers = wsHeaders;
   }
 
   // gRPC top-level field
@@ -140,6 +271,8 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     config.xhttp_upload_url = w.xhttpUploadUrl;
     config.xhttp_download_url = w.xhttpDownloadUrl;
     config.xhttp_stream_url = w.xhttpStreamUrl;
+    const xhttpHeaders = parseHeaderLines(w.xhttpExtraHeaders);
+    if (xhttpHeaders.length > 0) config.xhttp_extra_headers = xhttpHeaders;
   }
 
   // XPorta — nested object matching XPortaClientConfig
@@ -148,6 +281,24 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
       base_url: w.xportaBaseUrl,
       encoding: w.xportaEncoding,
       poll_timeout_secs: w.xportaPollTimeout,
+    };
+  }
+
+  // Header obfuscation
+  if (w.userAgent) config.user_agent = w.userAgent;
+  if (w.referer) config.referer = w.referer;
+
+  // XMUX connection pool
+  if (w.xmuxEnabled) {
+    config.xmux = {
+      max_connections_min: w.xmuxMaxConnsMin,
+      max_connections_max: w.xmuxMaxConnsMax,
+      max_concurrency_min: w.xmuxMaxConcurrencyMin,
+      max_concurrency_max: w.xmuxMaxConcurrencyMax,
+      max_lifetime_secs_min: w.xmuxMaxLifetimeMin,
+      max_lifetime_secs_max: w.xmuxMaxLifetimeMax,
+      max_requests_min: w.xmuxMaxRequestsMin,
+      max_requests_max: w.xmuxMaxRequestsMax,
     };
   }
 
@@ -164,10 +315,35 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
       base_port: w.portHopBase,
       port_range: w.portHopRange,
       interval_secs: w.portHopInterval,
+      grace_period_secs: w.portHopGracePeriod,
     };
   }
 
-  // TUN — nested TunConfig (field is device_name, not device)
+  // Traffic shaping
+  if (
+    w.trafficPaddingMode !== "none" ||
+    w.trafficTimingJitter > 0 ||
+    w.trafficChaffInterval > 0 ||
+    w.trafficCoalesceWindow > 0
+  ) {
+    config.traffic_shaping = {
+      padding_mode: w.trafficPaddingMode,
+      timing_jitter_ms: w.trafficTimingJitter,
+      chaff_interval_ms: w.trafficChaffInterval,
+      coalesce_window_ms: w.trafficCoalesceWindow,
+    };
+  }
+
+  // UDP FEC
+  if (w.fecEnabled) {
+    config.udp_fec = {
+      enabled: true,
+      data_shards: w.fecDataShards,
+      parity_shards: w.fecParityShards,
+    };
+  }
+
+  // TUN — nested TunConfig
   if (w.tunEnabled) {
     config.tun = {
       enabled: true,
@@ -178,12 +354,38 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     };
   }
 
-  // DNS — nested DnsConfig (mode is a lowercase enum string)
+  // DNS — nested DnsConfig
   config.dns = {
     mode: w.dnsMode,
     upstream: w.dnsUpstream,
     ...(w.dnsMode === "fake" ? { fake_ip_range: w.fakeIpRange } : {}),
   };
+
+  // Logging
+  if (w.logLevel !== "info" || w.logFormat !== "pretty") {
+    config.logging = {
+      level: w.logLevel,
+      format: w.logFormat,
+    };
+  }
+
+  // Port forwards
+  const pfs = parsePortForwards(w.portForwards);
+  if (pfs.length > 0) config.port_forwards = pfs;
+
+  // Routing
+  if (w.routingGeoipPath || w.routingRules) {
+    const routing: Record<string, unknown> = {};
+    if (w.routingGeoipPath) routing.geoip_path = w.routingGeoipPath;
+    if (w.routingRules) {
+      try {
+        routing.rules = JSON.parse(w.routingRules);
+      } catch {
+        // invalid JSON — skip
+      }
+    }
+    if (Object.keys(routing).length > 0) config.routing = routing;
+  }
 
   // PrismaAuth secret (v4)
   if (w.prismaAuthSecret) {
@@ -194,7 +396,7 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
 }
 
 /** Maps a stored ClientConfig back to WizardState (for editing) */
-export function parseProfileToWizard(name: string, config: unknown): WizardState {
+export function parseProfileToWizard(name: string, config: unknown, tags?: string[]): WizardState {
   const c = (config ?? {}) as Record<string, unknown>;
   const identity = (c.identity ?? {}) as Record<string, unknown>;
   const tun = (c.tun ?? {}) as Record<string, unknown>;
@@ -202,6 +404,11 @@ export function parseProfileToWizard(name: string, config: unknown): WizardState
   const congestion = (c.congestion ?? {}) as Record<string, unknown>;
   const ph = (c.port_hopping ?? {}) as Record<string, unknown>;
   const xporta = (c.xporta ?? {}) as Record<string, unknown>;
+  const xmux = (c.xmux ?? null) as Record<string, unknown> | null;
+  const ts = (c.traffic_shaping ?? {}) as Record<string, unknown>;
+  const fec = (c.udp_fec ?? {}) as Record<string, unknown>;
+  const logging = (c.logging ?? {}) as Record<string, unknown>;
+  const routing = (c.routing ?? {}) as Record<string, unknown>;
 
   // Parse server_addr "host:port"
   const serverAddr = String(c.server_addr ?? "");
@@ -209,47 +416,91 @@ export function parseProfileToWizard(name: string, config: unknown): WizardState
   const serverHost = lastColon > 0 ? serverAddr.slice(0, lastColon) : serverAddr;
   const serverPort = lastColon > 0 ? Number(serverAddr.slice(lastColon + 1)) || 443 : 443;
 
-  // Parse socks5_listen_addr "host:port"
-  const socksAddr = String(c.socks5_listen_addr ?? "");
-  const socksColon = socksAddr.lastIndexOf(":");
-  const socks5Port = socksColon > 0 ? Number(socksAddr.slice(socksColon + 1)) || 1080 : 1080;
+  // Parse extra headers back to "Key: Value" lines
+  const wsHeaders = Array.isArray(c.ws_extra_headers)
+    ? (c.ws_extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
+    : "";
+  const xhttpHeaders = Array.isArray(c.xhttp_extra_headers)
+    ? (c.xhttp_extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
+    : "";
 
-  // Parse http_listen_addr
-  const httpAddr = c.http_listen_addr ? String(c.http_listen_addr) : "";
-  const httpColon = httpAddr.lastIndexOf(":");
-  const httpPort = httpColon > 0 ? httpAddr.slice(httpColon + 1) : "";
+  // Parse port forwards back to CSV lines
+  const pfArr = Array.isArray(c.port_forwards) ? (c.port_forwards as Record<string, unknown>[]) : [];
+  const portForwards = pfArr
+    .map((pf) => `${pf.name},${pf.local_addr},${pf.remote_port}`)
+    .join("\n");
+
+  // Parse alpn back to comma-separated
+  const alpnArr = Array.isArray(c.alpn_protocols) ? (c.alpn_protocols as string[]) : [];
+  const alpnProtocols = alpnArr.length > 0 ? alpnArr.join(",") : "h2,http/1.1";
+
+  // Parse fallback order
+  const foArr = Array.isArray(c.fallback_order) ? (c.fallback_order as string[]) : [];
+  const fallbackOrder = foArr.length > 0 ? foArr.join(",") : "quic-v2,prisma-tls,ws-cdn,xporta";
+
+  // Routing rules back to JSON string
+  const routingRulesArr = Array.isArray(routing.rules) ? routing.rules : [];
+  const routingRules = routingRulesArr.length > 0 ? JSON.stringify(routingRulesArr, null, 2) : "";
 
   return {
     name,
     serverHost,
     serverPort,
-    socks5Port,
-    httpPort,
+    skipCertVerify: Boolean(c.skip_cert_verify),
+    tlsOnTcp: Boolean(c.tls_on_tcp),
+    tlsServerName: String(c.tls_server_name ?? ""),
+    alpnProtocols,
     clientId: String(identity.client_id ?? ""),
     authSecret: String(identity.auth_secret ?? ""),
     prismaAuthSecret: String(c.prisma_auth_secret ?? ""),
     protocolVersion: (c.protocol_version as "v4" | "v3") ?? "v4",
+    transportOnlyCipher: Boolean(c.transport_only_cipher),
     transport: (c.transport as WizardState["transport"]) ?? "quic",
     cipher: String(c.cipher_suite ?? "chacha20-poly1305"),
-    fingerprint: String(c.fingerprint ?? ""),
-    quicVersion: String(c.quic_version ?? "v1"),
+    fingerprint: String(c.fingerprint ?? "chrome"),
+    quicVersion: String(c.quic_version ?? "auto"),
     sniSlicing: Boolean(c.sni_slicing),
     wsUrl: String(c.ws_url ?? "/ws"),
     wsHost: String(c.ws_host ?? ""),
+    wsExtraHeaders: wsHeaders,
     grpcUrl: String(c.grpc_url ?? "/prisma.Proxy/Relay"),
     xhttpMode: String(c.xhttp_mode ?? "auto"),
     xhttpUploadUrl: String(c.xhttp_upload_url ?? "/up"),
     xhttpDownloadUrl: String(c.xhttp_download_url ?? "/down"),
     xhttpStreamUrl: String(c.xhttp_stream_url ?? "/stream"),
+    xhttpExtraHeaders: xhttpHeaders,
     xportaBaseUrl: String(xporta.base_url ?? ""),
-    xportaEncoding: String(xporta.encoding ?? "base64"),
-    xportaPollTimeout: Number(xporta.poll_timeout_secs ?? 30),
+    xportaEncoding: String(xporta.encoding ?? "json"),
+    xportaPollTimeout: Number(xporta.poll_timeout_secs ?? 55),
     congestion: (congestion.mode as WizardState["congestion"]) ?? "bbr",
     targetBandwidth: String(congestion.target_bandwidth ?? ""),
     portHopping: Boolean(ph.enabled),
     portHopBase: Number(ph.base_port ?? 40000),
     portHopRange: Number(ph.port_range ?? 5000),
     portHopInterval: Number(ph.interval_secs ?? 30),
+    portHopGracePeriod: Number(ph.grace_period_secs ?? 5),
+    salamanderPassword: String(c.salamander_password ?? ""),
+    userAgent: String(c.user_agent ?? ""),
+    referer: String(c.referer ?? ""),
+    xmuxEnabled: xmux !== null,
+    xmuxMaxConnsMin: Number(xmux?.max_connections_min ?? 1),
+    xmuxMaxConnsMax: Number(xmux?.max_connections_max ?? 4),
+    xmuxMaxConcurrencyMin: Number(xmux?.max_concurrency_min ?? 8),
+    xmuxMaxConcurrencyMax: Number(xmux?.max_concurrency_max ?? 16),
+    xmuxMaxLifetimeMin: Number(xmux?.max_lifetime_secs_min ?? 300),
+    xmuxMaxLifetimeMax: Number(xmux?.max_lifetime_secs_max ?? 600),
+    xmuxMaxRequestsMin: Number(xmux?.max_requests_min ?? 100),
+    xmuxMaxRequestsMax: Number(xmux?.max_requests_max ?? 200),
+    transportMode: String(c.transport_mode ?? "auto"),
+    fallbackOrder,
+    entropyCamouflage: Boolean(c.entropy_camouflage),
+    trafficPaddingMode: String(ts.padding_mode ?? "none"),
+    trafficTimingJitter: Number(ts.timing_jitter_ms ?? 0),
+    trafficChaffInterval: Number(ts.chaff_interval_ms ?? 0),
+    trafficCoalesceWindow: Number(ts.coalesce_window_ms ?? 0),
+    fecEnabled: Boolean(fec.enabled),
+    fecDataShards: Number(fec.data_shards ?? 10),
+    fecParityShards: Number(fec.parity_shards ?? 3),
     tunEnabled: Boolean(tun.enabled),
     tunDevice: String(tun.device_name ?? "prisma-tun0"),
     tunMtu: Number(tun.mtu ?? 1500),
@@ -258,7 +509,12 @@ export function parseProfileToWizard(name: string, config: unknown): WizardState
     dnsMode: (dns.mode as WizardState["dnsMode"]) ?? "direct",
     dnsUpstream: String(dns.upstream ?? "8.8.8.8:53"),
     fakeIpRange: String(dns.fake_ip_range ?? "198.18.0.0/15"),
-    tags: [],
+    logLevel: String(logging.level ?? "info"),
+    logFormat: String(logging.format ?? "pretty"),
+    portForwards,
+    routingGeoipPath: String(routing.geoip_path ?? ""),
+    routingRules,
+    tags: tags ?? [],
   };
 }
 
@@ -271,5 +527,16 @@ export function validateWizard(w: WizardState): string[] {
     errs.push("Server port must be 1–65535");
   if (!/^[0-9a-f]{64}$/.test(w.authSecret))
     errs.push("Auth secret must be 64 lowercase hex characters");
+  if (w.fecEnabled && w.fecDataShards < 1)
+    errs.push("FEC data shards must be at least 1");
+  if (w.fecEnabled && w.fecParityShards < 1)
+    errs.push("FEC parity shards must be at least 1");
+  if (w.routingRules) {
+    try {
+      JSON.parse(w.routingRules);
+    } catch {
+      errs.push("Routing rules must be valid JSON");
+    }
+  }
   return errs;
 }

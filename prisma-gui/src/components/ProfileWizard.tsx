@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { WizardState } from "@/lib/buildConfig";
 import { DEFAULT_WIZARD, buildClientConfig, validateWizard } from "@/lib/buildConfig";
+import { useSettings } from "@/store/settings";
 import Step1Connection from "./wizard/Step1Connection";
 import Step2Auth from "./wizard/Step2Auth";
 import Step3Transport from "./wizard/Step3Transport";
@@ -18,15 +20,19 @@ interface Props {
   onSave: (name: string, config: Record<string, unknown>, tags: string[]) => Promise<void>;
 }
 
-const STEP_LABELS = [
-  "Connection",
-  "Auth",
-  "Transport",
-  "Routing & TUN",
-  "Review",
-];
-
 export default function ProfileWizard({ open, onOpenChange, initial, onSave }: Props) {
+  const { t } = useTranslation();
+  const socks5Port = useSettings((s) => s.socks5Port);
+  const httpPort = useSettings((s) => s.httpPort);
+
+  const STEP_LABELS = [
+    t("wizard.connection"),
+    t("wizard.auth"),
+    t("wizard.transport"),
+    t("wizard.routingTun"),
+    t("wizard.review"),
+  ];
+
   const [step, setStep] = useState(0);
   const [state, setState] = useState<WizardState>(initial ?? DEFAULT_WIZARD);
   const [saving, setSaving] = useState(false);
@@ -38,7 +44,6 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
 
   function handleOpen(v: boolean) {
     if (!v) {
-      // Reset on close
       setStep(0);
       setState(initial ?? DEFAULT_WIZARD);
       setSaveError("");
@@ -46,8 +51,13 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
     onOpenChange(v);
   }
 
-  // Re-sync initial when it changes (edit mode)
-  // (caller should remount or pass stable initial)
+  useEffect(() => {
+    if (open) {
+      setStep(0);
+      setState(initial ?? DEFAULT_WIZARD);
+      setSaveError("");
+    }
+  }, [open, initial]);
 
   async function handleSave() {
     const errors = validateWizard(state);
@@ -55,7 +65,7 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
     setSaving(true);
     setSaveError("");
     try {
-      await onSave(state.name, buildClientConfig(state), state.tags);
+      await onSave(state.name, buildClientConfig(state, { socks5Port, httpPort }), state.tags);
       handleOpen(false);
     } catch (e) {
       setSaveError(String(e));
@@ -72,7 +82,7 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {initial ? "Edit Profile" : "New Profile"} — {STEP_LABELS[step]}
+            {initial ? t("wizard.editProfile") : t("wizard.newProfile")} — {STEP_LABELS[step]}
           </DialogTitle>
         </DialogHeader>
 
@@ -120,19 +130,19 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
 
         <DialogFooter className="gap-1">
           <Button variant="ghost" onClick={() => handleOpen(false)}>
-            Cancel
+            {t("wizard.cancel")}
           </Button>
           {step > 0 && (
             <Button variant="outline" onClick={() => setStep((s) => s - 1)}>
-              Back
+              {t("wizard.back")}
             </Button>
           )}
           {!isLast && (
-            <Button onClick={() => setStep((s) => s + 1)}>Next</Button>
+            <Button onClick={() => setStep((s) => s + 1)}>{t("wizard.next")}</Button>
           )}
           {isLast && (
             <Button onClick={handleSave} disabled={!canSave || saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("wizard.saving") : t("wizard.save")}
             </Button>
           )}
         </DialogFooter>

@@ -84,6 +84,7 @@ pub fn run() {
             commands::set_system_proxy,
             commands::clear_system_proxy,
             commands::refresh_tray_profiles,
+            commands::quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

@@ -798,6 +798,7 @@ async fn run_speed_test(
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
+        metrics: prisma_client::metrics::ClientMetrics::new(),
     };
 
     let transport = ctx.connect().await?;

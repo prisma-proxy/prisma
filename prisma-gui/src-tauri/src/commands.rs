@@ -147,6 +147,13 @@ pub fn refresh_tray_profiles(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ── app lifecycle ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 // ── speed test ────────────────────────────────────────────────────────────────
 
 #[tauri::command]

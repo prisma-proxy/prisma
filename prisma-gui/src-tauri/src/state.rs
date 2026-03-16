@@ -10,4 +10,5 @@ pub struct AppState {
 pub static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 /// The tray "Connect/Disconnect" menu item — stored so update_status can toggle its label.
-pub static TRAY_CONNECT_ITEM: OnceLock<tauri::menu::MenuItem<tauri::Wry>> = OnceLock::new();
+/// Uses Mutex (not OnceLock) because refresh_profiles recreates the menu item.
+pub static TRAY_CONNECT_ITEM: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>> = Mutex::new(None);

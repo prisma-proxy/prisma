@@ -1,16 +1,19 @@
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Home, List, GitBranch, ScrollText, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const links = [
-  { to: "/",         icon: Home,       label: "Home" },
-  { to: "/profiles", icon: List,       label: "Profiles" },
-  { to: "/rules",    icon: GitBranch,  label: "Rules" },
-  { to: "/logs",     icon: ScrollText, label: "Logs" },
-  { to: "/settings", icon: Settings,   label: "Settings" },
-];
-
 export default function BottomNav() {
+  const { t } = useTranslation();
+
+  const links = [
+    { to: "/",         icon: Home,       label: t("nav.home") },
+    { to: "/profiles", icon: List,       label: t("nav.profiles") },
+    { to: "/rules",    icon: GitBranch,  label: t("nav.rules") },
+    { to: "/logs",     icon: ScrollText, label: t("nav.logs") },
+    { to: "/settings", icon: Settings,   label: t("nav.settings") },
+  ];
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
       {links.map(({ to, icon: Icon, label }) => (

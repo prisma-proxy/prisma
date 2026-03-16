@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -5,6 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
 
 interface Props {
@@ -13,14 +15,19 @@ interface Props {
 }
 
 export default function Step4RoutingTun({ state, onChange }: Props) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-5">
       {/* TUN */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">TUN mode</p>
-            <p className="text-xs text-muted-foreground">Capture all traffic via virtual network adapter</p>
+          <div className="flex items-center gap-1">
+            <div>
+              <p className="text-sm font-medium">{t("wizard.tunMode")}</p>
+              <p className="text-xs text-muted-foreground">{t("wizard.tunModeDesc")}</p>
+            </div>
+            <HelpTip content={t("wizard.help.tun")} />
           </div>
           <Switch checked={state.tunEnabled} onCheckedChange={(v) => onChange({ tunEnabled: v })} />
         </div>
@@ -29,7 +36,7 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
           <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
             <div className="flex gap-2">
               <div className="flex-1 space-y-1">
-                <Label>Device name</Label>
+                <Label>{t("wizard.tunDevice")}</Label>
                 <Input
                   value={state.tunDevice}
                   onChange={(e) => onChange({ tunDevice: e.target.value })}
@@ -37,7 +44,7 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
                 />
               </div>
               <div className="w-28 space-y-1">
-                <Label>MTU</Label>
+                <Label>{t("wizard.tunMtu")}</Label>
                 <Input
                   type="number"
                   value={state.tunMtu}
@@ -46,7 +53,7 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Include routes <span className="text-muted-foreground text-xs">(one per line, optional)</span></Label>
+              <Label>{t("wizard.tunIncludeRoutes")} <span className="text-muted-foreground text-xs">({t("wizard.onePerLine")})</span></Label>
               <Textarea
                 rows={3}
                 className="font-mono text-xs"
@@ -58,7 +65,7 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
               />
             </div>
             <div className="space-y-1">
-              <Label>Exclude routes <span className="text-muted-foreground text-xs">(one per line, optional)</span></Label>
+              <Label>{t("wizard.tunExcludeRoutes")} <span className="text-muted-foreground text-xs">({t("wizard.onePerLine")})</span></Label>
               <Textarea
                 rows={2}
                 className="font-mono text-xs"
@@ -75,24 +82,27 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
 
       {/* DNS */}
       <div className="space-y-3">
-        <p className="text-sm font-medium">DNS settings</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium">{t("wizard.dnsSettings")}</p>
+          <HelpTip content={t("wizard.help.dnsMode")} />
+        </div>
         <div className="space-y-1">
-          <Label>DNS mode</Label>
+          <Label>{t("wizard.dnsMode")}</Label>
           <Select
             value={state.dnsMode}
             onValueChange={(v) => onChange({ dnsMode: v as WizardState["dnsMode"] })}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="direct">Direct (system DNS)</SelectItem>
-              <SelectItem value="tunnel">Tunnel (forward via proxy)</SelectItem>
-              <SelectItem value="fake">Fake-IP</SelectItem>
-              <SelectItem value="smart">Smart (geo-split)</SelectItem>
+              <SelectItem value="direct">{t("settings.dnsDirect")}</SelectItem>
+              <SelectItem value="tunnel">{t("settings.dnsTunnel")}</SelectItem>
+              <SelectItem value="fake">{t("settings.dnsFake")}</SelectItem>
+              <SelectItem value="smart">{t("settings.dnsSmart")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1">
-          <Label>Upstream DNS server</Label>
+          <Label>{t("wizard.dnsUpstream")}</Label>
           <Input
             value={state.dnsUpstream}
             onChange={(e) => onChange({ dnsUpstream: e.target.value })}
@@ -101,7 +111,7 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
         </div>
         {state.dnsMode === "fake" && (
           <div className="space-y-1">
-            <Label>Fake-IP range</Label>
+            <Label>{t("wizard.fakeIpRange")}</Label>
             <Input
               value={state.fakeIpRange}
               onChange={(e) => onChange({ fakeIpRange: e.target.value })}
@@ -109,6 +119,78 @@ export default function Step4RoutingTun({ state, onChange }: Props) {
             />
           </div>
         )}
+      </div>
+
+      {/* Routing */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium">{t("wizard.routing")}</p>
+          <HelpTip content={t("wizard.help.routingRules")} />
+        </div>
+        <div className="space-y-1">
+          <Label>{t("wizard.geoipPath")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
+          <Input
+            value={state.routingGeoipPath}
+            onChange={(e) => onChange({ routingGeoipPath: e.target.value })}
+            placeholder="/path/to/geoip.dat"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>{t("wizard.routingRules")} <span className="text-muted-foreground text-xs">({t("wizard.routingRulesHint")})</span></Label>
+          <Textarea
+            rows={4}
+            className="font-mono text-xs"
+            value={state.routingRules}
+            onChange={(e) => onChange({ routingRules: e.target.value })}
+            placeholder={`[{"condition":{"type":"DomainMatch","value":"*.example.com"},"action":"Direct"}]`}
+          />
+        </div>
+      </div>
+
+      {/* Port forwards */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium">{t("wizard.portForwarding")}</p>
+        <div className="space-y-1">
+          <Label>{t("wizard.portForwardRules")} <span className="text-muted-foreground text-xs">({t("wizard.portForwardHint")})</span></Label>
+          <Textarea
+            rows={3}
+            className="font-mono text-xs"
+            value={state.portForwards}
+            onChange={(e) => onChange({ portForwards: e.target.value })}
+            placeholder="ssh,127.0.0.1:22,2222&#10;web,127.0.0.1:8080,8080"
+          />
+        </div>
+      </div>
+
+      {/* Logging */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium">{t("wizard.logging")}</p>
+        <div className="flex gap-2">
+          <div className="flex-1 space-y-1">
+            <Label>{t("wizard.logLevel")}</Label>
+            <Select value={state.logLevel} onValueChange={(v) => onChange({ logLevel: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="trace">Trace</SelectItem>
+                <SelectItem value="debug">Debug</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="warn">Warn</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 space-y-1">
+            <Label>{t("wizard.logFormat")}</Label>
+            <Select value={state.logFormat} onValueChange={(v) => onChange({ logFormat: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pretty">Pretty</SelectItem>
+                <SelectItem value="json">JSON</SelectItem>
+                <SelectItem value="compact">Compact</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
     </div>
   );

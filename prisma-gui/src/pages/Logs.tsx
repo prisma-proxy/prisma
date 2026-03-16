@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, Pause, Play, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ function levelBadge(level: LogEntry["level"]) {
 }
 
 export default function Logs() {
+  const { t } = useTranslation();
   const logs = useStore((s) => s.logs);
   const clearLogs = useStore((s) => s.clearLogs);
   const [search,      setSearch]      = useState("");
@@ -75,7 +77,7 @@ export default function Logs() {
     <div className="p-4 flex flex-col h-full gap-3">
       <div className="flex items-center gap-2 flex-wrap">
         <Input
-          placeholder="Search…"
+          placeholder={t("logs.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 text-sm flex-1 min-w-[140px]"
@@ -93,7 +95,7 @@ export default function Logs() {
           variant="ghost"
           className="h-8 w-8 shrink-0"
           onClick={() => setPaused((v) => !v)}
-          title={paused ? "Resume auto-scroll" : "Pause auto-scroll"}
+          title={paused ? t("logs.resume") : t("logs.pause")}
         >
           {paused ? <Play size={14} /> : <Pause size={14} />}
         </Button>
@@ -102,7 +104,7 @@ export default function Logs() {
           variant="ghost"
           className="h-8 w-8 shrink-0"
           onClick={handleExport}
-          title="Export logs"
+          title={t("logs.export")}
         >
           <Download size={14} />
         </Button>
@@ -111,7 +113,7 @@ export default function Logs() {
           variant="ghost"
           className="h-8 w-8 shrink-0"
           onClick={() => setConfirmOpen(true)}
-          title="Clear logs"
+          title={t("logs.clear")}
         >
           <Trash2 size={14} />
         </Button>
@@ -122,7 +124,7 @@ export default function Logs() {
         className="flex-1 h-0 rounded-md border overflow-auto logs-scroll-container font-mono text-[11px]"
       >
         {filtered.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8 font-sans text-sm">No logs</p>
+          <p className="text-center text-muted-foreground py-8 font-sans text-sm">{t("logs.noLogs")}</p>
         ) : (
           <div
             style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
@@ -160,9 +162,9 @@ export default function Logs() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Clear Logs"
-        message="Clear all log entries? This cannot be undone."
-        confirmLabel="Clear"
+        title={t("logs.clearTitle")}
+        message={t("logs.clearMessage")}
+        confirmLabel={t("logs.clear")}
         onConfirm={clearLogs}
       />
     </div>

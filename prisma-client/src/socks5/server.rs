@@ -125,7 +125,7 @@ async fn handle_connect(
             };
             let outbound = TcpStream::connect(&dest_str).await?;
             send_socks5_reply(&mut stream, 0x00).await?;
-            return relay::relay_direct(stream, outbound).await;
+            return relay::relay_direct(stream, outbound, ctx.metrics.clone()).await;
         }
         RouteAction::Direct => {
             // force_proxy=true: Smart DNS says this domain is blocked,
@@ -154,7 +154,7 @@ async fn handle_connect(
     send_socks5_reply(&mut stream, 0x00).await?;
 
     // Relay data
-    relay::relay(stream, tunnel_conn).await
+    relay::relay(stream, tunnel_conn, ctx.metrics.clone()).await
 }
 
 /// If the destination is a fake IP, resolve it back to the real domain.

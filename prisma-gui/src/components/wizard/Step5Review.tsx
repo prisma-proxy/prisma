@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { WizardState } from "@/lib/buildConfig";
 import { buildClientConfig, validateWizard } from "@/lib/buildConfig";
+import { useSettings } from "@/store/settings";
 
 interface Props {
   state: WizardState;
@@ -13,6 +15,9 @@ interface Props {
 }
 
 export default function Step5Review({ state, onChange }: Props) {
+  const { t } = useTranslation();
+  const socks5Port = useSettings((s) => s.socks5Port);
+  const httpPort = useSettings((s) => s.httpPort);
   const [tagInput, setTagInput] = useState("");
   const errors = validateWizard(state);
 
@@ -28,7 +33,7 @@ export default function Step5Review({ state, onChange }: Props) {
     onChange({ tags: state.tags.filter((t) => t !== tag) });
   }
 
-  const preview = JSON.stringify(buildClientConfig(state), null, 2);
+  const preview = JSON.stringify(buildClientConfig(state, { socks5Port, httpPort }), null, 2);
 
   return (
     <div className="space-y-4">
@@ -45,14 +50,14 @@ export default function Step5Review({ state, onChange }: Props) {
       {errors.length === 0 && (
         <Alert className="border-green-600/30 bg-green-600/10">
           <AlertDescription className="text-green-500 text-sm">
-            All fields look good — ready to save.
+            {t("wizard.validationOk")}
           </AlertDescription>
         </Alert>
       )}
 
       {/* Tags */}
       <div className="space-y-2">
-        <Label>Tags</Label>
+        <Label>{t("wizard.tags")}</Label>
         <div className="flex flex-wrap gap-1 min-h-8">
           {state.tags.map((tag) => (
             <Badge key={tag} variant="secondary" className="gap-1">
@@ -68,7 +73,7 @@ export default function Step5Review({ state, onChange }: Props) {
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-            placeholder="Add tag…"
+            placeholder={t("wizard.addTag")}
             className="h-8 text-sm"
           />
           <button
@@ -83,7 +88,7 @@ export default function Step5Review({ state, onChange }: Props) {
 
       {/* JSON preview */}
       <div className="space-y-1">
-        <Label>Config preview</Label>
+        <Label>{t("wizard.configPreview")}</Label>
         <pre className="text-[10px] font-mono bg-muted rounded-lg p-3 overflow-auto max-h-48 border">
           {preview}
         </pre>

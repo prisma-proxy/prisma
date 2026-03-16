@@ -8,12 +8,20 @@ on:
       - 'prisma-*/Cargo.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'prisma-gui/src/**'
+      - 'prisma-gui/src-tauri/**'
+      - 'prisma-gui/package.json'
+      - 'prisma-gui/package-lock.json'
   pull_request:
     paths:
       - 'prisma-*/src/**'
       - 'prisma-*/Cargo.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'prisma-gui/src/**'
+      - 'prisma-gui/src-tauri/**'
+      - 'prisma-gui/package.json'
+      - 'prisma-gui/package-lock.json'
 
 env:
   CARGO_TERM_COLOR: always
@@ -77,3 +85,23 @@ jobs:
 
       - name: Run doctests
         run: cargo test --workspace --doc --target ${{ matrix.target }}
+
+  gui-check:
+    name: GUI Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: prisma-gui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-gui
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: prisma-gui

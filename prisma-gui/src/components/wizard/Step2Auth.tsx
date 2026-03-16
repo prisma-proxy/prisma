@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RefreshCw, Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
 
 interface Props {
@@ -20,12 +23,13 @@ function generateHex64(): string {
 }
 
 export default function Step2Auth({ state, onChange }: Props) {
+  const { t } = useTranslation();
   const [showSecret, setShowSecret] = useState(false);
 
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <Label htmlFor="w-clientid">Client ID</Label>
+        <Label htmlFor="w-clientid">{t("wizard.clientId")}</Label>
         <Input
           id="w-clientid"
           value={state.clientId}
@@ -35,7 +39,7 @@ export default function Step2Auth({ state, onChange }: Props) {
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="w-auth">Auth secret * <span className="text-xs text-muted-foreground">(64 hex chars)</span></Label>
+        <Label htmlFor="w-auth">{t("wizard.authSecret")} * <span className="text-xs text-muted-foreground">({t("wizard.authSecretHint")})</span></Label>
         <div className="flex gap-1">
           <div className="relative flex-1">
             <Input
@@ -59,18 +63,18 @@ export default function Step2Auth({ state, onChange }: Props) {
             variant="outline"
             size="icon"
             onClick={() => onChange({ authSecret: generateHex64() })}
-            title="Generate random secret"
+            title={t("wizard.generateSecret")}
           >
             <RefreshCw size={14} />
           </Button>
         </div>
         {state.authSecret && !/^[0-9a-f]{64}$/.test(state.authSecret) && (
-          <p className="text-xs text-destructive">Must be exactly 64 lowercase hex characters</p>
+          <p className="text-xs text-destructive">{t("wizard.authSecretError")}</p>
         )}
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="w-prisma-auth">Prisma auth secret <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        <Label htmlFor="w-prisma-auth">{t("wizard.prismaAuthSecret")} <span className="text-muted-foreground text-xs">({t("wizard.prismaAuthHint")})</span></Label>
         <Input
           id="w-prisma-auth"
           type="password"
@@ -80,7 +84,7 @@ export default function Step2Auth({ state, onChange }: Props) {
       </div>
 
       <div className="space-y-1">
-        <Label>Protocol version</Label>
+        <Label>{t("wizard.protocolVersion")}</Label>
         <Select
           value={state.protocolVersion}
           onValueChange={(v) => onChange({ protocolVersion: v as "v4" | "v3" })}
@@ -89,10 +93,21 @@ export default function Step2Auth({ state, onChange }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="v4">v4 (recommended)</SelectItem>
-            <SelectItem value="v3">v3 (legacy)</SelectItem>
+            <SelectItem value="v4">{t("wizard.protocolV4")}</SelectItem>
+            <SelectItem value="v3">{t("wizard.protocolV3")}</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <div>
+            <Label>{t("wizard.transportOnlyCipher")}</Label>
+            <p className="text-xs text-muted-foreground">{t("wizard.transportOnlyCipherDesc")}</p>
+          </div>
+          <HelpTip content={t("wizard.help.cipher")} />
+        </div>
+        <Switch checked={state.transportOnlyCipher} onCheckedChange={(v) => onChange({ transportOnlyCipher: v })} />
       </div>
     </div>
   );

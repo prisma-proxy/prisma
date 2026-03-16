@@ -102,7 +102,7 @@ async fn handle_http_client(stream: TcpStream, ctx: &ProxyContext) -> Result<()>
             stream
                 .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
                 .await?;
-            return relay::relay_direct(stream, outbound).await;
+            return relay::relay_direct(stream, outbound, ctx.metrics.clone()).await;
         }
         RouteAction::Proxy => {}
     }
@@ -128,7 +128,7 @@ async fn handle_http_client(stream: TcpStream, ctx: &ProxyContext) -> Result<()>
         .await?;
 
     // Relay data bidirectionally
-    relay::relay(stream, tunnel_conn).await
+    relay::relay(stream, tunnel_conn, ctx.metrics.clone()).await
 }
 
 /// Parse a CONNECT target like "example.com:443" or "[::1]:443" or "1.2.3.4:80"

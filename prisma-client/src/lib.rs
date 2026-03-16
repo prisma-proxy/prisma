@@ -5,6 +5,7 @@ pub mod dns_server;
 pub mod forward;
 pub mod grpc_stream;
 pub mod http;
+pub mod metrics;
 pub mod proxy;
 pub mod relay;
 pub mod socks5;
@@ -22,20 +23,46 @@ use anyhow::Result;
 use prisma_core::config::load_client_config;
 use prisma_core::congestion::CongestionMode;
 use prisma_core::geodata::GeoIPMatcher;
-use prisma_core::logging::init_logging;
+use prisma_core::logging::{init_logging, init_logging_with_broadcast};
 use prisma_core::router::Router;
+use prisma_core::state::LogEntry;
 use prisma_core::types::{CipherSuite, ClientId};
 use prisma_core::util;
+use tokio::sync::broadcast;
 use tracing::info;
 
 use dns_resolver::DnsResolver;
+use metrics::ClientMetrics;
 use proxy::ProxyContext;
 
+/// Run client in standalone mode (CLI). Sets up its own logging.
 pub async fn run(config_path: &str) -> Result<()> {
     let config = load_client_config(config_path)
         .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
 
     init_logging(&config.logging.level, &config.logging.format);
+
+    run_inner(config, ClientMetrics::new()).await
+}
+
+/// Run client in embedded mode (GUI/FFI). Uses broadcast logging and shared metrics.
+pub async fn run_embedded(
+    config_path: &str,
+    log_tx: broadcast::Sender<LogEntry>,
+    metrics: ClientMetrics,
+) -> Result<()> {
+    let config = load_client_config(config_path)
+        .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
+
+    init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
+
+    run_inner(config, metrics).await
+}
+
+async fn run_inner(
+    config: prisma_core::config::client::ClientConfig,
+    metrics: ClientMetrics,
+) -> Result<()> {
 
     info!("Prisma client starting");
     info!(socks5 = %config.socks5_listen_addr, server = %config.server_addr);
@@ -150,6 +177,7 @@ pub async fn run(config_path: &str) -> Result<()> {
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls,
+        metrics,
     };
 
     // Log DNS mode

@@ -25,7 +25,7 @@ impl StatsPoller {
                 tokio::select! {
                     _ = interval.tick() => {
                         let json = match connection.lock() {
-                            Ok(conn) => conn.get_stats_json(),
+                            Ok(mut conn) => conn.get_stats_json(),
                             Err(_) => continue,
                         };
                         let holder = callback.lock().unwrap();
@@ -45,6 +45,5 @@ impl StatsPoller {
 
     pub fn stop(self) {
         let _ = self.stop_tx.send(());
-        // Don't await — just signal and let it clean up
     }
 }

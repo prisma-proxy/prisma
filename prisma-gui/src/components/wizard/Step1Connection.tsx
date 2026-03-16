@@ -1,5 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
 
 interface Props {
@@ -8,10 +11,12 @@ interface Props {
 }
 
 export default function Step1Connection({ state, onChange }: Props) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <Label htmlFor="w-name">Profile name *</Label>
+        <Label htmlFor="w-name">{t("wizard.profileName")} *</Label>
         <Input
           id="w-name"
           value={state.name}
@@ -22,7 +27,7 @@ export default function Step1Connection({ state, onChange }: Props) {
 
       <div className="flex gap-2">
         <div className="flex-1 space-y-1">
-          <Label htmlFor="w-host">Server host *</Label>
+          <Label htmlFor="w-host">{t("wizard.serverHost")} *</Label>
           <Input
             id="w-host"
             value={state.serverHost}
@@ -31,7 +36,7 @@ export default function Step1Connection({ state, onChange }: Props) {
           />
         </div>
         <div className="w-28 space-y-1">
-          <Label htmlFor="w-port">Port *</Label>
+          <Label htmlFor="w-port">{t("wizard.port")} *</Label>
           <Input
             id="w-port"
             type="number"
@@ -43,29 +48,49 @@ export default function Step1Connection({ state, onChange }: Props) {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-1">
-          <Label htmlFor="w-socks5">SOCKS5 listen port</Label>
+      {/* TLS / Security */}
+      <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+        <p className="text-sm font-medium">{t("wizard.tlsSettings")}</p>
+        <div className="space-y-1">
+          <Label htmlFor="w-tls-sni">{t("wizard.tlsServerName")} <span className="text-muted-foreground text-xs">({t("wizard.tlsServerNameHint")})</span></Label>
           <Input
-            id="w-socks5"
-            type="number"
-            min={1}
-            max={65535}
-            value={state.socks5Port}
-            onChange={(e) => onChange({ socks5Port: parseInt(e.target.value, 10) || 1080 })}
+            id="w-tls-sni"
+            value={state.tlsServerName}
+            onChange={(e) => onChange({ tlsServerName: e.target.value })}
+            placeholder={t("wizard.tlsServerNamePlaceholder")}
           />
         </div>
-        <div className="flex-1 space-y-1">
-          <Label htmlFor="w-http">HTTP listen port <span className="text-muted-foreground">(optional)</span></Label>
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="w-alpn">{t("wizard.alpnProtocols")} <span className="text-muted-foreground text-xs">({t("wizard.alpnHint")})</span></Label>
+            <HelpTip content={t("wizard.help.alpn")} />
+          </div>
           <Input
-            id="w-http"
-            type="number"
-            min={1}
-            max={65535}
-            value={state.httpPort}
-            onChange={(e) => onChange({ httpPort: e.target.value })}
-            placeholder="8080"
+            id="w-alpn"
+            value={state.alpnProtocols}
+            onChange={(e) => onChange({ alpnProtocols: e.target.value })}
+            placeholder="h2,http/1.1"
           />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <div>
+              <Label>{t("wizard.tlsOnTcp")}</Label>
+              <p className="text-xs text-muted-foreground">{t("wizard.tlsOnTcpDesc")}</p>
+            </div>
+            <HelpTip content={t("wizard.help.tlsOnTcp")} />
+          </div>
+          <Switch checked={state.tlsOnTcp} onCheckedChange={(v) => onChange({ tlsOnTcp: v })} />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <div>
+              <Label>{t("wizard.skipCertVerify")}</Label>
+              <p className="text-xs text-destructive/70">{t("wizard.skipCertVerifyDesc")}</p>
+            </div>
+            <HelpTip content={t("wizard.help.skipCertVerify")} />
+          </div>
+          <Switch checked={state.skipCertVerify} onCheckedChange={(v) => onChange({ skipCertVerify: v })} />
         </div>
       </div>
     </div>

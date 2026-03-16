@@ -1,20 +1,23 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Home, List, GitBranch, ScrollText, Gauge, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const links = [
-  { to: "/",          icon: Home,       label: "Home" },
-  { to: "/profiles",  icon: List,       label: "Profiles" },
-  { to: "/rules",     icon: GitBranch,  label: "Rules" },
-  { to: "/logs",      icon: ScrollText, label: "Logs" },
-  { to: "/speedtest", icon: Gauge,      label: "Speed" },
-  { to: "/settings",  icon: Settings,   label: "Settings" },
-];
 
 const STORAGE_KEY = "prisma-sidebar-collapsed";
 
 export default function Sidebar() {
+  const { t } = useTranslation();
+
+  const links = [
+    { to: "/",          icon: Home,       label: t("nav.home") },
+    { to: "/profiles",  icon: List,       label: t("nav.profiles") },
+    { to: "/rules",     icon: GitBranch,  label: t("nav.rules") },
+    { to: "/logs",      icon: ScrollText, label: t("nav.logs") },
+    { to: "/speedtest", icon: Gauge,      label: t("nav.speed") },
+    { to: "/settings",  icon: Settings,   label: t("nav.settings") },
+  ];
+
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(STORAGE_KEY) === "true"
   );
@@ -59,9 +62,9 @@ export default function Sidebar() {
           "flex items-center gap-2 py-2 px-3 mx-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-xs",
           collapsed && "justify-center px-2"
         )}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? t("nav.collapse") : t("nav.collapse")}
       >
-        {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Collapse</span></>}
+        {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>{t("nav.collapse")}</span></>}
       </button>
     </nav>
   );

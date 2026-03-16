@@ -80,6 +80,7 @@ pub async fn ping(
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
+        metrics: prisma_client::metrics::ClientMetrics::new(),
     };
 
     let mut rtts = Vec::new();
@@ -239,6 +240,7 @@ pub async fn test_transport(config_path: &str) -> Result<()> {
             quic_version: config.quic_version.clone(),
             traffic_shaping: config.traffic_shaping.clone(),
             use_prisma_tls: *transport_name == "prisma-tls" || *transport_name == "reality",
+            metrics: prisma_client::metrics::ClientMetrics::new(),
         };
 
         let start = std::time::Instant::now();

@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 use crate::connector::{self, TransportStream};
 use crate::dns_resolver::DnsResolver;
+use crate::metrics::ClientMetrics;
 use crate::xporta_stream;
 use prisma_core::config::client::XPortaClientConfig;
 use prisma_core::xporta::types::XPortaEncoding;
@@ -61,6 +62,8 @@ pub struct ProxyContext {
     pub traffic_shaping: TrafficShapingConfig,
     /// Whether to use PrismaTLS transport mode.
     pub use_prisma_tls: bool,
+    /// Shared traffic counters for GUI/FFI stats.
+    pub metrics: ClientMetrics,
 }
 
 impl ProxyContext {

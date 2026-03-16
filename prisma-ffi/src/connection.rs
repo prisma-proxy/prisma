@@ -1,23 +1,18 @@
 use anyhow::Result;
 use std::sync::Arc;
 
+use prisma_client::metrics::ClientMetrics;
+
 use crate::runtime::PrismaRuntime;
 use crate::{PRISMA_STATUS_CONNECTED, PRISMA_STATUS_CONNECTING, PRISMA_STATUS_DISCONNECTED};
-
-#[derive(Default)]
-pub struct ConnectionStats {
-    pub bytes_up: u64,
-    pub bytes_down: u64,
-    pub speed_up_bps: u64,
-    pub speed_down_bps: u64,
-    pub uptime_secs: u64,
-}
 
 pub struct ConnectionManager {
     status: i32,
     stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
-    stats: Arc<std::sync::Mutex<ConnectionStats>>,
+    metrics: ClientMetrics,
     start_time: Option<std::time::Instant>,
+    prev_bytes_up: u64,
+    prev_bytes_down: u64,
 }
 
 impl ConnectionManager {
@@ -25,8 +20,10 @@ impl ConnectionManager {
         Self {
             status: PRISMA_STATUS_DISCONNECTED,
             stop_tx: None,
-            stats: Arc::new(std::sync::Mutex::new(ConnectionStats::default())),
+            metrics: ClientMetrics::new(),
             start_time: None,
+            prev_bytes_up: 0,
+            prev_bytes_down: 0,
         }
     }
 
@@ -35,12 +32,6 @@ impl ConnectionManager {
     }
 
     pub fn status(&self) -> i32 {
-        // Update uptime
-        if let Some(start) = self.start_time {
-            if let Ok(mut stats) = self.stats.lock() {
-                stats.uptime_secs = start.elapsed().as_secs();
-            }
-        }
         self.status
     }
 
@@ -49,19 +40,51 @@ impl ConnectionManager {
         runtime: Arc<PrismaRuntime>,
         config: prisma_core::config::client::ClientConfig,
         modes: u32,
-        on_event: Box<dyn Fn(String) + Send + Sync + 'static>,
+        on_event: Arc<dyn Fn(String) + Send + Sync + 'static>,
     ) -> Result<()> {
         self.status = PRISMA_STATUS_CONNECTING;
 
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
         self.stop_tx = Some(stop_tx);
         self.start_time = Some(std::time::Instant::now());
+        self.metrics.reset();
+        self.prev_bytes_up = 0;
+        self.prev_bytes_down = 0;
 
-        // Serialize config to TOML file in a temp location and run client
+        // Serialize config to a temp file for the client loader
         let config_json = serde_json::to_string(&config)?;
 
+        // Create broadcast channel for log forwarding
+        let (log_tx, mut log_rx) = tokio::sync::broadcast::channel::<prisma_core::state::LogEntry>(256);
+
+        // Shared metrics for traffic counting
+        let metrics = self.metrics.clone();
+
+        // Spawn log forwarder: converts tracing events → FFI callback events
+        let on_event_log = on_event.clone();
         runtime.spawn(async move {
-            // Write config to a temp file and invoke the client
+            loop {
+                match log_rx.recv().await {
+                    Ok(entry) => {
+                        let level = entry.level.to_uppercase();
+                        let msg = entry.message.replace('\\', "\\\\").replace('"', "\\\"");
+                        let time = entry.timestamp.timestamp_millis();
+                        let event = format!(
+                            r#"{{"type":"log","level":"{}","msg":"{}","time":{}}}"#,
+                            level, msg, time
+                        );
+                        on_event_log(event);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("Log forwarder lagged, dropped {} entries", n);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        runtime.spawn(async move {
+            // Write config to a temp file
             let tmp_dir = std::env::temp_dir();
             let config_path = tmp_dir.join("prisma_ffi_client.json");
 
@@ -80,14 +103,11 @@ impl ConnectionManager {
                 }
             }
 
-            // Run the client (prisma-client run function)
-            // We convert the JSON config back for the client library
             let config_path_str = config_path.to_string_lossy().to_string();
 
-            // Write as TOML for the client loader
-            // For now we directly use serde_json deserialization path
+            // Use run_embedded for log + metrics forwarding
             let run_result = tokio::select! {
-                result = prisma_client::run(&config_path_str) => result,
+                result = prisma_client::run_embedded(&config_path_str, log_tx, metrics) => result,
                 _ = stop_rx => Ok(()),
             };
 
@@ -117,19 +137,32 @@ impl ConnectionManager {
         }
         self.status = PRISMA_STATUS_DISCONNECTED;
         self.start_time = None;
-        if let Ok(mut stats) = self.stats.lock() {
-            *stats = ConnectionStats::default();
-        }
+        self.metrics.reset();
     }
 
-    pub fn get_stats_json(&self) -> String {
-        match self.stats.lock() {
-            Ok(s) => format!(
-                r#"{{"type":"stats","bytes_up":{},"bytes_down":{},"speed_up_bps":{},"speed_down_bps":{},"uptime_secs":{}}}"#,
-                s.bytes_up, s.bytes_down, s.speed_up_bps, s.speed_down_bps, s.uptime_secs
-            ),
-            Err(_) => r#"{"type":"stats","bytes_up":0,"bytes_down":0,"speed_up_bps":0,"speed_down_bps":0,"uptime_secs":0}"#.to_string(),
-        }
+    pub fn get_stats_json(&mut self) -> String {
+        let uptime_secs = self
+            .start_time
+            .map(|t| t.elapsed().as_secs())
+            .unwrap_or(0);
+
+        let bytes_up = self.metrics.get_up();
+        let bytes_down = self.metrics.get_down();
+
+        // Compute speed as bytes delta since last poll (called every 1s)
+        let speed_up = bytes_up.saturating_sub(self.prev_bytes_up);
+        let speed_down = bytes_down.saturating_sub(self.prev_bytes_down);
+        self.prev_bytes_up = bytes_up;
+        self.prev_bytes_down = bytes_down;
+
+        // Convert bytes/sec → bits/sec for the frontend
+        let speed_up_bps = speed_up * 8;
+        let speed_down_bps = speed_down * 8;
+
+        format!(
+            r#"{{"type":"stats","bytes_up":{},"bytes_down":{},"speed_up_bps":{},"speed_down_bps":{},"uptime_secs":{}}}"#,
+            bytes_up, bytes_down, speed_up_bps, speed_down_bps, uptime_secs
+        )
     }
 }
 
