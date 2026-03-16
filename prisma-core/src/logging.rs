@@ -9,14 +9,12 @@ use crate::state::LogEntry;
 pub fn init_logging(level: &str, format: &str) {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
 
-    match format {
-        "json" => {
-            fmt().with_env_filter(filter).json().init();
-        }
-        _ => {
-            fmt().with_env_filter(filter).pretty().init();
-        }
-    }
+    // Use try_init to avoid panicking if a global subscriber is already set
+    // (e.g. when called from FFI where connect/disconnect cycles reuse the process).
+    let _ = match format {
+        "json" => fmt().with_env_filter(filter).json().try_init(),
+        _ => fmt().with_env_filter(filter).pretty().try_init(),
+    };
 }
 
 /// Initialize logging with a broadcast layer for the management API.
@@ -38,10 +36,12 @@ pub fn init_logging_with_broadcast(
         .with(filter)
         .with(broadcast_layer);
 
-    match format {
-        "json" => registry.with(fmt::layer().json()).init(),
-        _ => registry.with(fmt::layer().pretty()).init(),
-    }
+    // Use try_init to avoid panicking if a global subscriber is already set
+    // (e.g. when called from FFI where connect/disconnect cycles reuse the process).
+    let _ = match format {
+        "json" => registry.with(fmt::layer().json()).try_init(),
+        _ => registry.with(fmt::layer().pretty()).try_init(),
+    };
 }
 
 /// Tracing layer that broadcasts log events.
