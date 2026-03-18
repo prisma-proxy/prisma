@@ -1,8 +1,8 @@
-FROM node:22-slim AS dashboard
-WORKDIR /dashboard
-COPY prisma-dashboard/package.json prisma-dashboard/package-lock.json ./
+FROM node:22-slim AS console
+WORKDIR /console
+COPY prisma-console/package.json prisma-console/package-lock.json ./
 RUN npm ci
-COPY prisma-dashboard/ ./
+COPY prisma-console/ ./
 RUN npm run build
 
 FROM rust:1-bookworm AS builder
@@ -31,7 +31,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
-COPY --from=dashboard /dashboard/out /opt/prisma/dashboard
+COPY --from=console /console/out /opt/prisma/console
 
 EXPOSE 8443/tcp 8443/udp 9090/tcp
 

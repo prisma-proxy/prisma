@@ -6,14 +6,14 @@ sidebar_position: 2
 
 ## Multi-stage build
 
-The Docker image uses a multi-stage build: Node.js builds the dashboard as static files, Rust builds the server binary, and the final image is a minimal Debian runtime with both.
+The Docker image uses a multi-stage build: Node.js builds the console as static files, Rust builds the server binary, and the final image is a minimal Debian runtime with both.
 
 ```dockerfile
-FROM node:22-slim AS dashboard
-WORKDIR /dashboard
-COPY prisma-dashboard/package.json prisma-dashboard/package-lock.json ./
+FROM node:22-slim AS console
+WORKDIR /console
+COPY prisma-console/package.json prisma-console/package-lock.json ./
 RUN npm ci
-COPY prisma-dashboard/ ./
+COPY prisma-console/ ./
 RUN npm run build
 
 FROM rust:1-bookworm AS builder
@@ -24,11 +24,11 @@ RUN cargo build --release -p prisma-cli
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
-COPY --from=dashboard /dashboard/out /opt/prisma/dashboard
+COPY --from=console /console/out /opt/prisma/console
 ENTRYPOINT ["prisma"]
 ```
 
-The built dashboard is placed at `/opt/prisma/dashboard` inside the container. Configure `dashboard_dir` in your server config to serve it.
+The built console is placed at `/opt/prisma/console` inside the container. Configure `console_dir` in your server config to serve it.
 
 ## Usage
 
@@ -52,10 +52,10 @@ Example `server.toml` for Docker:
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/console"
 ```
 
-Access the dashboard at `http://<host>:9090/`.
+Access the console at `http://<host>:9090/`.
 
 ### Client
 

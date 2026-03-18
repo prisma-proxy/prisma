@@ -2,82 +2,82 @@
 sidebar_position: 5
 ---
 
-# 控制面板
+# 控制台
 
-Prisma 控制面板是用于监控和管理代理服务器的实时 Web 界面。它使用 Next.js 16、shadcn/ui、Recharts 和 TanStack Query 构建为静态站点，由 Prisma 服务器直接提供服务。
+Prisma 控制台是用于监控和管理代理服务器的实时 Web 界面。它使用 Next.js 16、shadcn/ui、Recharts 和 TanStack Query 构建为静态站点，由 Prisma 服务器直接提供服务。
 
 ## 前提条件
 
 - 一个已启用[管理 API](/docs/features/management-api) 的运行中的 Prisma 服务器
-- 控制面板静态文件（预构建或从源代码构建）
+- 控制台静态文件（预构建或从源代码构建）
 
 ## 设置
 
 ### 使用预构建文件
 
-从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载 `prisma-dashboard.tar.gz` 并解压：
+从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载 `prisma-console.tar.gz` 并解压：
 
 ```bash
-mkdir -p /opt/prisma/dashboard
-tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+mkdir -p /opt/prisma/console
+tar -xzf prisma-console.tar.gz -C /opt/prisma/console
 ```
 
 ### 从源代码构建
 
 ```bash
-cd prisma-dashboard
+cd prisma-console
 npm ci
 npm run build
 ```
 
-静态文件输出到 `prisma-dashboard/out/`。
+静态文件输出到 `prisma-console/out/`。
 
 ### 服务端配置
 
-在 `server.toml` 中将服务器指向控制面板文件：
+在 `server.toml` 中将服务器指向控制台文件：
 
 ```toml
 [management_api]
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"  # 或 "./prisma-dashboard/out"
+console_dir = "/opt/prisma/console"  # 或 "./prisma-console/out"
 ```
 
-启动服务器后访问 `https://your-server:9090/` 即可打开控制面板。
+启动服务器后访问 `https://your-server:9090/` 即可打开控制台。
 
 ### 使用 CLI（自动下载）
 
-`prisma dashboard` 命令可自动下载并启动控制面板，无需手动设置：
+`prisma console` 命令可自动下载并启动控制台，无需手动设置：
 
 ```bash
-prisma dashboard --mgmt-url https://127.0.0.1:9090 --token your-secure-token
+prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 ```
 
-该命令会从 GitHub Releases 下载最新控制面板并缓存到本地，启动本地服务器将 API 请求代理到管理 API。桌面系统会自动打开浏览器。
+该命令会从 GitHub Releases 下载最新控制台并缓存到本地，启动本地服务器将 API 请求代理到管理 API。桌面系统会自动打开浏览器。
 
 ## 认证
 
-控制面板使用基于令牌的认证。在登录页面输入服务器配置中的 `management_api.auth_token`。令牌存储在浏览器的会话存储中，并以 `Bearer` 令牌的形式随每个 API 请求发送。
+控制台使用基于令牌的认证。在登录页面输入服务器配置中的 `management_api.auth_token`。令牌存储在浏览器的会话存储中，并以 `Bearer` 令牌的形式随每个 API 请求发送。
 
-所有 `/dashboard/*` 路由都受保护 — 未认证用户将被重定向到 `/login`。
+所有 `/console/*` 路由都受保护 — 未认证用户将被重定向到 `/login`。
 
 ## 架构
 
-控制面板构建为静态单页应用程序 (SPA)，由 Prisma 服务器的管理 API (axum) 提供服务。生产环境无需单独的 Node.js 进程。
+控制台构建为静态单页应用程序 (SPA)，由 Prisma 服务器的管理 API (axum) 提供服务。生产环境无需单独的 Node.js 进程。
 
 ```
-浏览器 → prisma-server:9090 → 静态文件（控制面板）
+浏览器 → prisma-server:9090 → 静态文件（控制台）
                               → /api/*（REST + WebSocket）
 ```
 
-控制面板的 API 调用直接发送到同源管理 API 端点。WebSocket 连接使用 `?token=` 查询参数进行认证（因为浏览器 WebSocket API 无法发送自定义头部）。
+控制台的 API 调用直接发送到同源管理 API 端点。WebSocket 连接使用 `?token=` 查询参数进行认证（因为浏览器 WebSocket API 无法发送自定义头部）。
 
 ## 页面
 
 ### 概览
 
-主控制面板页面显示：
+主控制台页面显示：
 - **指标卡片** — 活跃连接数、总上传/下载字节数、运行时间
 - **流量图表** — 实时字节/秒，支持时间范围选择（实时/1H/6H/24H/7D）和 Mbps 切换
 - **传输类型饼图** — 按传输类型分组的连接分布
@@ -168,7 +168,7 @@ prisma dashboard --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 本地开发时，可以运行 Next.js 开发服务器：
 
 ```bash
-cd prisma-dashboard
+cd prisma-console
 npm install
 npm run dev
 # → http://localhost:3000

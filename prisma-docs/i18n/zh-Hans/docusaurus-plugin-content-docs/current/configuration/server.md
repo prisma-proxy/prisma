@@ -27,8 +27,8 @@ sidebar_position: 1
 | `management_api.enabled` | bool | `false` | 启用管理 REST/WS API |
 | `management_api.listen_addr` | string | `"0.0.0.0:9090"` | 管理 API 绑定地址 |
 | `management_api.auth_token` | string | — | API 认证的 Bearer 令牌 |
-| `management_api.cors_origins` | string[] | `[]` | 允许的 CORS 来源（用于外部仪表盘开发） |
-| `management_api.dashboard_dir` | string? | — | 已构建仪表盘静态文件路径 |
+| `management_api.cors_origins` | string[] | `[]` | 允许的 CORS 来源（用于外部控制台开发） |
+| `management_api.console_dir` | string? | — | 已构建控制台静态文件路径 |
 | `management_api.tls.cert_path` | string? | — | 管理 API 的 TLS 证书路径（未设置时继承 `[tls]` 配置） |
 | `management_api.tls.key_path` | string? | — | 管理 API 的 TLS 私钥路径（未设置时继承 `[tls]` 配置） |
 | `management_api.tls_enabled` | bool | `true` | 启用管理 API 的 TLS（自动继承服务器 `[tls]` 配置） |
@@ -131,12 +131,12 @@ enabled = true
 port_range_start = 10000
 port_range_end = 20000
 
-# 管理 API + 仪表盘
+# 管理 API + 控制台
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"  # 已构建仪表盘静态文件路径
+console_dir = "/opt/prisma/console"  # 已构建控制台静态文件路径
 
 # 每帧填充
 [padding]
@@ -249,7 +249,7 @@ auth_secret = "hex-secret-2"
 name = "phone"
 ```
 
-客户端也可以通过[管理 API](/docs/features/management-api)或[仪表盘](/docs/features/dashboard)在运行时管理，无需重启服务器。
+客户端也可以通过[管理 API](/docs/features/management-api)或[控制台](/docs/features/dashboard)在运行时管理，无需重启服务器。
 
 ## 管理 API 配置
 
@@ -261,6 +261,6 @@ name = "phone"
 
 **绑定地址**：默认 API 监听 `127.0.0.1:9090`（仅本地）。要暴露到网络，请更改 `listen_addr`——但请确保有适当的网络级别访问控制。
 
-**仪表盘**：将 `dashboard_dir` 设置为包含已构建仪表盘静态文件的路径。服务器将在管理 API 地址提供仪表盘服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd prisma-dashboard && npm ci && npm run build` 从源码构建。
+**控制台**：将 `console_dir` 设置为包含已构建控制台静态文件的路径。服务器将在管理 API 地址提供控制台服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd prisma-console && npm ci && npm run build` 从源码构建。
 
-**CORS 来源**：仅在仪表盘开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中仪表盘由服务器自身提供时不需要。
+**CORS 来源**：仅在控制台开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中控制台由服务器自身提供时不需要。

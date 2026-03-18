@@ -109,8 +109,8 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
 
     let mut app = api;
 
-    if let Some(ref dir) = config.dashboard_dir {
-        tracing::info!(dashboard_dir = %dir, "Serving dashboard static files");
+    if let Some(ref dir) = config.console_dir {
+        tracing::info!(console_dir = %dir, "Serving console static files");
         let index_path = std::path::PathBuf::from(dir).join("index.html");
         let serve_dir = ServeDir::new(dir)
             .append_index_html_on_directories(true)

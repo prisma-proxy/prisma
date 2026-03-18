@@ -627,7 +627,7 @@ encoding = "json"
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "YOUR-SECURE-TOKEN"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/console"
 
 # Static routing rules (persist across restarts)
 [routing]

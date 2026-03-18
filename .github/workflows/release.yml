@@ -19,8 +19,8 @@ env:
   RUSTC_WRAPPER: sccache
 
 jobs:
-  dashboard:
-    name: Build Dashboard
+  console:
+    name: Build Console
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,24 +29,24 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: prisma-dashboard/package-lock.json
+          cache-dependency-path: prisma-console/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: prisma-dashboard
+        working-directory: prisma-console
 
-      - name: Build static dashboard
+      - name: Build static console
         run: npm run build
-        working-directory: prisma-dashboard
+        working-directory: prisma-console
 
-      - name: Package dashboard
-        run: tar -czf prisma-dashboard.tar.gz -C prisma-dashboard/out .
+      - name: Package console
+        run: tar -czf prisma-console.tar.gz -C prisma-console/out .
 
-      - name: Upload dashboard artifact
+      - name: Upload console artifact
         uses: actions/upload-artifact@v7
         with:
-          name: prisma-dashboard
-          path: prisma-dashboard.tar.gz
+          name: prisma-console
+          path: prisma-console.tar.gz
 
   build:
     name: Build ${{ matrix.artifact }}
@@ -231,7 +231,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [dashboard, build, gui]
+    needs: [console, build, gui]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

@@ -1,6 +1,6 @@
-# Prisma Dashboard
+# Prisma Console
 
-Real-time web dashboard for monitoring and managing the [Prisma](https://github.com/Yamimega/prisma) proxy server. Built as a static site and served directly by the Prisma server.
+Real-time web console for monitoring and managing the [Prisma](https://github.com/Yamimega/prisma) proxy server. Built as a static site and served directly by the Prisma server.
 
 ## Build
 
@@ -16,10 +16,10 @@ Static files are output to `out/`. Configure the server to serve them:
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "./prisma-dashboard/out"
+console_dir = "./prisma-console/out"
 ```
 
-Then access the dashboard at `http://127.0.0.1:9090/`. Log in using the `auth_token` from your server config.
+Then access the console at `http://127.0.0.1:9090/`. Log in using the `auth_token` from your server config.
 
 ## Development
 
@@ -29,7 +29,7 @@ npm run dev
 # → http://localhost:3000
 ```
 
-During development, the dashboard connects to the management API on the same origin. Start the Prisma server with the management API enabled and configure `cors_origins` if running the dev server on a different port.
+During development, the console connects to the management API on the same origin. Start the Prisma server with the management API enabled and configure `cors_origins` if running the dev server on a different port.
 
 ## Pages
 

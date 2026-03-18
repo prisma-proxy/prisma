@@ -125,14 +125,14 @@ The service files include these systemd security directives:
 | `ReadOnlyPaths=/etc/prisma` | Config files immutable at runtime |
 | `LimitNOFILE=65535` | High file descriptor limit for many connections |
 
-## Dashboard (Optional)
+## Console (Optional)
 
 ```bash
 sudo mkdir -p /opt/prisma/dashboard
 # From release:
-sudo tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+sudo tar -xzf prisma-console.tar.gz -C /opt/prisma/dashboard
 # Or build from source:
-cd prisma-dashboard && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
+cd prisma-console && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
 ```
 
 Add to `server.toml`:
@@ -142,10 +142,10 @@ Add to `server.toml`:
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/dashboard"
 ```
 
-Update service file to allow dashboard access:
+Update service file to allow console access:
 
 ```ini
 ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard

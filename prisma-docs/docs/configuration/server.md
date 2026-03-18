@@ -27,8 +27,8 @@ The server is configured via a TOML file (default: `server.toml`). Configuration
 | `management_api.enabled` | bool | `false` | Enable the management REST/WS API |
 | `management_api.listen_addr` | string | `"0.0.0.0:9090"` | Management API bind address |
 | `management_api.auth_token` | string | — | Bearer token for API authentication |
-| `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins (for external dashboard dev) |
-| `management_api.dashboard_dir` | string? | — | Path to built dashboard static files |
+| `management_api.cors_origins` | string[] | `[]` | Allowed CORS origins (for external console dev) |
+| `management_api.console_dir` | string? | — | Path to built console static files |
 | `management_api.tls.cert_path` | string? | — | TLS certificate path for management API (inherits from `[tls]` if omitted) |
 | `management_api.tls.key_path` | string? | — | TLS private key path for management API (inherits from `[tls]` if omitted) |
 | `management_api.tls_enabled` | bool | `true` | Enable TLS on management API (auto-inherits server `[tls]` config) |
@@ -131,12 +131,12 @@ enabled = true
 port_range_start = 10000
 port_range_end = 20000
 
-# Management API + dashboard
+# Management API + console
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"  # Path to built dashboard static files
+console_dir = "/opt/prisma/console"  # Path to built console static files
 
 # Per-frame padding
 [padding]
@@ -249,7 +249,7 @@ auth_secret = "hex-secret-2"
 name = "phone"
 ```
 
-Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/dashboard) without restarting the server.
+Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/console) without restarting the server.
 
 ## Management API configuration
 
@@ -261,6 +261,6 @@ The `auth_token` protects all management API endpoints. Use a strong, random tok
 
 **Bind address**: By default the API listens on `127.0.0.1:9090` (localhost only). To expose it to the network, change `listen_addr` — but ensure you have proper network-level access controls in place.
 
-**Dashboard**: Set `dashboard_dir` to the path containing the built dashboard static files. The server will serve the dashboard at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd prisma-dashboard && npm ci && npm run build`.
+**Dashboard**: Set `console_dir` to the path containing the built console static files. The server will serve the console at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd prisma-console && npm ci && npm run build`.
 
-**CORS origins**: Only needed when running the dashboard dev server on a different origin (e.g. `http://localhost:3000`). Not needed in production when the dashboard is served by the server itself.
+**CORS origins**: Only needed when running the console dev server on a different origin (e.g. `http://localhost:3000`). Not needed in production when the console is served by the server itself.

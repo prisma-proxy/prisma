@@ -15,22 +15,22 @@ The Prisma dashboard is a real-time web interface for monitoring and managing th
 
 ### Using pre-built files
 
-Download `prisma-dashboard.tar.gz` from the [latest release](https://github.com/Yamimega/prisma/releases/latest) and extract it:
+Download `prisma-console.tar.gz` from the [latest release](https://github.com/Yamimega/prisma/releases/latest) and extract it:
 
 ```bash
 mkdir -p /opt/prisma/dashboard
-tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+tar -xzf prisma-console.tar.gz -C /opt/prisma/dashboard
 ```
 
 ### Building from source
 
 ```bash
-cd prisma-dashboard
+cd prisma-console
 npm ci
 npm run build
 ```
 
-Static files are output to `prisma-dashboard/out/`.
+Static files are output to `prisma-console/out/`.
 
 ### Server configuration
 
@@ -41,17 +41,17 @@ Point the server to the dashboard files in `server.toml`:
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"  # or "./prisma-dashboard/out"
+console_dir = "/opt/prisma/dashboard"  # or "./prisma-console/out"
 ```
 
 Start the server and access the dashboard at `https://your-server:9090/`.
 
 ### Using the CLI (auto-download)
 
-The `prisma dashboard` command automatically downloads and serves the dashboard without manual setup:
+The `prisma console` command automatically downloads and serves the dashboard without manual setup:
 
 ```bash
-prisma dashboard --mgmt-url https://127.0.0.1:9090 --token your-secure-token
+prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 ```
 
 This downloads the latest dashboard from GitHub Releases, caches it locally, and starts a local server that proxies API requests to your management API. The browser opens automatically on desktop systems.
@@ -168,7 +168,7 @@ Traffic shaping visualization:
 For local development, you can run the Next.js dev server:
 
 ```bash
-cd prisma-dashboard
+cd prisma-console
 npm install
 npm run dev
 # → http://localhost:3000

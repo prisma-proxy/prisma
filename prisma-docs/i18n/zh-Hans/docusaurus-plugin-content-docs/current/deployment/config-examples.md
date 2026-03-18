@@ -518,7 +518,7 @@ format = "pretty"
 
 ## 7. 全功能 — 全部启用
 
-生产部署，启用所有功能：CDN 传输（XPorta + WebSocket + XHTTP）、端口转发、管理 API、仪表盘、伪装和带宽控制。
+生产部署，启用所有功能：CDN 传输（XPorta + WebSocket + XHTTP）、端口转发、管理 API、控制台、伪装和带宽控制。
 
 **最适合：** 服务多个客户端的共享代理服务器，需要完整可观测性。
 
@@ -627,7 +627,7 @@ encoding = "json"
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "YOUR-SECURE-TOKEN"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/console"
 
 # 静态路由规则（重启后保持不变）
 [routing]
@@ -696,7 +696,7 @@ format = "pretty"
 |------|------|
 | 最大灵活性——支持所有传输方式 | 配置复杂 |
 | 单客户端带宽 + 配额控制 | 资源消耗较高 |
-| 完整可观测性（仪表盘 + API） | 需要域名 + CDN + 伪装站点 |
+| 完整可观测性（控制台 + API） | 需要域名 + CDN + 伪装站点 |
 | 主动探测防御（XPorta + 伪装站点） | 更多需要加固的攻击面 |
 | 端口转发用于 NAT 后服务 | — |
 

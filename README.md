@@ -14,7 +14,7 @@
 - **流量整形** — 桶填充、时序抖动、杂音注入、帧合并，抵御封装 TLS 指纹识别
 - **抗审查** — Salamander UDP 混淆、HTTP/3 伪装、端口跳跃、TLS 伪装、熵伪装
 - **端口转发** — 通过加密隧道实现类 frp 的反向代理
-- **Web 仪表板** — 基于 Next.js + shadcn/ui 的实时监控
+- **Web 管理控制台** — 基于 Next.js + shadcn/ui 的实时监控
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
 - **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
 - **跨平台 GUI** — 速度测试、完整备份/恢复、系统托盘、键盘快捷键、通知历史、流量统计（Tauri 2 + React）
@@ -78,7 +78,7 @@ prisma/
 ├── prisma-cli/          # CLI 工具：密钥/证书生成、初始化、校验
 ├── prisma-ffi/          # C FFI 库，供 GUI 客户端调用
 ├── prisma-gui/          # 跨平台 GUI（Tauri 2 + React + TypeScript）
-├── prisma-dashboard/    # Web 仪表板（Next.js + shadcn/ui）
+├── prisma-console/      # Web 管理控制台（Next.js + shadcn/ui）
 ├── prisma-docs/         # 文档站点（Docusaurus）
 └── scripts/             # 安装脚本和基准测试
 ```
@@ -117,8 +117,8 @@ cargo build --release -p prisma-ffi
 # 构建 GUI（需要 Node.js）
 cd prisma-gui && npm install && npm run tauri build
 
-# 构建仪表板
-cd prisma-dashboard && npm ci && npm run build
+# 构建控制台
+cd prisma-console && npm ci && npm run build
 
 # 构建文档
 cd prisma-docs && npm install && npm start

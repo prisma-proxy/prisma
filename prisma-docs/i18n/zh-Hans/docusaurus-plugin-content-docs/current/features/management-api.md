@@ -15,7 +15,7 @@ sidebar_position: 4
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"  # 可选：提供构建好的控制面板
+console_dir = "/opt/prisma/console"  # 可选：提供构建好的控制台
 ```
 
 ## 认证

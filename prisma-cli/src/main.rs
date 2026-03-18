@@ -4,7 +4,7 @@ mod clients;
 mod completions;
 mod config_ops;
 mod connections;
-mod dashboard;
+mod console;
 mod diagnostics;
 mod init;
 mod logs;
@@ -114,27 +114,27 @@ enum Commands {
     },
     /// Show version, protocol version, supported ciphers and transports
     Version,
-    /// Launch the web dashboard (auto-downloads UI, proxies management API)
-    Dashboard {
+    /// Launch the web console (auto-downloads UI, proxies management API)
+    Console {
         /// Management API URL to proxy requests to
         #[arg(long, default_value = "https://127.0.0.1:9090")]
         mgmt_url: String,
         /// Auth token for management API
         #[arg(long)]
         token: Option<String>,
-        /// Port to serve the dashboard on
+        /// Port to serve the console on
         #[arg(long, default_value = "9091")]
         port: u16,
-        /// Address to bind the dashboard server to
+        /// Address to bind the console server to
         #[arg(long, default_value = "0.0.0.0")]
         bind: String,
         /// Don't auto-open browser
         #[arg(long)]
         no_open: bool,
-        /// Force re-download of dashboard assets
+        /// Force re-download of console assets
         #[arg(long)]
         update: bool,
-        /// Serve dashboard from a local directory instead of downloading
+        /// Serve console from a local directory instead of downloading
         #[arg(long)]
         dir: Option<String>,
     },
@@ -441,7 +441,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Version => {
             print_version();
         }
-        Commands::Dashboard {
+        Commands::Console {
             mgmt_url,
             token,
             port,
@@ -465,7 +465,7 @@ async fn main() -> anyhow::Result<()> {
                             }
                         })
                 });
-            dashboard::run_dashboard(mgmt_url, token, port, bind, no_open, update, dir).await?;
+            console::run_console(mgmt_url, token, port, bind, no_open, update, dir).await?;
         }
         Commands::Completions { shell } => {
             completions::generate(shell);

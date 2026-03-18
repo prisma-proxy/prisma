@@ -125,14 +125,14 @@ journalctl -u prisma-server --since "1h ago" # 最近的日志
 | `ReadOnlyPaths=/etc/prisma` | 配置文件运行时不可修改 |
 | `LimitNOFILE=65535` | 高文件描述符限制以支持大量连接 |
 
-## 仪表盘（可选）
+## 控制台（可选）
 
 ```bash
-sudo mkdir -p /opt/prisma/dashboard
+sudo mkdir -p /opt/prisma/console
 # 从发布版：
-sudo tar -xzf prisma-dashboard.tar.gz -C /opt/prisma/dashboard
+sudo tar -xzf prisma-console.tar.gz -C /opt/prisma/console
 # 或从源码构建：
-cd prisma-dashboard && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
+cd prisma-console && npm ci && npm run build && sudo cp -r out/ /opt/prisma/console/
 ```
 
 在 `server.toml` 中添加：
@@ -142,13 +142,13 @@ cd prisma-dashboard && npm ci && npm run build && sudo cp -r out/ /opt/prisma/da
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/console"
 ```
 
-更新服务文件以允许仪表盘访问：
+更新服务文件以允许控制台访问：
 
 ```ini
-ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
+ReadOnlyPaths=/etc/prisma /opt/prisma/console
 ```
 
 ## 目录布局
@@ -158,5 +158,5 @@ ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
 /etc/prisma/server.toml            # 服务端配置
 /etc/prisma/client.toml            # 客户端配置
 /etc/prisma/*.pem                  # TLS 证书
-/opt/prisma/dashboard/             # 仪表盘（可选）
+/opt/prisma/console/               # 控制台（可选）
 ```

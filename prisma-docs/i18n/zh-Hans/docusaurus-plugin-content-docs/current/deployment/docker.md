@@ -6,14 +6,14 @@ sidebar_position: 2
 
 ## 多阶段构建
 
-Docker 镜像使用多阶段构建：Node.js 将仪表盘构建为静态文件，Rust 构建服务器二进制文件，最终镜像是包含两者的最小 Debian 运行时。
+Docker 镜像使用多阶段构建：Node.js 将控制台构建为静态文件，Rust 构建服务器二进制文件，最终镜像是包含两者的最小 Debian 运行时。
 
 ```dockerfile
-FROM node:22-slim AS dashboard
-WORKDIR /dashboard
-COPY prisma-dashboard/package.json prisma-dashboard/package-lock.json ./
+FROM node:22-slim AS console
+WORKDIR /console
+COPY prisma-console/package.json prisma-console/package-lock.json ./
 RUN npm ci
-COPY prisma-dashboard/ ./
+COPY prisma-console/ ./
 RUN npm run build
 
 FROM rust:1-bookworm AS builder
@@ -24,11 +24,11 @@ RUN cargo build --release -p prisma-cli
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
-COPY --from=dashboard /dashboard/out /opt/prisma/dashboard
+COPY --from=console /console/out /opt/prisma/console
 ENTRYPOINT ["prisma"]
 ```
 
-构建好的仪表盘位于容器内的 `/opt/prisma/dashboard`。在服务端配置中设置 `dashboard_dir` 即可提供服务。
+构建好的控制台位于容器内的 `/opt/prisma/console`。在服务端配置中设置 `console_dir` 即可提供服务。
 
 ## 用法
 
@@ -52,10 +52,10 @@ Docker 环境下的 `server.toml` 示例：
 enabled = true
 listen_addr = "0.0.0.0:9090"
 auth_token = "your-secure-token-here"
-dashboard_dir = "/opt/prisma/dashboard"
+console_dir = "/opt/prisma/console"
 ```
 
-通过 `http://<host>:9090/` 访问仪表盘。
+通过 `http://<host>:9090/` 访问控制台。
 
 ### 客户端
 

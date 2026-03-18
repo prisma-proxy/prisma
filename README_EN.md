@@ -14,7 +14,7 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **Traffic shaping** — bucket padding, timing jitter, chaff injection, frame coalescing to defeat encapsulated TLS fingerprinting
 - **Anti-censorship** — Salamander UDP obfuscation, HTTP/3 masquerade, port hopping, TLS camouflage, entropy camouflage
 - **Port forwarding** — frp-style reverse proxy over encrypted tunnels
-- **Web dashboard** — real-time monitoring with Next.js + shadcn/ui
+- **Web console** — real-time monitoring with Next.js + shadcn/ui
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 - **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
 - **Cross-platform GUI** — speed test, full backup/restore, system tray, keyboard shortcuts, notification history, data usage tracking (Tauri 2 + React)
@@ -78,7 +78,7 @@ prisma/
 ├── prisma-cli/          # CLI with key/cert generation, init, validate
 ├── prisma-ffi/          # C FFI library for GUI clients
 ├── prisma-gui/          # Cross-platform GUI (Tauri 2 + React + TypeScript)
-├── prisma-dashboard/    # Web dashboard (Next.js + shadcn/ui)
+├── prisma-console/      # Web console (Next.js + shadcn/ui)
 ├── prisma-docs/         # Documentation site (Docusaurus)
 └── scripts/             # Install scripts and benchmarks
 ```
@@ -117,8 +117,8 @@ cargo build --release -p prisma-ffi
 # Build GUI (requires Node.js)
 cd prisma-gui && npm install && npm run tauri build
 
-# Build dashboard
-cd prisma-dashboard && npm ci && npm run build
+# Build console
+cd prisma-console && npm ci && npm run build
 
 # Build docs
 cd prisma-docs && npm install && npm start

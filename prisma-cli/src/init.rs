@@ -137,12 +137,12 @@ port_range_end = 20000
 # fallback_addr = "example.com:443"
 # alpn_protocols = ["h2", "http/1.1"]
 {cdn_section}
-# Management API + dashboard
+# Management API + console
 [management_api]
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "{mgmt_token}"
-# dashboard_dir = "./prisma-dashboard/out"
+# console_dir = "./prisma-console/out"
 # cors_origins = ["http://localhost:3000"]
 "#
     );

@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI 参考
 
-`prisma` 二进制文件提供多个子命令，用于运行服务端和客户端、生成凭证、管理配置、启动控制面板，以及通过管理 API 控制运行中的服务器。
+`prisma` 二进制文件提供多个子命令，用于运行服务端和客户端、生成凭证、管理配置、启动控制台，以及通过管理 API 控制运行中的服务器。
 
 ## 全局参数
 
@@ -188,25 +188,25 @@ prisma speed-test -s <SERVER> [OPTIONS]
 prisma speed-test -s my-server.example.com:8443 -d 15 --direction download
 ```
 
-## `prisma dashboard`
+## `prisma console`
 
-启动 Web 控制面板，支持自动下载和反向代理。
+启动 Web 控制台，支持自动下载和反向代理。
 
 ```bash
-prisma dashboard [OPTIONS]
+prisma console [OPTIONS]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
 | `--mgmt-url <URL>` | `https://127.0.0.1:9090` | 代理请求的管理 API 地址 |
 | `--token <TOKEN>` | — | 管理 API 认证令牌 |
-| `--port <PORT>` | `9091` | 控制面板服务端口 |
-| `--bind <ADDR>` | `0.0.0.0` | 控制面板绑定地址 |
+| `--port <PORT>` | `9091` | 控制台服务端口 |
+| `--bind <ADDR>` | `0.0.0.0` | 控制台绑定地址 |
 | `--no-open` | — | 不自动打开浏览器 |
-| `--update` | — | 强制重新下载控制面板资源 |
-| `--dir <PATH>` | — | 从本地目录提供控制面板，而非自动下载 |
+| `--update` | — | 强制重新下载控制台资源 |
+| `--dir <PATH>` | — | 从本地目录提供控制台，而非自动下载 |
 
-首次运行时从 GitHub Releases 下载最新控制面板并缓存到本地。启动本地服务器提供静态文件并将 `/api/*` 请求反向代理到管理 API。
+首次运行时从 GitHub Releases 下载最新控制台并缓存到本地。启动本地服务器提供静态文件并将 `/api/*` 请求反向代理到管理 API。
 
 桌面系统会自动打开浏览器。无头/VPS 环境（SSH 会话、无 `$DISPLAY`）则打印 URL。
 
@@ -214,13 +214,13 @@ prisma dashboard [OPTIONS]
 
 ```bash
 # 基本用法（连接本地管理 API）
-prisma dashboard --token your-secure-token
+prisma console --token your-secure-token
 
 # 连接远程服务器
-prisma dashboard --mgmt-url https://my-server.com:9090 --token my-token
+prisma console --mgmt-url https://my-server.com:9090 --token my-token
 
-# 强制重新下载最新控制面板
-prisma dashboard --update --token your-secure-token
+# 强制重新下载最新控制台
+prisma console --update --token your-secure-token
 ```
 
 ## `prisma version`

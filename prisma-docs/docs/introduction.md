@@ -29,14 +29,14 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 - **PrismaUDP** — UDP relay with FEC Reed-Solomon forward error correction
 - **Congestion control** — BBR, Brutal, and Adaptive modes for QUIC
 - **Management API** — REST + WebSocket API for live monitoring and control
-- **Web dashboard** — real-time Next.js + shadcn/ui dashboard with metrics, client management, and log streaming
+- **Web console** — real-time Next.js + shadcn/ui console with metrics, client management, and log streaming
 - **Per-client bandwidth and quota limits** — upload/download rate limiting with configurable quotas
 - **Connection backpressure** via configurable max connection limits
 - **Structured logging** (pretty or JSON) via `tracing` with broadcast support
 
 ## Architecture
 
-Prisma is organized into six crates plus a dashboard:
+Prisma is organized into six crates plus a console:
 
 ```
 prisma/
@@ -45,7 +45,7 @@ prisma/
 ├── prisma-client/     # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
 ├── prisma-mgmt/       # Management API (REST + WebSocket via axum)
 ├── prisma-cli/        # CLI with key/cert generation, init, validate
-├── prisma-dashboard/  # Web dashboard (Next.js + shadcn/ui)
+├── prisma-console/  # Web console (Next.js + shadcn/ui)
 ├── prisma-docs/       # Documentation site (Docusaurus)
 └── scripts/           # Install scripts and benchmarks
 ```
@@ -72,13 +72,13 @@ graph LR
     C -->|TCP| D[Local Service]
 ```
 
-### Data flow — management & dashboard
+### Data flow — management & console
 
-The management API provides live observability and control. The dashboard communicates with the management API via a server-side proxy to keep the API token secure.
+The management API provides live observability and control. The console communicates with the management API via a server-side proxy to keep the API token secure.
 
 ```mermaid
 graph LR
-    A[Browser] -->|HTTP| B["prisma-dashboard (Next.js)"]
+    A[Browser] -->|HTTP| B["prisma-console (Next.js)"]
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```

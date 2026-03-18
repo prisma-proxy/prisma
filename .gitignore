@@ -26,13 +26,14 @@ prisma-docs/node_modules/
 prisma-docs/build/
 prisma-docs/.docusaurus/
 
-# Dashboard (Next.js)
-prisma-dashboard/node_modules/
-prisma-dashboard/.next/
-prisma-dashboard/out/
-prisma-dashboard/.env*
+# Console (Next.js)
+prisma-console/node_modules/
+prisma-console/.next/
+prisma-console/out/
+prisma-console/.env*
 
 .claude/
+CLAUDE.md
 
 # Benchmark artifacts
 benchmark-results/

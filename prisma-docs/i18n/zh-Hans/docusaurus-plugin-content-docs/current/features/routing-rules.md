@@ -124,7 +124,7 @@ action = "direct"
 
 ### 动态规则（管理 API）
 
-规则也可以通过[管理 API](/docs/features/management-api) 或[控制面板](/docs/features/dashboard)在运行时管理。动态规则的优先级数值较低，优先于静态配置规则。
+规则也可以通过[管理 API](/docs/features/management-api) 或[控制台](/docs/features/dashboard)在运行时管理。动态规则的优先级数值较低，优先于静态配置规则。
 
 ```bash
 # 列出规则
@@ -147,7 +147,7 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:9090/api/routes/<rule-id>
 ```
 
-通过控制面板，导航到**路由**页面可视化管理规则。
+通过控制台，导航到**路由**页面可视化管理规则。
 
 ### 服务端规则条件（管理 API 格式）
 

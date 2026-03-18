@@ -157,8 +157,8 @@ pub struct ManagementApiConfig {
     pub auth_token: String,
     #[serde(default)]
     pub cors_origins: Vec<String>,
-    #[serde(default)]
-    pub dashboard_dir: Option<String>,
+    #[serde(default, alias = "dashboard_dir")]
+    pub console_dir: Option<String>,
     /// TLS configuration for the management API.
     /// If omitted, inherits from the server's top-level `[tls]` section automatically.
     /// Set `tls_enabled = false` to explicitly disable TLS on the management API.
@@ -175,7 +175,7 @@ impl Default for ManagementApiConfig {
             listen_addr: default_mgmt_listen_addr(),
             auth_token: String::new(),
             cors_origins: Vec::new(),
-            dashboard_dir: None,
+            console_dir: None,
             tls: None,
             tls_enabled: true,
         }
