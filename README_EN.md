@@ -17,6 +17,7 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **Web dashboard** — real-time monitoring with Next.js + shadcn/ui
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 - **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
+- **Cross-platform GUI** — speed test, full backup/restore, system tray, keyboard shortcuts, notification history, data usage tracking (Tauri 2 + React)
 
 ## Quick Start
 

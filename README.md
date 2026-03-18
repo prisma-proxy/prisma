@@ -17,6 +17,7 @@
 - **Web 仪表板** — 基于 Next.js + shadcn/ui 的实时监控
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
 - **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
+- **跨平台 GUI** — 速度测试、完整备份/恢复、系统托盘、键盘快捷键、通知历史、流量统计（Tauri 2 + React）
 
 ## 快速开始
 
