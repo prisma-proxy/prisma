@@ -128,11 +128,11 @@ The service files include these systemd security directives:
 ## Console (Optional)
 
 ```bash
-sudo mkdir -p /opt/prisma/console
+sudo mkdir -p /opt/prisma/dashboard
 # From release:
-sudo tar -xzf prisma-console.tar.gz -C /opt/prisma/console
+sudo tar -xzf prisma-console.tar.gz -C /opt/prisma/dashboard
 # Or build from source:
-cd prisma-console && npm ci && npm run build && sudo cp -r out/ /opt/prisma/console/
+cd prisma-console && npm ci && npm run build && sudo cp -r out/ /opt/prisma/dashboard/
 ```
 
 Add to `server.toml`:
@@ -142,13 +142,13 @@ Add to `server.toml`:
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token"
-console_dir = "/opt/prisma/console"
+console_dir = "/opt/prisma/dashboard"
 ```
 
 Update service file to allow console access:
 
 ```ini
-ReadOnlyPaths=/etc/prisma /opt/prisma/console
+ReadOnlyPaths=/etc/prisma /opt/prisma/dashboard
 ```
 
 ## Directory Layout
@@ -158,5 +158,5 @@ ReadOnlyPaths=/etc/prisma /opt/prisma/console
 /etc/prisma/server.toml            # Server config
 /etc/prisma/client.toml            # Client config
 /etc/prisma/*.pem                  # TLS certificates
-/opt/prisma/console/               # Console (optional)
+/opt/prisma/dashboard/             # Dashboard (optional)
 ```

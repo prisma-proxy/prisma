@@ -5,11 +5,11 @@ slug: /introduction
 
 # 简介
 
-Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v4** 线路协议，融合现代密码学、多种传输方式和高级抗审查特性。
+Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议，融合现代密码学、多种传输方式和高级抗审查特性。
 
 ## 功能特性
 
-- **PrismaVeil v4 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only 加密模式
+- **PrismaVeil v5 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only 加密模式，头部认证加密（AAD）、连接迁移、增强型 KDF（向后兼容 v4）
 - **6 种传输方式** — QUIC v2、TCP、WebSocket、gRPC、XHTTP、XPorta（CDN 兼容），支持自动回退
 - **双重加密** — 在 QUIC/TLS 内嵌入 PrismaVeil 加密，实现纵深防御
 - **现代密码学** — X25519 ECDH、BLAKE3 KDF、ChaCha20-Poly1305 / AES-256-GCM AEAD

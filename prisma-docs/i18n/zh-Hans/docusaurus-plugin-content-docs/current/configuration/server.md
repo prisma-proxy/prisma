@@ -34,7 +34,7 @@ sidebar_position: 1
 | `management_api.tls_enabled` | bool | `true` | 启用管理 API 的 TLS（自动继承服务器 `[tls]` 配置） |
 | `padding.min` | u16 | `0` | 每帧最小填充字节数 |
 | `padding.max` | u16 | `256` | 每帧最大填充字节数 |
-| `protocol_version` | string | `"v4"` | 协议版本（仅 v4） |
+| `protocol_version` | string | `"v5"` | 协议版本（默认 `v5`，`v4` 用于向后兼容） |
 | `prisma_tls.enabled` | bool | `false` | 启用 PrismaTLS（替代 REALITY） |
 | `prisma_tls.mask_servers` | array | `[]` | 掩护服务器池 |
 | `prisma_tls.mask_servers[].addr` | string | — | 掩护服务器地址（如 `"www.microsoft.com:443"`） |
@@ -249,7 +249,7 @@ auth_secret = "hex-secret-2"
 name = "phone"
 ```
 
-客户端也可以通过[管理 API](/docs/features/management-api)或[控制台](/docs/features/dashboard)在运行时管理，无需重启服务器。
+客户端也可以通过[管理 API](/docs/features/management-api)或[控制台](/docs/features/console)在运行时管理，无需重启服务器。
 
 ## 管理 API 配置
 

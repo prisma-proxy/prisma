@@ -124,7 +124,7 @@ Server-side rules use the same `type`/`value` syntax as client rules. Valid `act
 
 ### Dynamic rules (Management API)
 
-Rules can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Console](/docs/features/console). Dynamic rules have lower priority numbers and take precedence over static config rules.
+Rules can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/dashboard). Dynamic rules have lower priority numbers and take precedence over static config rules.
 
 ```bash
 # List rules
@@ -147,7 +147,7 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:9090/api/routes/<rule-id>
 ```
 
-Via the Console, navigate to the **Routing** page to visually manage rules.
+Via the Dashboard, navigate to the **Routing** page to visually manage rules.
 
 ### Server rule conditions (Management API format)
 

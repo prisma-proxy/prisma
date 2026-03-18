@@ -518,7 +518,7 @@ format = "pretty"
 
 ## 7. Full-Featured — Everything Enabled
 
-Production deployment with all features: CDN transport (XPorta + WebSocket + XHTTP), port forwarding, management API, console, camouflage, and bandwidth controls.
+Production deployment with all features: CDN transport (XPorta + WebSocket + XHTTP), port forwarding, management API, dashboard, camouflage, and bandwidth controls.
 
 **Best for:** Shared proxy server serving multiple clients with full observability.
 
@@ -696,7 +696,7 @@ format = "pretty"
 |------|------|
 | Maximum flexibility — supports all transports | Complex configuration |
 | Per-client bandwidth + quota controls | Higher resource usage |
-| Full observability (console + API) | Requires domain + CDN + cover site |
+| Full observability (dashboard + API) | Requires domain + CDN + cover site |
 | Active probe resistant (XPorta + cover site) | More attack surface to secure |
 | Port forwarding for services behind NAT | — |
 

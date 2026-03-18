@@ -124,7 +124,7 @@ action = "direct"
 
 ### 动态规则（管理 API）
 
-规则也可以通过[管理 API](/docs/features/management-api) 或[控制台](/docs/features/dashboard)在运行时管理。动态规则的优先级数值较低，优先于静态配置规则。
+规则也可以通过[管理 API](/docs/features/management-api) 或[控制台](/docs/features/console)在运行时管理。动态规则的优先级数值较低，优先于静态配置规则。
 
 ```bash
 # 列出规则

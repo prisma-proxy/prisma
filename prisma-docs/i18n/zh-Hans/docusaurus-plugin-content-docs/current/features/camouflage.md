@@ -60,7 +60,7 @@ fallback_addr = "example.com:443"
 
 ## ALPN 自定义
 
-PrismaVeil v4 对 QUIC 使用标准 ALPN `"h3"`，避免被 DPI 进行协议识别。对于启用伪装的 TCP 传输，ALPN 默认为 `["h2", "http/1.1"]` — 与真实 HTTPS 站点使用的协议匹配。
+PrismaVeil v5 对 QUIC 使用标准 ALPN `"h3"`，避免被 DPI 进行协议识别。对于启用伪装的 TCP 传输，ALPN 默认为 `["h2", "http/1.1"]` — 与真实 HTTPS 站点使用的协议匹配。
 
 ```toml
 [camouflage]

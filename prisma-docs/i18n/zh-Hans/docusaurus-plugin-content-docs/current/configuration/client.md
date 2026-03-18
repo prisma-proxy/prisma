@@ -82,7 +82,7 @@ sidebar_position: 2
 | `tun.include_routes` | string[] | `["0.0.0.0/0"]` | TUN 模式捕获的路由 |
 | `tun.exclude_routes` | string[] | `[]` | 排除的路由（服务器 IP 自动排除） |
 | `tun.dns` | string | `"fake"` | TUN DNS 模式：`"fake"` / `"tunnel"` |
-| `protocol_version` | string | `"v4"` | 协议版本（仅 v4） |
+| `protocol_version` | string | `"v5"` | 协议版本（默认 `v5`，`v4` 用于向后兼容） |
 | `fingerprint` | string | `"chrome"` | uTLS 指纹：`chrome` / `firefox` / `safari` / `random` / `none` |
 | `quic_version` | string | `"auto"` | QUIC 版本：`v2` / `v1` / `auto` |
 | `transport_mode` | string | `"auto"` | 传输模式：`auto` 或显式名称 |
@@ -107,8 +107,8 @@ cipher_suite = "chacha20-poly1305"   # 或 "aes-256-gcm"
 transport = "quic"                   # 或 "tcp" / "ws" / "grpc" / "xhttp" / "xporta" / "prisma-tls"
 skip_cert_verify = true              # 开发环境中使用自签名证书时设为 true
 
-# v4 功能
-protocol_version = "v4"
+# v5 功能（向后兼容 v4）
+protocol_version = "v5"
 fingerprint = "chrome"        # uTLS 指纹，模拟浏览器 ClientHello
 quic_version = "auto"         # "v2"、"v1" 或 "auto"
 # prisma_auth_secret = "hex-encoded-32-bytes"   # PrismaTLS 传输使用

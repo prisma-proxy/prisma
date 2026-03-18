@@ -2,11 +2,11 @@
 
 [简体中文](./README.md) | **English**
 
-A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil v4** wire protocol — combining modern cryptography, multiple transport options, and advanced anti-censorship features.
+A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil v5** wire protocol — combining modern cryptography, multiple transport options, and advanced anti-censorship features.
 
 ## Highlights
 
-- **PrismaVeil v4 protocol** — 1-RTT handshake, 0-RTT resumption, X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only
+- **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT resumption, X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only, header-authenticated encryption (AAD), connection migration, enhanced KDF
 - **6 transports** — QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta (CDN-compatible)
 - **TUN mode** — system-wide proxy via virtual network interface (Windows/Linux/macOS)
 - **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server

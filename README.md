@@ -2,11 +2,11 @@
 
 **简体中文** | [English](./README_EN.md)
 
-基于 Rust 构建的下一代加密代理基础设施套件。Prisma 实现了 **PrismaVeil v4** 线路协议，融合现代密码学、多种传输方式和高级抗审查特性。
+基于 Rust 构建的下一代加密代理基础设施套件。Prisma 实现了 **PrismaVeil v5** 线路协议，融合现代密码学、多种传输方式和高级抗审查特性。
 
 ## 特性亮点
 
-- **PrismaVeil v4 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only
+- **PrismaVeil v5 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only，头部认证加密（AAD）、连接迁移、增强型 KDF
 - **6 种传输方式** — QUIC v2、TCP、WebSocket、gRPC、XHTTP、XPorta（CDN 兼容）
 - **TUN 模式** — 通过虚拟网络接口实现系统级代理（Windows/Linux/macOS）
 - **GeoIP 路由** — 基于 v2fly geoip.dat 的国家级智能分流，客户端和服务端均支持

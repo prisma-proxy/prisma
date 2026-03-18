@@ -58,6 +58,7 @@ const config: Config = {
           lastVersion: 'current',
           versions: {
             current: {label: 'v4', path: ''},
+            legacy: {label: 'Legacy', path: 'legacy'},
           },
         },
         blog: false,

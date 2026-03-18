@@ -249,7 +249,7 @@ auth_secret = "hex-secret-2"
 name = "phone"
 ```
 
-Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Console](/docs/features/console) without restarting the server.
+Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/dashboard) without restarting the server.
 
 ## Management API configuration
 
@@ -261,6 +261,6 @@ The `auth_token` protects all management API endpoints. Use a strong, random tok
 
 **Bind address**: By default the API listens on `127.0.0.1:9090` (localhost only). To expose it to the network, change `listen_addr` — but ensure you have proper network-level access controls in place.
 
-**Console**: Set `console_dir` to the path containing the built console static files. The server will serve the console at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd prisma-console && npm ci && npm run build`.
+**Dashboard**: Set `console_dir` to the path containing the built console static files. The server will serve the console at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd prisma-console && npm ci && npm run build`.
 
 **CORS origins**: Only needed when running the console dev server on a different origin (e.g. `http://localhost:3000`). Not needed in production when the console is served by the server itself.

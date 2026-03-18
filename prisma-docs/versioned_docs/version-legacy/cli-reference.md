@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI Reference
 
-The `prisma` binary provides subcommands for running the server and client, generating credentials, managing configs, launching the console, and controlling a live server via the management API.
+The `prisma` binary provides subcommands for running the server and client, generating credentials, managing configs, launching the dashboard, and controlling a live server via the management API.
 
 ## Global flags
 
@@ -188,25 +188,25 @@ Example:
 prisma speed-test -s my-server.example.com:8443 -d 15 --direction download
 ```
 
-## `prisma console`
+## `prisma dashboard`
 
-Launch the web console with auto-download and reverse proxy.
+Launch the web dashboard with auto-download and reverse proxy.
 
 ```bash
-prisma console [OPTIONS]
+prisma dashboard [OPTIONS]
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--mgmt-url <URL>` | `https://127.0.0.1:9090` | Management API URL to proxy requests to |
 | `--token <TOKEN>` | — | Auth token for management API |
-| `--port <PORT>` | `9091` | Port to serve the console on |
-| `--bind <ADDR>` | `0.0.0.0` | Address to bind the console server to |
+| `--port <PORT>` | `9091` | Port to serve the dashboard on |
+| `--bind <ADDR>` | `0.0.0.0` | Address to bind the dashboard server to |
 | `--no-open` | — | Don't auto-open the browser |
-| `--update` | — | Force re-download of console assets |
-| `--dir <PATH>` | — | Serve console from a local directory instead of downloading |
+| `--update` | — | Force re-download of dashboard assets |
+| `--dir <PATH>` | — | Serve dashboard from a local directory instead of downloading |
 
-On first run, downloads the latest console from GitHub Releases and caches it locally (`~/.cache/prisma/console/` on Linux, `~/Library/Caches/prisma/` on macOS, `%LOCALAPPDATA%\prisma\` on Windows). Starts a local server that serves the static console and reverse-proxies `/api/*` requests to the management API.
+On first run, downloads the latest dashboard from GitHub Releases and caches it locally (`~/.cache/prisma/dashboard/` on Linux, `~/Library/Caches/prisma/` on macOS, `%LOCALAPPDATA%\prisma\` on Windows). Starts a local server that serves the static dashboard and reverse-proxies `/api/*` requests to the management API.
 
 On desktop systems, the browser opens automatically. On headless/VPS (SSH sessions, no `$DISPLAY`), the URL is printed instead.
 
@@ -214,13 +214,13 @@ Example:
 
 ```bash
 # Basic usage (connects to local management API)
-prisma console --token your-secure-token
+prisma dashboard --token your-secure-token
 
 # Connect to remote server
-prisma console --mgmt-url https://my-server.com:9090 --token my-token
+prisma dashboard --mgmt-url https://my-server.com:9090 --token my-token
 
-# Force re-download latest console
-prisma console --update --token your-secure-token
+# Force re-download latest dashboard
+prisma dashboard --update --token your-secure-token
 ```
 
 ## `prisma version`
