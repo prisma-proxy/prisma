@@ -13,6 +13,9 @@ import {
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import QrDisplay from "@/components/QrDisplay";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ProfileWizard from "@/components/ProfileWizard";
@@ -36,7 +39,7 @@ export default function Profiles() {
   const connecting = useStore((s) => s.connecting);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
   const proxyModes = useStore((s) => s.proxyModes);
-  const metricsStore = useProfileMetrics();
+  const metrics = useProfileMetrics((s) => s.metrics);
   const { connectTo, disconnect, switchTo } = useConnection();
 
   // Wizard
@@ -63,8 +66,9 @@ export default function Profiles() {
   const [deleteOpen,    setDeleteOpen]    = useState(false);
   const [deletePending, setDeletePending] = useState<Profile | null>(null);
 
-  // Search
+  // Search & sort
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"default" | "name" | "lastUsed" | "latency">("default");
 
   const reload = () =>
     api.listProfiles()
@@ -74,12 +78,30 @@ export default function Profiles() {
   useEffect(() => { reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredProfiles = useMemo(() => {
-    if (!search.trim()) return profiles;
-    const q = search.toLowerCase();
-    return profiles.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  }, [profiles, search]);
+    let result = [...profiles];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (p) => p.name.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    if (sortBy === "name") {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "lastUsed") {
+      result.sort((a, b) => {
+        const ma = metrics[a.id]?.lastConnectedAt ?? "";
+        const mb = metrics[b.id]?.lastConnectedAt ?? "";
+        return mb.localeCompare(ma);
+      });
+    } else if (sortBy === "latency") {
+      result.sort((a, b) => {
+        const la = metrics[a.id]?.lastLatencyMs ?? 9999;
+        const lb = metrics[b.id]?.lastLatencyMs ?? 9999;
+        return la - lb;
+      });
+    }
+    return result;
+  }, [profiles, search, sortBy, metrics]);
 
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : null;
 
@@ -277,15 +299,28 @@ export default function Profiles() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("profiles.search")}
-          className="pl-8 h-8 text-sm"
-        />
+      {/* Search & sort */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("profiles.search")}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+          <SelectTrigger className="w-28 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">{t("profiles.sortDefault")}</SelectItem>
+            <SelectItem value="name">{t("profiles.sortName")}</SelectItem>
+            <SelectItem value="lastUsed">{t("profiles.sortLastUsed")}</SelectItem>
+            <SelectItem value="latency">{t("profiles.sortLatency")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {search && (
@@ -301,7 +336,7 @@ export default function Profiles() {
           )}
           {filteredProfiles.map((p) => {
             const isActive = connected && activeProfile?.id === p.id;
-            const metrics = metricsStore.getMetrics(p.id);
+            const pm = useProfileMetrics.getState().getMetrics(p.id);
 
             return (
               <div
@@ -328,21 +363,21 @@ export default function Profiles() {
                     }
                   </div>
                   {/* Per-profile metrics */}
-                  {metrics.connectCount > 0 && (
+                  {pm.connectCount > 0 && (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[10px] text-muted-foreground">
-                      {metrics.lastLatencyMs != null && <span>{metrics.lastLatencyMs}ms</span>}
-                      {metrics.lastConnectedAt && <span>{fmtRelativeTime(metrics.lastConnectedAt)}</span>}
-                      {(metrics.totalBytesUp > 0 || metrics.totalBytesDown > 0) && (
-                        <span>↑{fmtBytes(metrics.totalBytesUp)} ↓{fmtBytes(metrics.totalBytesDown)}</span>
+                      {pm.lastLatencyMs != null && <span>{pm.lastLatencyMs}ms</span>}
+                      {pm.lastConnectedAt && <span>{fmtRelativeTime(pm.lastConnectedAt)}</span>}
+                      {(pm.totalBytesUp > 0 || pm.totalBytesDown > 0) && (
+                        <span>↑{fmtBytes(pm.totalBytesUp)} ↓{fmtBytes(pm.totalBytesDown)}</span>
                       )}
-                      {metrics.connectCount > 1 && (
-                        <span>{metrics.connectCount} {t("profiles.sessions")}</span>
+                      {pm.connectCount > 1 && (
+                        <span>{pm.connectCount} {t("profiles.sessions")}</span>
                       )}
-                      {metrics.totalUptimeSecs > 0 && (
-                        <span>{fmtDuration(metrics.totalUptimeSecs)}</span>
+                      {pm.totalUptimeSecs > 0 && (
+                        <span>{fmtDuration(pm.totalUptimeSecs)}</span>
                       )}
-                      {metrics.peakSpeedDownBps > 0 && (
-                        <span>{t("profiles.peak")} ↓{fmtSpeed(metrics.peakSpeedDownBps)}</span>
+                      {pm.peakSpeedDownBps > 0 && (
+                        <span>{t("profiles.peak")} ↓{fmtSpeed(pm.peakSpeedDownBps)}</span>
                       )}
                     </div>
                   )}

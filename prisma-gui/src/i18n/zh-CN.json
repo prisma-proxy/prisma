@@ -20,7 +20,12 @@
     "download": "下载",
     "upload": "上传",
     "transferred": "已传输",
-    "uptime": "运行时间"
+    "uptime": "运行时间",
+    "todayUsage": "今日",
+    "qualityExcellent": "优秀",
+    "qualityGood": "良好",
+    "qualityFair": "一般",
+    "qualityPoor": "较差"
   },
   "profiles": {
     "title": "配置文件",
@@ -64,7 +69,11 @@
     "deleteTitle": "删除配置",
     "deleteMessage": "确定删除 \"{{name}}\"？此操作不可撤销。",
     "sessions": "次连接",
-    "peak": "峰值"
+    "peak": "峰值",
+    "sortDefault": "默认",
+    "sortName": "名称",
+    "sortLastUsed": "最近使用",
+    "sortLatency": "延迟"
   },
   "rules": {
     "title": "规则",
@@ -75,7 +84,11 @@
     "type": "类型",
     "match": "匹配",
     "action": "动作",
-    "matchPlaceholder": "例如 example.com"
+    "matchPlaceholder": "例如 example.com",
+    "export": "导出规则",
+    "import": "导入规则",
+    "exported": "规则已导出",
+    "imported": "已导入 {{count}} 条规则"
   },
   "logs": {
     "search": "搜索…",
@@ -101,13 +114,15 @@
     "measuringLatency": "测量延迟中…",
     "measuringDownload": "测量下载速度中…",
     "measuringUpload": "测量上传速度中…",
-    "notConnected": "未连接代理 — 测试结果为直连速度。",
+    "notConnected": "速度测试需要活跃的代理连接。请先连接到配置文件。",
     "history": "历史记录",
     "avgDownload": "平均 ↓ Mbps",
     "avgUpload": "平均 ↑ Mbps",
     "bestDownload": "最佳 ↓ Mbps",
     "proxy": "代理",
-    "direct": "直连"
+    "direct": "直连",
+    "chartView": "图表",
+    "listView": "列表"
   },
   "settings": {
     "title": "设置",
@@ -166,7 +181,11 @@
     "resetSettingsConfirm": "将所有设置重置为默认值？此操作不可撤销。",
     "clearAllDataConfirm": "清除所有连接历史、日志、通知和配置指标？此操作不可撤销。",
     "platform": "平台",
-    "settingsStoredLocally": "所有设置均存储在本地设备上。"
+    "settingsStoredLocally": "所有设置均存储在本地设备上。",
+    "exportFullBackup": "完整备份",
+    "importFullBackup": "恢复备份",
+    "backupExported": "完整备份已导出",
+    "backupImported": "备份已恢复（{{count}} 个部分）"
   },
   "wizard": {
     "newProfile": "新建配置",
@@ -324,7 +343,10 @@
     "error": "发生错误",
     "connected": "已连接",
     "disconnected": "已断开",
-    "reconnecting": "自动重连中…"
+    "reconnecting": "自动重连中…",
+    "history": "通知历史",
+    "clearAll": "清除全部",
+    "noNotifications": "暂无通知"
   },
   "common": {
     "cancel": "取消",

@@ -54,4 +54,10 @@ export const api = {
 
   refreshTrayProfiles: () =>
     invoke<void>("refresh_tray_profiles"),
+
+  setActiveProfileId: (id: string) =>
+    invoke<void>("set_active_profile_id", { id }),
+
+  setTrayPort: (port: number) =>
+    invoke<void>("set_tray_port", { port }),
 };

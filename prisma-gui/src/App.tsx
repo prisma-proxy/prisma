@@ -3,6 +3,8 @@ import { usePrismaEvents } from "./hooks/usePrismaEvents";
 import { usePlatform } from "./hooks/usePlatform";
 import { useWindowEvents } from "./hooks/useWindowEvents";
 import { useAutoReconnect } from "./hooks/useAutoReconnect";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useClipboardImport } from "./hooks/useClipboardImport";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
 import StatusBar from "./components/StatusBar";
@@ -17,6 +19,8 @@ export default function App() {
   usePrismaEvents();
   useWindowEvents();
   useAutoReconnect();
+  useKeyboardShortcuts();
+  useClipboardImport();
   const { isMobile } = usePlatform();
 
   return (

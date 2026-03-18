@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Stats, Profile, LogEntry, SpeedTestResult } from "../lib/types";
+import type { Stats, Profile, LogEntry, SpeedTestResult, UpdateInfo } from "../lib/types";
 
 interface PrismaStore {
   // Connection
@@ -21,7 +21,7 @@ interface PrismaStore {
   logs: LogEntry[];
 
   // Update
-  updateAvailable: string | null;
+  updateAvailable: UpdateInfo | null;
   updateProgress: number | null;
 
   // Speed test
@@ -40,7 +40,7 @@ interface PrismaStore {
   setProfiles: (p: Profile[]) => void;
   addLog: (entry: LogEntry) => void;
   clearLogs: () => void;
-  setUpdateAvailable: (version: string | null) => void;
+  setUpdateAvailable: (info: UpdateInfo | null) => void;
   setUpdateProgress: (p: number | null) => void;
   setSpeedTestRunning: (v: boolean) => void;
   setSpeedTestResult: (r: SpeedTestResult | null) => void;
@@ -101,7 +101,7 @@ export const useStore = create<PrismaStore>((set) => ({
 
   clearLogs: () => set({ logs: [] }),
 
-  setUpdateAvailable: (version) => set({ updateAvailable: version }),
+  setUpdateAvailable: (info) => set({ updateAvailable: info }),
   setUpdateProgress:  (p)       => set({ updateProgress: p }),
 
   setSpeedTestRunning: (v) => set({ speedTestRunning: v }),

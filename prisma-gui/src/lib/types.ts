@@ -18,6 +18,7 @@ export interface UpdateInfo {
   version: string;
   url: string;
   changelog: string;
+  sha?: string;
 }
 
 export interface LogEntry {

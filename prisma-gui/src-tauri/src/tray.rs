@@ -18,6 +18,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
 
     let show = MenuItem::with_id(app, "tray-show", "Show Window", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit Prisma",  true, None::<&str>)?;
+    let copy_addr = MenuItem::with_id(app, "tray-copy-addr", "Copy Proxy Address", true, None::<&str>)?;
 
     let profiles_sub = SubmenuBuilder::new(app, "Profiles")
         .item(&MenuItem::with_id(app, "profile:none", "(no profiles)", false, None::<&str>)?)
@@ -25,7 +26,10 @@ pub fn setup(app: &App) -> tauri::Result<()> {
 
     let menu = MenuBuilder::new(app)
         .item(&connect)
+        .separator()
         .item(&profiles_sub)
+        .separator()
+        .item(&copy_addr)
         .separator()
         .item(&show)
         .item(&quit)
@@ -45,6 +49,9 @@ pub fn setup(app: &App) -> tauri::Result<()> {
             }
             "tray-connect" => {
                 let _ = app.emit("tray://connect-toggle", ());
+            }
+            "tray-copy-addr" => {
+                let _ = app.emit("tray://copy-proxy-address", ());
             }
             id if id.starts_with("profile:") => {
                 let profile_id = id["profile:".len()..].to_owned();
@@ -101,6 +108,11 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
         serde_json::from_str(&s).unwrap_or_default()
     };
 
+    let active_id = crate::state::ACTIVE_PROFILE_ID
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+
     let connect_label = crate::state::TRAY_CONNECT_ITEM
         .lock()
         .ok()
@@ -112,8 +124,9 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
     if let Ok(mut guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
         *guard = Some(connect.clone());
     }
-    let show    = MenuItem::with_id(app, "tray-show",    "Show Window", true, None::<&str>)?;
-    let quit    = MenuItem::with_id(app, "tray-quit",    "Quit Prisma", true, None::<&str>)?;
+    let show      = MenuItem::with_id(app, "tray-show",      "Show Window",        true, None::<&str>)?;
+    let quit      = MenuItem::with_id(app, "tray-quit",      "Quit Prisma",        true, None::<&str>)?;
+    let copy_addr = MenuItem::with_id(app, "tray-copy-addr", "Copy Proxy Address", true, None::<&str>)?;
 
     let mut sub = SubmenuBuilder::new(app, "Profiles");
     if profiles.is_empty() {
@@ -121,10 +134,16 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
     } else {
         for p in &profiles {
             if let (Some(id), Some(name)) = (p["id"].as_str(), p["name"].as_str()) {
+                let is_active = active_id.as_deref() == Some(id);
+                let label = if is_active {
+                    format!("\u{25CF} {name}")
+                } else {
+                    format!("  {name}")
+                };
                 sub = sub.item(&MenuItem::with_id(
                     app,
                     format!("profile:{id}"),
-                    name,
+                    label,
                     true,
                     None::<&str>,
                 )?);
@@ -135,7 +154,10 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
 
     let menu = MenuBuilder::new(app)
         .item(&connect)
+        .separator()
         .item(&profiles_sub)
+        .separator()
+        .item(&copy_addr)
         .separator()
         .item(&show)
         .item(&quit)

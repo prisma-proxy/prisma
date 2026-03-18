@@ -7,12 +7,16 @@ import { useConnectionHistory } from "../store/connectionHistory";
 import { useSettings } from "../store/settings";
 import { api } from "../lib/commands";
 import { MODE_SYSTEM_PROXY } from "../lib/types";
-import type { Stats, LogEntry, SpeedTestResult } from "../lib/types";
+import type { Stats, LogEntry, SpeedTestResult, UpdateInfo } from "../lib/types";
+import { useDataUsage } from "../store/dataUsage";
 
 interface PrismaEvent {
   type: string;
   status?: string;
   version?: string;
+  url?: string;
+  changelog?: string;
+  sha?: string;
   level?: string;
   msg?: string;
   time?: number;
@@ -96,12 +100,21 @@ export function usePrismaEvents() {
 
         case "stats": {
           const s = data as unknown as Stats;
+          const prevStats = store.stats;
           store.setStats(s);
           // Track peak speeds for the active profile
           const { activeProfileIdx: aidx, profiles: profs } = store;
           const activeProf = aidx !== null ? profs[aidx] : profs[0];
           if (activeProf) {
             useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
+          }
+          // Track data usage deltas
+          if (prevStats) {
+            const deltaUp = Math.max(0, s.bytes_up - prevStats.bytes_up);
+            const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
+            if (deltaUp > 0 || deltaDown > 0) {
+              useDataUsage.getState().recordUsage(deltaUp, deltaDown);
+            }
           }
           break;
         }
@@ -116,7 +129,13 @@ export function usePrismaEvents() {
 
         case "update_available":
           if (data.version) {
-            store.setUpdateAvailable(data.version);
+            const updateInfo: UpdateInfo = {
+              version: data.version,
+              url: data.url ?? "",
+              changelog: data.changelog ?? "",
+              sha: data.sha,
+            };
+            store.setUpdateAvailable(updateInfo);
             notify.info(`Update available: v${data.version}`);
           }
           break;

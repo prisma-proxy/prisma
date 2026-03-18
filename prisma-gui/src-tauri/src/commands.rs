@@ -170,6 +170,22 @@ pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+// ── tray state ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn set_active_profile_id(id: String) {
+    if let Ok(mut guard) = crate::state::ACTIVE_PROFILE_ID.lock() {
+        *guard = if id.is_empty() { None } else { Some(id) };
+    }
+}
+
+#[tauri::command]
+pub fn set_tray_port(port: u16) {
+    if let Ok(mut guard) = crate::state::SOCKS5_PORT.lock() {
+        *guard = port;
+    }
+}
+
 // ── speed test ────────────────────────────────────────────────────────────────
 
 #[tauri::command]

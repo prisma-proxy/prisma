@@ -86,6 +86,8 @@ pub fn run() {
             commands::set_system_proxy,
             commands::clear_system_proxy,
             commands::refresh_tray_profiles,
+            commands::set_active_profile_id,
+            commands::set_tray_port,
             commands::quit_app,
         ])
         .run(tauri::generate_context!())

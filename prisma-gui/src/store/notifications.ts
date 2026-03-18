@@ -11,8 +11,10 @@ export interface Notification {
 interface NotificationStore {
   items: Notification[];
   current: Notification | null;
+  lastSeenTimestamp: number;
   push: (type: Notification["type"], message: string) => void;
   dismiss: (id: string) => void;
+  markSeen: () => void;
   clearAll: () => void;
 }
 
@@ -21,6 +23,7 @@ const MAX_ITEMS = 50;
 export const useNotifications = create<NotificationStore>((set) => ({
   items: [],
   current: null,
+  lastSeenTimestamp: 0,
 
   push: (type, message) => {
     const n: Notification = {
@@ -41,7 +44,9 @@ export const useNotifications = create<NotificationStore>((set) => ({
       current: state.current?.id === id ? null : state.current,
     })),
 
-  clearAll: () => set({ items: [], current: null }),
+  markSeen: () => set({ lastSeenTimestamp: Date.now() }),
+
+  clearAll: () => set({ items: [], current: null, lastSeenTimestamp: Date.now() }),
 }));
 
 export const notify = {

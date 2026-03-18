@@ -20,7 +20,12 @@
     "download": "Download",
     "upload": "Upload",
     "transferred": "Transferred",
-    "uptime": "Uptime"
+    "uptime": "Uptime",
+    "todayUsage": "Today",
+    "qualityExcellent": "Excellent",
+    "qualityGood": "Good",
+    "qualityFair": "Fair",
+    "qualityPoor": "Poor"
   },
   "profiles": {
     "title": "Profiles",
@@ -64,7 +69,11 @@
     "deleteTitle": "Delete Profile",
     "deleteMessage": "Delete \"{{name}}\"? This cannot be undone.",
     "sessions": "sessions",
-    "peak": "peak"
+    "peak": "peak",
+    "sortDefault": "Default",
+    "sortName": "Name",
+    "sortLastUsed": "Last used",
+    "sortLatency": "Latency"
   },
   "rules": {
     "title": "Rules",
@@ -75,7 +84,11 @@
     "type": "Type",
     "match": "Match",
     "action": "Action",
-    "matchPlaceholder": "e.g. example.com"
+    "matchPlaceholder": "e.g. example.com",
+    "export": "Export rules",
+    "import": "Import rules",
+    "exported": "Rules exported",
+    "imported": "Imported {{count}} rule(s)"
   },
   "logs": {
     "search": "Search…",
@@ -101,13 +114,15 @@
     "measuringLatency": "Measuring latency…",
     "measuringDownload": "Measuring download…",
     "measuringUpload": "Measuring upload…",
-    "notConnected": "Not connected to a proxy — results reflect your direct connection.",
+    "notConnected": "Speed test requires an active proxy connection. Connect to a profile first.",
     "history": "History",
     "avgDownload": "Avg ↓ Mbps",
     "avgUpload": "Avg ↑ Mbps",
     "bestDownload": "Best ↓ Mbps",
     "proxy": "proxy",
-    "direct": "direct"
+    "direct": "direct",
+    "chartView": "Chart",
+    "listView": "List"
   },
   "settings": {
     "title": "Settings",
@@ -166,7 +181,11 @@
     "resetSettingsConfirm": "Reset all settings to their default values? This cannot be undone.",
     "clearAllDataConfirm": "Clear all connection history, logs, notifications, and profile metrics? This cannot be undone.",
     "platform": "Platform",
-    "settingsStoredLocally": "All settings are stored locally on your device."
+    "settingsStoredLocally": "All settings are stored locally on your device.",
+    "exportFullBackup": "Full Backup",
+    "importFullBackup": "Restore Backup",
+    "backupExported": "Full backup exported",
+    "backupImported": "Backup restored ({{count}} sections)"
   },
   "wizard": {
     "newProfile": "New Profile",
@@ -324,7 +343,10 @@
     "error": "An error occurred",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "reconnecting": "Auto-reconnecting…"
+    "reconnecting": "Auto-reconnecting…",
+    "history": "Notification History",
+    "clearAll": "Clear All",
+    "noNotifications": "No notifications"
   },
   "common": {
     "cancel": "Cancel",

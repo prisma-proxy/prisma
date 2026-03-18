@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "@/store";
 import { useNotifications } from "@/store/notifications";
 import { fmtBytes, fmtUptime, fmtSpeed } from "@/lib/format";
+import NotificationHistory from "./NotificationHistory";
 
 export default function StatusBar() {
   const { t } = useTranslation();
@@ -77,6 +78,9 @@ export default function StatusBar() {
           </span>
         )}
       </div>
+
+      {/* Notification history bell */}
+      <NotificationHistory />
     </div>
   );
 }

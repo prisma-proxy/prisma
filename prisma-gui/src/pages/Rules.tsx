@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2, Info } from "lucide-react";
+import { Plus, Trash2, Info, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { useRules } from "@/store/rules";
 import type { Rule } from "@/store/rules";
+import { notify } from "@/store/notifications";
+import { downloadJson, pickJsonFile } from "@/lib/utils";
 
 const RULE_TYPES   = ["DOMAIN", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
@@ -34,13 +36,49 @@ export default function Rules() {
     setOpen(false);
   }
 
+  function handleExportRules() {
+    downloadJson(rules, `prisma-rules-${Date.now()}.json`);
+    notify.success(t("rules.exported"));
+  }
+
+  async function handleImportRules() {
+    try {
+      const arr = await pickJsonFile();
+      if (!Array.isArray(arr)) throw new Error("Expected JSON array");
+      let count = 0;
+      for (const item of arr) {
+        if (item.type && item.action) {
+          addRule({
+            id: item.id ?? crypto.randomUUID(),
+            type: item.type,
+            match: item.match ?? "",
+            action: item.action,
+          });
+          count++;
+        }
+      }
+      notify.success(t("rules.imported", { count }));
+    } catch (e) {
+      if (e instanceof Error && e.message === "No file selected") return;
+      notify.error(`Import failed: ${String(e)}`);
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-lg">{t("rules.title")}</h1>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus /> {t("rules.addRule")}
-        </Button>
+        <div className="flex gap-1">
+          <Button size="sm" variant="ghost" onClick={handleExportRules} title={t("rules.export")}>
+            <Download size={14} />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleImportRules} title={t("rules.import")}>
+            <Upload size={14} />
+          </Button>
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus /> {t("rules.addRule")}
+          </Button>
+        </div>
       </div>
 
       <Alert className="border-blue-600/30 bg-blue-600/10">

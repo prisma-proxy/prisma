@@ -1,12 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { PlayCircle, StopCircle, ArrowDown, ArrowUp, Activity, Trash2, Clock } from "lucide-react";
+import { PlayCircle, ArrowDown, ArrowUp, Activity, Trash2, Clock, Loader2, BarChart3, List } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -14,17 +13,13 @@ import { useStore } from "@/store";
 import { notify } from "@/store/notifications";
 import { useSpeedTestHistory } from "@/store/speedTestHistory";
 import type { SpeedTestEntry } from "@/store/speedTestHistory";
+import { api } from "@/lib/commands";
 import { fmtRelativeTime } from "@/lib/format";
-
-interface SpeedResult {
-  downloadMbps: number;
-  uploadMbps: number;
-  latencyMs: number;
-}
+import SpeedTestChart from "@/components/SpeedTestChart";
 
 const TEST_SERVERS = [
-  { label: "Cloudflare", download: "https://speed.cloudflare.com/__down?bytes=26214400", upload: "https://speed.cloudflare.com/__up" },
-  { label: "Fast.com (Netflix)", download: "https://api.fast.com/netflix/speedtest/v2?https=true&token=YXNkZmFzZGxmbnNkYWZoYXNkZmhrYWw%3D&urlCount=1", upload: "" },
+  { label: "Cloudflare", pingUrl: "https://speed.cloudflare.com/__down?bytes=0" },
+  { label: "Google", pingUrl: "https://www.google.com" },
 ];
 
 async function measureLatency(url: string): Promise<number> {
@@ -37,169 +32,70 @@ async function measureLatency(url: string): Promise<number> {
   return Math.round(performance.now() - start);
 }
 
-async function measureDownload(
-  url: string,
-  durationMs: number,
-  onProgress: (mbps: number) => void,
-  abort: AbortSignal,
-): Promise<number> {
-  const start = performance.now();
-  let totalBytes = 0;
-
-  const NUM_STREAMS = 4;
-  const controllers: AbortController[] = [];
-
-  async function streamFetch() {
-    while (!abort.aborted && performance.now() - start < durationMs) {
-      const ctrl = new AbortController();
-      controllers.push(ctrl);
-      abort.addEventListener("abort", () => ctrl.abort(), { once: true });
-      try {
-        const resp = await fetch(url, {
-          cache: "no-store",
-          signal: ctrl.signal,
-        });
-        if (!resp.body) break;
-        const reader = resp.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done || abort.aborted) break;
-          totalBytes += value.byteLength;
-          const elapsedSec = (performance.now() - start) / 1000;
-          if (elapsedSec > 0) onProgress((totalBytes * 8) / (elapsedSec * 1e6));
-          if (performance.now() - start >= durationMs) break;
-        }
-      } catch {
-        if (abort.aborted) break;
-      }
-    }
-  }
-
-  const streams = Array.from({ length: NUM_STREAMS }, () => streamFetch());
-  await Promise.allSettled(streams);
-  controllers.forEach((c) => c.abort());
-
-  const elapsedSec = (performance.now() - start) / 1000;
-  return elapsedSec > 0 ? (totalBytes * 8) / (elapsedSec * 1e6) : 0;
-}
-
-async function measureUpload(
-  url: string,
-  durationMs: number,
-  onProgress: (mbps: number) => void,
-  abort: AbortSignal,
-): Promise<number> {
-  if (!url) return 0;
-  const start = performance.now();
-  let totalBytes = 0;
-  const chunkSize = 1024 * 1024;
-  const chunk = new Uint8Array(chunkSize);
-
-  while (!abort.aborted && performance.now() - start < durationMs) {
-    try {
-      await fetch(url, {
-        method: "POST",
-        body: chunk,
-        cache: "no-store",
-        signal: abort,
-      });
-      totalBytes += chunkSize;
-      const elapsedSec = (performance.now() - start) / 1000;
-      if (elapsedSec > 0) onProgress((totalBytes * 8) / (elapsedSec * 1e6));
-    } catch {
-      if (abort.aborted) break;
-      return 0;
-    }
-  }
-
-  const elapsedSec = (performance.now() - start) / 1000;
-  return elapsedSec > 0 ? (totalBytes * 8) / (elapsedSec * 1e6) : 0;
-}
-
 export default function SpeedTest() {
   const { t } = useTranslation();
   const connected = useStore((s) => s.connected);
+  const speedTestRunning = useStore((s) => s.speedTestRunning);
+  const speedTestResult = useStore((s) => s.speedTestResult);
+  const setSpeedTestRunning = useStore((s) => s.setSpeedTestRunning);
   const history = useSpeedTestHistory((s) => s.entries);
   const addHistory = useSpeedTestHistory((s) => s.add);
   const clearHistory = useSpeedTestHistory((s) => s.clear);
 
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<SpeedResult | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [phase, setPhase] = useState("");
-  const [liveDl, setLiveDl] = useState(0);
-  const [liveUl, setLiveUl] = useState(0);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [duration, setDuration] = useState(10);
   const [serverIdx, setServerIdx] = useState("0");
-  const abortRef = useRef<AbortController | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "chart">("list");
+  // Track whether we're waiting for a result from the current run
+  const expectingResult = useRef(false);
+  const runContextRef = useRef({ serverIdx: "0", latencyMs: 0 as number | null, connected: false });
+
+  // When FFI speed test result arrives, save to history
+  useEffect(() => {
+    if (!speedTestResult || !expectingResult.current) return;
+    expectingResult.current = false;
+
+    const ctx = runContextRef.current;
+    const server = TEST_SERVERS[parseInt(ctx.serverIdx, 10)] ?? TEST_SERVERS[0];
+    addHistory({
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      server: server.label,
+      downloadMbps: speedTestResult.download_mbps,
+      uploadMbps: speedTestResult.upload_mbps,
+      latencyMs: ctx.latencyMs ?? 0,
+      viaProxy: ctx.connected,
+    });
+  }, [speedTestResult, addHistory]);
 
   const handleRun = useCallback(async () => {
+    if (!connected) {
+      notify.warning(t("speedTest.notConnected"));
+      return;
+    }
+
     const server = TEST_SERVERS[parseInt(serverIdx, 10)] ?? TEST_SERVERS[0];
-    setRunning(true);
-    setResult(null);
-    setProgress(0);
-    setLiveDl(0);
-    setLiveUl(0);
-    abortRef.current = new AbortController();
-    const abort = abortRef.current.signal;
-    const durationMs = duration * 1000;
 
     try {
-      // Phase 1: Latency
-      setPhase(t("speedTest.measuringLatency"));
-      setProgress(5);
+      // Phase 1: Measure latency with browser HEAD pings
+      setLatencyMs(null);
       const pings: number[] = [];
-      for (let i = 0; i < 3 && !abort.aborted; i++) {
-        pings.push(await measureLatency(server.download));
+      for (let i = 0; i < 3; i++) {
+        pings.push(await measureLatency(server.pingUrl));
       }
-      const latencyMs = pings.length > 0 ? Math.min(...pings) : 0;
-      setProgress(15);
+      const lat = pings.length > 0 ? Math.min(...pings) : 0;
+      setLatencyMs(lat);
 
-      // Phase 2: Download
-      setPhase(t("speedTest.measuringDownload"));
-      const downloadMbps = await measureDownload(
-        server.download,
-        durationMs,
-        (mbps) => setLiveDl(mbps),
-        abort,
-      );
-      setProgress(60);
-
-      // Phase 3: Upload
-      setPhase(t("speedTest.measuringUpload"));
-      const uploadMbps = await measureUpload(
-        server.upload,
-        durationMs * 0.6,
-        (mbps) => setLiveUl(mbps),
-        abort,
-      );
-      setProgress(100);
-
-      const res = { downloadMbps, uploadMbps, latencyMs };
-      setResult(res);
-
-      // Save to history
-      addHistory({
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        server: server.label,
-        downloadMbps,
-        uploadMbps,
-        latencyMs,
-        viaProxy: connected,
-      });
+      // Phase 2: Kick off FFI speed test (non-blocking, result arrives via event)
+      runContextRef.current = { serverIdx, latencyMs: lat, connected };
+      expectingResult.current = true;
+      setSpeedTestRunning(true);
+      await api.speedTest(server.label.toLowerCase(), duration);
     } catch (e) {
-      if (!abort.aborted) notify.error(String(e));
-    } finally {
-      setRunning(false);
-      setPhase("");
-      abortRef.current = null;
+      notify.error(String(e));
+      setSpeedTestRunning(false);
     }
-  }, [duration, serverIdx, t, connected, addHistory]);
-
-  const handleStop = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
+  }, [duration, serverIdx, t, connected, setSpeedTestRunning]);
 
   const handleDurationBlur = useCallback(() => {
     setDuration((d) => Math.max(5, Math.min(60, d)));
@@ -248,63 +144,50 @@ export default function SpeedTest() {
             onChange={(e) => setDuration(Number(e.target.value))}
             onBlur={handleDurationBlur}
             className="w-24"
-            disabled={running}
+            disabled={speedTestRunning}
           />
         </div>
       </div>
 
       <Button
         className="w-full"
-        variant={running ? "destructive" : "default"}
-        onClick={running ? handleStop : handleRun}
+        disabled={speedTestRunning || !connected}
+        onClick={handleRun}
       >
-        {running ? (
-          <><StopCircle /> {t("speedTest.stop")}</>
+        {speedTestRunning ? (
+          <><Loader2 className="animate-spin" /> {t("speedTest.running")}</>
         ) : (
           <><PlayCircle /> {t("speedTest.run")}</>
         )}
       </Button>
 
-      {running && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{phase}</span>
-            <span>{progress}%</span>
-          </div>
-          <Progress value={progress} />
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <p className="text-2xl font-bold text-green-400">{liveDl.toFixed(1)}</p>
-              <p className="text-xs text-muted-foreground">↓ Mbps</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-400">{liveUl.toFixed(1)}</p>
-              <p className="text-xs text-muted-foreground">↑ Mbps</p>
-            </div>
-          </div>
+      {speedTestRunning && (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="animate-spin" size={16} />
+          <span>{t("speedTest.testing")}</span>
         </div>
       )}
 
-      {result && !running && (
+      {speedTestResult && !speedTestRunning && (
         <div className="grid grid-cols-3 gap-3">
           <Card>
             <CardContent className="pt-4 pb-4 flex flex-col items-center gap-1">
               <ArrowDown className="text-green-400" size={24} />
-              <p className="text-2xl font-bold">{result.downloadMbps.toFixed(1)}</p>
+              <p className="text-2xl font-bold">{speedTestResult.download_mbps.toFixed(1)}</p>
               <p className="text-xs text-muted-foreground">{t("speedTest.download")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4 flex flex-col items-center gap-1">
               <ArrowUp className="text-blue-400" size={24} />
-              <p className="text-2xl font-bold">{result.uploadMbps.toFixed(1)}</p>
+              <p className="text-2xl font-bold">{speedTestResult.upload_mbps.toFixed(1)}</p>
               <p className="text-xs text-muted-foreground">{t("speedTest.upload")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4 flex flex-col items-center gap-1">
               <Activity className="text-yellow-400" size={24} />
-              <p className="text-2xl font-bold">{result.latencyMs}</p>
+              <p className="text-2xl font-bold">{latencyMs ?? "—"}</p>
               <p className="text-xs text-muted-foreground">{t("speedTest.latency")}</p>
             </CardContent>
           </Card>
@@ -312,7 +195,7 @@ export default function SpeedTest() {
       )}
 
       {/* Summary stats from history */}
-      {history.length > 0 && !running && (
+      {history.length > 0 && !speedTestRunning && (
         <div className="space-y-2">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border bg-card p-2">
@@ -339,15 +222,38 @@ export default function SpeedTest() {
               <Clock size={12} /> {t("speedTest.history")}
               <span className="text-[10px]">({history.length})</span>
             </p>
-            <Button size="sm" variant="ghost" onClick={clearHistory} className="h-6 px-2">
-              <Trash2 size={12} />
-            </Button>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant={viewMode === "list" ? "default" : "ghost"}
+                onClick={() => setViewMode("list")}
+                className="h-6 w-6 p-0"
+              >
+                <List size={12} />
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "chart" ? "default" : "ghost"}
+                onClick={() => setViewMode("chart")}
+                className="h-6 w-6 p-0"
+              >
+                <BarChart3 size={12} />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearHistory} className="h-6 px-2">
+                <Trash2 size={12} />
+              </Button>
+            </div>
           </div>
-          <div className="space-y-1">
-            {recentHistory.map((entry) => (
-              <HistoryRow key={entry.id} entry={entry} />
-            ))}
-          </div>
+
+          {viewMode === "chart" ? (
+            <SpeedTestChart entries={history} />
+          ) : (
+            <div className="space-y-1">
+              {recentHistory.map((entry) => (
+                <HistoryRow key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

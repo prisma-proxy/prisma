@@ -16,6 +16,7 @@ export function useConnection() {
     setConnectStartTime(Date.now());
     try {
       await api.connect(JSON.stringify(profile.config), modes);
+      api.setActiveProfileId(profile.id).catch(() => {});
     } catch (e) {
       notify.error(String(e));
       setConnectStartTime(null);
@@ -26,6 +27,7 @@ export function useConnection() {
     try {
       setManualDisconnect(true);
       await api.disconnect();
+      api.setActiveProfileId("").catch(() => {});
     } catch (e) {
       notify.error(String(e));
       setManualDisconnect(false);
@@ -43,5 +45,17 @@ export function useConnection() {
     await connectTo(profile, modes);
   }, [connectTo, setManualDisconnect]);
 
-  return { connectTo, disconnect, switchTo };
+  const toggle = useCallback(async () => {
+    const store = useStore.getState();
+    if (store.connected) {
+      await disconnect();
+    } else {
+      const profile = store.activeProfileIdx !== null
+        ? store.profiles[store.activeProfileIdx]
+        : store.profiles[0];
+      if (profile) await connectTo(profile, store.proxyModes);
+    }
+  }, [connectTo, disconnect]);
+
+  return { connectTo, disconnect, switchTo, toggle };
 }
