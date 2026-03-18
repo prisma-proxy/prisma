@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BackupTable } from "@/components/backups/backup-table";
+import { BackupCompare } from "@/components/backups/backup-compare";
 import { DiffViewer } from "@/components/backups/diff-viewer";
 import { RestoreDialog } from "@/components/backups/restore-dialog";
 import { Plus } from "lucide-react";
@@ -75,6 +76,11 @@ export default function BackupsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Backup comparison */}
+      {(backups?.length ?? 0) >= 2 && (
+        <BackupCompare backups={backups ?? []} />
+      )}
 
       {/* Restore confirmation dialog */}
       <RestoreDialog

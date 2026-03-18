@@ -76,7 +76,7 @@ export default function SettingsPage() {
             <CardContent>
               {config && (
                 <ConfigForm
-                  key={`${config.logging_level}-${config.logging_format}-${config.max_connections}-${config.port_forwarding_enabled}`}
+                  key={`${config.logging_level}-${config.logging_format}-${config.performance.max_connections}-${config.port_forwarding.enabled}`}
                   config={config}
                   onSave={(data) => patchConfig.mutate(data)}
                   isLoading={patchConfig.isPending}
@@ -87,15 +87,24 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="camouflage">
-          <CamouflageForm />
+          <CamouflageForm
+            onSave={(data) => patchConfig.mutate(data)}
+            isLoading={patchConfig.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="traffic">
-          <TrafficForm />
+          <TrafficForm
+            onSave={(data) => patchConfig.mutate(data)}
+            isLoading={patchConfig.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="security">
-          <SecurityForm />
+          <SecurityForm
+            onSave={(data) => patchConfig.mutate(data)}
+            isLoading={patchConfig.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="alerts">

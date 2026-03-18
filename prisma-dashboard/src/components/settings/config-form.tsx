@@ -27,9 +27,9 @@ const loggingFormats = ["pretty", "json"];
 export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
   const [loggingLevel, setLoggingLevel] = useState(config.logging_level);
   const [loggingFormat, setLoggingFormat] = useState(config.logging_format);
-  const [maxConnections, setMaxConnections] = useState(config.max_connections);
+  const [maxConnections, setMaxConnections] = useState(config.performance.max_connections);
   const [portForwardingEnabled, setPortForwardingEnabled] = useState(
-    config.port_forwarding_enabled
+    config.port_forwarding.enabled
   );
 
   function handleSubmit(e: React.FormEvent) {

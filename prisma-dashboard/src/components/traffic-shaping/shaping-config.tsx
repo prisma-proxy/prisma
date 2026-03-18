@@ -3,10 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
-import type { ExpandedConfigResponse } from "@/lib/types";
+import type { ConfigResponse } from "@/lib/types";
 
 interface ShapingConfigProps {
-  config: ExpandedConfigResponse;
+  config: ConfigResponse;
 }
 
 export function ShapingConfig({ config }: ShapingConfigProps) {
@@ -24,12 +24,12 @@ export function ShapingConfig({ config }: ShapingConfigProps) {
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("trafficShaping.mode")}</span>
-              <Badge variant="secondary">{config.traffic_shaping_mode}</Badge>
+              <Badge variant="secondary">{config.traffic_shaping.padding_mode}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Padding Range</span>
               <span className="font-mono text-xs">
-                {config.padding_min} - {config.padding_max} bytes
+                {config.padding.min} - {config.padding.max} bytes
               </span>
             </div>
           </div>
@@ -46,7 +46,7 @@ export function ShapingConfig({ config }: ShapingConfigProps) {
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("trafficShaping.jitterMs")}</span>
-              <span className="font-medium">{config.traffic_shaping_jitter_ms} ms</span>
+              <span className="font-medium">{config.traffic_shaping.timing_jitter_ms} ms</span>
             </div>
           </div>
         </CardContent>
@@ -62,9 +62,9 @@ export function ShapingConfig({ config }: ShapingConfigProps) {
           <div className="text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("clients.status")}</span>
-              {config.traffic_shaping_chaff_enabled ? (
+              {config.traffic_shaping.chaff_interval_ms > 0 ? (
                 <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
-                  {t("trafficShaping.enabled")}
+                  {config.traffic_shaping.chaff_interval_ms}ms
                 </Badge>
               ) : (
                 <Badge className="bg-red-500/15 text-red-700 dark:text-red-400">
@@ -87,7 +87,7 @@ export function ShapingConfig({ config }: ShapingConfigProps) {
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("trafficShaping.coalescingWindow")}</span>
               <span className="font-medium">
-                {config.traffic_shaping_coalescing_window_ms} ms
+                {config.traffic_shaping.coalesce_window_ms} ms
               </span>
             </div>
           </div>

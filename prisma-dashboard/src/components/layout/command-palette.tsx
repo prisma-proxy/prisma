@@ -31,17 +31,19 @@ const PAGES: { label: string; href: string; i18nKey: string }[] = [
   { label: "System", href: "/dashboard/system", i18nKey: "sidebar.system" },
   { label: "Traffic Shaping", href: "/dashboard/traffic-shaping", i18nKey: "sidebar.trafficShaping" },
   { label: "Config Backup", href: "/dashboard/backups", i18nKey: "sidebar.backups" },
+  { label: "Speed Test", href: "/dashboard/speed-test", i18nKey: "sidebar.speedTest" },
+  { label: "Bandwidth", href: "/dashboard/bandwidth", i18nKey: "sidebar.bandwidth" },
 ];
 
-const CONFIG_KEYS: { key: string; label: string }[] = [
-  { key: "listen_addr", label: "Listen Address" },
-  { key: "quic_listen_addr", label: "QUIC Listen Address" },
-  { key: "max_connections", label: "Max Connections" },
-  { key: "logging_level", label: "Logging Level" },
-  { key: "logging_format", label: "Logging Format" },
-  { key: "port_forwarding_enabled", label: "Port Forwarding" },
-  { key: "camouflage_enabled", label: "Camouflage" },
-  { key: "tls_enabled", label: "TLS" },
+const CONFIG_KEYS: { key: string; label: string; accessor: (c: ConfigResponse) => string }[] = [
+  { key: "listen_addr", label: "Listen Address", accessor: (c) => c.listen_addr },
+  { key: "quic_listen_addr", label: "QUIC Listen Address", accessor: (c) => c.quic_listen_addr },
+  { key: "max_connections", label: "Max Connections", accessor: (c) => String(c.performance.max_connections) },
+  { key: "logging_level", label: "Logging Level", accessor: (c) => c.logging_level },
+  { key: "logging_format", label: "Logging Format", accessor: (c) => c.logging_format },
+  { key: "port_forwarding", label: "Port Forwarding", accessor: (c) => c.port_forwarding.enabled ? "Enabled" : "Disabled" },
+  { key: "camouflage", label: "Camouflage", accessor: (c) => c.camouflage.enabled ? "Enabled" : "Disabled" },
+  { key: "tls_enabled", label: "TLS", accessor: (c) => c.tls_enabled ? "Enabled" : "Disabled" },
 ];
 
 export function CommandPalette() {
@@ -115,17 +117,16 @@ export function CommandPalette() {
     // Search config keys
     const config = queryClient.getQueryData<ConfigResponse>(["config"]);
     if (config) {
-      for (const { key, label } of CONFIG_KEYS) {
+      for (const { key, label, accessor } of CONFIG_KEYS) {
         if (
           key.toLowerCase().includes(q) ||
           label.toLowerCase().includes(q)
         ) {
-          const value = String((config as unknown as Record<string, unknown>)[key] ?? "");
           matches.push({
             id: `config-${key}`,
             type: "config",
             label: label,
-            description: value,
+            description: accessor(config),
             href: "/dashboard/settings",
           });
         }

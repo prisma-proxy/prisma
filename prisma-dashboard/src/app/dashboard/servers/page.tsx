@@ -6,6 +6,7 @@ import { formatDuration } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TlsInfo } from "@/components/settings/tls-info";
+import { ForwardsTable } from "@/components/server/forwards-table";
 
 export default function ServersPage() {
   const { data: health, isLoading: healthLoading } = useQuery({
@@ -22,6 +23,12 @@ export default function ServersPage() {
   const { data: tls, isLoading: tlsLoading } = useQuery({
     queryKey: ["tls"],
     queryFn: api.getTlsInfo,
+  });
+
+  const { data: forwards } = useQuery({
+    queryKey: ["forwards"],
+    queryFn: api.getForwards,
+    refetchInterval: 5000,
   });
 
   if (healthLoading || configLoading || tlsLoading) {
@@ -74,28 +81,30 @@ export default function ServersPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Max Connections</p>
-              <p className="text-sm font-mono">{config.max_connections}</p>
+              <p className="text-sm font-mono">{config.performance.max_connections}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Connection Timeout</p>
-              <p className="text-sm font-mono">{config.connection_timeout_secs}s</p>
+              <p className="text-sm font-mono">{config.performance.connection_timeout_secs}s</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Port Forwarding:</span>
               <Badge
                 className={
-                  config.port_forwarding_enabled
+                  config.port_forwarding.enabled
                     ? "bg-green-500/15 text-green-700 dark:text-green-400"
                     : "bg-red-500/15 text-red-700 dark:text-red-400"
                 }
               >
-                {config.port_forwarding_enabled ? "Enabled" : "Disabled"}
+                {config.port_forwarding.enabled ? "Enabled" : "Disabled"}
               </Badge>
             </div>
-            {config.port_forwarding_enabled && (
+            {config.port_forwarding.enabled && (
               <div>
                 <p className="text-sm text-muted-foreground">Port Forwarding Range</p>
-                <p className="text-sm font-mono">{config.port_forwarding_range}</p>
+                <p className="text-sm font-mono">
+                  {config.port_forwarding.port_range_start}\u2013{config.port_forwarding.port_range_end}
+                </p>
               </div>
             )}
             <div>
@@ -111,6 +120,8 @@ export default function ServersPage() {
       )}
 
       {tls && <TlsInfo tls={tls} />}
+
+      <ForwardsTable forwards={forwards ?? []} />
     </div>
   );
 }

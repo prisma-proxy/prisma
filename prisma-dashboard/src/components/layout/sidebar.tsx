@@ -15,6 +15,8 @@ import {
   Archive,
   PanelLeftClose,
   PanelLeftOpen,
+  Gauge,
+  BarChart3,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ const navItems = [
   { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings },
   { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor },
   { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity },
+  { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge },
+  { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3 },
   { labelKey: "sidebar.backups", href: "/dashboard/backups/", icon: Archive },
 ];
 

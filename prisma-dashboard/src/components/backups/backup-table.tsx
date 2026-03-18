@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { formatBytes } from "@/lib/utils";
 import type { BackupInfo } from "@/lib/types";
-import { RotateCcw, FileDiff, Trash2 } from "lucide-react";
+import { RotateCcw, FileDiff, Trash2, Download } from "lucide-react";
+import { api } from "@/lib/api";
 
 interface BackupTableProps {
   backups: BackupInfo[];
@@ -32,6 +33,24 @@ function formatTimestamp(timestamp: string): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+async function handleDownload(name: string) {
+  try {
+    const content = await api.getBackup(name);
+    const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    const blob = new Blob([text], { type: "application/toml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name.endsWith(".toml") ? name : `${name}.toml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // Download failed silently
+  }
 }
 
 export function BackupTable({
@@ -71,6 +90,14 @@ export function BackupTable({
             <TableCell>{formatBytes(backup.size)}</TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownload(backup.name)}
+                >
+                  <Download className="h-3.5 w-3.5" data-icon="inline-start" />
+                  {t("backups.download")}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

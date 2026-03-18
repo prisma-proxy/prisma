@@ -38,20 +38,111 @@ export interface CreateClientResponse {
   auth_secret_hex: string;
 }
 
+// --- Nested config sub-types (matching backend ConfigResponse) ---
+
+export interface PerformanceInfo {
+  max_connections: number;
+  connection_timeout_secs: number;
+}
+
+export interface PortForwardingInfo {
+  enabled: boolean;
+  port_range_start: number;
+  port_range_end: number;
+}
+
+export interface CamouflageInfo {
+  enabled: boolean;
+  tls_on_tcp: boolean;
+  fallback_addr: string | null;
+  alpn_protocols: string[];
+  salamander_password: string | null;
+  h3_cover_site: string | null;
+  h3_static_dir: string | null;
+}
+
+export interface CdnInfo {
+  enabled: boolean;
+  listen_addr: string;
+  ws_tunnel_path: string;
+  grpc_tunnel_path: string;
+  xhttp_upload_path: string;
+  xhttp_download_path: string;
+  xhttp_stream_path: string;
+  cover_upstream: string | null;
+  xporta_enabled: boolean;
+  expose_management_api: boolean;
+  management_api_path: string;
+  padding_header: boolean;
+  enable_sse_disguise: boolean;
+}
+
+export interface TrafficShapingInfo {
+  padding_mode: string;
+  bucket_sizes: number[];
+  timing_jitter_ms: number;
+  chaff_interval_ms: number;
+  coalesce_window_ms: number;
+}
+
+export interface CongestionInfo {
+  mode: string;
+  target_bandwidth: string | null;
+}
+
+export interface AntiRttInfo {
+  enabled: boolean;
+  normalization_ms: number;
+}
+
+export interface PrismaTlsInfo {
+  enabled: boolean;
+  mask_server_count: number;
+  auth_rotation_hours: number;
+}
+
+export interface PaddingInfo {
+  min: number;
+  max: number;
+}
+
+export interface PortHoppingInfo {
+  enabled: boolean;
+  base_port: number;
+  range: number;
+  interval_secs: number;
+  grace_period_secs: number;
+}
+
+export interface ManagementApiInfo {
+  enabled: boolean;
+  listen_addr: string;
+  tls_enabled: boolean;
+  cors_origins: string[];
+}
+
 export interface ConfigResponse {
   listen_addr: string;
   quic_listen_addr: string;
   tls_enabled: boolean;
-  max_connections: number;
-  connection_timeout_secs: number;
-  port_forwarding_enabled: boolean;
-  port_forwarding_range: string;
+  authorized_clients_count: number;
   logging_level: string;
   logging_format: string;
-  camouflage_enabled: boolean;
-  camouflage_tls_on_tcp: boolean;
-  camouflage_fallback_addr: string | null;
-  camouflage_alpn: string[];
+  protocol_version: string;
+  dns_upstream: string;
+  allow_transport_only_cipher: boolean;
+  performance: PerformanceInfo;
+  port_forwarding: PortForwardingInfo;
+  camouflage: CamouflageInfo;
+  cdn: CdnInfo;
+  traffic_shaping: TrafficShapingInfo;
+  congestion: CongestionInfo;
+  anti_rtt: AntiRttInfo;
+  prisma_tls: PrismaTlsInfo;
+  padding: PaddingInfo;
+  port_hopping: PortHoppingInfo;
+  management_api: ManagementApiInfo;
+  routing_rules_count: number;
 }
 
 export interface TlsInfoResponse {
@@ -99,8 +190,6 @@ export interface LogEntry {
   target: string;
   message: string;
 }
-
-// Phase 2: New types for expanded API
 
 export interface SystemInfoResponse {
   version: string;
@@ -164,44 +253,4 @@ export interface AlertConfig {
   cert_expiry_days: number;
   quota_warn_percent: number;
   handshake_spike_threshold: number;
-}
-
-export interface ExpandedConfigResponse extends ConfigResponse {
-  // Camouflage (full)
-  camouflage_salamander_password: string | null;
-  camouflage_h3_enabled: boolean;
-  // CDN
-  cdn_ws_path: string | null;
-  cdn_grpc_path: string | null;
-  cdn_xhttp_upload_path: string | null;
-  cdn_xhttp_download_path: string | null;
-  cdn_xhttp_stream_path: string | null;
-  cdn_cover_site: string | null;
-  cdn_xporta_enabled: boolean;
-  // Traffic shaping
-  padding_min: number;
-  padding_max: number;
-  traffic_shaping_mode: string;
-  traffic_shaping_bucket_sizes: number[];
-  traffic_shaping_jitter_ms: number;
-  traffic_shaping_chaff_enabled: boolean;
-  traffic_shaping_coalescing_window_ms: number;
-  // Congestion
-  congestion_mode: string;
-  congestion_target_bandwidth: string | null;
-  // Port hopping
-  port_hopping_enabled: boolean;
-  port_hopping_interval_secs: number;
-  port_hopping_ports: string | null;
-  // DNS
-  dns_upstream: string;
-  // Anti-RTT
-  anti_rtt_enabled: boolean;
-  anti_rtt_normalization_ms: number;
-  // PrismaTLS
-  prisma_tls_enabled: boolean;
-  // Transport-only cipher
-  allow_transport_only_cipher: boolean;
-  // Protocol version
-  protocol_version: string;
 }
