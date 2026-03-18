@@ -82,6 +82,7 @@ impl PaddingMode {
 ///
 /// Returns the smallest bucket size >= payload_size.
 /// If payload exceeds all buckets, returns MAX_FRAME_SIZE (16384).
+#[inline]
 pub fn bucket_pad_size(payload_size: usize, bucket_sizes: &[u16]) -> usize {
     for &bucket in bucket_sizes {
         if payload_size <= bucket as usize {
@@ -179,7 +180,8 @@ pub fn generate_chaff_frame(bucket_sizes: &[u16]) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     // Random small payload (32-128 bytes)
     let payload_len: usize = rng.gen_range(32..=128);
-    let payload: Vec<u8> = (0..payload_len).map(|_| rng.gen()).collect();
+    let mut payload = vec![0u8; payload_len];
+    rng.fill(&mut payload[..]);
 
     encode_bucketed_frame(CMD_DATA, FLAG_CHAFF, 0, &payload, bucket_sizes)
 }

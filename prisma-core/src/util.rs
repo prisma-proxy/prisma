@@ -11,7 +11,13 @@ type HmacSha256 = Hmac<Sha256>;
 
 /// Encode bytes as a lowercase hex string.
 pub fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        result.push(HEX_CHARS[(b >> 4) as usize] as char);
+        result.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+    }
+    result
 }
 
 /// Decode a hex string into bytes. Returns `None` if the string has odd length
@@ -80,17 +86,22 @@ pub async fn read_framed<R: AsyncReadExt + Unpin>(r: &mut R) -> Result<Vec<u8>, 
 }
 
 /// Write a length-prefixed frame: `[len:2][payload]`.
+///
+/// Coalesces the length prefix and payload into a single buffer to reduce
+/// the number of syscalls from two `write_all` calls to one.
 pub async fn write_framed<W: AsyncWriteExt + Unpin>(
     w: &mut W,
     payload: &[u8],
 ) -> Result<(), ProtocolError> {
     let len = (payload.len() as u16).to_be_bytes();
-    w.write_all(&len)
+    // Coalesce length prefix + payload into a single write to reduce syscalls.
+    // For typical frame sizes (<32KB) this is a net win over two separate writes.
+    let mut buf = Vec::with_capacity(2 + payload.len());
+    buf.extend_from_slice(&len);
+    buf.extend_from_slice(payload);
+    w.write_all(&buf)
         .await
-        .map_err(|e| ProtocolError::InvalidFrame(format!("write length: {}", e)))?;
-    w.write_all(payload)
-        .await
-        .map_err(|e| ProtocolError::InvalidFrame(format!("write payload: {}", e)))?;
+        .map_err(|e| ProtocolError::InvalidFrame(format!("write frame: {}", e)))?;
     w.flush()
         .await
         .map_err(|e| ProtocolError::InvalidFrame(format!("flush: {}", e)))?;

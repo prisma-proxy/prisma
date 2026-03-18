@@ -30,7 +30,7 @@ pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError
     // Minimum: 1+1+32+16+8+1+32 = 91
     if data.len() < 91 {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaClientInit too short".to_string(),
+            "PrismaClientInit too short".into(),
         ));
     }
     let version = data[0];
@@ -100,11 +100,11 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
     // Minimum: 1+16+32+32+2+2+4+2+0+2 = 93
     if data.len() < 93 {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaServerInit too short".to_string(),
+            "PrismaServerInit too short".into(),
         ));
     }
     let status = AcceptStatus::from_u8(data[0]).ok_or(ProtocolError::InvalidFrame(
-        "Invalid PrismaServerInit status".to_string(),
+        "Invalid PrismaServerInit status".into(),
     ))?;
     let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
     let mut server_ephemeral_pub = [0u8; 32];
@@ -115,19 +115,32 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
     let padding_max = u16::from_le_bytes([data[83], data[84]]);
     let server_features = u32::from_le_bytes([data[85], data[86], data[87], data[88]]);
     let ticket_len = u16::from_be_bytes([data[89], data[90]]) as usize;
+    // Sanity check: reject absurdly large ticket lengths to prevent allocation DoS.
+    // A legitimate session ticket is ~61 bytes (encrypted); 4096 is extremely generous.
+    if ticket_len > 4096 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit session ticket too large".into(),
+        ));
+    }
     let ticket_end = 91 + ticket_len;
     if data.len() < ticket_end + 2 {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaServerInit ticket/buckets truncated".to_string(),
+            "PrismaServerInit ticket/buckets truncated".into(),
         ));
     }
     let session_ticket = data[91..ticket_end].to_vec();
     let bucket_count = u16::from_be_bytes([data[ticket_end], data[ticket_end + 1]]) as usize;
+    // Sanity check: typical bucket configs have 4-16 sizes; 256 is extremely generous.
+    if bucket_count > 256 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit too many bucket sizes".into(),
+        ));
+    }
     let buckets_start = ticket_end + 2;
     let buckets_end = buckets_start + bucket_count * 2;
     if data.len() < buckets_end {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaServerInit bucket sizes truncated".to_string(),
+            "PrismaServerInit bucket sizes truncated".into(),
         ));
     }
     let mut bucket_sizes = Vec::with_capacity(bucket_count);
@@ -170,7 +183,7 @@ pub fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolE
     // Minimum: 1+1+32+2 = 36
     if data.len() < 36 {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaClientResume too short".to_string(),
+            "PrismaClientResume too short".into(),
         ));
     }
     let version = data[0];
@@ -180,7 +193,7 @@ pub fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolE
     let ticket_len = u16::from_be_bytes([data[34], data[35]]) as usize;
     if data.len() < 36 + ticket_len {
         return Err(ProtocolError::InvalidFrame(
-            "PrismaClientResume ticket truncated".to_string(),
+            "PrismaClientResume ticket truncated".into(),
         ));
     }
     let session_ticket = data[36..36 + ticket_len].to_vec();
@@ -212,7 +225,7 @@ pub fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError
     // 16+32+1+8+2+2 = 61
     if data.len() < 61 {
         return Err(ProtocolError::InvalidFrame(
-            "SessionTicket too short".to_string(),
+            "SessionTicket too short".into(),
         ));
     }
     let client_id = ClientId(uuid::Uuid::from_bytes(data[..16].try_into().unwrap()));
@@ -280,9 +293,7 @@ pub fn encode_data_frame_padded(
 /// v3 format: [cmd:1][flags:2 LE][stream_id:4][payload:var]
 pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
     if data.len() < 7 {
-        return Err(ProtocolError::InvalidFrame(
-            "DataFrame too short".to_string(),
-        ));
+        return Err(ProtocolError::InvalidFrame("DataFrame too short".into()));
     }
     let cmd = data[0];
     let flags = u16::from_le_bytes([data[1], data[2]]);
@@ -292,13 +303,13 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
         // Padded format: [payload_len:2][payload:var][padding:var]
         if data.len() < 9 {
             return Err(ProtocolError::InvalidFrame(
-                "Padded DataFrame too short for payload_len".to_string(),
+                "Padded DataFrame too short for payload_len".into(),
             ));
         }
         let payload_len = u16::from_be_bytes([data[7], data[8]]) as usize;
         if data.len() < 9 + payload_len {
             return Err(ProtocolError::InvalidFrame(
-                "Padded DataFrame payload truncated".to_string(),
+                "Padded DataFrame payload truncated".into(),
             ));
         }
         // Strip padding — only return the actual payload
@@ -307,13 +318,13 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
         // Bucketed format: [bucket_pad_len:2][payload:var][bucket_padding:var]
         if data.len() < 9 {
             return Err(ProtocolError::InvalidFrame(
-                "Bucketed DataFrame too short".to_string(),
+                "Bucketed DataFrame too short".into(),
             ));
         }
         let bucket_pad_len = u16::from_be_bytes([data[7], data[8]]) as usize;
         if data.len() < 9 + bucket_pad_len {
             return Err(ProtocolError::InvalidFrame(
-                "Bucketed DataFrame pad_len exceeds frame".to_string(),
+                "Bucketed DataFrame pad_len exceeds frame".into(),
             ));
         }
         // Strip bucket padding from the end

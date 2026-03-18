@@ -3,6 +3,12 @@
 /// Uses a 1024-bit bitmap to track recently seen nonce counter values.
 /// Any nonce below `base` (i.e. more than WINDOW_SIZE behind the highest seen)
 /// is rejected as too old. Any nonce already seen within the window is rejected.
+///
+/// # Thread Safety
+///
+/// This type is **not** thread-safe. If shared across tasks, wrap in a `Mutex`.
+/// In practice, anti-replay windows are per-connection and only accessed from
+/// the upload task, so no locking is needed.
 pub struct AntiReplayWindow {
     bitmap: [u64; Self::BITMAP_WORDS],
     base: u64,

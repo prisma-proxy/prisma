@@ -228,8 +228,8 @@ fn create_macos_tun(device_name: &str, mtu: u16) -> Result<Box<dyn TunDevice>> {
 
     // macOS uses the utun kernel control interface.
     // Parse utun index from device name (e.g., "utun5" → 5).
-    let utun_index: u32 = if device_name.starts_with("utun") {
-        device_name[4..].parse().unwrap_or(0) // utun0 if no number specified
+    let utun_index: u32 = if let Some(suffix) = device_name.strip_prefix("utun") {
+        suffix.parse().unwrap_or(0) // utun0 if no number specified
     } else {
         0
     };

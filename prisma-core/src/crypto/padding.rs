@@ -12,11 +12,9 @@ pub fn generate_padding(max_size: usize) -> Vec<u8> {
     }
     let mut rng = rand::thread_rng();
     let padding_len = rng.gen_range(0..=(max - 2));
-    let mut result = Vec::with_capacity(2 + padding_len);
-    result.extend_from_slice(&(padding_len as u16).to_be_bytes());
-    let mut buf = vec![0u8; padding_len];
-    rng.fill(&mut buf[..]);
-    result.extend_from_slice(&buf);
+    let mut result = vec![0u8; 2 + padding_len];
+    result[..2].copy_from_slice(&(padding_len as u16).to_be_bytes());
+    rng.fill(&mut result[2..]);
     result
 }
 

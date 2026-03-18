@@ -266,6 +266,7 @@ impl AtomicNonceCounter {
     }
 
     /// Generate the next nonce atomically. Safe to call from multiple tasks.
+    #[inline]
     pub fn next_nonce(&self) -> [u8; 12] {
         let counter = self.counter.fetch_add(1, Ordering::Relaxed);
         nonce_from_counter(counter, self.is_client)
@@ -274,6 +275,7 @@ impl AtomicNonceCounter {
 
 /// Build a 12-byte nonce from a counter and direction flag.
 /// Format: [direction:1][0:3][counter:8]
+#[inline]
 fn nonce_from_counter(counter: u64, is_client: bool) -> [u8; 12] {
     let mut nonce = [0u8; 12];
     nonce[0] = if is_client { 0x00 } else { 0x01 };

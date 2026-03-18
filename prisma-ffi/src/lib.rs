@@ -68,13 +68,30 @@ unsafe impl Sync for CallbackHolder {}
 
 impl PrismaClient {
     fn fire_event(&self, event_json: &str) {
-        let holder = self.callback.lock().unwrap();
+        let holder = match self.callback.lock() {
+            Ok(h) => h,
+            Err(_) => return, // Mutex poisoned — silently skip to avoid panic across FFI
+        };
         if let Some(func) = holder.func {
             if let Ok(cstr) = CString::new(event_json) {
                 unsafe { func(cstr.as_ptr(), holder.userdata) };
             }
         }
     }
+}
+
+// ── Panic safety ─────────────────────────────────────────────────────────────
+
+/// Catch panics at the FFI boundary. Panicking across `extern "C"` functions
+/// is undefined behavior. This macro wraps the body and returns `$fallback`
+/// if a panic occurs.
+macro_rules! ffi_catch {
+    ($fallback:expr, $body:expr) => {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
+            Ok(val) => val,
+            Err(_) => $fallback,
+        }
+    };
 }
 
 // ── Helper macros ────────────────────────────────────────────────────────────
@@ -108,23 +125,25 @@ macro_rules! cstr_to_str_opt {
 /// Create a new PrismaClient handle. Returns NULL on allocation failure.
 #[no_mangle]
 pub extern "C" fn prisma_create() -> *mut PrismaClient {
-    // Install rustls CryptoProvider (idempotent — ignores if already set)
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    ffi_catch!(std::ptr::null_mut(), {
+        // Install rustls CryptoProvider (idempotent — ignores if already set)
+        let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let runtime = match PrismaRuntime::new() {
-        Ok(r) => Arc::new(r),
-        Err(_) => return std::ptr::null_mut(),
-    };
-    let client = Box::new(PrismaClient {
-        runtime,
-        connection: Arc::new(Mutex::new(ConnectionManager::new())),
-        callback: Arc::new(Mutex::new(CallbackHolder {
-            func: None,
-            userdata: std::ptr::null_mut(),
-        })),
-        stats_poller: Arc::new(Mutex::new(None)),
-    });
-    Box::into_raw(client)
+        let runtime = match PrismaRuntime::new() {
+            Ok(r) => Arc::new(r),
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let client = Box::new(PrismaClient {
+            runtime,
+            connection: Arc::new(Mutex::new(ConnectionManager::new())),
+            callback: Arc::new(Mutex::new(CallbackHolder {
+                func: None,
+                userdata: std::ptr::null_mut(),
+            })),
+            stats_poller: Arc::new(Mutex::new(None)),
+        });
+        Box::into_raw(client)
+    })
 }
 
 /// Destroy a PrismaClient handle.
@@ -160,64 +179,75 @@ pub unsafe extern "C" fn prisma_connect(
     config_json: *const c_char,
     modes: u32,
 ) -> c_int {
-    if handle.is_null() {
-        return PRISMA_ERR_INVALID_CONFIG;
-    }
-    let client = unsafe { &*handle };
-    let config_str = cstr_to_str!(config_json);
-
-    let config: prisma_core::config::client::ClientConfig = match serde_json::from_str(config_str) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!("Invalid config JSON: {}", e);
-            client.fire_event(&format!(
-                r#"{{"type":"error","code":"invalid_config","msg":{}}}"#,
-                serde_json::to_string(&e.to_string()).unwrap_or_default()
-            ));
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
             return PRISMA_ERR_INVALID_CONFIG;
         }
-    };
+        let client = unsafe { &*handle };
+        let config_str = cstr_to_str!(config_json);
 
-    let mut conn = match client.connection.lock() {
-        Ok(g) => g,
-        Err(_) => return PRISMA_ERR_INTERNAL,
-    };
+        let config: prisma_core::config::client::ClientConfig =
+            match serde_json::from_str(config_str) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("Invalid config JSON: {}", e);
+                    client.fire_event(&format!(
+                        r#"{{"type":"error","code":"invalid_config","msg":{}}}"#,
+                        serde_json::to_string(&e.to_string()).unwrap_or_default()
+                    ));
+                    return PRISMA_ERR_INVALID_CONFIG;
+                }
+            };
 
-    if conn.is_connected() {
-        return PRISMA_ERR_ALREADY_CONNECTED;
-    }
+        let mut conn = match client.connection.lock() {
+            Ok(g) => g,
+            Err(_) => return PRISMA_ERR_INTERNAL,
+        };
 
-    client.fire_event(r#"{"type":"status_changed","status":"connecting"}"#);
+        if conn.is_connected() {
+            return PRISMA_ERR_ALREADY_CONNECTED;
+        }
 
-    let cb_arc = Arc::clone(&client.callback);
-    let fire = move |ev: String| {
-        let holder = cb_arc.lock().unwrap();
-        if let Some(func) = holder.func {
-            if let Ok(cstr) = CString::new(ev) {
-                unsafe { func(cstr.as_ptr(), holder.userdata) };
+        client.fire_event(r#"{"type":"status_changed","status":"connecting"}"#);
+
+        let cb_arc = Arc::clone(&client.callback);
+        let fire = move |ev: String| {
+            let holder = match cb_arc.lock() {
+                Ok(h) => h,
+                Err(_) => return, // Mutex poisoned — skip to avoid panic across FFI
+            };
+            if let Some(func) = holder.func {
+                if let Ok(cstr) = CString::new(ev) {
+                    unsafe { func(cstr.as_ptr(), holder.userdata) };
+                }
+            }
+        };
+
+        match conn.connect(Arc::clone(&client.runtime), config, modes, Arc::new(fire)) {
+            Ok(_) => {
+                // Start stats poller
+                let cb_arc2 = Arc::clone(&client.callback);
+                let conn_arc = Arc::clone(&client.connection);
+                let poller = stats_poller::StatsPoller::start(
+                    Arc::clone(&client.runtime),
+                    conn_arc,
+                    cb_arc2,
+                );
+                if let Ok(mut guard) = client.stats_poller.lock() {
+                    *guard = Some(poller);
+                }
+                client.fire_event(r#"{"type":"status_changed","status":"connected"}"#);
+                PRISMA_OK
+            }
+            Err(e) => {
+                client.fire_event(&format!(
+                    r#"{{"type":"error","code":"connect_failed","msg":{}}}"#,
+                    serde_json::to_string(&e.to_string()).unwrap_or_default()
+                ));
+                PRISMA_ERR_INTERNAL
             }
         }
-    };
-
-    match conn.connect(Arc::clone(&client.runtime), config, modes, Arc::new(fire)) {
-        Ok(_) => {
-            // Start stats poller
-            let cb_arc2 = Arc::clone(&client.callback);
-            let conn_arc = Arc::clone(&client.connection);
-            let poller =
-                stats_poller::StatsPoller::start(Arc::clone(&client.runtime), conn_arc, cb_arc2);
-            *client.stats_poller.lock().unwrap() = Some(poller);
-            client.fire_event(r#"{"type":"status_changed","status":"connected"}"#);
-            PRISMA_OK
-        }
-        Err(e) => {
-            client.fire_event(&format!(
-                r#"{{"type":"error","code":"connect_failed","msg":{}}}"#,
-                serde_json::to_string(&e.to_string()).unwrap_or_default()
-            ));
-            PRISMA_ERR_INTERNAL
-        }
-    }
+    }) // ffi_catch
 }
 
 /// Disconnect the current session.
@@ -226,30 +256,32 @@ pub unsafe extern "C" fn prisma_connect(
 /// `handle` must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_disconnect(handle: *mut PrismaClient) -> c_int {
-    if handle.is_null() {
-        return PRISMA_ERR_INVALID_CONFIG;
-    }
-    let client = unsafe { &*handle };
-
-    // Stop stats poller first
-    if let Ok(mut guard) = client.stats_poller.lock() {
-        if let Some(poller) = guard.take() {
-            poller.stop();
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_INVALID_CONFIG;
         }
-    }
+        let client = unsafe { &*handle };
 
-    let mut conn = match client.connection.lock() {
-        Ok(g) => g,
-        Err(_) => return PRISMA_ERR_INTERNAL,
-    };
+        // Stop stats poller first
+        if let Ok(mut guard) = client.stats_poller.lock() {
+            if let Some(poller) = guard.take() {
+                poller.stop();
+            }
+        }
 
-    if !conn.is_connected() {
-        return PRISMA_ERR_NOT_CONNECTED;
-    }
+        let mut conn = match client.connection.lock() {
+            Ok(g) => g,
+            Err(_) => return PRISMA_ERR_INTERNAL,
+        };
 
-    conn.disconnect();
-    client.fire_event(r#"{"type":"status_changed","status":"disconnected"}"#);
-    PRISMA_OK
+        if !conn.is_connected() {
+            return PRISMA_ERR_NOT_CONNECTED;
+        }
+
+        conn.disconnect();
+        client.fire_event(r#"{"type":"status_changed","status":"disconnected"}"#);
+        PRISMA_OK
+    })
 }
 
 /// Get current connection status.
@@ -535,10 +567,11 @@ pub unsafe extern "C" fn prisma_speed_test(
                 serde_json::to_string(&e.to_string()).unwrap_or_default()
             ),
         };
-        let holder = cb_arc.lock().unwrap();
-        if let Some(func) = holder.func {
-            if let Ok(cstr) = CString::new(event) {
-                unsafe { func(cstr.as_ptr(), holder.userdata) };
+        if let Ok(holder) = cb_arc.lock() {
+            if let Some(func) = holder.func {
+                if let Ok(cstr) = CString::new(event) {
+                    unsafe { func(cstr.as_ptr(), holder.userdata) };
+                }
             }
         }
     });

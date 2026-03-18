@@ -117,6 +117,13 @@ where
 
     // It looks like Prisma: read the rest of the ClientHello/ClientInit frame
     let frame_len = u16::from_be_bytes([peek[0], peek[1]]) as usize;
+    if frame_len > prisma_core::types::MAX_FRAME_SIZE {
+        // Oversized frame — treat as probe, relay to fallback
+        if let Some(ref fallback) = fallback_addr {
+            let _ = camouflage::decoy_relay(stream, fallback, &peek).await;
+        }
+        return Ok(());
+    }
     let mut client_hello_buf = vec![0u8; frame_len];
     // The first byte after length prefix is peek[2] (version byte)
     client_hello_buf[0] = peek[2];

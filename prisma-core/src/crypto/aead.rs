@@ -300,16 +300,12 @@ impl AeadCipher for TransportOnlyCipher {
     }
 }
 
-/// Constant-time byte comparison.
+/// Constant-time byte comparison using the `subtle` crate for guaranteed
+/// constant-time behavior (not subject to compiler optimizations).
+#[inline]
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    use subtle::ConstantTimeEq;
+    a.ct_eq(b).into()
 }
 
 /// Create a cipher instance for the given suite and key.

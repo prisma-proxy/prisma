@@ -27,10 +27,11 @@ impl StatsPoller {
                             Ok(mut conn) => conn.get_stats_json(),
                             Err(_) => continue,
                         };
-                        let holder = callback.lock().unwrap();
-                        if let Some(func) = holder.func {
-                            if let Ok(cstr) = std::ffi::CString::new(json) {
-                                unsafe { func(cstr.as_ptr(), holder.userdata) };
+                        if let Ok(holder) = callback.lock() {
+                            if let Some(func) = holder.func {
+                                if let Ok(cstr) = std::ffi::CString::new(json) {
+                                    unsafe { func(cstr.as_ptr(), holder.userdata) };
+                                }
                             }
                         }
                     }
