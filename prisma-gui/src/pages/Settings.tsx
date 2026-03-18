@@ -317,17 +317,12 @@ export default function Settings() {
     // Restore profiles — delete existing, then save imported
     if (Array.isArray(data.profiles) && data.profiles.length > 0) {
       try {
-        // Remove existing profiles first
+        // Remove existing profiles first (parallel)
         const existing = await api.listProfiles();
-        for (const p of existing) {
-          await api.deleteProfile(p.id).catch(() => {});
-        }
-        // Save imported profiles
-        for (const p of data.profiles) {
-          if (p && typeof p === "object" && p.id && p.name) {
-            await api.saveProfile(JSON.stringify(p)).catch(() => {});
-          }
-        }
+        await Promise.all(existing.map((p) => api.deleteProfile(p.id).catch(() => {})));
+        // Save imported profiles (parallel)
+        const valid = data.profiles.filter((p: unknown) => p && typeof p === "object" && (p as Record<string, unknown>).id && (p as Record<string, unknown>).name);
+        await Promise.all(valid.map((p: unknown) => api.saveProfile(JSON.stringify(p)).catch(() => {})));
         const refreshed = await api.listProfiles();
         useStore.getState().setProfiles(refreshed);
         api.refreshTrayProfiles().catch(() => {});

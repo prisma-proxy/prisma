@@ -30,10 +30,9 @@ export default function Home() {
   const setProfiles = useStore((s) => s.setProfiles);
 
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
-  const { connectTo, disconnect } = useConnection();
+  const { toggle } = useConnection();
   const events = useConnectionHistory((s) => s.events);
-  const dailyData = useDataUsage((s) => s.daily);
-  const todayUsage = dailyData[new Date().toISOString().slice(0, 10)] ?? { up: 0, down: 0 };
+  const todayUsage = useDataUsage.getState().getToday();
   const recentEvents = events.slice(-10).reverse();
 
   const [busy, setBusy] = useState(false);
@@ -48,24 +47,9 @@ export default function Home() {
   }, [setProfiles]);
 
   const handleConnect = useCallback(async () => {
-    if (connected) {
-      try {
-        setBusy(true);
-        await disconnect();
-      } finally {
-        setBusy(false);
-      }
-    } else {
-      const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
-      if (!profile) return;
-      try {
-        setBusy(true);
-        await connectTo(profile, proxyModes);
-      } finally {
-        setBusy(false);
-      }
-    }
-  }, [connected, activeProfileIdx, profiles, proxyModes, connectTo, disconnect]);
+    setBusy(true);
+    try { await toggle(); } finally { setBusy(false); }
+  }, [toggle]);
 
   const modeValues: string[] = [];
   if (proxyModes & MODE_SOCKS5)       modeValues.push("socks5");

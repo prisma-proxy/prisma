@@ -25,6 +25,7 @@ import { useConnection } from "@/hooks/useConnection";
 import { notify } from "@/store/notifications";
 import { api } from "@/lib/commands";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtDuration } from "@/lib/format";
+import { downloadJson, pickJsonFile } from "@/lib/utils";
 import { parseProfileToWizard } from "@/lib/buildConfig";
 import type { WizardState } from "@/lib/buildConfig";
 import type { Profile } from "@/lib/types";
@@ -235,48 +236,34 @@ export default function Profiles() {
 
   function handleExportAll() {
     try {
-      const blob = new Blob([JSON.stringify(profiles, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `prisma-profiles-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
+      downloadJson(profiles, `prisma-profiles-${Date.now()}.json`);
+    } catch {
       notify.error(t("profiles.exportFailed"));
     }
   }
 
-  function handleImportFile() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const arr = JSON.parse(text);
-        if (!Array.isArray(arr)) throw new Error("Expected JSON array");
-        let count = 0;
-        for (const item of arr) {
-          const p: Profile = {
-            id: item.id ?? crypto.randomUUID(),
-            name: item.name ?? "Imported",
-            tags: item.tags ?? [],
-            config: item.config ?? item,
-            created_at: item.created_at ?? new Date().toISOString(),
-          };
-          await api.saveProfile(JSON.stringify(p));
-          count++;
-        }
-        await reload();
-        notify.success(t("profiles.importSuccess", { count }));
-      } catch (e) {
-        notify.error(t("profiles.importFailed") + ": " + String(e));
+  async function handleImportFile() {
+    try {
+      const arr = await pickJsonFile();
+      if (!Array.isArray(arr)) throw new Error("Expected JSON array");
+      let count = 0;
+      for (const item of arr) {
+        const p: Profile = {
+          id: item.id ?? crypto.randomUUID(),
+          name: item.name ?? "Imported",
+          tags: item.tags ?? [],
+          config: item.config ?? item,
+          created_at: item.created_at ?? new Date().toISOString(),
+        };
+        await api.saveProfile(JSON.stringify(p));
+        count++;
       }
-    };
-    input.click();
+      await reload();
+      notify.success(t("profiles.importSuccess", { count }));
+    } catch (e) {
+      if (e instanceof Error && e.message === "No file selected") return;
+      notify.error(t("profiles.importFailed") + ": " + String(e));
+    }
   }
 
   return (
@@ -336,7 +323,7 @@ export default function Profiles() {
           )}
           {filteredProfiles.map((p) => {
             const isActive = connected && activeProfile?.id === p.id;
-            const pm = useProfileMetrics.getState().getMetrics(p.id);
+            const pm = metrics[p.id] ?? { lastLatencyMs: null, lastConnectedAt: null, totalBytesUp: 0, totalBytesDown: 0, connectCount: 0, totalUptimeSecs: 0, lastSessionSecs: 0, peakSpeedDownBps: 0, peakSpeedUpBps: 0 };
 
             return (
               <div

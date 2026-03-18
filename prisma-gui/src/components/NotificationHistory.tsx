@@ -25,7 +25,7 @@ export default function NotificationHistory() {
   const [open, setOpen] = useState(false);
 
   const unreadCount = useMemo(() => items.filter((n) => n.timestamp > lastSeen).length, [items, lastSeen]);
-  const sorted = useMemo(() => [...items].reverse(), [items]);
+  const sorted = useMemo(() => open ? [...items].reverse() : [], [items, open]);
 
   function handleOpen() {
     setOpen(true);

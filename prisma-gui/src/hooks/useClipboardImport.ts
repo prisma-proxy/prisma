@@ -27,11 +27,7 @@ export function useClipboardImport() {
       }
     }
 
-    function onFocus() {
-      checkClipboard();
-    }
-
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    window.addEventListener("focus", checkClipboard);
+    return () => window.removeEventListener("focus", checkClipboard);
   }, [navigate]);
 }

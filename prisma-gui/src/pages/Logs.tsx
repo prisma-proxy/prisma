@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStore } from "@/store";
 import type { LogEntry } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, downloadText } from "@/lib/utils";
 
 type LevelFilter = "ALL" | "ERROR" | "WARN" | "INFO" | "DEBUG";
 
@@ -86,14 +86,7 @@ export default function Logs() {
     const lines = filtered.map(
       (l) => `[${new Date(l.time).toISOString()}] [${l.level}] ${l.msg}`
     );
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `prisma-logs-${dateStr}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(lines.join("\n"), `prisma-logs-${new Date().toISOString().slice(0, 10)}.txt`);
   }, [filtered]);
 
   return (

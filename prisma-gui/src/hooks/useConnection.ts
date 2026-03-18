@@ -8,9 +8,9 @@ export function useConnection() {
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
   const setManualDisconnect = useStore((s) => s.setManualDisconnect);
   const setConnectStartTime = useStore((s) => s.setConnectStartTime);
-  const profiles = useStore((s) => s.profiles);
 
   const connectTo = useCallback(async (profile: Profile, modes: number) => {
+    const profiles = useStore.getState().profiles;
     const idx = profiles.findIndex((p) => p.id === profile.id);
     if (idx >= 0) setActiveProfileIdx(idx);
     setConnectStartTime(Date.now());
@@ -21,7 +21,7 @@ export function useConnection() {
       notify.error(String(e));
       setConnectStartTime(null);
     }
-  }, [profiles, setActiveProfileIdx, setConnectStartTime]);
+  }, [setActiveProfileIdx, setConnectStartTime]);
 
   const disconnect = useCallback(async () => {
     try {
