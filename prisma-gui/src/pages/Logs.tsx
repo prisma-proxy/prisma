@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, Pause, Play, Download } from "lucide-react";
@@ -12,6 +12,21 @@ import type { LogEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type LevelFilter = "ALL" | "ERROR" | "WARN" | "INFO" | "DEBUG";
+
+function highlightSearch(text: string, query: string): ReactNode {
+  if (!query) return text;
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const idx = lowerText.indexOf(lowerQuery);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-500/30 text-inherit rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
 
 function levelBadge(level: LogEntry["level"]) {
   switch (level) {
@@ -32,6 +47,13 @@ export default function Logs() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Level statistics
+  const levelCounts = useMemo(() => {
+    const counts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0 };
+    for (const l of logs) counts[l.level]++;
+    return counts;
+  }, [logs]);
 
   const filtered = useMemo(
     () =>
@@ -68,7 +90,8 @@ export default function Logs() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `prisma-logs-${Date.now()}.txt`;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `prisma-logs-${dateStr}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }, [filtered]);
@@ -119,6 +142,30 @@ export default function Logs() {
         </Button>
       </div>
 
+      {/* Level statistics */}
+      {logs.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {levelCounts.ERROR > 0 && (
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 cursor-pointer" onClick={() => setLevelFilter("ERROR")}>
+              ERR: {levelCounts.ERROR}
+            </Badge>
+          )}
+          {levelCounts.WARN > 0 && (
+            <Badge variant="warning" className="text-[10px] px-1.5 py-0 cursor-pointer" onClick={() => setLevelFilter("WARN")}>
+              WRN: {levelCounts.WARN}
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer" onClick={() => setLevelFilter("INFO")}>
+            INF: {levelCounts.INFO}
+          </Badge>
+          {levelCounts.DEBUG > 0 && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer" onClick={() => setLevelFilter("DEBUG")}>
+              DBG: {levelCounts.DEBUG}
+            </Badge>
+          )}
+        </div>
+      )}
+
       <div
         ref={parentRef}
         className="flex-1 h-0 rounded-md border overflow-auto logs-scroll-container font-mono text-[11px]"
@@ -151,7 +198,9 @@ export default function Logs() {
                   <span className="text-muted-foreground shrink-0">
                     {new Date(l.time).toLocaleTimeString()}
                   </span>
-                  <span className="break-all">{l.msg}</span>
+                  <span className="break-all">
+                    {search ? highlightSearch(l.msg, search) : l.msg}
+                  </span>
                 </div>
               );
             })}

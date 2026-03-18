@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
@@ -21,10 +21,61 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStore } from "@/store";
 import { useSettings, type AppSettings } from "@/store/settings";
-import { useProfileMetrics } from "@/store/profileMetrics";
+import { useProfileMetrics, type ProfileMetrics } from "@/store/profileMetrics";
 import { useConnectionHistory } from "@/store/connectionHistory";
+import { useSpeedTestHistory } from "@/store/speedTestHistory";
+import { useRules } from "@/store/rules";
+import { useDataUsage } from "@/store/dataUsage";
 import { useNotifications, notify } from "@/store/notifications";
 import { api } from "@/lib/commands";
+import { downloadJson, pickJsonFile } from "@/lib/utils";
+
+const SETTINGS_KEYS: (keyof AppSettings)[] = [
+  "language", "theme", "startOnBoot", "minimizeToTray",
+  "socks5Port", "httpPort", "dnsMode", "dnsUpstream", "fakeIpRange",
+  "autoReconnect", "reconnectDelaySecs", "reconnectMaxAttempts",
+];
+
+// ── Port input with local state, commits on blur ─────────────────────────────
+
+function PortInput({
+  id, value, onChange, hint,
+}: {
+  id: string;
+  value: number;
+  onChange: (v: number) => void;
+  hint?: string;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  // Sync draft when the store value changes externally (e.g. reset, import)
+  useEffect(() => { setDraft(String(value)); }, [value]);
+
+  const commit = useCallback(() => {
+    const n = parseInt(draft, 10);
+    const clamped = Number.isNaN(n) ? 0 : Math.max(0, Math.min(65535, n));
+    onChange(clamped);
+    setDraft(String(clamped));
+  }, [draft, onChange]);
+
+  return (
+    <div className="space-y-1">
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        max={65535}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+      />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
@@ -82,6 +133,7 @@ export default function Settings() {
       setCheckingUpdate(true);
       const info = await api.checkUpdate();
       if (info) {
+        useStore.getState().setUpdateAvailable(info);
         notify.info(`${t("settings.updateAvailable")}: v${info.version}`);
       } else {
         notify.success(t("settings.upToDate"));
@@ -98,6 +150,7 @@ export default function Settings() {
     try {
       setUpdateProgress(0);
       notify.info(t("settings.downloadingUpdate"));
+      await api.applyUpdate(updateAvailable.url, updateAvailable.sha ?? "");
     } catch (e) {
       notify.error(String(e));
       setUpdateProgress(null);
@@ -117,7 +170,7 @@ export default function Settings() {
     let plat: string;
     try { plat = osPlatform(); } catch { plat = "unknown"; }
     const info = [
-      `Prisma v0.6.2`,
+      `Prisma v0.6.3`,
       `Platform: ${plat}`,
       `Language: ${language}`,
       `Theme: ${theme}`,
@@ -140,7 +193,7 @@ export default function Settings() {
 
   function handleExportSettings() {
     const data = {
-      version: "0.6.2",
+      version: "0.6.3",
       exportedAt: new Date().toISOString(),
       settings: {
         language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
@@ -148,45 +201,26 @@ export default function Settings() {
         autoReconnect, reconnectDelaySecs, reconnectMaxAttempts,
       },
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `prisma-settings-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJson(data, `prisma-settings-${Date.now()}.json`);
     notify.success(t("settings.settingsExported"));
   }
 
-  function handleImportSettings() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        const s = data.settings;
-        if (!s) throw new Error("Invalid settings file");
-        const validKeys: (keyof AppSettings)[] = [
-          "language", "theme", "startOnBoot", "minimizeToTray",
-          "socks5Port", "httpPort", "dnsMode", "dnsUpstream", "fakeIpRange",
-          "autoReconnect", "reconnectDelaySecs", "reconnectMaxAttempts",
-        ];
-        const imported: Partial<AppSettings> = {};
-        for (const k of validKeys) {
-          if (k in s) (imported as Record<string, unknown>)[k] = s[k];
-        }
-        patch(imported);
-        if (imported.language) i18n.changeLanguage(imported.language);
-        notify.success(t("settings.settingsImported"));
-      } catch (e) {
-        notify.error(`Import failed: ${String(e)}`);
+  async function handleImportSettings() {
+    try {
+      const data = await pickJsonFile() as Record<string, unknown>;
+      const s = data.settings as Record<string, unknown> | undefined;
+      if (!s) throw new Error("Invalid settings file");
+      const imported: Partial<AppSettings> = {};
+      for (const k of SETTINGS_KEYS) {
+        if (k in s) (imported as Record<string, unknown>)[k] = s[k];
       }
-    };
-    input.click();
+      patch(imported);
+      if (imported.language) i18n.changeLanguage(imported.language);
+      notify.success(t("settings.settingsImported"));
+    } catch (e) {
+      if (e instanceof Error && e.message === "No file selected") return;
+      notify.error(`Import failed: ${String(e)}`);
+    }
   }
 
   function handleResetSettings() {
@@ -212,10 +246,143 @@ export default function Settings() {
     clearHistory();
     clearNotifications();
     clearLogs();
-    // Clear profile metrics
     useProfileMetrics.setState({ metrics: {} });
+    useSpeedTestHistory.getState().clear();
+    useDataUsage.getState().clear();
     notify.success(t("settings.allDataCleared"));
   }
+
+  async function handleExportFullBackup() {
+    try {
+      // Ensure profiles are fresh from backend
+      let profiles = useStore.getState().profiles;
+      if (profiles.length === 0) {
+        try {
+          profiles = await api.listProfiles();
+          useStore.getState().setProfiles(profiles);
+        } catch { /* use whatever is in store */ }
+      }
+
+      const allSettings = useSettings.getState();
+      const settingsData: Record<string, unknown> = {};
+      for (const k of SETTINGS_KEYS) settingsData[k] = allSettings[k];
+
+      const backup = {
+        version: "0.6.3",
+        exportedAt: new Date().toISOString(),
+        settings: settingsData,
+        profiles,
+        rules: useRules.getState().rules,
+        speedTestHistory: useSpeedTestHistory.getState().entries,
+        connectionHistory: useConnectionHistory.getState().events,
+        profileMetrics: useProfileMetrics.getState().metrics,
+        dataUsage: useDataUsage.getState().daily,
+      };
+
+      downloadJson(backup, `prisma-backup-${Date.now()}.json`);
+      notify.success(t("settings.backupExported"));
+    } catch (e) {
+      notify.error(`Export failed: ${String(e)}`);
+    }
+  }
+
+  async function handleImportFullBackup() {
+    let data: Record<string, unknown>;
+    try {
+      data = await pickJsonFile() as Record<string, unknown>;
+    } catch {
+      return; // user cancelled or invalid file
+    }
+
+    if (!data || typeof data !== "object") {
+      notify.error("Invalid backup file");
+      return;
+    }
+
+    const errors: string[] = [];
+
+    // Restore settings
+    if (data.settings && typeof data.settings === "object") {
+      try {
+        const s = data.settings as Record<string, unknown>;
+        const imported: Partial<AppSettings> = {};
+        for (const k of SETTINGS_KEYS) {
+          if (k in s) (imported as Record<string, unknown>)[k] = s[k];
+        }
+        patch(imported);
+        if (imported.language) i18n.changeLanguage(imported.language);
+      } catch { errors.push("settings"); }
+    }
+
+    // Restore profiles — delete existing, then save imported
+    if (Array.isArray(data.profiles) && data.profiles.length > 0) {
+      try {
+        // Remove existing profiles first
+        const existing = await api.listProfiles();
+        for (const p of existing) {
+          await api.deleteProfile(p.id).catch(() => {});
+        }
+        // Save imported profiles
+        for (const p of data.profiles) {
+          if (p && typeof p === "object" && p.id && p.name) {
+            await api.saveProfile(JSON.stringify(p)).catch(() => {});
+          }
+        }
+        const refreshed = await api.listProfiles();
+        useStore.getState().setProfiles(refreshed);
+        api.refreshTrayProfiles().catch(() => {});
+      } catch { errors.push("profiles"); }
+    }
+
+    // Restore rules
+    if (Array.isArray(data.rules)) {
+      try {
+        useRules.setState({ rules: data.rules.filter((r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).id) });
+      } catch { errors.push("rules"); }
+    }
+
+    // Restore speed test history
+    if (Array.isArray(data.speedTestHistory)) {
+      try {
+        useSpeedTestHistory.setState({ entries: data.speedTestHistory });
+      } catch { errors.push("speedTestHistory"); }
+    }
+
+    // Restore connection history
+    if (Array.isArray(data.connectionHistory)) {
+      try {
+        useConnectionHistory.setState({ events: data.connectionHistory });
+      } catch { errors.push("connectionHistory"); }
+    }
+
+    // Restore profile metrics
+    if (data.profileMetrics && typeof data.profileMetrics === "object" && !Array.isArray(data.profileMetrics)) {
+      try {
+        useProfileMetrics.setState({ metrics: data.profileMetrics as Record<string, ProfileMetrics> });
+      } catch { errors.push("profileMetrics"); }
+    }
+
+    // Restore data usage
+    if (data.dataUsage && typeof data.dataUsage === "object" && !Array.isArray(data.dataUsage)) {
+      try {
+        useDataUsage.setState({ daily: data.dataUsage as Record<string, { up: number; down: number }> });
+      } catch { errors.push("dataUsage"); }
+    }
+
+    if (errors.length > 0) {
+      notify.warning(`Backup restored with errors: ${errors.join(", ")}`);
+    } else {
+      notify.success("Backup restored successfully");
+    }
+  }
+
+  const handleHttpPort = useCallback((v: number) => {
+    patch({ httpPort: v > 0 ? v : null });
+  }, [patch]);
+
+  const handleSocks5Port = useCallback((v: number) => {
+    patch({ socks5Port: v });
+  }, [patch]);
 
   return (
     <>
@@ -284,29 +451,11 @@ export default function Settings() {
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label htmlFor="s-http">{t("settings.httpPort")}</Label>
-            <Input
-              id="s-http"
-              type="number"
-              min={0}
-              max={65535}
-              value={httpPort ?? 0}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                patch({ httpPort: v > 0 ? v : null });
-              }}
-            />
+            <PortInput id="s-http" value={httpPort ?? 0} onChange={handleHttpPort} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="s-socks5">{t("settings.socks5Port")}</Label>
-            <Input
-              id="s-socks5"
-              type="number"
-              min={0}
-              max={65535}
-              value={socks5Port}
-              onChange={(e) => patch({ socks5Port: parseInt(e.target.value, 10) || 0 })}
-            />
-            <p className="text-xs text-muted-foreground">{t("settings.socks5PortHint")}</p>
+            <PortInput id="s-socks5" value={socks5Port} onChange={handleSocks5Port} hint={t("settings.socks5PortHint")} />
           </div>
         </div>
       </div>
@@ -416,6 +565,15 @@ export default function Settings() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportFullBackup}>
+            <Download size={14} /> {t("settings.exportFullBackup")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleImportFullBackup}>
+            <FileUp size={14} /> {t("settings.importFullBackup")}
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setConfirmClearDataOpen(true)}>
             <Trash2 size={14} /> {t("settings.clearAllData")}
           </Button>
@@ -438,8 +596,11 @@ export default function Settings() {
 
         {updateAvailable && (
           <div className="rounded-lg border border-green-600/30 bg-green-600/10 p-3 text-sm">
-            <p className="font-medium">v{updateAvailable} {t("settings.available")}</p>
+            <p className="font-medium">v{updateAvailable.version} {t("settings.available")}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{t("settings.newVersionReady")}</p>
+            {updateAvailable.changelog && (
+              <p className="text-xs text-muted-foreground mt-1">{updateAvailable.changelog}</p>
+            )}
           </div>
         )}
 
@@ -470,7 +631,7 @@ export default function Settings() {
         <p className="text-xs font-semibold uppercase tracking-wider">{t("settings.about")}</p>
         <div className="flex items-center gap-2">
           <Shield size={14} />
-          <span>Prisma v0.6.2</span>
+          <span>Prisma v0.6.3</span>
         </div>
         <p>{t("settings.platform")}: {platformName}</p>
         <p>License: GPLv3.0</p>

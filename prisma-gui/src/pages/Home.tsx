@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown, ArrowDown, ArrowUp, Timer, Database } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown, ArrowDown, ArrowUp, Timer, Database, Signal } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { useStore } from "@/store";
 import { useConnection } from "@/hooks/useConnection";
 import { useConnectionHistory } from "@/store/connectionHistory";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtUptime } from "@/lib/format";
+import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/commands";
+import { useDataUsage } from "@/store/dataUsage";
 import { MODE_SOCKS5, MODE_SYSTEM_PROXY, MODE_TUN, MODE_PER_APP } from "@/lib/types";
 
 export default function Home() {
@@ -27,8 +29,11 @@ export default function Home() {
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
   const setProfiles = useStore((s) => s.setProfiles);
 
+  const speedSamplesDown = useStore((s) => s.speedSamplesDown);
   const { connectTo, disconnect } = useConnection();
   const events = useConnectionHistory((s) => s.events);
+  const dailyData = useDataUsage((s) => s.daily);
+  const todayUsage = dailyData[new Date().toISOString().slice(0, 10)] ?? { up: 0, down: 0 };
   const recentEvents = events.slice(-10).reverse();
 
   const [busy, setBusy] = useState(false);
@@ -159,6 +164,18 @@ export default function Home() {
         </div>
       )}
 
+      {/* Connection quality + data usage */}
+      {connected && speedSamplesDown.length >= 5 && (
+        <div className="flex items-center gap-3">
+          <ConnectionQuality samples={speedSamplesDown} />
+          {(todayUsage.up > 0 || todayUsage.down > 0) && (
+            <span className="text-xs text-muted-foreground">
+              {t("home.todayUsage")}: ↑{fmtBytes(todayUsage.up)} ↓{fmtBytes(todayUsage.down)}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Proxy modes */}
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground">{t("home.proxyModes")}</p>
@@ -226,5 +243,33 @@ export default function Home() {
       )}
     </div>
     </ScrollArea>
+  );
+}
+
+function ConnectionQuality({ samples }: { samples: number[] }) {
+  const { t } = useTranslation();
+
+  const grade = useMemo(() => {
+    const recent = samples.slice(-20);
+    if (recent.length < 3) return null;
+    const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+    if (mean === 0) return null;
+    const variance = recent.reduce((s, v) => s + (v - mean) ** 2, 0) / recent.length;
+    const cv = Math.sqrt(variance) / mean;
+    if (cv < 0.15) return "excellent" as const;
+    if (cv < 0.35) return "good" as const;
+    if (cv < 0.6)  return "fair" as const;
+    return "poor" as const;
+  }, [samples]);
+
+  if (!grade) return null;
+
+  const labels = { excellent: t("home.qualityExcellent"), good: t("home.qualityGood"), fair: t("home.qualityFair"), poor: t("home.qualityPoor") };
+  const colors = { excellent: "text-green-500 border-green-500/30", good: "text-blue-400 border-blue-400/30", fair: "text-yellow-500 border-yellow-500/30", poor: "text-red-500 border-red-500/30" };
+
+  return (
+    <Badge variant="outline" className={`text-[10px] ${colors[grade]} gap-1`}>
+      <Signal size={10} /> {labels[grade]}
+    </Badge>
   );
 }

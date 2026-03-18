@@ -16,6 +16,10 @@
 # OS
 .DS_Store
 Thumbs.db
+._*
+__MACOSX/
+ehthumbs.db
+Desktop.ini
 
 # Docs (Docusaurus)
 prisma-docs/node_modules/
@@ -26,12 +30,9 @@ prisma-docs/.docusaurus/
 prisma-dashboard/node_modules/
 prisma-dashboard/.next/
 prisma-dashboard/out/
-prisma-dashboard/.vercel
 prisma-dashboard/.env*
-prisma-dashboard/*.tsbuildinfo
-prisma-dashboard/next-env.d.ts
 
-.claude
+.claude/
 
 # Benchmark artifacts
 benchmark-results/
@@ -46,7 +47,20 @@ prisma-gui/.vite/
 prisma-gui/src-tauri/target/
 prisma-gui/src-tauri/gen/
 prisma-gui/src-tauri/WixTools/
-prisma-gui/*.tsbuildinfo
 
 # prisma-ffi build artifacts
 prisma-ffi/target/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Temp / merge artifacts
+*.orig
+*.bak
+*.tmp
+
+# Build caches
+*.tsbuildinfo
+.turbo/
