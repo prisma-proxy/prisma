@@ -6,6 +6,7 @@ pub mod forward;
 pub mod grpc_stream;
 pub mod http;
 pub mod metrics;
+pub mod pac;
 pub mod proxy;
 pub mod relay;
 pub mod socks5;
@@ -42,7 +43,7 @@ pub async fn run(config_path: &str) -> Result<()> {
 
     init_logging(&config.logging.level, &config.logging.format);
 
-    run_inner(config, ClientMetrics::new()).await
+    run_inner(config, ClientMetrics::new(), None).await
 }
 
 /// Run client in embedded mode (GUI/FFI). Uses broadcast logging and shared metrics.
@@ -56,12 +57,28 @@ pub async fn run_embedded(
 
     init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
 
-    run_inner(config, metrics).await
+    run_inner(config, metrics, None).await
+}
+
+/// Run client in embedded mode with an optional per-app filter.
+pub async fn run_embedded_with_filter(
+    config_path: &str,
+    log_tx: broadcast::Sender<LogEntry>,
+    metrics: ClientMetrics,
+    app_filter: Option<Arc<tun::process::AppFilter>>,
+) -> Result<()> {
+    let config = load_client_config(config_path)
+        .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
+
+    init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
+
+    run_inner(config, metrics, app_filter).await
 }
 
 async fn run_inner(
     config: prisma_core::config::client::ClientConfig,
     metrics: ClientMetrics,
+    app_filter: Option<Arc<tun::process::AppFilter>>,
 ) -> Result<()> {
     info!("Prisma client starting");
     info!(socks5 = %config.socks5_listen_addr, server = %config.server_addr);
@@ -174,6 +191,7 @@ async fn run_inner(
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls,
         metrics,
+        server_key_pin: config.server_key_pin.clone(),
     };
 
     // Log DNS mode
@@ -228,6 +246,28 @@ async fn run_inner(
         None
     };
 
+    // Optionally start PAC server (only when pac_port is configured)
+    let pac_handle = if let Some(pac_port) = config.pac_port {
+        let proxy_directive = pac::build_proxy_directive(
+            &config.socks5_listen_addr,
+            config.http_listen_addr.as_deref(),
+        );
+        let pac_content = pac::generate_pac(
+            &config.routing.rules,
+            &proxy_directive,
+            prisma_core::router::RouteAction::Proxy,
+        );
+        let pac_addr = format!("127.0.0.1:{}", pac_port);
+        info!(url = %format!("http://{}/proxy.pac", pac_addr), "PAC server enabled");
+        Some(tokio::spawn(async move {
+            if let Err(e) = pac::serve_pac(&pac_addr, pac_content).await {
+                tracing::error!("PAC server error: {}", e);
+            }
+        }))
+    } else {
+        None
+    };
+
     // Optionally start TUN mode
     let tun_handle = if config.tun.enabled {
         info!(device = %config.tun.device_name, mtu = config.tun.mtu, "Starting TUN mode");
@@ -239,8 +279,11 @@ async fn run_inner(
         ) {
             Ok(device) => {
                 let tun_ctx = ctx.clone();
+                let tun_filter = app_filter.clone();
                 Some(tokio::spawn(async move {
-                    if let Err(e) = tun::handler::run_tun_handler(device, tun_ctx).await {
+                    if let Err(e) =
+                        tun::handler::run_tun_handler(device, tun_ctx, tun_filter).await
+                    {
                         tracing::error!("TUN handler error: {}", e);
                     }
                 }))
@@ -260,6 +303,7 @@ async fn run_inner(
         _ = async { if let Some(h) = http_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
         _ = async { if let Some(h) = forward_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
         _ = async { if let Some(h) = dns_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
+        _ = async { if let Some(h) = pac_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
         _ = async { if let Some(h) = tun_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
     }
 

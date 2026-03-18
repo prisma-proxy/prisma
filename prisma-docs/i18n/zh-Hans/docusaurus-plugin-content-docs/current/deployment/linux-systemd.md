@@ -112,7 +112,7 @@ journalctl -u prisma-server -f              # 实时跟踪
 journalctl -u prisma-server --since "1h ago" # 最近的日志
 ```
 
-## 安全加固
+## 安全加固 (Security Hardening)
 
 服务文件包含以下 systemd 安全指令：
 

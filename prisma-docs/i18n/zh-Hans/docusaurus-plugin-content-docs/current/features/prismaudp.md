@@ -43,7 +43,7 @@ PrismaUDP 是 PrismaVeil 中专为代理 UDP 流量设计的子协议 — 适用
 | `dest_port` | 目标端口（大端序） |
 | `udp_payload` | 原始 UDP 有效载荷 |
 
-## 前向纠错 (FEC)
+## 前向纠错 (Forward Error Correction, FEC)
 
 PrismaUDP 支持可选的 Reed-Solomon FEC，无需重传即可恢复丢失的数据包：
 
@@ -72,9 +72,9 @@ parity_shards = 3     # 每个组的校验数据包数
 
 | 场景 | 推荐配置 |
 |------|----------|
-| 竞技游戏 | QUIC 传输 + Brutal 拥塞控制 + FEC（3 校验） |
-| 休闲游戏 | QUIC 传输 + BBR 拥塞控制 + 无 FEC |
-| VoIP | QUIC 传输 + BBR 拥塞控制 + FEC（2 校验） |
+| 竞技游戏 | QUIC 传输 + Brutal 拥塞控制 (Congestion Control) + FEC（3 校验） |
+| 休闲游戏 | QUIC 传输 + BBR 拥塞控制 (Congestion Control) + 无 FEC |
+| VoIP | QUIC 传输 + BBR 拥塞控制 (Congestion Control) + FEC（2 校验） |
 | DNS 中继 | 任意传输协议，无需 FEC |
 
 ## 配置示例

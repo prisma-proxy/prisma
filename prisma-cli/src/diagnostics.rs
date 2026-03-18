@@ -81,6 +81,7 @@ fn build_proxy_context(
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
         metrics: prisma_client::metrics::ClientMetrics::new(),
+        server_key_pin: config.server_key_pin.clone(),
     })
 }
 
@@ -126,6 +127,7 @@ pub async fn ping(
                     ctx.client_id,
                     ctx.auth_secret,
                     ctx.cipher_suite,
+                    ctx.server_key_pin.as_deref(),
                 )
                 .await
                 {

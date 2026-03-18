@@ -2,9 +2,9 @@
 sidebar_position: 1
 ---
 
-# SOCKS5 代理
+# SOCKS5 代理 (Proxy)
 
-Prisma 在客户端实现了完整的 RFC 1928 SOCKS5 代理接口。应用程序连接到本地 SOCKS5 端口，流量通过加密的 PrismaVeil 连接透明地隧道传输到服务器。
+Prisma 在客户端实现了完整的 RFC 1928 SOCKS5 代理接口。应用程序连接到本地 SOCKS5 端口，流量通过加密的 PrismaVeil 连接透明地隧道 (Tunnel) 传输到服务器。
 
 ## 支持的功能
 

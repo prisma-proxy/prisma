@@ -45,15 +45,25 @@ pub struct TunnelConnection {
 
 /// Perform the Prisma handshake over the transport and send the initial
 /// Connect command to proxy to the given destination.
+///
+/// If `server_key_pin` is `Some`, the server's ephemeral public key is
+/// verified against the pinned SHA-256 hash before the handshake completes.
 pub async fn establish_tunnel(
     mut stream: TransportStream,
     client_id: ClientId,
     auth_secret: [u8; 32],
     cipher_suite: CipherSuite,
     destination: &ProxyDestination,
+    server_key_pin: Option<&str>,
 ) -> Result<TunnelConnection> {
-    let (mut session_keys, bucket_sizes) =
-        establish_handshake(&mut stream, client_id, auth_secret, cipher_suite).await?;
+    let (mut session_keys, bucket_sizes) = establish_handshake(
+        &mut stream,
+        client_id,
+        auth_secret,
+        cipher_suite,
+        server_key_pin,
+    )
+    .await?;
 
     let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
     send_challenge_response(&mut stream, &mut session_keys, cipher.as_ref()).await?;
@@ -97,9 +107,16 @@ pub async fn establish_udp_tunnel(
     client_id: ClientId,
     auth_secret: [u8; 32],
     cipher_suite: CipherSuite,
+    server_key_pin: Option<&str>,
 ) -> Result<TunnelConnection> {
-    let (mut session_keys, bucket_sizes) =
-        establish_handshake(&mut stream, client_id, auth_secret, cipher_suite).await?;
+    let (mut session_keys, bucket_sizes) = establish_handshake(
+        &mut stream,
+        client_id,
+        auth_secret,
+        cipher_suite,
+        server_key_pin,
+    )
+    .await?;
 
     let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
     send_challenge_response(&mut stream, &mut session_keys, cipher.as_ref()).await?;
@@ -131,11 +148,17 @@ pub async fn establish_udp_tunnel(
 }
 
 /// Establish the Prisma handshake (PrismaClientInit -> PrismaServerInit).
+///
+/// If `server_key_pin` is `Some`, verifies the server's ephemeral public key
+/// (the first 32 bytes of the ServerInit wire message) against the pinned
+/// SHA-256 hash before completing the handshake. This provides server
+/// authentication independent of TLS.
 async fn establish_handshake(
     stream: &mut TransportStream,
     client_id: ClientId,
     auth_secret: [u8; 32],
     cipher_suite: CipherSuite,
+    server_key_pin: Option<&str>,
 ) -> Result<(SessionKeys, Vec<u16>)> {
     let handshake = PrismaHandshakeClient::new(client_id, auth_secret, cipher_suite);
     let (client_state, init_bytes) = handshake.start();
@@ -143,6 +166,18 @@ async fn establish_handshake(
     util::write_framed(stream, &init_bytes).await?;
 
     let server_init_buf = util::read_framed(stream).await?;
+
+    // Verify server key pin before processing the full handshake.
+    // The first 32 bytes of the server init buffer are the server's ephemeral
+    // public key sent in the clear.
+    if let Some(pin) = server_key_pin {
+        if server_init_buf.len() >= 32 {
+            let mut server_pub = [0u8; 32];
+            server_pub.copy_from_slice(&server_init_buf[..32]);
+            util::verify_server_key_pin(pin, &server_pub)?;
+            debug!("Server key pin verified successfully");
+        }
+    }
 
     let (session_keys, bucket_sizes) = client_state.process_server_init(&server_init_buf)?;
     info!(
@@ -161,9 +196,16 @@ pub async fn establish_raw_tunnel(
     client_id: ClientId,
     auth_secret: [u8; 32],
     cipher_suite: CipherSuite,
+    server_key_pin: Option<&str>,
 ) -> Result<TunnelConnection> {
-    let (mut session_keys, bucket_sizes) =
-        establish_handshake(&mut stream, client_id, auth_secret, cipher_suite).await?;
+    let (mut session_keys, bucket_sizes) = establish_handshake(
+        &mut stream,
+        client_id,
+        auth_secret,
+        cipher_suite,
+        server_key_pin,
+    )
+    .await?;
 
     let cipher = create_cipher(session_keys.cipher_suite, &session_keys.session_key);
     send_challenge_response(&mut stream, &mut session_keys, cipher.as_ref()).await?;

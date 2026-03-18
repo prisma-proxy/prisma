@@ -109,9 +109,9 @@ graph LR
 
 如果在超时时间内没有数据到达，服务端返回空响应，客户端立即发送新的轮询请求。
 
-### 基于序列号的重组
+### 基于序列号的重组 (Sequence-Based Reassembly)
 
-由于 HTTP/2 在单一 TCP 连接上多路复用请求，响应可能乱序到达。每个上传和下载的数据块都携带序列号。接收端缓冲乱序的数据块，并按正确的序列号顺序重组后再传递给隧道层。
+由于 HTTP/2 在单一 TCP 连接上多路复用 (Multiplexing) 请求，响应可能乱序到达。每个上传和下载的数据块都携带序列号。接收端缓冲乱序的数据块，并按正确的序列号顺序重组后再传递给隧道层。
 
 ## 编码模式
 
@@ -187,9 +187,9 @@ extra_headers = [["X-App-Version", "2.1.0"]]
 | `poll_timeout_secs` | 55 | 长轮询超时时间（秒，范围 10-90） |
 | `extra_headers` | — | 所有请求附加的额外 HTTP 头部 |
 
-## 主动探测防御
+## 主动探测防御 (Active Probe Resistance)
 
-XPorta 是 PrismaVeil 首个内置主动探测防御能力的传输协议。当审查系统或自动化扫描器连接到服务端时，响应取决于请求是否携带有效的会话 cookie：
+XPorta 是 PrismaVeil 首个内置主动探测防御 (Active Probe Resistance) 能力的传输协议。当审查系统或自动化扫描器连接到服务端时，响应取决于请求是否携带有效的会话 cookie：
 
 **无有效 cookie** —— 服务端将请求反向代理到伪装站点（通过 `cover_upstream` 配置），或返回逼真的 JSON 错误：
 

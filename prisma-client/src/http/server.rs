@@ -142,6 +142,7 @@ async fn handle_http_client(stream: TcpStream, ctx: &ProxyContext) -> Result<()>
         ctx.auth_secret,
         ctx.cipher_suite,
         &destination,
+        ctx.server_key_pin.as_deref(),
     )
     .await?;
 

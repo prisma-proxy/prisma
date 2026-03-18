@@ -68,6 +68,7 @@ proptest! {
             timestamp,
             cipher_suite: CipherSuite::ChaCha20Poly1305,
             auth_token,
+            pq_kem_encap_key: None,
             padding: padding.clone(),
         };
         let encoded = encode_client_init(&msg);
@@ -98,6 +99,7 @@ proptest! {
             server_features: FEATURE_UDP_RELAY,
             session_ticket: ticket.clone(),
             bucket_sizes: vec![],
+            pq_kem_ciphertext: None,
             padding: padding.clone(),
         };
         let encoded = encode_server_init(&msg);

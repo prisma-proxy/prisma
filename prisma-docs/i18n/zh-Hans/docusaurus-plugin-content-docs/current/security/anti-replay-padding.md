@@ -2,13 +2,13 @@
 sidebar_position: 3
 ---
 
-# 抗重放与填充
+# 抗重放 (Anti-Replay) 与填充 (Padding)
 
-Prisma 包含两种防御网络层攻击的机制：滑动窗口抗重放机制和握手消息的随机填充。
+Prisma 包含两种防御网络层攻击的机制：滑动窗口 (Sliding Window) 抗重放机制和握手 (Handshake) 消息的随机填充。
 
-## 抗重放保护
+## 抗重放保护 (Anti-Replay Protection)
 
-### 滑动窗口
+### 滑动窗口 (Sliding Window)
 
 Prisma 使用 1024 位滑动窗口来检测重放或重排序的 nonce 计数器值。该窗口实现为 16 个 `u64` 字的位图（共 1024 位）。
 
@@ -32,9 +32,9 @@ Prisma 使用 1024 位滑动窗口来检测重放或重排序的 nonce 计数器
 
 当检测到重放时，该帧会被拒绝并返回 `ReplayDetected` 错误，包含违规的计数器值。连接可以继续处理后续有效帧。
 
-## 随机填充
+## 随机填充 (Random Padding)
 
-### 握手填充
+### 握手填充 (Handshake Padding)
 
 `ClientInit` (v3) / `ClientHello` (v1/v2) 和 `ServerInit` / `ServerHello` 消息都包含随机填充以抵抗流量指纹识别。填充格式为：
 
@@ -46,7 +46,7 @@ Prisma 使用 1024 位滑动窗口来检测重放或重排序的 nonce 计数器
 - 填充字节使用密码学安全的随机数据填充
 - 接收方通过读取 2 字节长度前缀来剥离填充
 
-### 逐帧填充 (v2/v3)
+### 逐帧填充 (Per-Frame Padding) (v2/v3)
 
 在协议 v2 和 v3 中，当设置 `FLAG_PADDED` 时，每个数据帧都包含随机填充。填充帧格式为：
 

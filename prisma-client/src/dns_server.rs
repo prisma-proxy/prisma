@@ -157,9 +157,14 @@ async fn tunnel_dns_query(ctx: &ProxyContext, query: &[u8]) -> Result<Vec<u8>> {
 
     // Establish a raw tunnel (handshake + challenge only, no CONNECT command)
     let stream = ctx.connect().await?;
-    let tunnel_conn =
-        tunnel::establish_raw_tunnel(stream, ctx.client_id, ctx.auth_secret, ctx.cipher_suite)
-            .await?;
+    let tunnel_conn = tunnel::establish_raw_tunnel(
+        stream,
+        ctx.client_id,
+        ctx.auth_secret,
+        ctx.cipher_suite,
+        ctx.server_key_pin.as_deref(),
+    )
+    .await?;
 
     let cipher: Arc<dyn AeadCipher> = Arc::from(create_cipher(
         tunnel_conn.session_keys.cipher_suite,

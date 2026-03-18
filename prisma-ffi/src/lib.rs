@@ -530,6 +530,183 @@ pub unsafe extern "C" fn prisma_apply_update(
     }
 }
 
+// ── Ping ──────────────────────────────────────────────────────────────────────
+
+/// Measure TCP connect latency to `server_addr` (host:port).
+/// Returns JSON: `{"latency_ms": 42}` or `{"error": "..."}`.
+/// Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `server_addr` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_ping(server_addr: *const c_char) -> *mut c_char {
+    let addr_str = match cstr_to_str_opt!(server_addr) {
+        Some(s) => s,
+        None => {
+            let err = r#"{"error":"null server address"}"#;
+            return CString::new(err).map_or(std::ptr::null_mut(), CString::into_raw);
+        }
+    };
+
+    let result = ping_tcp(addr_str);
+    let json = match result {
+        Ok(ms) => format!(r#"{{"latency_ms":{ms}}}"#),
+        Err(e) => format!(
+            r#"{{"error":{}}}"#,
+            serde_json::to_string(&e.to_string()).unwrap_or_default()
+        ),
+    };
+    CString::new(json).map_or(std::ptr::null_mut(), CString::into_raw)
+}
+
+/// Measure TCP connect latency: 3 attempts, return median.
+fn ping_tcp(addr: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    use std::net::ToSocketAddrs;
+    use std::time::{Duration, Instant};
+
+    let sock_addr = addr
+        .to_socket_addrs()?
+        .next()
+        .ok_or("could not resolve address")?;
+
+    let timeout = Duration::from_secs(5);
+    let mut samples = Vec::with_capacity(3);
+
+    for _ in 0..3 {
+        let start = Instant::now();
+        match std::net::TcpStream::connect_timeout(&sock_addr, timeout) {
+            Ok(stream) => {
+                let elapsed = start.elapsed();
+                samples.push(elapsed.as_millis() as u64);
+                drop(stream);
+            }
+            Err(e) => {
+                // If any attempt fails, still try others
+                if samples.is_empty() {
+                    // Record error only if we have no successful samples yet
+                    samples.push(0); // placeholder
+                    tracing::debug!("ping attempt failed: {e}");
+                }
+            }
+        }
+    }
+
+    // Filter out zero placeholders
+    let mut valid: Vec<u64> = samples.into_iter().filter(|&v| v > 0).collect();
+    if valid.is_empty() {
+        return Err("all ping attempts failed".into());
+    }
+    valid.sort();
+    // Return median
+    Ok(valid[valid.len() / 2])
+}
+
+// ── PAC URL ──────────────────────────────────────────────────────────────────
+
+/// Get the PAC (Proxy Auto-Configuration) URL. Caller must call `prisma_free_string`.
+/// Returns the URL string based on the provided PAC port (0 = default 8070).
+///
+/// # Safety
+/// `handle` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_get_pac_url(
+    handle: *mut PrismaClient,
+    pac_port: u16,
+) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let _ = handle;
+        let port = if pac_port == 0 { 8070u16 } else { pac_port };
+        let url = format!("http://127.0.0.1:{}/proxy.pac", port);
+        match CString::new(url) {
+            Ok(s) => s.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
+}
+
+// ── Per-app proxy ─────────────────────────────────────────────────────────────
+
+/// Global app filter — shared between FFI and the TUN handler.
+static APP_FILTER: once_cell::sync::Lazy<Arc<prisma_client::tun::process::AppFilter>> =
+    once_cell::sync::Lazy::new(|| Arc::new(prisma_client::tun::process::AppFilter::new()));
+
+/// Get the global AppFilter instance for use by TUN handler integration.
+pub fn global_app_filter() -> Arc<prisma_client::tun::process::AppFilter> {
+    Arc::clone(&APP_FILTER)
+}
+
+/// Set the per-app proxy filter.
+///
+/// `app_names_json` must be a valid JSON string:
+/// `{"mode": "include"|"exclude", "apps": ["Firefox", "Chrome"]}`
+///
+/// Pass NULL or empty string to disable.
+///
+/// # Safety
+/// `app_names_json` must be a valid non-null C string (or NULL to disable).
+#[no_mangle]
+pub unsafe extern "C" fn prisma_set_per_app_filter(app_names_json: *const c_char) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if app_names_json.is_null() {
+            APP_FILTER.set_config(None);
+            return PRISMA_OK;
+        }
+        let json_str = match unsafe { CStr::from_ptr(app_names_json) }.to_str() {
+            Ok(s) => s,
+            Err(_) => return PRISMA_ERR_INVALID_CONFIG,
+        };
+
+        if json_str.is_empty() {
+            APP_FILTER.set_config(None);
+            return PRISMA_OK;
+        }
+
+        match serde_json::from_str::<prisma_client::tun::process::AppFilterConfig>(json_str) {
+            Ok(config) => {
+                tracing::info!(
+                    mode = ?config.mode,
+                    apps = config.apps.len(),
+                    "Per-app filter updated"
+                );
+                APP_FILTER.set_config(Some(config));
+                PRISMA_OK
+            }
+            Err(e) => {
+                tracing::error!("Invalid per-app filter JSON: {}", e);
+                PRISMA_ERR_INVALID_CONFIG
+            }
+        }
+    })
+}
+
+/// Get the current per-app filter config as JSON. Caller must call `prisma_free_string`.
+/// Returns NULL if no filter is set.
+#[no_mangle]
+pub extern "C" fn prisma_get_per_app_filter() -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        match APP_FILTER.get_config() {
+            Some(config) => match serde_json::to_string(&config) {
+                Ok(json) => CString::new(json).map_or(std::ptr::null_mut(), CString::into_raw),
+                Err(_) => std::ptr::null_mut(),
+            },
+            None => std::ptr::null_mut(),
+        }
+    })
+}
+
+/// Get a list of currently running application names as JSON array.
+/// Caller must call `prisma_free_string`.
+#[no_mangle]
+pub extern "C" fn prisma_get_running_apps() -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let apps = prisma_client::tun::process::list_running_apps();
+        match serde_json::to_string(&apps) {
+            Ok(json) => CString::new(json).map_or(std::ptr::null_mut(), CString::into_raw),
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
+}
+
 // ── Speed test ────────────────────────────────────────────────────────────────
 
 /// Run a speed test (non-blocking). Result delivered via callback.
@@ -565,7 +742,9 @@ pub unsafe extern "C" fn prisma_speed_test(
     let runtime = Arc::clone(&client.runtime);
 
     runtime.spawn(async move {
-        let result = connection::run_speed_test(&socks5_addr, &server_owned, duration_secs, &dir_owned).await;
+        let result =
+            connection::run_speed_test(&socks5_addr, &server_owned, duration_secs, &dir_owned)
+                .await;
         let event = match result {
             Ok((dl, ul)) => format!(
                 r#"{{"type":"speed_test_result","download_mbps":{:.2},"upload_mbps":{:.2}}}"#,

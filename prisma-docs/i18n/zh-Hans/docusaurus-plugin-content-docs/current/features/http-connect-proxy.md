@@ -2,9 +2,9 @@
 sidebar_position: 2
 ---
 
-# HTTP CONNECT 代理
+# HTTP CONNECT 代理 (Proxy)
 
-Prisma 在客户端支持可选的 HTTP CONNECT 代理接口。这允许 HTTP 感知的应用程序和浏览器通过加密的 PrismaVeil 连接隧道传输 HTTPS 流量。
+Prisma 在客户端支持可选的 HTTP CONNECT 代理接口。这允许 HTTP 感知的应用程序和浏览器通过加密的 PrismaVeil 连接隧道 (Tunnel) 传输 HTTPS 流量。
 
 ## 工作原理
 

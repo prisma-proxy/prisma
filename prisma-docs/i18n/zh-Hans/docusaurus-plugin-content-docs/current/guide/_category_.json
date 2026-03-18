@@ -1,0 +1,9 @@
+{
+  "label": "新手指南",
+  "position": 0,
+  "collapsed": false,
+  "link": {
+    "type": "doc",
+    "id": "guide/index"
+  }
+}

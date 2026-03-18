@@ -88,6 +88,12 @@ impl BandwidthLimiterStore {
     pub async fn wait_download(&self, client_id: &str, bytes: u32) {
         wait_limiter(&self.download, client_id, bytes).await;
     }
+
+    /// Remove all bandwidth limits for a client.
+    pub async fn remove_client(&self, client_id: &str) {
+        self.upload.write().await.remove(client_id);
+        self.download.write().await.remove(client_id);
+    }
 }
 
 /// Check if `bytes` is allowed by the limiter for the given client.

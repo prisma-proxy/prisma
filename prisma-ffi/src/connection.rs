@@ -113,9 +113,16 @@ impl ConnectionManager {
 
             let config_path_str = config_path.to_string_lossy().to_string();
 
+            // Get per-app filter if PER_APP mode is active
+            let app_filter = if modes & crate::PRISMA_MODE_PER_APP != 0 {
+                Some(crate::global_app_filter())
+            } else {
+                None
+            };
+
             // Use run_embedded for log + metrics forwarding
             let run_result = tokio::select! {
-                result = prisma_client::run_embedded(&config_path_str, log_tx, metrics) => result,
+                result = prisma_client::run_embedded_with_filter(&config_path_str, log_tx, metrics, app_filter) => result,
                 _ = stop_rx => Ok(()),
             };
 
@@ -260,11 +267,7 @@ async fn measure_upload(
     let payload: Vec<u8> = (0..1_000_000).map(|i| (i % 256) as u8).collect();
 
     while std::time::Instant::now() < deadline {
-        let resp = client
-            .post(&url)
-            .body(payload.clone())
-            .send()
-            .await;
+        let resp = client.post(&url).body(payload.clone()).send().await;
 
         match resp {
             Ok(_) => total_bytes += payload.len() as u64,

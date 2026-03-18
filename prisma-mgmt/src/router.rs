@@ -12,7 +12,8 @@ use prisma_core::config::server::ManagementApiConfig;
 
 use crate::auth::{auth_middleware, AuthToken};
 use crate::handlers::{
-    alerts, backup, bandwidth, clients, config, connections, forwards, health, routes, system,
+    alerts, backup, bandwidth, clients, config, connections, forwards, health, prometheus_export,
+    reload, routes, system,
 };
 use crate::ws::{logs, metrics};
 use crate::MgmtState;
@@ -93,6 +94,8 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
             "/api/alerts/config",
             get(alerts::get_alert_config).put(alerts::update_alert_config),
         )
+        // Config reload
+        .route("/api/reload", post(reload::reload_config))
         // WebSocket
         .route("/api/ws/metrics", get(metrics::ws_metrics))
         .route("/api/ws/logs", get(logs::ws_logs))
@@ -107,7 +110,13 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
             }
         }));
 
-    let mut app = api;
+    // Prometheus metrics endpoint — outside auth middleware for scraper access
+    let prometheus_route = Router::new().route(
+        "/api/prometheus",
+        get(prometheus_export::prometheus_metrics),
+    );
+
+    let mut app = api.merge(prometheus_route);
 
     if let Some(ref dir) = config.console_dir {
         tracing::info!(console_dir = %dir, "Serving console static files");

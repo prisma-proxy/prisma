@@ -54,6 +54,8 @@ pub const FEATURE_V5_KDF: u32 = 0x0100;
 pub const FEATURE_HEADER_AUTH: u32 = 0x0200;
 /// v5: Server supports connection migration tokens.
 pub const FEATURE_CONNECTION_MIGRATION: u32 = 0x0400;
+/// v5: Server supports hybrid post-quantum key exchange (X25519 + ML-KEM-768).
+pub const FEATURE_PQ_KEM: u32 = 0x0800;
 
 // --- PrismaVeil handshake types (v4 only) ---
 
@@ -68,6 +70,8 @@ pub struct PrismaClientInit {
     pub timestamp: u64,
     pub cipher_suite: CipherSuite,
     pub auth_token: [u8; 32],
+    /// ML-KEM-768 encapsulation key (1184 bytes), present when CLIENT_INIT_FLAG_PQ_KEM is set.
+    pub pq_kem_encap_key: Option<Vec<u8>>,
     pub padding: Vec<u8>,
 }
 
@@ -84,6 +88,8 @@ pub struct PrismaServerInit {
     pub session_ticket: Vec<u8>,
     /// Bucket sizes for traffic shaping (empty = disabled).
     pub bucket_sizes: Vec<u16>,
+    /// ML-KEM-768 ciphertext (1088 bytes), present when FEATURE_PQ_KEM is negotiated.
+    pub pq_kem_ciphertext: Option<Vec<u8>>,
     pub padding: Vec<u8>,
 }
 
@@ -114,6 +120,8 @@ pub const CLIENT_INIT_FLAG_RESUMPTION: u8 = 0x02;
 pub const CLIENT_INIT_FLAG_HEADER_AUTH: u8 = 0x04;
 /// v5: Client supports connection migration.
 pub const CLIENT_INIT_FLAG_MIGRATION: u8 = 0x08;
+/// v5: Client supports hybrid post-quantum key exchange (X25519 + ML-KEM-768).
+pub const CLIENT_INIT_FLAG_PQ_KEM: u8 = 0x10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

@@ -42,7 +42,7 @@ pub enum RuleCondition {
     /// Domain contains keyword.
     #[serde(rename = "domain-keyword")]
     DomainKeyword(String),
-    /// IP CIDR range match.
+    /// IP CIDR range match (IPv4 or IPv6).
     #[serde(rename = "ip-cidr")]
     IpCidr(String),
     /// GeoIP country match (e.g., "cn", "us", "private").
@@ -56,11 +56,19 @@ pub enum RuleCondition {
     All,
 }
 
+/// Pre-parsed CIDR for either IPv4 or IPv6.
+#[derive(Debug, Clone, Copy)]
+enum ParsedCidr {
+    None,
+    V4 { network: u32, mask: u32 },
+    V6 { network: u128, mask: u128 },
+}
+
 /// The routing engine: evaluates rules top-to-bottom, first match wins.
 pub struct Router {
     rules: Vec<Rule>,
-    /// Pre-parsed CIDR entries for fast IP matching.
-    cidrs: Vec<(u32, u32)>, // (network_u32, mask_u32) per IpCidr rule index
+    /// Pre-parsed CIDR entries for fast IP matching (one per rule slot).
+    cidrs: Vec<ParsedCidr>,
     /// Optional GeoIP matcher for country-based routing.
     geoip: Option<Arc<GeoIPMatcher>>,
 }
@@ -77,9 +85,19 @@ impl Router {
             .iter()
             .map(|r| {
                 if let RuleCondition::IpCidr(ref cidr) = r.condition {
-                    parse_cidr_v4(cidr).unwrap_or((0, 0))
+                    if cidr.contains(':') {
+                        match parse_cidr_v6(cidr) {
+                            Some((network, mask)) => ParsedCidr::V6 { network, mask },
+                            None => ParsedCidr::None,
+                        }
+                    } else {
+                        match parse_cidr_v4(cidr) {
+                            Some((network, mask)) => ParsedCidr::V4 { network, mask },
+                            None => ParsedCidr::None,
+                        }
+                    }
                 } else {
-                    (0, 0)
+                    ParsedCidr::None
                 }
             })
             .collect();
@@ -135,15 +153,15 @@ impl Router {
             }),
             RuleCondition::DomainKeyword(kw) => domain
                 .is_some_and(|dom| dom.to_ascii_lowercase().contains(&kw.to_ascii_lowercase())),
-            RuleCondition::IpCidr(_) => {
-                if let Some(IpAddr::V4(v4)) = ip {
-                    let (network, mask) = self.cidrs[idx];
-                    let ip_u32 = u32::from(v4);
-                    (ip_u32 & mask) == network
-                } else {
-                    false // TODO: IPv6 CIDR support
+            RuleCondition::IpCidr(_) => match (ip, self.cidrs[idx]) {
+                (Some(IpAddr::V4(v4)), ParsedCidr::V4 { network, mask }) => {
+                    (u32::from(v4) & mask) == network
                 }
-            }
+                (Some(IpAddr::V6(v6)), ParsedCidr::V6 { network, mask }) => {
+                    (u128::from(v6) & mask) == network
+                }
+                _ => false,
+            },
             RuleCondition::GeoIp(code) => {
                 if let (Some(geoip), Some(IpAddr::V4(v4))) = (&self.geoip, ip) {
                     geoip.matches(code, v4)
@@ -157,7 +175,7 @@ impl Router {
     }
 }
 
-/// Parse a CIDR string into (network_u32, mask_u32).
+/// Parse an IPv4 CIDR string into (network_u32, mask_u32).
 pub fn parse_cidr_v4(cidr: &str) -> Option<(u32, u32)> {
     let parts: Vec<&str> = cidr.split('/').collect();
     if parts.len() != 2 {
@@ -174,6 +192,26 @@ pub fn parse_cidr_v4(cidr: &str) -> Option<(u32, u32)> {
         !0u32 << (32 - prefix)
     };
     let network = u32::from(ip) & mask;
+    Some((network, mask))
+}
+
+/// Parse an IPv6 CIDR string into (network_u128, mask_u128).
+pub fn parse_cidr_v6(cidr: &str) -> Option<(u128, u128)> {
+    let parts: Vec<&str> = cidr.split('/').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    let ip: std::net::Ipv6Addr = parts[0].parse().ok()?;
+    let prefix: u32 = parts[1].parse().ok()?;
+    if prefix > 128 {
+        return None;
+    }
+    let mask = if prefix == 0 {
+        0
+    } else {
+        !0u128 << (128 - prefix)
+    };
+    let network = u128::from(ip) & mask;
     Some((network, mask))
 }
 
@@ -285,6 +323,130 @@ mod tests {
 
         assert_eq!(router.route(None, local_ip, 80), RouteAction::Direct);
         assert_eq!(router.route(None, public_ip, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_ipv6_cidr_match() {
+        let rules = vec![Rule {
+            condition: RuleCondition::IpCidr("2001:db8::/32".into()),
+            action: RouteAction::Direct,
+        }];
+        let router = Router::new(rules);
+
+        let inside: Option<IpAddr> = "2001:db8::1".parse().ok();
+        let outside: Option<IpAddr> = "2001:db9::1".parse().ok();
+        let v4: Option<IpAddr> = "192.168.1.1".parse().ok();
+
+        assert_eq!(router.route(None, inside, 443), RouteAction::Direct);
+        assert_eq!(router.route(None, outside, 443), RouteAction::Proxy);
+        // IPv4 address should not match an IPv6 CIDR rule
+        assert_eq!(router.route(None, v4, 443), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_ipv6_cidr_loopback() {
+        let rules = vec![Rule {
+            condition: RuleCondition::IpCidr("::1/128".into()),
+            action: RouteAction::Block,
+        }];
+        let router = Router::new(rules);
+
+        let loopback: Option<IpAddr> = "::1".parse().ok();
+        let other: Option<IpAddr> = "::2".parse().ok();
+
+        assert_eq!(router.route(None, loopback, 80), RouteAction::Block);
+        assert_eq!(router.route(None, other, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_ipv6_cidr_ula() {
+        // Unique Local Addresses: fc00::/7
+        let rules = vec![Rule {
+            condition: RuleCondition::IpCidr("fc00::/7".into()),
+            action: RouteAction::Direct,
+        }];
+        let router = Router::new(rules);
+
+        let ula: Option<IpAddr> = "fd12:3456:789a::1".parse().ok();
+        let public: Option<IpAddr> = "2001:db8::1".parse().ok();
+
+        assert_eq!(router.route(None, ula, 80), RouteAction::Direct);
+        assert_eq!(router.route(None, public, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_mixed_v4_v6_cidr_rules() {
+        let rules = vec![
+            Rule {
+                condition: RuleCondition::IpCidr("192.168.0.0/16".into()),
+                action: RouteAction::Direct,
+            },
+            Rule {
+                condition: RuleCondition::IpCidr("2001:db8::/32".into()),
+                action: RouteAction::Direct,
+            },
+        ];
+        let router = Router::new(rules);
+
+        let v4_match: Option<IpAddr> = "192.168.1.1".parse().ok();
+        let v6_match: Option<IpAddr> = "2001:db8::1".parse().ok();
+        let v4_no: Option<IpAddr> = "10.0.0.1".parse().ok();
+        let v6_no: Option<IpAddr> = "2001:db9::1".parse().ok();
+
+        assert_eq!(router.route(None, v4_match, 80), RouteAction::Direct);
+        assert_eq!(router.route(None, v6_match, 80), RouteAction::Direct);
+        assert_eq!(router.route(None, v4_no, 80), RouteAction::Proxy);
+        assert_eq!(router.route(None, v6_no, 80), RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_parse_cidr_v6() {
+        // Valid CIDRs
+        let (net, mask) = parse_cidr_v6("2001:db8::/32").unwrap();
+        assert_eq!(mask, !0u128 << 96);
+        assert_eq!(
+            net,
+            u128::from("2001:db8::".parse::<std::net::Ipv6Addr>().unwrap()) & mask
+        );
+
+        let (net, _mask) = parse_cidr_v6("::1/128").unwrap();
+        assert_eq!(net, 1u128);
+
+        let (net, mask) = parse_cidr_v6("fc00::/7").unwrap();
+        assert_eq!(mask, !0u128 << 121);
+        assert_eq!(
+            net,
+            u128::from("fc00::".parse::<std::net::Ipv6Addr>().unwrap()) & mask
+        );
+
+        // Full match (match everything)
+        let (_net, mask) = parse_cidr_v6("::/0").unwrap();
+        assert_eq!(mask, 0u128);
+
+        // Invalid cases
+        assert!(parse_cidr_v6("2001:db8::").is_none()); // missing prefix
+        assert!(parse_cidr_v6("2001:db8::/129").is_none()); // prefix too large
+        assert!(parse_cidr_v6("not-an-ip/32").is_none()); // invalid IP
+    }
+
+    #[test]
+    fn test_ipv6_cidr_all_zeros() {
+        // ::/0 should match everything
+        let rules = vec![Rule {
+            condition: RuleCondition::IpCidr("::/0".into()),
+            action: RouteAction::Block,
+        }];
+        let router = Router::new(rules);
+
+        let any_v6: Option<IpAddr> = "2001:db8::1".parse().ok();
+        let loopback: Option<IpAddr> = "::1".parse().ok();
+
+        assert_eq!(router.route(None, any_v6, 80), RouteAction::Block);
+        assert_eq!(router.route(None, loopback, 80), RouteAction::Block);
+
+        // IPv4 should not match IPv6 ::/0
+        let v4: Option<IpAddr> = "1.2.3.4".parse().ok();
+        assert_eq!(router.route(None, v4, 80), RouteAction::Proxy);
     }
 
     #[test]

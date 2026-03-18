@@ -28,7 +28,7 @@ prisma server -c <PATH>
 |------|--------|------|
 | `-c, --config <PATH>` | `server.toml` | 服务端配置文件路径 |
 
-服务端同时启动 TCP 和 QUIC 监听器，等待客户端连接。启动时会验证配置，如果验证失败则退出并报错。
+如果当前目录找不到配置文件，CLI 会自动搜索标准位置（`/etc/prisma/`、`~/.config/prisma/`）。服务端同时启动 TCP 和 QUIC 监听器，等待客户端连接。启动时会验证配置，如果验证失败则退出并报错。
 
 ## `prisma client`
 
@@ -42,7 +42,7 @@ prisma client -c <PATH>
 |------|--------|------|
 | `-c, --config <PATH>` | `client.toml` | 客户端配置文件路径 |
 
-客户端启动 SOCKS5 监听器（以及可选的 HTTP CONNECT 监听器），连接到远程服务器，执行 PrismaVeil 握手，然后开始代理流量。
+如果当前目录找不到配置文件，CLI 会自动搜索标准位置（`/etc/prisma/`、`~/.config/prisma/`）。客户端启动 SOCKS5 监听器（以及可选的 HTTP CONNECT 监听器），连接到远程服务器，执行 PrismaVeil 握手 (Handshake)，然后开始代理流量。
 
 ## `prisma gen-key`
 
@@ -167,7 +167,7 @@ prisma status --mgmt-url https://127.0.0.1:9090 --mgmt-token your-auth-token
 
 ## `prisma speed-test`
 
-运行针对服务器的带宽测试。
+运行针对服务器的带宽 (Bandwidth) 测量测试。
 
 ```bash
 prisma speed-test -s <SERVER> [OPTIONS]
@@ -310,7 +310,7 @@ prisma metrics [OPTIONS]
 
 ## `prisma bandwidth`
 
-管理每客户端带宽限制和流量配额。
+管理每客户端带宽 (Bandwidth) 限制和流量配额。
 
 ```bash
 prisma bandwidth <SUBCOMMAND>
@@ -344,7 +344,7 @@ prisma config <SUBCOMMAND>
 
 ## `prisma routes`
 
-管理服务端路由规则。
+管理服务端路由 (Routing) 规则。
 
 ```bash
 prisma routes <SUBCOMMAND>
@@ -409,7 +409,7 @@ prisma logs [OPTIONS]
 
 ## `prisma ping`
 
-测量到服务器的握手 RTT。
+测量到服务器的握手 (Handshake) RTT。
 
 ```bash
 prisma ping [OPTIONS]

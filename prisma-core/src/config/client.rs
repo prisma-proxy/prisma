@@ -7,6 +7,9 @@ pub struct ClientConfig {
     pub socks5_listen_addr: String,
     #[serde(default)]
     pub http_listen_addr: Option<String>,
+    /// PAC server port. Defaults to 8070 when not set.
+    #[serde(default)]
+    pub pac_port: Option<u16>,
     pub server_addr: String,
     pub identity: ClientIdentity,
     #[serde(default = "default_cipher_suite")]
@@ -108,6 +111,14 @@ pub struct ClientConfig {
     /// Only effective when transport provides confidentiality (TLS/QUIC). Defaults to false.
     #[serde(default)]
     pub transport_only_cipher: bool,
+    /// Server public key pin: hex-encoded SHA-256 hash of the server's ephemeral public key.
+    /// When set, the client verifies the server's identity during handshake by comparing the
+    /// SHA-256 hash of the received `server_ephemeral_pub` against this pinned value.
+    /// This provides end-to-end server authentication independent of TLS, which is critical
+    /// when traffic traverses CDNs that terminate TLS.
+    /// Generate with: `prisma-cli server-key-pin --key <hex-encoded-server-public-key>`
+    #[serde(default)]
+    pub server_key_pin: Option<String>,
 }
 
 /// TUN device configuration.

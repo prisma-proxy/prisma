@@ -5,6 +5,7 @@ mod completions;
 mod config_ops;
 mod connections;
 mod console;
+mod diagnose;
 mod diagnostics;
 mod init;
 mod logs;
@@ -205,6 +206,12 @@ enum Commands {
     },
     /// Test all configured transports against the server
     TestTransport {
+        /// Path to client config file
+        #[arg(short, long, default_value = "client.toml")]
+        config: String,
+    },
+    /// Run connectivity diagnostics against the server
+    Diagnose {
         /// Path to client config file
         #[arg(short, long, default_value = "client.toml")]
         config: String,
@@ -610,6 +617,10 @@ async fn main() -> anyhow::Result<()> {
             let path = resolve_config(&config, "client.toml");
             diagnostics::test_transport(path.to_str().unwrap()).await?;
         }
+        Commands::Diagnose { config } => {
+            let path = resolve_config(&config, "client.toml");
+            diagnose::run(path.to_str().unwrap()).await?;
+        }
     }
 
     Ok(())
@@ -765,6 +776,7 @@ async fn run_speed_test(
         client_id,
         auth_secret,
         cipher_suite,
+        ctx.server_key_pin.as_deref(),
     )
     .await?;
 

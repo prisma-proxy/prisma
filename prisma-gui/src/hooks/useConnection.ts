@@ -91,5 +91,17 @@ export function useConnection() {
     }
   }, [connectTo, disconnect]);
 
-  return { connectTo, disconnect, switchTo, toggle };
+  const toggleProxyOnly = useCallback(async () => {
+    const store = useStore.getState();
+    if (store.connected) {
+      await disconnect();
+    } else {
+      const profile = store.activeProfileIdx !== null
+        ? store.profiles[store.activeProfileIdx]
+        : store.profiles[0];
+      if (profile) await connectTo(profile, 0x01); // MODE_SOCKS5 only, no system proxy
+    }
+  }, [connectTo, disconnect]);
+
+  return { connectTo, disconnect, switchTo, toggle, toggleProxyOnly };
 }

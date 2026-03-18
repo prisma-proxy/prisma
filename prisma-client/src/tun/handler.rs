@@ -20,6 +20,7 @@ use crate::proxy::ProxyContext;
 use crate::relay;
 use crate::tun::device::TunDevice;
 use crate::tun::packet::{self, PROTO_TCP, PROTO_UDP};
+use crate::tun::process::AppFilter;
 use crate::tun::tcp_stack::TcpStack;
 use crate::tunnel;
 
@@ -28,7 +29,11 @@ use crate::tunnel;
 /// Creates a smoltcp TCP/IP stack and processes raw IP packets from the TUN
 /// device. TCP connections are bridged to PrismaVeil tunnels, UDP datagrams
 /// are relayed via CMD_UDP_DATA.
-pub async fn run_tun_handler(device: Box<dyn TunDevice>, ctx: ProxyContext) -> Result<()> {
+pub async fn run_tun_handler(
+    device: Box<dyn TunDevice>,
+    ctx: ProxyContext,
+    app_filter: Option<Arc<AppFilter>>,
+) -> Result<()> {
     let device_name = device.name().to_string();
     let mtu = device.mtu();
     info!(device = %device_name, mtu = mtu, "TUN handler starting");
@@ -82,6 +87,20 @@ pub async fn run_tun_handler(device: Box<dyn TunDevice>, ctx: ProxyContext) -> R
             Some(info) => info,
             None => continue,
         };
+
+        // Per-app filter: check if this packet should be proxied
+        if let Some(ref filter) = app_filter {
+            if let Some(src_port) = packet::src_port(pkt) {
+                if !filter.should_proxy(ip_info.protocol, src_port) {
+                    debug!(
+                        proto = ip_info.protocol,
+                        src_port = src_port,
+                        "Per-app filter: bypassing (direct)"
+                    );
+                    continue; // Skip this packet — it goes direct via OS routing
+                }
+            }
+        }
 
         match ip_info.protocol {
             PROTO_TCP => {
@@ -269,6 +288,7 @@ async fn relay_tun_tcp(
         ctx.auth_secret,
         ctx.cipher_suite,
         &destination,
+        ctx.server_key_pin.as_deref(),
     )
     .await?;
 

@@ -124,6 +124,11 @@ impl QuotaStore {
         self.clients.read().await.contains_key(client_id)
     }
 
+    /// Remove a client's quota tracking.
+    pub async fn remove_client(&self, client_id: &str) {
+        self.clients.write().await.remove(client_id);
+    }
+
     /// Get the usage tracker for a client.
     pub async fn get(&self, client_id: &str) -> Option<Arc<ClientUsage>> {
         self.clients.read().await.get(client_id).cloned()

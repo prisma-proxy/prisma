@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, List, GitBranch, ScrollText, Gauge, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, List, GitBranch, Network, ScrollText, Gauge, BarChart3, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "prisma-sidebar-collapsed";
@@ -13,8 +13,10 @@ export default function Sidebar() {
     { to: "/",          icon: Home,       label: t("nav.home") },
     { to: "/profiles",  icon: List,       label: t("nav.profiles") },
     { to: "/rules",     icon: GitBranch,  label: t("nav.rules") },
+    { to: "/connections", icon: Network,  label: t("nav.connections") },
     { to: "/logs",      icon: ScrollText, label: t("nav.logs") },
     { to: "/speedtest", icon: Gauge,      label: t("nav.speed") },
+    { to: "/analytics", icon: BarChart3,  label: t("nav.analytics") },
     { to: "/settings",  icon: Settings,   label: t("nav.settings") },
   ];
 

@@ -6,5 +6,7 @@ pub mod config;
 pub mod connections;
 pub mod forwards;
 pub mod health;
+pub mod prometheus_export;
+pub mod reload;
 pub mod routes;
 pub mod system;

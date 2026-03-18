@@ -134,8 +134,8 @@ prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 
 带选项卡的服务器配置编辑器：
 - **通用** — 日志级别、日志格式、最大连接数、端口转发开关
-- **伪装与 CDN** — 伪装和 CDN 配置（只读）
-- **流量与性能** — 流量整形、拥塞控制、端口跳跃、DNS、反 RTT 设置
+- **伪装 (Camouflage) 与 CDN** — 伪装和 CDN 配置（只读）
+- **流量与性能** — 流量整形 (Traffic Shaping)、拥塞控制 (Congestion Control)、端口跳跃 (Port Hopping)、DNS、反 RTT 设置
 - **TLS 与安全** — 证书信息、仅传输层加密、协议版本、PrismaTLS 状态
 - **告警** — 配置告警阈值（证书到期、配额警告、握手失败峰值）
 
@@ -148,11 +148,11 @@ prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 - **差异查看器** — 并排彩色显示备份与当前配置的差异
 - **删除** — 删除旧备份
 
-### 流量整形
+### 流量整形 (Traffic Shaping)
 
 流量整形可视化：
-- **桶大小图表** — 显示填充桶大小分布的柱状图
-- **配置卡片** — 填充模式、抖动、干扰状态、合并窗口
+- **桶大小图表** — 显示填充桶 (Bucket) 大小分布的柱状图
+- **配置卡片** — 填充模式、抖动 (Jitter)、杂音 (Chaff) 状态、合并窗口 (Coalescing Window)
 
 ## 附加功能
 

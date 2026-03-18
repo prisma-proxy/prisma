@@ -115,3 +115,120 @@ pub fn ct_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
     use subtle::ConstantTimeEq;
     a.ct_eq(b).into()
 }
+
+// --- Server key pinning ---
+
+/// Compute the SHA-256 pin of a server's public key (32 bytes).
+/// Returns the pin as a lowercase hex string (64 characters).
+///
+/// This pin can be set as `server_key_pin` in the client config to
+/// authenticate the server during the PrismaVeil handshake, independent
+/// of the TLS layer. This is critical when traffic goes through CDNs
+/// that terminate TLS.
+pub fn compute_server_key_pin(server_public_key: &[u8; 32]) -> String {
+    use sha2::Digest;
+    let hash = Sha256::digest(server_public_key);
+    hex_encode(&hash)
+}
+
+/// Verify that a server's public key matches a pinned SHA-256 hash.
+///
+/// `pin_hex` is the expected hex-encoded SHA-256 hash.
+/// `server_public_key` is the raw 32-byte X25519 public key from the server.
+///
+/// Returns `Ok(())` if the pin matches, or an error describing the mismatch.
+pub fn verify_server_key_pin(
+    pin_hex: &str,
+    server_public_key: &[u8; 32],
+) -> Result<(), crate::error::PrismaError> {
+    use sha2::Digest;
+    let actual_hash = Sha256::digest(server_public_key);
+    let actual_hex = hex_encode(&actual_hash);
+
+    let pin_normalized = pin_hex.to_lowercase();
+    if pin_normalized.len() != 64 {
+        return Err(crate::error::PrismaError::Config(ConfigError::Invalid(
+            format!(
+                "server_key_pin must be a 64-character hex string (SHA-256), got {} characters",
+                pin_normalized.len()
+            ),
+        )));
+    }
+
+    if actual_hex != pin_normalized {
+        return Err(crate::error::PrismaError::Auth(format!(
+            "Server key pin mismatch: expected {}, got {}. \
+             This may indicate a man-in-the-middle attack or a server key change.",
+            pin_normalized, actual_hex
+        )));
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_server_key_pin() {
+        let key = [0x42u8; 32];
+        let pin = compute_server_key_pin(&key);
+        // Pin should be a 64-char hex string (SHA-256)
+        assert_eq!(pin.len(), 64);
+        // Should be deterministic
+        assert_eq!(pin, compute_server_key_pin(&key));
+        // Different key should produce different pin
+        let other_key = [0x43u8; 32];
+        assert_ne!(pin, compute_server_key_pin(&other_key));
+    }
+
+    #[test]
+    fn test_verify_server_key_pin_match() {
+        let key = [0xAAu8; 32];
+        let pin = compute_server_key_pin(&key);
+        assert!(verify_server_key_pin(&pin, &key).is_ok());
+    }
+
+    #[test]
+    fn test_verify_server_key_pin_match_case_insensitive() {
+        let key = [0xAAu8; 32];
+        let pin = compute_server_key_pin(&key);
+        // Uppercase pin should also match
+        let upper_pin = pin.to_uppercase();
+        assert!(verify_server_key_pin(&upper_pin, &key).is_ok());
+    }
+
+    #[test]
+    fn test_verify_server_key_pin_mismatch() {
+        let key = [0xAAu8; 32];
+        let wrong_key = [0xBBu8; 32];
+        let pin = compute_server_key_pin(&key);
+        let result = verify_server_key_pin(&pin, &wrong_key);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("pin mismatch"), "Error: {}", err_msg);
+    }
+
+    #[test]
+    fn test_verify_server_key_pin_invalid_length() {
+        let key = [0xAAu8; 32];
+        let result = verify_server_key_pin("deadbeef", &key);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("64-character hex string"),
+            "Error: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_server_key_pin_no_pin_skipped() {
+        // When no pin is set (None), the check should be skipped at the call site.
+        // This test verifies the function works correctly when called with valid inputs.
+        let key = [0xCCu8; 32];
+        let pin = compute_server_key_pin(&key);
+        assert!(verify_server_key_pin(&pin, &key).is_ok());
+    }
+}

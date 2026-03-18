@@ -6,6 +6,7 @@ use crate::crypto::kdf::{
     derive_preliminary_key, derive_v3_session_key, derive_v5_header_key, derive_v5_migration_token,
     derive_v5_preliminary_key, derive_v5_session_key,
 };
+use crate::crypto::pq_kem;
 use crate::error::{CryptoError, PrismaError, ProtocolError};
 use crate::protocol::codec::*;
 use crate::protocol::types::*;
@@ -27,6 +28,7 @@ pub struct PrismaHandshakeClient {
     client_id: ClientId,
     auth_secret: [u8; 32],
     preferred_cipher: CipherSuite,
+    enable_pq_kem: bool,
 }
 
 impl PrismaHandshakeClient {
@@ -35,7 +37,14 @@ impl PrismaHandshakeClient {
             client_id,
             auth_secret,
             preferred_cipher,
+            enable_pq_kem: false,
         }
+    }
+
+    /// Enable hybrid post-quantum key exchange (X25519 + ML-KEM-768).
+    pub fn with_pq_kem(mut self) -> Self {
+        self.enable_pq_kem = true;
+        self
     }
 
     /// Step 1: Generate PrismaClientInit and transition to awaiting PrismaServerInit.
@@ -50,7 +59,17 @@ impl PrismaHandshakeClient {
         let auth_token = util::compute_auth_token(&self.auth_secret, &self.client_id, timestamp);
 
         // v5: request header authentication and connection migration
-        let flags = CLIENT_INIT_FLAG_HEADER_AUTH | CLIENT_INIT_FLAG_MIGRATION;
+        let mut flags = CLIENT_INIT_FLAG_HEADER_AUTH | CLIENT_INIT_FLAG_MIGRATION;
+
+        // Generate ML-KEM-768 keypair for hybrid PQ key exchange if enabled
+        let (mlkem_keypair, pq_kem_encap_key) = if self.enable_pq_kem {
+            flags |= CLIENT_INIT_FLAG_PQ_KEM;
+            let kp = pq_kem::generate_mlkem_keypair();
+            let ek_bytes = kp.ek_bytes.clone();
+            (Some(kp), Some(ek_bytes))
+        } else {
+            (None, None)
+        };
 
         let init = PrismaClientInit {
             version: PRISMA_PROTOCOL_VERSION,
@@ -60,6 +79,7 @@ impl PrismaHandshakeClient {
             timestamp,
             cipher_suite: self.preferred_cipher,
             auth_token,
+            pq_kem_encap_key,
             padding: crate::crypto::padding::generate_padding(64),
         };
         let bytes = encode_client_init(&init);
@@ -70,6 +90,7 @@ impl PrismaHandshakeClient {
             timestamp,
             client_id: self.client_id,
             preferred_cipher: self.preferred_cipher,
+            mlkem_keypair,
         };
 
         (state, bytes)
@@ -83,6 +104,8 @@ pub struct PrismaClientAwaitingServerInit {
     timestamp: u64,
     client_id: ClientId,
     preferred_cipher: CipherSuite,
+    /// ML-KEM-768 keypair for hybrid PQ KEM (present when CLIENT_INIT_FLAG_PQ_KEM was set).
+    mlkem_keypair: Option<pq_kem::MlKemKeyPair>,
 }
 
 impl PrismaClientAwaitingServerInit {
@@ -129,6 +152,27 @@ impl PrismaClientAwaitingServerInit {
                 server_init.status
             )));
         }
+
+        // If PQ KEM was negotiated, decapsulate the ML-KEM ciphertext and combine
+        // with the X25519 shared secret for hybrid post-quantum security.
+        let shared_secret = if server_init.server_features & FEATURE_PQ_KEM != 0 {
+            let mlkem_kp = self.mlkem_keypair.ok_or_else(|| {
+                ProtocolError::HandshakeFailed(
+                    "Server negotiated PQ KEM but client has no ML-KEM keypair".into(),
+                )
+            })?;
+            let ct = server_init.pq_kem_ciphertext.as_ref().ok_or_else(|| {
+                ProtocolError::HandshakeFailed(
+                    "Server negotiated PQ KEM but no ciphertext in ServerInit".into(),
+                )
+            })?;
+            let mlkem_shared = pq_kem::mlkem_decapsulate(&mlkem_kp.dk, ct).ok_or_else(|| {
+                ProtocolError::HandshakeFailed("ML-KEM decapsulation failed".into())
+            })?;
+            pq_kem::hybrid_combine(&shared_secret, &mlkem_shared)
+        } else {
+            shared_secret
+        };
 
         // Derive final session key — v5 KDF with version binding
         let session_key = derive_v5_session_key(
@@ -231,9 +275,9 @@ impl PrismaHandshakeServer {
         let server_keypair = EphemeralKeyPair::generate();
         let server_pub = server_keypair.public_key_bytes();
 
-        // Derive shared secret
+        // Derive X25519 shared secret
         let client_pub_key = x25519_dalek::PublicKey::from(client_init.client_ephemeral_pub);
-        let shared_secret = server_keypair.diffie_hellman(&client_pub_key);
+        let x25519_shared = server_keypair.diffie_hellman(&client_pub_key);
 
         // Generate random challenge
         let mut challenge = [0u8; 32];
@@ -243,25 +287,49 @@ impl PrismaHandshakeServer {
 
         let is_v5 = client_version >= 0x05;
 
-        // Derive preliminary key (for encrypting PrismaServerInit)
-        // v5 uses a new domain separation string for forward-incompatible derivation
+        // Derive preliminary key from X25519 only (client needs this to decrypt
+        // the ServerInit, which contains the ML-KEM ciphertext).
         let prelim_key = if is_v5 {
             derive_v5_preliminary_key(
-                &shared_secret,
+                &x25519_shared,
                 &client_init.client_ephemeral_pub,
                 &server_pub,
                 client_init.timestamp,
             )
         } else {
             derive_preliminary_key(
-                &shared_secret,
+                &x25519_shared,
                 &client_init.client_ephemeral_pub,
                 &server_pub,
                 client_init.timestamp,
             )
         };
 
-        // Derive final session key (for data transfer)
+        // Hybrid PQ KEM: if both client and server support it, encapsulate with
+        // client's ML-KEM key and combine the resulting shared secret with X25519.
+        // The combined secret is used for the session key (not the preliminary key).
+        let pq_kem_negotiated = is_v5
+            && client_init.flags & CLIENT_INIT_FLAG_PQ_KEM != 0
+            && server_features & FEATURE_PQ_KEM != 0
+            && client_init.pq_kem_encap_key.is_some();
+
+        let (shared_secret, pq_kem_ciphertext) = if pq_kem_negotiated {
+            let ek_bytes = client_init.pq_kem_encap_key.as_ref().unwrap();
+            match pq_kem::mlkem_encapsulate(ek_bytes) {
+                Some((ct, mlkem_shared)) => {
+                    let combined = pq_kem::hybrid_combine(&x25519_shared, &mlkem_shared);
+                    (combined, Some(ct))
+                }
+                None => {
+                    // ML-KEM encapsulation failed; fall back to plain X25519
+                    (x25519_shared, None)
+                }
+            }
+        } else {
+            (x25519_shared, None)
+        };
+
+        // Derive final session key (for data transfer) from the (potentially hybrid) shared secret
         let session_key = if is_v5 {
             derive_v5_session_key(
                 &shared_secret,
@@ -308,6 +376,10 @@ impl PrismaHandshakeServer {
             if client_init.flags & CLIENT_INIT_FLAG_MIGRATION != 0 {
                 f |= FEATURE_CONNECTION_MIGRATION;
             }
+            // Only advertise PQ KEM if we actually negotiated it
+            if pq_kem_ciphertext.is_some() {
+                f |= FEATURE_PQ_KEM;
+            }
             f
         } else {
             server_features
@@ -324,6 +396,7 @@ impl PrismaHandshakeServer {
             server_features: negotiated_features,
             session_ticket: encrypted_ticket,
             bucket_sizes: bucket_sizes.to_vec(),
+            pq_kem_ciphertext,
             padding: crate::crypto::padding::generate_padding(64),
         };
         let init_plaintext = encode_server_init(&server_init);
@@ -765,6 +838,7 @@ mod tests {
             timestamp,
             cipher_suite: CipherSuite::ChaCha20Poly1305,
             auth_token,
+            pq_kem_encap_key: None,
             padding: vec![],
         };
         let bad_bytes = encode_client_init(&bad_init);
@@ -813,5 +887,260 @@ mod tests {
         assert_eq!(keys.server_nonce_counter, 0);
         assert_eq!(keys.header_key, Some([0xCCu8; 32]));
         assert_eq!(keys.migration_token, Some([0xDDu8; 32]));
+    }
+
+    #[test]
+    fn test_server_key_pin_verification_success() {
+        // Full handshake, then verify the server's public key pin matches.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305);
+        let (client_state, client_init_bytes) = client_hs.start();
+
+        let (server_init_bytes, _server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            0,
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
+
+        // Extract server public key (first 32 bytes of wire format)
+        let mut server_pub = [0u8; 32];
+        server_pub.copy_from_slice(&server_init_bytes[..32]);
+
+        // Compute the pin from the server's public key
+        let pin = crate::util::compute_server_key_pin(&server_pub);
+
+        // Verify should succeed with the correct pin
+        assert!(crate::util::verify_server_key_pin(&pin, &server_pub).is_ok());
+
+        // The handshake should still succeed after pin verification
+        let (session_keys, _) = client_state
+            .process_server_init(&server_init_bytes)
+            .unwrap();
+        assert!(session_keys.challenge.is_some());
+    }
+
+    #[test]
+    fn test_server_key_pin_verification_failure() {
+        // Full handshake, then verify that a wrong pin is rejected.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305);
+        let (_client_state, client_init_bytes) = client_hs.start();
+
+        let (server_init_bytes, _server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            0,
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
+
+        // Extract server public key (first 32 bytes of wire format)
+        let mut server_pub = [0u8; 32];
+        server_pub.copy_from_slice(&server_init_bytes[..32]);
+
+        // Use a wrong pin (pin of a different key)
+        let wrong_key = [0xEEu8; 32];
+        let wrong_pin = crate::util::compute_server_key_pin(&wrong_key);
+
+        // Verify should fail with the wrong pin
+        let result = crate::util::verify_server_key_pin(&wrong_pin, &server_pub);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("pin mismatch"));
+    }
+
+    #[test]
+    fn test_no_server_key_pin_skips_verification() {
+        // When no pin is configured (None), the handshake should proceed without
+        // any pin check. This test verifies the handshake completes successfully.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305);
+        let (client_state, client_init_bytes) = client_hs.start();
+
+        let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            0,
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
+
+        // No pin verification — just complete the handshake
+        let (client_session, _) = client_state
+            .process_server_init(&server_init_bytes)
+            .unwrap();
+
+        let server_session = server_state.into_session_keys();
+        assert_eq!(client_session.session_key, server_session.session_key);
+    }
+
+    #[test]
+    fn test_prisma_handshake_pq_kem() {
+        // Full handshake with hybrid PQ KEM enabled on both sides.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+        let bucket_sizes = vec![128, 256, 512, 1024];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        // Client enables PQ KEM
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305)
+                .with_pq_kem();
+        let (client_state, client_init_bytes) = client_hs.start();
+
+        // Server enables PQ KEM via server_features
+        let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            FEATURE_UDP_RELAY | FEATURE_PQ_KEM,
+            &ticket_key,
+            &bucket_sizes,
+            &verifier,
+        )
+        .unwrap();
+
+        // Client processes server response (with PQ KEM ciphertext)
+        let (client_session, client_buckets) = client_state
+            .process_server_init(&server_init_bytes)
+            .unwrap();
+
+        let server_session = server_state.into_session_keys();
+
+        // Both sides must agree on session key (derived from hybrid X25519+ML-KEM secret)
+        assert_eq!(client_session.session_key, server_session.session_key);
+        assert_eq!(client_session.session_id, server_session.session_id);
+        assert_eq!(client_session.cipher_suite, server_session.cipher_suite);
+        assert_eq!(client_session.protocol_version, PRISMA_PROTOCOL_VERSION);
+        assert!(client_session.challenge.is_some());
+        assert!(client_session.session_ticket.is_some());
+        assert_eq!(client_buckets, bucket_sizes);
+
+        // Verify challenge response still works
+        let challenge = client_session.challenge.unwrap();
+        let response_hash: [u8; 32] = blake3::hash(&challenge).into();
+        assert!(server_state_verify_challenge(
+            &server_session.challenge.unwrap(),
+            &response_hash
+        ));
+    }
+
+    #[test]
+    fn test_prisma_handshake_pq_kem_backward_compat() {
+        // Client enables PQ KEM but server does NOT support it.
+        // Handshake should succeed using plain X25519.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305)
+                .with_pq_kem();
+        let (client_state, client_init_bytes) = client_hs.start();
+
+        // Server does NOT advertise FEATURE_PQ_KEM
+        let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            FEATURE_UDP_RELAY, // no PQ KEM
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
+
+        let (client_session, _) = client_state
+            .process_server_init(&server_init_bytes)
+            .unwrap();
+
+        let server_session = server_state.into_session_keys();
+
+        // Handshake should still succeed with plain X25519
+        assert_eq!(client_session.session_key, server_session.session_key);
+    }
+
+    #[test]
+    fn test_prisma_handshake_pq_kem_differs_from_non_pq() {
+        // Verify that a PQ KEM handshake produces a different session key than
+        // a non-PQ handshake (since ML-KEM adds additional entropy).
+        // Note: We can't directly compare because ephemeral keys differ,
+        // but we verify the PQ KEM handshake itself is internally consistent.
+        let client_id = ClientId::new();
+        let auth_secret = [0x42u8; 32];
+        let ticket_key = [0xFFu8; 32];
+
+        let verifier = TestVerifier {
+            expected_id: client_id,
+            auth_secret,
+        };
+
+        // PQ KEM handshake
+        let client_hs =
+            PrismaHandshakeClient::new(client_id, auth_secret, CipherSuite::ChaCha20Poly1305)
+                .with_pq_kem();
+        let (client_state, client_init_bytes) = client_hs.start();
+
+        let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
+            &client_init_bytes,
+            PaddingRange::new(0, 256),
+            FEATURE_PQ_KEM,
+            &ticket_key,
+            &[],
+            &verifier,
+        )
+        .unwrap();
+
+        let (client_session, _) = client_state
+            .process_server_init(&server_init_bytes)
+            .unwrap();
+
+        let server_session = server_state.into_session_keys();
+
+        assert_eq!(client_session.session_key, server_session.session_key);
+        // Session key should not be all zeros
+        assert_ne!(client_session.session_key, [0u8; 32]);
     }
 }

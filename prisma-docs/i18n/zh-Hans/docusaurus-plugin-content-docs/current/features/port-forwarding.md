@@ -2,9 +2,9 @@
 sidebar_position: 3
 ---
 
-# 端口转发
+# 端口转发 (Port Forwarding)
 
-Prisma 支持 frp 风格的端口转发（反向代理），允许您通过 Prisma 服务器暴露 NAT 或防火墙后面的本地服务。所有流量都通过加密的 PrismaVeil 隧道传输。
+Prisma 支持 frp 风格的端口转发 (Port Forwarding)（反向代理），允许您通过 Prisma 服务器暴露 NAT 或防火墙后面的本地服务。所有流量都通过加密的 PrismaVeil 隧道 (Tunnel) 传输。
 
 ## 工作原理
 

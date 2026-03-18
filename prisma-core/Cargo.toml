@@ -12,6 +12,8 @@ rustls = { workspace = true }
 chacha20poly1305 = { workspace = true }
 aes-gcm = { workspace = true }
 x25519-dalek = { workspace = true }
+ml-kem = { workspace = true }
+kem = "0.3.0-pre.0"
 blake3 = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
@@ -39,6 +41,7 @@ http-body-util = "0.1"
 webpki-roots = "0.26"
 hex = "0.4"
 governor = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

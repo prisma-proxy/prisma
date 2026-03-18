@@ -2,9 +2,9 @@
 sidebar_position: 7
 ---
 
-# 伪装（抗主动检测）
+# 伪装 (Camouflage)（抗主动检测）
 
-Prisma 的伪装系统可抵御审查系统（如 GFW）的主动探测，这些系统通过连接并观察响应来识别代理协议。没有伪装时，PrismaVeil 握手可被轻易识别。
+Prisma 的伪装 (Camouflage) 系统可抵御审查系统（如 GFW）的主动探测 (Active Probing)，这些系统通过连接并观察响应来识别代理 (Proxy) 协议。没有伪装时，PrismaVeil 握手 (Handshake) 可被轻易识别。
 
 ## 伪装的重要性
 
@@ -43,9 +43,9 @@ skip_cert_verify = false
 
 客户端通过 TLS 连接到服务器。在 TLS 隧道内，正常的 PrismaVeil 握手继续进行。
 
-## 诱饵回退
+## 诱饵回退 (Decoy Fallback)
 
-当非 Prisma 连接到达时（HTTP 探测、浏览器访问、GFW 主动探测），服务器会将其反向代理到可配置的诱饵网站，而不是断开连接。这使服务器行为与真实的 HTTPS 反向代理完全一致。
+当非 Prisma 连接到达时（HTTP 探测、浏览器访问、GFW 主动探测），服务器会将其反向代理到可配置的诱饵网站 (Decoy Site)，而不是断开连接。这使服务器行为与真实的 HTTPS 反向代理完全一致。
 
 ```toml
 [camouflage]

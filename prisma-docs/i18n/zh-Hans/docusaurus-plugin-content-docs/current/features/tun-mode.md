@@ -173,9 +173,9 @@ exclude_routes = ["192.168.1.0/24", "10.0.0.0/8"]
 服务器的 IP 地址始终自动从 TUN 路由中排除，以防止路由环路。
 :::
 
-## 结合路由规则
+## 结合路由规则 (Routing Rules)
 
-TUN 模式可与 Prisma 的[路由规则](/docs/features/routing-rules)引擎配合使用。您可以通过 TUN 捕获所有流量，但选择性地路由：
+TUN 模式可与 Prisma 的[路由规则](/docs/features/routing-rules)引擎配合使用。您可以通过 TUN 捕获所有流量，但选择性地路由 (Routing)：
 
 ```toml title="client.toml"
 [tun]
@@ -252,7 +252,7 @@ macOS 需要 root 权限才能创建 TUN 设备：
 sudo prisma client -c client.toml
 ```
 
-### 路由环路
+### 路由环路 (Routing Loop)
 
 如果启用 TUN 模式后失去网络连接，可能是服务器 IP 未被正确排除。请显式排除：
 

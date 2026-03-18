@@ -21,7 +21,7 @@ sidebar_position: 1
 | `logging.format` | string | `"pretty"` | `pretty` / `json` |
 | `performance.max_connections` | u32 | `1024` | 最大并发连接数 |
 | `performance.connection_timeout_secs` | u64 | `300` | 空闲连接超时时间（秒） |
-| `port_forwarding.enabled` | bool | `false` | 启用端口转发 / 反向代理 |
+| `port_forwarding.enabled` | bool | `false` | 启用端口转发 (Port Forwarding) / 反向代理 |
 | `port_forwarding.port_range_start` | u16 | `1024` | 允许转发的最小端口号 |
 | `port_forwarding.port_range_end` | u16 | `65535` | 允许转发的最大端口号 |
 | `management_api.enabled` | bool | `false` | 启用管理 REST/WS API |
@@ -43,19 +43,19 @@ sidebar_position: 1
 | `prisma_tls.auth_rotation_hours` | u64 | `1` | 认证密钥轮换间隔（小时） |
 | `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
 | `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | 桶填充模式的桶大小 |
-| `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧最大时序抖动（毫秒） |
-| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 杂音注入间隔（毫秒），0=禁用 |
-| `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒），0=禁用 |
+| `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧最大时序抖动 (Timing Jitter)（毫秒） |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 杂音注入 (Chaff Injection) 间隔（毫秒），0=禁用 |
+| `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并 (Frame Coalescing) 窗口（毫秒），0=禁用 |
 | `allow_transport_only_cipher` | bool | `false` | 允许客户端使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。 |
 | `anti_rtt.enabled` | bool | `false` | 启用 RTT 归一化 |
 | `anti_rtt.normalization_ms` | u32 | `150` | RTT 归一化目标值 |
-| `camouflage.enabled` | bool | `false` | 启用伪装（抗主动探测） |
+| `camouflage.enabled` | bool | `false` | 启用伪装 (Camouflage)（抗主动探测） |
 | `camouflage.tls_on_tcp` | bool | `false` | 在 TCP 传输外包裹 TLS（需要 `[tls]` 配置） |
 | `camouflage.fallback_addr` | string? | — | 非 Prisma 连接的诱饵服务器地址 |
 | `camouflage.alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN 协议 |
 | `camouflage.h3_cover_site` | string? | — | HTTP/3 伪装上游 URL（代理真实网站） |
 | `camouflage.h3_static_dir` | string? | — | HTTP/3 伪装本地静态文件目录 |
-| `camouflage.salamander_password` | string? | — | Salamander UDP 混淆密码（仅 QUIC） |
+| `camouflage.salamander_password` | string? | — | Salamander UDP 混淆 (Obfuscation) 密码（仅 QUIC） |
 | `cdn.enabled` | bool | `false` | 启用 CDN 传输监听（WS、gRPC、XHTTP） |
 | `cdn.listen_addr` | string | `"0.0.0.0:443"` | CDN 监听绑定地址 |
 | `cdn.tls.cert_path` | string? | — | CDN TLS 证书（如 Cloudflare Origin 证书） |
@@ -85,9 +85,9 @@ sidebar_position: 1
 | `cdn.xporta.cookie_name` | string | `"_sess"` | 会话 Cookie 名称 |
 | `cdn.xporta.encoding` | string | `"json"` | 编码方式：`"json"` / `"binary"` |
 | `dns_upstream` | string | `"8.8.8.8:53"` | CMD_DNS_QUERY 转发的上游 DNS 服务器 |
-| `congestion.mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` |
+| `congestion.mode` | string | `"bbr"` | 拥塞控制 (Congestion Control)：`"brutal"` / `"bbr"` / `"adaptive"` |
 | `congestion.target_bandwidth` | string? | — | brutal/adaptive 模式的目标带宽（如 `"100mbps"`） |
-| `port_hopping.enabled` | bool | `false` | 启用 QUIC 端口跳变 |
+| `port_hopping.enabled` | bool | `false` | 启用 QUIC 端口跳变 (Port Hopping) |
 | `port_hopping.base_port` | u16 | `10000` | 端口范围起始值 |
 | `port_hopping.port_range` | u16 | `50000` | 端口范围数量 |
 | `port_hopping.interval_secs` | u64 | `60` | 端口跳变间隔（秒） |

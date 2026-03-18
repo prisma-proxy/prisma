@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Docker
 
-## 多阶段构建
+## 多阶段构建 (Multi-Stage Build)
 
 Docker 镜像使用多阶段构建：Node.js 将控制台构建为静态文件，Rust 构建服务器二进制文件，最终镜像是包含两者的最小 Debian 运行时。
 

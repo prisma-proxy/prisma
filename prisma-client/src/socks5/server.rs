@@ -171,6 +171,7 @@ async fn handle_connect(
         ctx.auth_secret,
         ctx.cipher_suite,
         &destination,
+        ctx.server_key_pin.as_deref(),
     )
     .await?;
 
@@ -226,6 +227,7 @@ async fn handle_udp_associate(mut stream: TcpStream, ctx: &ProxyContext) -> Resu
         ctx.client_id,
         ctx.auth_secret,
         ctx.cipher_suite,
+        ctx.server_key_pin.as_deref(),
     )
     .await?;
 

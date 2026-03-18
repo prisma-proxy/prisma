@@ -15,6 +15,7 @@ pub use prisma_core::config::client::TunConfig;
 
 pub mod device;
 pub mod handler;
+pub mod process;
 pub mod tcp_stack;
 
 /// IP packet header parsing utilities.
@@ -89,6 +90,16 @@ pub mod packet {
         }
         let dst_port = u16::from_be_bytes([udp[2], udp[3]]);
         Some(SocketAddr::new(ip.dst.into(), dst_port))
+    }
+
+    /// Extract the source port from a TCP or UDP packet (used by per-app filtering).
+    pub fn src_port(data: &[u8]) -> Option<u16> {
+        let ip = parse_ipv4(data)?;
+        let transport = &data[ip.payload_offset..];
+        if transport.len() < 2 {
+            return None;
+        }
+        Some(u16::from_be_bytes([transport[0], transport[1]]))
     }
 }
 

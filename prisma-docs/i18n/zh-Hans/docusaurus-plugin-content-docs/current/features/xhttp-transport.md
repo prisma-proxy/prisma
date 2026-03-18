@@ -86,9 +86,9 @@ referer = "https://www.google.com/"
 # xhttp_extra_headers = [["Accept", "text/html"]]
 ```
 
-## XMUX 连接池
+## XMUX 连接池 (Connection Pooling)
 
-XMUX 随机化连接生命周期以防止长连接指纹识别。连接池中的每个连接从可配置范围中获取随机的生命周期和请求数限制。
+XMUX 随机化连接生命周期以防止长连接指纹识别 (Fingerprinting)。连接池中的每个连接从可配置范围中获取随机的生命周期和请求数限制。
 
 ```toml
 [xmux]
@@ -104,7 +104,7 @@ max_requests_max = 200        # 轮换前最大请求数
 
 当连接超过其随机化的生命周期或请求数时，会被优雅关闭并替换为新连接。
 
-## HTTP 头部混淆
+## HTTP 头部混淆 (Header Obfuscation)
 
 客户端和服务端都可以注入头部，使流量看起来像正常的网页浏览：
 

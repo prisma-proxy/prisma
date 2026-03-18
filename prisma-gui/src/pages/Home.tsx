@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown, ArrowDown, ArrowUp, Timer, Database, Signal } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Clock, ArrowUpDown, ArrowDown, ArrowUp, Timer, Database, Signal, ClipboardCopy } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export default function Home() {
   const setProfiles = useStore((s) => s.setProfiles);
 
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
-  const { toggle } = useConnection();
+  const { toggle, toggleProxyOnly } = useConnection();
   const events = useConnectionHistory((s) => s.events);
   const todayUsage = useDataUsage.getState().getToday();
   const recentEvents = events.slice(-10).reverse();
@@ -50,6 +50,11 @@ export default function Home() {
     setBusy(true);
     try { await toggle(); } finally { setBusy(false); }
   }, [toggle]);
+
+  const handleProxyOnly = useCallback(async () => {
+    setBusy(true);
+    try { await toggleProxyOnly(); } finally { setBusy(false); }
+  }, [toggleProxyOnly]);
 
   const modeValues: string[] = [];
   if (proxyModes & MODE_SOCKS5)       modeValues.push("socks5");
@@ -178,20 +183,47 @@ export default function Home() {
       </div>
 
       {/* Connect/Disconnect */}
-      <Button
-        className="w-full"
-        variant={connected ? "destructive" : "default"}
-        disabled={busy || connecting}
-        onClick={handleConnect}
-      >
-        {connecting ? (
-          <><RefreshCw className="animate-spin" /> {t("home.connecting")}</>
-        ) : connected ? (
-          <><WifiOff /> {t("home.disconnect")}</>
-        ) : (
-          <><Wifi /> {t("home.connect")}</>
+      <div className="flex gap-2">
+        <Button
+          className="flex-1"
+          variant={connected ? "destructive" : "default"}
+          disabled={busy || connecting}
+          onClick={handleConnect}
+        >
+          {connecting ? (
+            <><RefreshCw className="animate-spin" /> {t("home.connecting")}</>
+          ) : connected ? (
+            <><WifiOff /> {t("home.disconnect")}</>
+          ) : (
+            <><Wifi /> {t("home.connect")}</>
+          )}
+        </Button>
+        {!connected && !connecting && (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={handleProxyOnly}
+            title={t("home.proxyOnlyTooltip")}
+          >
+            {t("home.proxyOnly")}
+          </Button>
         )}
-      </Button>
+        {connected && (
+          <Button
+            variant="outline"
+            size="icon"
+            title={t("home.copyPacUrl")}
+            onClick={async () => {
+              try {
+                const url = await api.getPacUrl(0);
+                await navigator.clipboard.writeText(url);
+              } catch {}
+            }}
+          >
+            <ClipboardCopy size={16} />
+          </Button>
+        )}
+      </div>
 
       {/* Connection history */}
       {recentEvents.length > 0 && (

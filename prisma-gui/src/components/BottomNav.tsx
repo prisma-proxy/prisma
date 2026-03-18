@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, List, GitBranch, ScrollText, Settings } from "lucide-react";
+import { Home, List, GitBranch, Network, ScrollText, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function BottomNav() {
@@ -10,7 +10,9 @@ export default function BottomNav() {
     { to: "/",         icon: Home,       label: t("nav.home") },
     { to: "/profiles", icon: List,       label: t("nav.profiles") },
     { to: "/rules",    icon: GitBranch,  label: t("nav.rules") },
+    { to: "/connections", icon: Network, label: t("nav.connections") },
     { to: "/logs",     icon: ScrollText, label: t("nav.logs") },
+    { to: "/analytics", icon: BarChart3, label: t("nav.analytics") },
     { to: "/settings", icon: Settings,   label: t("nav.settings") },
   ];
 

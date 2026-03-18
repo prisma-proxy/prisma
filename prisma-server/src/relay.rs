@@ -4,19 +4,23 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use prisma_core::crypto::aead::AeadCipher;
 use prisma_core::protocol::anti_replay::AntiReplayWindow;
 use prisma_core::protocol::codec::*;
 use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
-use prisma_core::types::MAX_FRAME_SIZE;
+use prisma_core::types::{CipherSuite, MAX_FRAME_SIZE};
 
 use prisma_core::state::ServerMetrics;
 
 use crate::bandwidth::limiter::BandwidthLimiterStore;
 use crate::bandwidth::quota::QuotaStore;
+
+/// Whether to enable splice(2) zero-copy relay on Linux when conditions allow.
+/// Set to `false` to force the standard userspace relay path even on Linux.
+const SPLICE_ENABLED: bool = true;
 
 /// Per-client bandwidth and quota limits, passed as a bundle to avoid
 /// duplicating the entire relay function for limited vs unlimited clients.
@@ -320,4 +324,422 @@ where
 /// Nonce format: [direction:1][0:3][counter:8]
 fn nonce_to_counter(nonce: &[u8; 12]) -> u64 {
     u64::from_be_bytes(nonce[4..12].try_into().unwrap())
+}
+
+/// Returns `true` if the splice(2) zero-copy relay path should be used.
+///
+/// Conditions:
+/// - `SPLICE_ENABLED` constant is `true`
+/// - Cipher suite is `TransportOnly` (TLS/QUIC already encrypts)
+/// - Running on Linux (compile-time check via `cfg`)
+fn should_use_splice(cipher_suite: CipherSuite) -> bool {
+    if !SPLICE_ENABLED {
+        return false;
+    }
+    if cipher_suite != CipherSuite::TransportOnly {
+        return false;
+    }
+    cfg!(target_os = "linux")
+}
+
+/// Zero-copy relay for `TransportOnly` sessions on Linux using splice(2).
+///
+/// When the transport layer (TLS/QUIC) already provides encryption, there is no
+/// need to decrypt/re-encrypt in userspace. The splice(2) syscall moves data
+/// directly between two file descriptors through a kernel pipe, avoiding copies
+/// into userspace entirely. This can significantly reduce CPU usage and latency
+/// for high-throughput relay sessions.
+///
+/// On non-Linux platforms or when conditions aren't met, falls back to
+/// `tokio::io::copy_bidirectional`.
+pub async fn relay_transport_only(
+    tunnel: TcpStream,
+    outbound: TcpStream,
+    cipher_suite: CipherSuite,
+    metrics: Arc<ServerMetrics>,
+    bytes_up: Arc<AtomicU64>,
+    bytes_down: Arc<AtomicU64>,
+) -> Result<()> {
+    if should_use_splice(cipher_suite) {
+        #[cfg(target_os = "linux")]
+        {
+            info!("Using splice(2) zero-copy relay path");
+            return splice_relay::relay(tunnel, outbound, metrics, bytes_up, bytes_down).await;
+        }
+    }
+
+    // Fallback: standard userspace bidirectional copy
+    info!("Using standard copy_bidirectional relay path");
+    let (mut tunnel_read, mut tunnel_write) = tunnel.into_split();
+    let (mut out_read, mut out_write) = outbound.into_split();
+
+    let metrics_up = metrics.clone();
+    let bytes_up_task = bytes_up.clone();
+
+    let up = tokio::spawn(async move {
+        let mut buf = [0u8; 32768];
+        loop {
+            match tunnel_read.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    bytes_up_task.fetch_add(n as u64, Ordering::Relaxed);
+                    metrics_up
+                        .total_bytes_up
+                        .fetch_add(n as u64, Ordering::Relaxed);
+                    if out_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = out_write.shutdown().await;
+    });
+
+    let down = tokio::spawn(async move {
+        let mut buf = [0u8; 32768];
+        loop {
+            match out_read.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    bytes_down.fetch_add(n as u64, Ordering::Relaxed);
+                    metrics
+                        .total_bytes_down
+                        .fetch_add(n as u64, Ordering::Relaxed);
+                    if tunnel_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = tunnel_write.shutdown().await;
+    });
+
+    tokio::select! {
+        _ = up => {},
+        _ = down => {},
+    }
+
+    debug!("Transport-only relay session ended");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Linux splice(2) zero-copy relay implementation
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+mod splice_relay {
+    use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+    use std::os::unix::io::AsRawFd;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
+
+    use anyhow::Result;
+    use nix::fcntl::{splice, SpliceFFlags};
+    use nix::unistd;
+    use tokio::net::TcpStream;
+    use tracing::{debug, warn};
+
+    use prisma_core::state::ServerMetrics;
+
+    /// Default pipe capacity hint (64KB, matching Linux default pipe size).
+    const PIPE_SIZE: usize = 65536;
+
+    /// Splice data from `src` to `dst` through a kernel pipe.
+    ///
+    /// Returns `Ok(())` on EOF from the source.
+    fn splice_one_direction(
+        src: BorrowedFd<'_>,
+        dst: BorrowedFd<'_>,
+        pipe_read: &OwnedFd,
+        pipe_write: &OwnedFd,
+        bytes_counter: &AtomicU64,
+        metric_counter: &AtomicU64,
+    ) -> Result<()> {
+        let src_flags = SpliceFFlags::SPLICE_F_MOVE | SpliceFFlags::SPLICE_F_NONBLOCK;
+
+        loop {
+            // Move data from source socket into the pipe
+            let n = match splice(&src, None, pipe_write, None, PIPE_SIZE, src_flags) {
+                Ok(0) => {
+                    debug!("splice: source EOF");
+                    return Ok(());
+                }
+                Ok(n) => n,
+                Err(nix::errno::Errno::EAGAIN) => {
+                    // Non-blocking source has no data; sleep briefly to avoid busy-spin.
+                    std::thread::sleep(std::time::Duration::from_micros(100));
+                    continue;
+                }
+                Err(e) => {
+                    warn!("splice src->pipe error: {}", e);
+                    return Err(e.into());
+                }
+            };
+
+            // Move data from the pipe into the destination socket.
+            // Handle partial writes by looping until all bytes are drained.
+            // Use only SPLICE_F_MOVE here (no NONBLOCK) to avoid busy-spin.
+            let mut remaining = n;
+            while remaining > 0 {
+                match splice(
+                    pipe_read,
+                    None,
+                    &dst,
+                    None,
+                    remaining,
+                    SpliceFFlags::SPLICE_F_MOVE,
+                ) {
+                    Ok(0) => {
+                        warn!("splice: destination closed mid-write");
+                        return Err(anyhow::anyhow!("destination closed"));
+                    }
+                    Ok(written) => {
+                        remaining -= written;
+                    }
+                    Err(nix::errno::Errno::EAGAIN) => {
+                        std::thread::sleep(std::time::Duration::from_micros(100));
+                    }
+                    Err(e) => {
+                        warn!("splice pipe->dst error: {}", e);
+                        return Err(e.into());
+                    }
+                }
+            }
+
+            // Update metrics
+            let transferred = n as u64;
+            bytes_counter.fetch_add(transferred, Ordering::Relaxed);
+            metric_counter.fetch_add(transferred, Ordering::Relaxed);
+        }
+    }
+
+    /// Bidirectional splice relay between tunnel and outbound TCP streams.
+    ///
+    /// Each direction gets its own pipe and runs in a separate blocking task.
+    /// The tokio `TcpStream`s are converted to `std::net::TcpStream` to allow
+    /// safe fd access from blocking threads.
+    pub async fn relay(
+        tunnel: TcpStream,
+        outbound: TcpStream,
+        metrics: Arc<ServerMetrics>,
+        bytes_up: Arc<AtomicU64>,
+        bytes_down: Arc<AtomicU64>,
+    ) -> Result<()> {
+        // Convert to std streams so we own them and can safely share fds.
+        let tunnel_std = tunnel.into_std()?;
+        let outbound_std = outbound.into_std()?;
+
+        // Set blocking mode (splice is a blocking syscall)
+        tunnel_std.set_nonblocking(false)?;
+        outbound_std.set_nonblocking(false)?;
+
+        // Wrap in Arc so both blocking tasks can borrow the fds safely.
+        let tunnel_std = Arc::new(tunnel_std);
+        let outbound_std = Arc::new(outbound_std);
+
+        // Create two pipe pairs: one for each direction
+        let (up_pipe_read, up_pipe_write) = unistd::pipe()?;
+        let (down_pipe_read, down_pipe_write) = unistd::pipe()?;
+
+        let metrics_up = metrics.clone();
+        let tunnel_up = tunnel_std.clone();
+        let outbound_up = outbound_std.clone();
+
+        // Upload: tunnel -> outbound
+        let up_handle = tokio::task::spawn_blocking(move || {
+            // SAFETY: The Arc<TcpStream> keeps the fds alive for the entire
+            // duration of this closure. BorrowedFd is valid as long as the
+            // Arc references are held.
+            let src = unsafe { BorrowedFd::borrow_raw(tunnel_up.as_raw_fd()) };
+            let dst = unsafe { BorrowedFd::borrow_raw(outbound_up.as_raw_fd()) };
+            splice_one_direction(
+                src,
+                dst,
+                &up_pipe_read,
+                &up_pipe_write,
+                &bytes_up,
+                &metrics_up.total_bytes_up,
+            )
+        });
+
+        let tunnel_down = tunnel_std.clone();
+        let outbound_down = outbound_std.clone();
+
+        // Download: outbound -> tunnel
+        let down_handle = tokio::task::spawn_blocking(move || {
+            let src = unsafe { BorrowedFd::borrow_raw(outbound_down.as_raw_fd()) };
+            let dst = unsafe { BorrowedFd::borrow_raw(tunnel_down.as_raw_fd()) };
+            splice_one_direction(
+                src,
+                dst,
+                &down_pipe_read,
+                &down_pipe_write,
+                &bytes_down,
+                &metrics.total_bytes_down,
+            )
+        });
+
+        // Wait for either direction to finish (the other will error on closed fd)
+        tokio::select! {
+            result = up_handle => {
+                if let Err(e) = result {
+                    warn!("splice upload task panicked: {}", e);
+                }
+            }
+            result = down_handle => {
+                if let Err(e) = result {
+                    warn!("splice download task panicked: {}", e);
+                }
+            }
+        }
+
+        // Explicit drops to document lifetime requirements.
+        drop(tunnel_std);
+        drop(outbound_std);
+
+        debug!("Splice relay session ended");
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_use_splice_transport_only() {
+        // On non-Linux, this should always be false regardless of cipher suite
+        let result = should_use_splice(CipherSuite::TransportOnly);
+        if cfg!(target_os = "linux") {
+            assert!(result);
+        } else {
+            assert!(!result);
+        }
+    }
+
+    #[test]
+    fn test_should_not_splice_encrypted_ciphers() {
+        assert!(!should_use_splice(CipherSuite::ChaCha20Poly1305));
+        assert!(!should_use_splice(CipherSuite::Aes256Gcm));
+    }
+
+    #[test]
+    fn test_nonce_to_counter_extraction() {
+        let mut nonce = [0u8; 12];
+        // Set counter bytes (offset 4..12) to a known value
+        nonce[4..12].copy_from_slice(&42u64.to_be_bytes());
+        assert_eq!(nonce_to_counter(&nonce), 42);
+    }
+
+    #[tokio::test]
+    async fn test_standard_relay_path_works() {
+        // Verify the fallback copy path handles a simple echo scenario
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Spawn a simple echo server
+        let echo = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let (mut r, mut w) = stream.split();
+            tokio::io::copy(&mut r, &mut w).await.ok();
+        });
+
+        let tunnel_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let tunnel_addr = tunnel_listener.local_addr().unwrap();
+
+        let metrics = Arc::new(ServerMetrics::default());
+        let bytes_up = Arc::new(AtomicU64::new(0));
+        let bytes_down = Arc::new(AtomicU64::new(0));
+
+        let relay_task = tokio::spawn({
+            let metrics = metrics.clone();
+            let bytes_up = bytes_up.clone();
+            let bytes_down = bytes_down.clone();
+            async move {
+                let (tunnel, _) = tunnel_listener.accept().await.unwrap();
+                let outbound = TcpStream::connect(addr).await.unwrap();
+                relay_transport_only(
+                    tunnel,
+                    outbound,
+                    // Force standard path by using an encrypted cipher suite
+                    CipherSuite::ChaCha20Poly1305,
+                    metrics,
+                    bytes_up,
+                    bytes_down,
+                )
+                .await
+            }
+        });
+
+        // Connect as client
+        let mut client = TcpStream::connect(tunnel_addr).await.unwrap();
+        let test_data = b"hello splice test";
+        client.write_all(test_data).await.unwrap();
+
+        let mut buf = [0u8; 64];
+        let n = client.read(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], test_data);
+
+        // Shut down
+        drop(client);
+        // Allow relay to detect closure
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        relay_task.abort();
+        echo.abort();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn test_splice_relay_path() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let echo = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let (mut r, mut w) = stream.split();
+            tokio::io::copy(&mut r, &mut w).await.ok();
+        });
+
+        let tunnel_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let tunnel_addr = tunnel_listener.local_addr().unwrap();
+
+        let metrics = Arc::new(ServerMetrics::default());
+        let bytes_up = Arc::new(AtomicU64::new(0));
+        let bytes_down = Arc::new(AtomicU64::new(0));
+
+        let relay_task = tokio::spawn({
+            let metrics = metrics.clone();
+            let bytes_up = bytes_up.clone();
+            let bytes_down = bytes_down.clone();
+            async move {
+                let (tunnel, _) = tunnel_listener.accept().await.unwrap();
+                let outbound = TcpStream::connect(addr).await.unwrap();
+                relay_transport_only(
+                    tunnel,
+                    outbound,
+                    CipherSuite::TransportOnly,
+                    metrics,
+                    bytes_up,
+                    bytes_down,
+                )
+                .await
+            }
+        });
+
+        let mut client = TcpStream::connect(tunnel_addr).await.unwrap();
+        let test_data = b"hello zero-copy splice";
+        client.write_all(test_data).await.unwrap();
+
+        let mut buf = [0u8; 64];
+        let n = client.read(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], test_data);
+
+        drop(client);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        relay_task.abort();
+        echo.abort();
+    }
 }

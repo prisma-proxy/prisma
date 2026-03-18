@@ -123,7 +123,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | 选项 | 描述 |
 |------|------|
 | `--setup` | 生成凭证、TLS 证书和示例配置文件 |
-| `--version VER` | 安装指定版本（如 `v0.2.1`）。默认：latest |
+| `--version VER` | 安装指定版本（如 `v0.2.1`）。默认：最新版本 (latest) |
 | `--dir DIR` | 安装目录。默认：`/usr/local/bin` |
 | `--config-dir DIR` | `--setup` 的配置文件输出目录。默认：当前目录 |
 | `--uninstall` | 删除 prisma 二进制文件 |
@@ -137,7 +137,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | 选项 | 描述 |
 |------|------|
 | `-Setup` | 生成凭证、TLS 证书和示例配置文件 |
-| `-Version VER` | 安装指定版本（如 `v0.2.1`）。默认：latest |
+| `-Version VER` | 安装指定版本（如 `v0.2.1`）。默认：最新版本 (latest) |
 | `-Dir DIR` | 安装目录。默认：`%LOCALAPPDATA%\prisma` |
 | `-ConfigDir DIR` | `-Setup` 的配置文件输出目录。默认：当前目录 |
 | `-Uninstall` | 删除 prisma 二进制文件并清理 PATH |
@@ -149,6 +149,8 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 </Tabs>
 
 ## 各平台手动下载
+
+如果您更倾向于直接下载二进制文件：
 
 <Tabs>
   <TabItem value="linux-x64" label="Linux x86_64" default>

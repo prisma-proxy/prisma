@@ -11,8 +11,10 @@ import StatusBar from "./components/StatusBar";
 import Home from "./pages/Home";
 import Profiles from "./pages/Profiles";
 import Rules from "./pages/Rules";
+import Connections from "./pages/Connections";
 import Logs from "./pages/Logs";
 import SpeedTest from "./pages/SpeedTest";
+import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -32,8 +34,10 @@ export default function App() {
             <Route path="/"          element={<Home />} />
             <Route path="/profiles"  element={<Profiles />} />
             <Route path="/rules"     element={<Rules />} />
+            <Route path="/connections" element={<Connections />} />
             <Route path="/logs"      element={<Logs />} />
             <Route path="/speedtest" element={<SpeedTest />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings"  element={<Settings />} />
           </Routes>
         </main>

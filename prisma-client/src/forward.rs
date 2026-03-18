@@ -31,6 +31,17 @@ pub async fn run_port_forwards(ctx: ProxyContext, forwards: Vec<PortForwardConfi
     util::write_framed(&mut stream, &init_bytes).await?;
 
     let server_init_buf = util::read_framed(&mut stream).await?;
+
+    // Verify server key pin if configured
+    if let Some(ref pin) = ctx.server_key_pin {
+        if server_init_buf.len() >= 32 {
+            let mut server_pub = [0u8; 32];
+            server_pub.copy_from_slice(&server_init_buf[..32]);
+            util::verify_server_key_pin(pin, &server_pub)?;
+            tracing::debug!("Server key pin verified successfully");
+        }
+    }
+
     let (session_keys, _bucket_sizes) = client_state.process_server_init(&server_init_buf)?;
     info!(session_id = %session_keys.session_id, "Forward tunnel established");
 

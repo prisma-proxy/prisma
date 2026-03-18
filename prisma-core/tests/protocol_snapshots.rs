@@ -53,6 +53,7 @@ fn test_prisma_client_init_snapshot() {
         timestamp: 1700000000,
         cipher_suite: CipherSuite::ChaCha20Poly1305,
         auth_token: [0xBB; 32],
+        pq_kem_encap_key: None,
         padding: vec![],
     };
     let encoded = encode_client_init(&msg);
@@ -71,6 +72,7 @@ fn test_prisma_server_init_snapshot() {
         server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
         session_ticket: vec![0x01, 0x02, 0x03],
         bucket_sizes: vec![128, 256, 512],
+        pq_kem_ciphertext: None,
         padding: vec![],
     };
     let encoded = encode_server_init(&msg);

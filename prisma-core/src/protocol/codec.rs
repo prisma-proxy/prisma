@@ -13,7 +13,8 @@ use super::types::*;
 ///   [version:1][flags:1][client_ephemeral_pub:32][client_id:16][timestamp:8]
 ///   [cipher_suite:1][auth_token:32][padding:var]
 pub fn encode_client_init(msg: &PrismaClientInit) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(1 + 1 + 32 + 16 + 8 + 1 + 32 + msg.padding.len());
+    let pq_len = msg.pq_kem_encap_key.as_ref().map_or(0, |k| 2 + k.len());
+    let mut buf = Vec::with_capacity(1 + 1 + 32 + 16 + 8 + 1 + 32 + pq_len + msg.padding.len());
     buf.push(msg.version);
     buf.push(msg.flags);
     buf.extend_from_slice(&msg.client_ephemeral_pub);
@@ -21,6 +22,11 @@ pub fn encode_client_init(msg: &PrismaClientInit) -> Vec<u8> {
     buf.extend_from_slice(&msg.timestamp.to_be_bytes());
     buf.push(msg.cipher_suite as u8);
     buf.extend_from_slice(&msg.auth_token);
+    // PQ KEM encapsulation key (after auth_token, before padding)
+    if let Some(ref ek) = msg.pq_kem_encap_key {
+        buf.extend_from_slice(&(ek.len() as u16).to_be_bytes());
+        buf.extend_from_slice(ek);
+    }
     buf.extend_from_slice(&msg.padding);
     buf
 }
@@ -43,7 +49,29 @@ pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError
         CipherSuite::from_u8(data[58]).ok_or(ProtocolError::InvalidCommand(data[58]))?;
     let mut auth_token = [0u8; 32];
     auth_token.copy_from_slice(&data[59..91]);
-    let padding = data[91..].to_vec();
+
+    // Parse optional PQ KEM encapsulation key when CLIENT_INIT_FLAG_PQ_KEM is set
+    let mut cursor = 91;
+    let pq_kem_encap_key = if flags & CLIENT_INIT_FLAG_PQ_KEM != 0 {
+        if data.len() < cursor + 2 {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaClientInit PQ KEM length truncated".into(),
+            ));
+        }
+        let ek_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        cursor += 2;
+        if data.len() < cursor + ek_len {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaClientInit PQ KEM encap key truncated".into(),
+            ));
+        }
+        let ek = data[cursor..cursor + ek_len].to_vec();
+        cursor += ek_len;
+        Some(ek)
+    } else {
+        None
+    };
+    let padding = data[cursor..].to_vec();
 
     Ok(PrismaClientInit {
         version,
@@ -53,6 +81,7 @@ pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError
         timestamp,
         cipher_suite,
         auth_token,
+        pq_kem_encap_key,
         padding,
     })
 }
@@ -90,6 +119,11 @@ pub fn encode_server_init(msg: &PrismaServerInit) -> Vec<u8> {
     buf.extend_from_slice(&(msg.bucket_sizes.len() as u16).to_be_bytes());
     for &size in &msg.bucket_sizes {
         buf.extend_from_slice(&size.to_le_bytes());
+    }
+    // PQ KEM ciphertext (after bucket_sizes, before padding)
+    if let Some(ref ct) = msg.pq_kem_ciphertext {
+        buf.extend_from_slice(&(ct.len() as u16).to_be_bytes());
+        buf.extend_from_slice(ct);
     }
     buf.extend_from_slice(&msg.padding);
     buf
@@ -148,7 +182,29 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
         let offset = buckets_start + i * 2;
         bucket_sizes.push(u16::from_le_bytes([data[offset], data[offset + 1]]));
     }
-    let padding = data[buckets_end..].to_vec();
+
+    // Parse optional PQ KEM ciphertext when FEATURE_PQ_KEM is set
+    let mut cursor = buckets_end;
+    let pq_kem_ciphertext = if server_features & FEATURE_PQ_KEM != 0 {
+        if data.len() < cursor + 2 {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaServerInit PQ KEM length truncated".into(),
+            ));
+        }
+        let ct_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        cursor += 2;
+        if data.len() < cursor + ct_len {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaServerInit PQ KEM ciphertext truncated".into(),
+            ));
+        }
+        let ct = data[cursor..cursor + ct_len].to_vec();
+        cursor += ct_len;
+        Some(ct)
+    } else {
+        None
+    };
+    let padding = data[cursor..].to_vec();
 
     Ok(PrismaServerInit {
         status,
@@ -160,6 +216,7 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
         server_features,
         session_ticket,
         bucket_sizes,
+        pq_kem_ciphertext,
         padding,
     })
 }
@@ -781,6 +838,7 @@ mod tests {
             timestamp: 1700000000,
             cipher_suite: CipherSuite::ChaCha20Poly1305,
             auth_token: [0xBB; 32],
+            pq_kem_encap_key: None,
             padding: vec![1, 2, 3],
         };
         let encoded = encode_client_init(&msg);
@@ -792,6 +850,7 @@ mod tests {
         assert_eq!(decoded.timestamp, msg.timestamp);
         assert_eq!(decoded.cipher_suite, msg.cipher_suite);
         assert_eq!(decoded.auth_token, msg.auth_token);
+        assert_eq!(decoded.pq_kem_encap_key, msg.pq_kem_encap_key);
         assert_eq!(decoded.padding, msg.padding);
     }
 
@@ -806,6 +865,7 @@ mod tests {
             timestamp: 1700000000,
             cipher_suite: CipherSuite::ChaCha20Poly1305,
             auth_token: [0xBB; 32],
+            pq_kem_encap_key: None,
             padding: vec![],
         };
         let encoded = encode_client_init(&msg);
@@ -832,6 +892,7 @@ mod tests {
             server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
             session_ticket: vec![1, 2, 3, 4, 5],
             bucket_sizes: vec![128, 256, 512],
+            pq_kem_ciphertext: None,
             padding: vec![6, 7, 8],
         };
         let encoded = encode_server_init(&msg);
@@ -845,6 +906,7 @@ mod tests {
         assert_eq!(decoded.server_features, msg.server_features);
         assert_eq!(decoded.session_ticket, msg.session_ticket);
         assert_eq!(decoded.bucket_sizes, msg.bucket_sizes);
+        assert_eq!(decoded.pq_kem_ciphertext, msg.pq_kem_ciphertext);
         assert_eq!(decoded.padding, msg.padding);
     }
 
@@ -860,6 +922,7 @@ mod tests {
             server_features: 0,
             session_ticket: vec![],
             bucket_sizes: vec![],
+            pq_kem_ciphertext: None,
             padding: vec![],
         };
         let encoded = encode_server_init(&msg);

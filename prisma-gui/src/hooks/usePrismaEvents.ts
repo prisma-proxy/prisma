@@ -9,6 +9,8 @@ import { api } from "../lib/commands";
 import { MODE_SYSTEM_PROXY } from "../lib/types";
 import type { Stats, LogEntry, SpeedTestResult, UpdateInfo } from "../lib/types";
 import { useDataUsage } from "../store/dataUsage";
+import { parseLogForConnection, useConnections } from "../store/connections";
+import { useAnalytics } from "../store/analytics";
 
 interface PrismaEvent {
   type: string;
@@ -114,18 +116,32 @@ export function usePrismaEvents() {
             const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
             if (deltaUp > 0 || deltaDown > 0) {
               useDataUsage.getState().recordUsage(deltaUp, deltaDown);
+              // Distribute traffic deltas to active connections for analytics
+              const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
+              if (activeConns.length > 0) {
+                const perUp = Math.floor(deltaUp / activeConns.length);
+                const perDown = Math.floor(deltaDown / activeConns.length);
+                const analytics = useAnalytics.getState();
+                for (const conn of activeConns) {
+                  const domain = conn.destination.replace(/:\d+$/, "");
+                  analytics.addTraffic(domain, perUp, perDown, conn.rule);
+                }
+              }
             }
           }
           break;
         }
 
-        case "log":
+        case "log": {
+          const logMsg = data.msg ?? "";
           store.addLog({
             level: (data.level ?? "INFO") as LogEntry["level"],
-            msg:   data.msg ?? "",
+            msg:   logMsg,
             time:  data.time ?? Date.now(),
           });
+          parseLogForConnection(logMsg);
           break;
+        }
 
         case "update_available":
           if (data.version) {

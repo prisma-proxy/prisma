@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check } from "lucide-react";
+import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import QrDisplay from "@/components/QrDisplay";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ProfileWizard from "@/components/ProfileWizard";
@@ -32,6 +36,22 @@ import type { Profile } from "@/lib/types";
 
 type ShareTab = "toml" | "uri" | "qr";
 
+// Latency cache entry
+interface LatencyEntry {
+  ms: number | null; // null = error or untested
+  loading: boolean;
+  error?: string;
+  timestamp: number;
+}
+
+const LATENCY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getServerAddr(config: unknown): string | null {
+  if (!config || typeof config !== "object") return null;
+  const c = config as Record<string, unknown>;
+  return typeof c.server_addr === "string" ? c.server_addr : null;
+}
+
 export default function Profiles() {
   const { t } = useTranslation();
   const profiles = useStore((s) => s.profiles);
@@ -42,6 +62,13 @@ export default function Profiles() {
   const proxyModes = useStore((s) => s.proxyModes);
   const metrics = useProfileMetrics((s) => s.metrics);
   const { connectTo, disconnect, switchTo } = useConnection();
+
+  // Latency testing state
+  const [latencyMap, setLatencyMap] = useState<Record<string, LatencyEntry>>({});
+  const [testingAll, setTestingAll] = useState(false);
+  const [autoSelect, setAutoSelect] = useState(() => {
+    try { return localStorage.getItem("prisma-auto-select") === "true"; } catch { return false; }
+  });
 
   // Wizard
   const [wizardOpen,   setWizardOpen]   = useState(false);
@@ -63,6 +90,13 @@ export default function Profiles() {
   const [qrImportText, setQrImportText] = useState("");
   const [qrImportErr,  setQrImportErr]  = useState("");
 
+  // Subscription import
+  const [subImportOpen, setSubImportOpen] = useState(false);
+  const [subUrl, setSubUrl] = useState("");
+  const [subImporting, setSubImporting] = useState(false);
+  const [subErr, setSubErr] = useState("");
+  const [subRefreshing, setSubRefreshing] = useState(false);
+
   // Delete confirm
   const [deleteOpen,    setDeleteOpen]    = useState(false);
   const [deletePending, setDeletePending] = useState<Profile | null>(null);
@@ -70,6 +104,52 @@ export default function Profiles() {
   // Search & sort
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"default" | "name" | "lastUsed" | "latency">("default");
+
+  // Persist auto-select preference
+  const toggleAutoSelect = useCallback((val: boolean) => {
+    setAutoSelect(val);
+    try { localStorage.setItem("prisma-auto-select", String(val)); } catch {}
+  }, []);
+
+  // Ping a single profile server
+  const pingProfile = useCallback(async (profileId: string, addr: string) => {
+    setLatencyMap((prev) => ({
+      ...prev,
+      [profileId]: { ms: null, loading: true, timestamp: Date.now() },
+    }));
+    try {
+      const ms = await api.pingServer(addr);
+      setLatencyMap((prev) => ({
+        ...prev,
+        [profileId]: { ms, loading: false, timestamp: Date.now() },
+      }));
+      return ms;
+    } catch (e) {
+      setLatencyMap((prev) => ({
+        ...prev,
+        [profileId]: { ms: null, loading: false, error: String(e), timestamp: Date.now() },
+      }));
+      return null;
+    }
+  }, []);
+
+  // Test all profiles in parallel
+  const testAllProfiles = useCallback(async () => {
+    setTestingAll(true);
+    const now = Date.now();
+    const promises = profiles.map((p) => {
+      const addr = getServerAddr(p.config);
+      if (!addr) return Promise.resolve(null);
+      // Skip if cached and not expired
+      const cached = latencyMap[p.id];
+      if (cached && !cached.loading && cached.ms != null && now - cached.timestamp < LATENCY_TTL_MS) {
+        return Promise.resolve(cached.ms);
+      }
+      return pingProfile(p.id, addr);
+    });
+    await Promise.allSettled(promises);
+    setTestingAll(false);
+  }, [profiles, latencyMap, pingProfile]);
 
   const reload = () =>
     api.listProfiles()
@@ -105,12 +185,48 @@ export default function Profiles() {
   }, [profiles, search, sortBy, metrics]);
 
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : null;
+  const hasSubscriptions = profiles.some((p) => !!p.subscription_url);
 
-  function handleProfileClick(p: Profile) {
+  async function handleProfileClick(p: Profile) {
     if (connecting) return;
     if (connected && activeProfile?.id === p.id) {
       disconnect();
-    } else if (connected) {
+      return;
+    }
+
+    // Auto-select: ping all and pick lowest latency
+    if (autoSelect && !connected) {
+      setTestingAll(true);
+      const results: { profile: Profile; ms: number }[] = [];
+      const promises = profiles.map(async (prof) => {
+        const addr = getServerAddr(prof.config);
+        if (!addr) return;
+        const cached = latencyMap[prof.id];
+        const now = Date.now();
+        let ms: number | null = null;
+        if (cached && !cached.loading && cached.ms != null && now - cached.timestamp < LATENCY_TTL_MS) {
+          ms = cached.ms;
+        } else {
+          ms = await pingProfile(prof.id, addr);
+        }
+        if (ms != null) results.push({ profile: prof, ms });
+      });
+      await Promise.allSettled(promises);
+      setTestingAll(false);
+
+      if (results.length > 0) {
+        results.sort((a, b) => a.ms - b.ms);
+        const best = results[0];
+        notify.success(t("profiles.autoSelectResult", { name: best.profile.name, ms: best.ms }));
+        connectTo(best.profile, proxyModes);
+      } else {
+        // Fallback to clicked profile
+        connectTo(p, proxyModes);
+      }
+      return;
+    }
+
+    if (connected) {
       switchTo(p, proxyModes);
     } else {
       connectTo(p, proxyModes);
@@ -266,16 +382,78 @@ export default function Profiles() {
     }
   }
 
+  async function handleImportSubscription() {
+    if (!subUrl.trim()) return;
+    setSubImporting(true);
+    setSubErr("");
+    try {
+      const result = await api.importSubscription(subUrl.trim());
+      await reload();
+      await api.refreshTrayProfiles().catch(() => {});
+      setSubImportOpen(false);
+      setSubUrl("");
+      notify.success(t("profiles.importSubSuccess", { count: result.count }));
+    } catch (e) {
+      setSubErr(String(e));
+    } finally {
+      setSubImporting(false);
+    }
+  }
+
+  async function handleRefreshSubscriptions() {
+    setSubRefreshing(true);
+    try {
+      const result = await api.refreshSubscriptions();
+      await reload();
+      await api.refreshTrayProfiles().catch(() => {});
+      notify.success(t("profiles.refreshSubSuccess", { count: result.count }));
+    } catch (e) {
+      notify.error(t("profiles.refreshSubFailed") + ": " + String(e));
+    } finally {
+      setSubRefreshing(false);
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-lg">{t("profiles.title")}</h1>
         <div className="flex gap-1">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 mr-1">
+                  <Switch
+                    checked={autoSelect}
+                    onCheckedChange={toggleAutoSelect}
+                    className="scale-75"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    <Zap size={12} className="inline mr-0.5" />{t("profiles.autoSelect")}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">{t("profiles.autoSelectEnabled")}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Button size="sm" variant="ghost" onClick={testAllProfiles} disabled={testingAll} title={t("profiles.testAll")}>
+            {testingAll ? <Loader2 size={14} className="animate-spin" /> : <Signal size={14} />}
+          </Button>
           <Button size="sm" variant="ghost" onClick={handleExportAll} title={t("profiles.exportAll")}>
             <Download size={14} />
           </Button>
           <Button size="sm" variant="ghost" onClick={handleImportFile} title={t("profiles.importFile")}>
             <Upload size={14} />
+          </Button>
+          {hasSubscriptions && (
+            <Button size="sm" variant="ghost" onClick={handleRefreshSubscriptions} disabled={subRefreshing} title={t("profiles.refreshSub")}>
+              {subRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setSubImportOpen(true)}>
+            <Globe size={14} /> {t("profiles.importSub")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setQrImportOpen(true)}>
             <ScanLine size={14} /> {t("profiles.importQr")}
@@ -342,12 +520,35 @@ export default function Profiles() {
                     {isActive && (
                       <Badge variant="success" className="text-[10px] px-1.5 py-0">{t("profiles.connected")}</Badge>
                     )}
+                    {/* Latency badge */}
+                    {(() => {
+                      const le = latencyMap[p.id];
+                      if (!le) return null;
+                      if (le.loading) return <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />;
+                      if (le.ms == null) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-gray-800 text-gray-500">{t("profiles.latencyError")}</Badge>;
+                      const color = le.ms < 100
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                        : le.ms < 300
+                        ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+                      return <Badge variant="outline" className={`text-[10px] px-1.5 py-0 border-0 ${color}`}>{le.ms}{t("profiles.ms")}</Badge>;
+                    })()}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-0.5">
+                    {p.subscription_url && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5">
+                        <Globe size={8} /> {t("profiles.subscription")}
+                      </Badge>
+                    )}
                     {p.tags.length > 0
                       ? p.tags.map((tag) => <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">{tag}</Badge>)
-                      : <span className="text-xs text-muted-foreground">—</span>
+                      : !p.subscription_url && <span className="text-xs text-muted-foreground">&mdash;</span>
                     }
+                    {p.last_updated && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {t("profiles.lastUpdated", { time: fmtRelativeTime(p.last_updated) })}
+                      </span>
+                    )}
                   </div>
                   {/* Per-profile metrics */}
                   {pm.connectCount > 0 && (
@@ -355,7 +556,7 @@ export default function Profiles() {
                       {pm.lastLatencyMs != null && <span>{pm.lastLatencyMs}ms</span>}
                       {pm.lastConnectedAt && <span>{fmtRelativeTime(pm.lastConnectedAt)}</span>}
                       {(pm.totalBytesUp > 0 || pm.totalBytesDown > 0) && (
-                        <span>↑{fmtBytes(pm.totalBytesUp)} ↓{fmtBytes(pm.totalBytesDown)}</span>
+                        <span>&uarr;{fmtBytes(pm.totalBytesUp)} &darr;{fmtBytes(pm.totalBytesDown)}</span>
                       )}
                       {pm.connectCount > 1 && (
                         <span>{pm.connectCount} {t("profiles.sessions")}</span>
@@ -364,7 +565,7 @@ export default function Profiles() {
                         <span>{fmtDuration(pm.totalUptimeSecs)}</span>
                       )}
                       {pm.peakSpeedDownBps > 0 && (
-                        <span>{t("profiles.peak")} ↓{fmtSpeed(pm.peakSpeedDownBps)}</span>
+                        <span>{t("profiles.peak")} &darr;{fmtSpeed(pm.peakSpeedDownBps)}</span>
                       )}
                     </div>
                   )}
@@ -502,13 +703,38 @@ export default function Profiles() {
               value={qrImportText}
               onChange={(e) => setQrImportText(e.target.value)}
               className="font-mono text-xs"
-              placeholder="prisma://…"
+              placeholder="prisma://..."
             />
             {qrImportErr && <p className="text-xs text-destructive">{qrImportErr}</p>}
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
             <Button onClick={handleQrImport} disabled={!qrImportText.trim()}>{t("profiles.importQr")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subscription import dialog */}
+      <Dialog open={subImportOpen} onOpenChange={(v) => { setSubImportOpen(v); setSubErr(""); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("profiles.importSubTitle")}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t("profiles.importSubDesc")}</p>
+            <Label>{t("profiles.importSubLabel")}</Label>
+            <Input
+              value={subUrl}
+              onChange={(e) => setSubUrl(e.target.value)}
+              placeholder={t("profiles.importSubPlaceholder")}
+              className="font-mono text-xs"
+            />
+            {subErr && <p className="text-xs text-destructive">{subErr}</p>}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
+            <Button onClick={handleImportSubscription} disabled={!subUrl.trim() || subImporting}>
+              {subImporting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Globe size={14} className="mr-1.5" />}
+              {subImporting ? t("profiles.importing") : t("profiles.importSub")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

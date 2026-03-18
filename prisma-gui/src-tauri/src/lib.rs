@@ -82,13 +82,19 @@ pub fn run() {
             commands::profile_config_to_toml,
             commands::check_update,
             commands::apply_update,
+            commands::ping_server,
             commands::speed_test,
+            commands::get_pac_url,
             commands::set_system_proxy,
             commands::clear_system_proxy,
             commands::refresh_tray_profiles,
             commands::set_active_profile_id,
             commands::set_tray_port,
             commands::quit_app,
+            commands::set_per_app_filter,
+            commands::clear_per_app_filter,
+            commands::get_running_apps,
+            commands::get_per_app_filter,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

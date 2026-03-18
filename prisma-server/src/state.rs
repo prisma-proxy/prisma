@@ -14,6 +14,8 @@ pub struct ServerContext {
     pub state: ServerState,
     pub bandwidth: Arc<BandwidthLimiterStore>,
     pub quotas: Arc<QuotaStore>,
+    /// Path to the server config file, used for hot-reload.
+    pub config_path: String,
 }
 
 impl Deref for ServerContext {

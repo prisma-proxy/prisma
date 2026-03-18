@@ -13,8 +13,9 @@ use anyhow::Result;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
+use prisma_core::dns::doh::DohResolver;
 use prisma_core::dns::fake_ip::FakeIpPool;
-use prisma_core::dns::{domain_matches_blocklist, DnsConfig, DnsMode};
+use prisma_core::dns::{domain_matches_blocklist, DnsConfig, DnsMode, DnsProtocol};
 
 /// A shared DNS resolver for the client.
 #[derive(Clone)]
@@ -24,7 +25,9 @@ pub struct DnsResolver {
 
 struct DnsResolverInner {
     mode: DnsMode,
+    protocol: DnsProtocol,
     upstream: String,
+    doh_resolver: Option<DohResolver>,
     blocklist: Vec<String>,
     fake_ip_pool: Mutex<Option<FakeIpPool>>,
 }
@@ -46,10 +49,25 @@ impl DnsResolver {
             Vec::new()
         };
 
+        // Initialize DoH resolver when DoH protocol is configured.
+        let doh_resolver = if config.protocol == DnsProtocol::Doh {
+            match DohResolver::new(&config.doh_url) {
+                Ok(resolver) => Some(resolver),
+                Err(e) => {
+                    tracing::error!("failed to create DoH resolver: {e}, falling back to UDP");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             inner: Arc::new(DnsResolverInner {
                 mode: config.mode.clone(),
+                protocol: config.protocol.clone(),
                 upstream: config.upstream.clone(),
+                doh_resolver,
                 blocklist,
                 fake_ip_pool: Mutex::new(fake_ip_pool),
             }),
@@ -59,6 +77,11 @@ impl DnsResolver {
     /// Get the DNS mode.
     pub fn mode(&self) -> &DnsMode {
         &self.inner.mode
+    }
+
+    /// Get the DNS protocol.
+    pub fn protocol(&self) -> &DnsProtocol {
+        &self.inner.protocol
     }
 
     /// Check if a domain should be resolved via the tunnel.
@@ -72,9 +95,13 @@ impl DnsResolver {
     }
 
     /// Resolve a domain directly using the configured upstream DNS.
-    /// Used by Smart mode for non-blocked domains and as a fallback.
+    /// Uses DoH when the protocol is set to "doh", otherwise falls back to UDP.
     pub async fn resolve_direct(&self, domain: &str) -> Result<Vec<Ipv4Addr>> {
-        resolve_dns_direct(domain, &self.inner.upstream).await
+        if let Some(ref doh) = self.inner.doh_resolver {
+            doh.resolve(domain).await
+        } else {
+            resolve_dns_direct(domain, &self.inner.upstream).await
+        }
     }
 
     /// Assign a fake IP for a domain (Fake DNS mode).
@@ -274,6 +301,7 @@ mod tests {
         let resolver = DnsResolver::new(&config);
         assert!(!resolver.should_tunnel_dns("google.com"));
         assert!(!resolver.should_tunnel_dns("example.com"));
+        assert_eq!(*resolver.protocol(), DnsProtocol::Udp);
     }
 
     #[test]
@@ -319,5 +347,26 @@ mod tests {
         // Same domain returns same IP
         let ip2 = resolver.assign_fake_ip("google.com").await.unwrap();
         assert_eq!(ip, ip2);
+    }
+
+    #[test]
+    fn test_dns_resolver_doh_mode() {
+        let config = DnsConfig {
+            protocol: DnsProtocol::Doh,
+            doh_url: "https://cloudflare-dns.com/dns-query".into(),
+            ..DnsConfig::default()
+        };
+        let resolver = DnsResolver::new(&config);
+        assert_eq!(*resolver.protocol(), DnsProtocol::Doh);
+        // DoH resolver should be initialized
+        assert!(resolver.inner.doh_resolver.is_some());
+    }
+
+    #[test]
+    fn test_dns_resolver_udp_has_no_doh() {
+        let config = DnsConfig::default();
+        let resolver = DnsResolver::new(&config);
+        assert_eq!(*resolver.protocol(), DnsProtocol::Udp);
+        assert!(resolver.inner.doh_resolver.is_none());
     }
 }

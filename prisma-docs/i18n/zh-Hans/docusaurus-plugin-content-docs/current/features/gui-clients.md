@@ -175,12 +175,12 @@ int   prisma_apply_update(const char* url, const char* sha256);
 
 ### 模式标志
 
-| Flag | Value | Description |
-|------|-------|-------------|
-| `PRISMA_MODE_SOCKS5` | `0x01` | Start local SOCKS5 listener on 127.0.0.1:1080 |
-| `PRISMA_MODE_SYSTEM_PROXY` | `0x02` | Configure OS system proxy |
-| `PRISMA_MODE_TUN` | `0x04` | Create TUN/VPN interface |
-| `PRISMA_MODE_PER_APP` | `0x08` | Per-app routing (Android/iOS only) |
+| 标志 | 值 | 描述 |
+|------|-----|------|
+| `PRISMA_MODE_SOCKS5` | `0x01` | 在 127.0.0.1:1080 上启动本地 SOCKS5 监听器 |
+| `PRISMA_MODE_SYSTEM_PROXY` | `0x02` | 配置操作系统系统代理 |
+| `PRISMA_MODE_TUN` | `0x04` | 创建 TUN/VPN 接口 |
+| `PRISMA_MODE_PER_APP` | `0x08` | 按应用路由 (Routing)（仅 Android/iOS） |
 
 ### 事件 JSON
 
@@ -238,12 +238,12 @@ UI (Compose) ─── PrismaViewModel ─── PrismaJni (JNI) ─── libpr
 
 ### 代理模式
 
-| Mode | Android mechanism |
-|------|-------------------|
-| SOCKS5 | Direct SOCKS5 listener on 127.0.0.1:1080 |
-| System Proxy | `ProxyInfo` set via `VpnService.Builder.setHttpProxy()` |
-| TUN | `VpnService.Builder.establish()` — creates a tun fd |
-| Per-App | `VpnService.Builder.addAllowedApplication()` |
+| 模式 | Android 实现机制 |
+|------|------------------|
+| SOCKS5 | 在 127.0.0.1:1080 上直接启动 SOCKS5 监听器 |
+| 系统代理 (System Proxy) | 通过 `VpnService.Builder.setHttpProxy()` 设置 `ProxyInfo` |
+| TUN | `VpnService.Builder.establish()` — 创建 tun fd |
+| 按应用 (Per-App) | `VpnService.Builder.addAllowedApplication()` |
 
 ### 构建
 

@@ -55,7 +55,7 @@ transport = "tcp"
 
 TCP 传输使用 TLS over TCP，提供相同的加密保证。
 
-## 端口转发被拒绝
+## 端口转发 (Port Forwarding) 被拒绝
 
 **症状：** 客户端日志显示 `ForwardReady` 且 `success = false`。
 
@@ -136,7 +136,7 @@ PRISMA_LOGGING_LEVEL=trace prisma server -c server.toml
 
 调试日志中需要关注的关键内容：
 
-- 握手步骤完成消息
+- 握手 (Handshake) 步骤完成消息
 - 连接建立和断开事件
-- 端口转发注册结果
-- 加密/解密错误
+- 端口转发 (Port Forwarding) 注册结果
+- 加密 (Encryption) / 解密错误

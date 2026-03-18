@@ -64,6 +64,9 @@ pub struct ProxyContext {
     pub use_prisma_tls: bool,
     /// Shared traffic counters for GUI/FFI stats.
     pub metrics: ClientMetrics,
+    /// Server public key pin (hex-encoded SHA-256) for server authentication
+    /// independent of TLS. See `prisma_core::util::compute_server_key_pin`.
+    pub server_key_pin: Option<String>,
 }
 
 impl ProxyContext {

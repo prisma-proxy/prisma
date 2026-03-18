@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConnection } from "./useConnection";
 
-const routes = ["/", "/profiles", "/rules", "/logs", "/speedtest", "/settings"];
+const routes = ["/", "/profiles", "/rules", "/connections", "/logs", "/speedtest", "/settings"];
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
@@ -17,9 +17,9 @@ export function useKeyboardShortcuts() {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
 
-      // Cmd+1..6 — navigate to pages
+      // Cmd+1..7 — navigate to pages
       const num = parseInt(e.key, 10);
-      if (num >= 1 && num <= 6) {
+      if (num >= 1 && num <= 7) {
         e.preventDefault();
         navigate(routes[num - 1]);
         return;

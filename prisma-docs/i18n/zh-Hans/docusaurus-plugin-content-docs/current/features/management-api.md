@@ -89,7 +89,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `PATCH` | `/api/config` | 热重载支持的字段（更改前自动备份配置） |
 | `GET` | `/api/config/tls` | TLS 证书信息 |
 
-**支持热重载的字段：** `logging_level`、`logging_format`、`max_connections`、`port_forwarding_enabled`，以及所有流量整形、拥塞控制和伪装设置。
+**支持热重载 (Hot-Reload) 的字段：** `logging_level`、`logging_format`、`max_connections`、`port_forwarding_enabled`，以及所有流量整形 (Traffic Shaping)、拥塞控制 (Congestion Control) 和伪装 (Camouflage) 设置。
 
 ### 配置备份
 
@@ -102,7 +102,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `DELETE` | `/api/config/backups/:name` | 删除备份 |
 | `GET` | `/api/config/backups/:name/diff` | 比较备份与当前配置的差异 |
 
-### 带宽与配额
+### 带宽 (Bandwidth) 与配额 (Quota)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -119,13 +119,13 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `GET` | `/api/alerts/config` | 告警阈值（证书到期、配额、握手失败峰值） |
 | `PUT` | `/api/alerts/config` | 更新告警阈值（持久化到 `alerts.json`） |
 
-### 端口转发
+### 端口转发 (Port Forwarding)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/forwards` | 列出活跃的端口转发会话 |
 
-### 路由规则
+### 路由规则 (Routing Rules)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

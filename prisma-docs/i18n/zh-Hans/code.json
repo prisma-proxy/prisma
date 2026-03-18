@@ -15,7 +15,7 @@
     "message": "功能特性"
   },
   "homepage.protocol": {
-    "message": "协议 v4"
+    "message": "协议 v5"
   },
   "homepage.quickStart": {
     "message": "快速上手"
@@ -39,7 +39,7 @@
     "message": "流量整形"
   },
   "homepage.features.trafficShaping.description": {
-    "message": "桶填充、干扰注入、时序抖动和帧合并，击败封装 TLS 指纹识别。"
+    "message": "桶填充 (Bucket Padding)、干扰注入、时序抖动和帧合并，击败封装 TLS 指纹识别。"
   },
   "homepage.features.cdnCompatible.title": {
     "message": "CDN 兼容"
@@ -60,22 +60,22 @@
     "message": "零拷贝 I/O、异步运行时、内存安全。以极少资源处理数千并发连接。"
   },
   "homepage.highlights.encryption": {
-    "message": "加密算法"
+    "message": "加密 (Encryption)"
   },
   "homepage.highlights.keyExchange": {
-    "message": "密钥交换"
+    "message": "密钥交换 (Key Exchange)"
   },
   "homepage.highlights.handshake": {
-    "message": "握手"
+    "message": "握手 (Handshake)"
   },
   "homepage.highlights.udpRelay": {
-    "message": "UDP 中继"
+    "message": "UDP 中继 (Relay)"
   },
   "homepage.highlights.congestion": {
-    "message": "拥塞控制"
+    "message": "拥塞控制 (Congestion Control)"
   },
   "homepage.highlights.obfuscation": {
-    "message": "混淆"
+    "message": "混淆 (Obfuscation)"
   },
   "benchmarks.page.title": {
     "message": "性能基准测试"
@@ -120,7 +120,7 @@
     "message": "基线"
   },
   "benchmarks.throughput.title": {
-    "message": "吞吐量对比"
+    "message": "吞吐量 (Throughput) 对比"
   },
   "benchmarks.throughput.download": {
     "message": "下载 (Mbps)"
@@ -129,13 +129,13 @@
     "message": "上传 (Mbps)"
   },
   "benchmarks.latency.title": {
-    "message": "延迟对比"
+    "message": "延迟 (Latency) 对比"
   },
   "benchmarks.latency.ttfb": {
-    "message": "TTFB 延迟 (ms)"
+    "message": "TTFB 延迟 (Latency) (ms)"
   },
   "benchmarks.latency.handshake": {
-    "message": "握手时间 (ms)"
+    "message": "握手 (Handshake) 时间 (ms)"
   },
   "benchmarks.platforms.title": {
     "message": "平台概览"
@@ -177,7 +177,7 @@
     "message": "下载稳定性 (CV%)"
   },
   "benchmarks.efficiency.title": {
-    "message": "吞吐效率"
+    "message": "吞吐效率 (Throughput Efficiency)"
   },
   "benchmarks.efficiency.description": {
     "message": "哪个代理在单位资源消耗下能提供最大吞吐量。"
@@ -192,7 +192,7 @@
     "message": "安全评分"
   },
   "benchmarks.security.description": {
-    "message": "综合评分 (0-100)，基于加密深度、前向保密、流量分析抵抗、协议检测抵抗、防重放和认证强度。"
+    "message": "综合评分 (0-100)，基于加密 (Encryption) 深度、前向保密 (Forward Secrecy)、流量分析抵抗、协议检测抵抗、防重放 (Anti-Replay) 和认证强度。"
   },
   "benchmarks.security.chart": {
     "message": "安全评分（越高越好）"
@@ -243,7 +243,7 @@
     "message": "高安全性"
   },
   "benchmarks.usecase.highsec.desc": {
-    "message": "最大化抗审查能力。安全评分是主导因素。"
+    "message": "最大化抗审查 (Anti-Censorship) 能力。安全评分是主导因素。"
   },
   "benchmarks.history.title": {
     "message": "历史趋势"

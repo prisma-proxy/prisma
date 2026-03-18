@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Profile, Stats, UpdateInfo } from "./types";
+import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter } from "./types";
 
-export type { Profile, Stats, UpdateInfo };
+export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter };
 
 export const api = {
   connect:          (configJson: string, modes: number) =>
@@ -37,14 +37,26 @@ export const api = {
   profileConfigToToml: (configJson: string) =>
     invoke<string>("profile_config_to_toml", { configJson }),
 
+  importSubscription: (url: string) =>
+    invoke<ImportResult>("import_subscription", { url }),
+
+  refreshSubscriptions: () =>
+    invoke<ImportResult>("refresh_subscriptions"),
+
   checkUpdate:      () =>
     invoke<UpdateInfo | null>("check_update"),
 
   applyUpdate:      (url: string, sha: string) =>
     invoke<void>("apply_update", { url, sha }),
 
+  pingServer:       (addr: string) =>
+    invoke<number>("ping_server", { addr }),
+
   speedTest:        (server: string, durationSecs: number) =>
     invoke<void>("speed_test", { server, durationSecs }),
+
+  getPacUrl:        (pacPort: number = 0) =>
+    invoke<string>("get_pac_url", { pacPort }),
 
   setSystemProxy:   (host: string, port: number) =>
     invoke<void>("set_system_proxy", { host, port }),
@@ -60,4 +72,17 @@ export const api = {
 
   setTrayPort: (port: number) =>
     invoke<void>("set_tray_port", { port }),
+
+  // Per-app proxy
+  setPerAppFilter: (filterJson: string) =>
+    invoke<void>("set_per_app_filter", { filterJson }),
+
+  clearPerAppFilter: () =>
+    invoke<void>("clear_per_app_filter"),
+
+  getRunningApps: () =>
+    invoke<string[]>("get_running_apps"),
+
+  getPerAppFilter: () =>
+    invoke<PerAppFilter | null>("get_per_app_filter"),
 };

@@ -56,15 +56,15 @@ sidebar_position: 2
 | `xmux.max_requests_max` | u32 | `200` | 轮换前最大请求数 |
 | `user_agent` | string? | — | 覆盖 User-Agent 请求头 |
 | `referer` | string? | — | 覆盖 Referer 请求头 |
-| `congestion.mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` |
+| `congestion.mode` | string | `"bbr"` | 拥塞控制 (Congestion Control)：`"brutal"` / `"bbr"` / `"adaptive"` |
 | `congestion.target_bandwidth` | string? | — | brutal/adaptive 模式的目标带宽（如 `"100mbps"`） |
-| `port_hopping.enabled` | bool | `false` | 启用 QUIC 端口跳变 |
+| `port_hopping.enabled` | bool | `false` | 启用 QUIC 端口跳变 (Port Hopping) |
 | `port_hopping.base_port` | u16 | `10000` | 端口范围起始值 |
 | `port_hopping.port_range` | u16 | `50000` | 端口范围数量 |
 | `port_hopping.interval_secs` | u64 | `60` | 端口跳变间隔（秒） |
 | `port_hopping.grace_period_secs` | u64 | `10` | 双端口接受窗口（秒） |
-| `salamander_password` | string? | — | Salamander UDP 混淆密码（仅 QUIC） |
-| `udp_fec.enabled` | bool | `false` | 启用 UDP 中继的前向纠错 |
+| `salamander_password` | string? | — | Salamander UDP 混淆 (Obfuscation) 密码（仅 QUIC） |
+| `udp_fec.enabled` | bool | `false` | 启用 UDP 中继的前向纠错 (FEC) |
 | `udp_fec.data_shards` | usize | `10` | 每 FEC 组的原始数据包数 |
 | `udp_fec.parity_shards` | usize | `3` | 每 FEC 组的校验包数 |
 | `dns.mode` | string | `"direct"` | DNS 模式：`"smart"` / `"fake"` / `"tunnel"` / `"direct"` |
@@ -76,7 +76,7 @@ sidebar_position: 2
 | `routing.rules[].value` | string | — | 匹配值（`geoip` 类型使用国家代码，如 `"cn"`、`"private"`） |
 | `routing.rules[].action` | string | `"proxy"` | 动作：`"proxy"` / `"direct"` / `"block"` |
 | `routing.geoip_path` | string? | — | v2fly geoip.dat 文件路径，用于 GeoIP 路由 |
-| `tun.enabled` | bool | `false` | 启用 TUN 模式（系统级代理） |
+| `tun.enabled` | bool | `false` | 启用 TUN 模式（系统全局代理） |
 | `tun.device_name` | string | `"prisma-tun0"` | TUN 设备名称 |
 | `tun.mtu` | u16 | `1500` | TUN 设备 MTU |
 | `tun.include_routes` | string[] | `["0.0.0.0/0"]` | TUN 模式捕获的路由 |
@@ -91,10 +91,10 @@ sidebar_position: 2
 | `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
 | `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | bucket 填充模式的桶大小 |
 | `traffic_shaping.timing_jitter_ms` | u32 | `0` | 握手帧的最大时序抖动（毫秒） |
-| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 混淆注入间隔（毫秒），0=禁用 |
+| `traffic_shaping.chaff_interval_ms` | u32 | `0` | 杂音注入 (Chaff Injection) 间隔（毫秒），0=禁用 |
 | `traffic_shaping.coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒） |
 | `sni_slicing` | bool | `false` | QUIC SNI 分片（将 ClientHello 分片到多个 CRYPTO 帧中） |
-| `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装 |
+| `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装 (Entropy Camouflage) |
 | `transport_only_cipher` | bool | `false` | 使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。服务端也须启用。 |
 
 ## 完整示例

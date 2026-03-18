@@ -8,6 +8,7 @@ pub mod handler;
 pub mod listener;
 pub mod outbound;
 pub mod relay;
+pub mod reload;
 pub mod state;
 pub mod udp_relay;
 pub mod ws_stream;
@@ -117,10 +118,31 @@ pub async fn run(config_path: &str) -> Result<()> {
         state: state.clone(),
         bandwidth,
         quotas,
+        config_path: config_path.to_string(),
     };
 
     // Start metrics ticker (1s snapshots)
     tokio::spawn(prisma_core::state::metrics_ticker(state.clone()));
+
+    // Start SIGHUP signal handler for config hot-reload (Unix only)
+    #[cfg(unix)]
+    {
+        let reload_ctx = ctx.clone();
+        tokio::spawn(async move {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sighup =
+                signal(SignalKind::hangup()).expect("Failed to register SIGHUP handler");
+            loop {
+                sighup.recv().await;
+                info!("Received SIGHUP, triggering config reload");
+                match reload::reload_config(&reload_ctx.config_path, &reload_ctx).await {
+                    Ok(summary) => info!(summary = %summary, "Config reload complete"),
+                    Err(e) => tracing::error!(error = %e, "Config reload failed"),
+                }
+            }
+        });
+        info!("SIGHUP config reload handler registered");
+    }
 
     // Start management API if enabled
     if config.management_api.enabled {

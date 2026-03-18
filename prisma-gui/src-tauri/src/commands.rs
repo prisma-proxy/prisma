@@ -186,6 +186,70 @@ pub fn set_tray_port(port: u16) {
     }
 }
 
+// ── ping ──────────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn ping_server(addr: String) -> Result<u64, String> {
+    let cstr = CString::new(addr).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_ping(cstr.as_ptr()) };
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("ping returned null".into()),
+        Some(json) => {
+            let val: serde_json::Value =
+                serde_json::from_str(&json).map_err(|e| e.to_string())?;
+            if let Some(ms) = val["latency_ms"].as_u64() {
+                Ok(ms)
+            } else if let Some(err) = val["error"].as_str() {
+                Err(err.to_string())
+            } else {
+                Err("unexpected ping response".into())
+            }
+        }
+    }
+}
+
+// ── PAC URL ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_pac_url(state: tauri::State<AppState>, pac_port: u16) -> Result<String, String> {
+    let client = client_ptr(&state)?;
+    let ptr = unsafe { prisma_ffi::prisma_get_pac_url(client, pac_port) };
+    unsafe { read_owned_cstr(ptr) }.ok_or_else(|| "Failed to get PAC URL".into())
+}
+
+// ── per-app proxy ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn set_per_app_filter(filter_json: String) -> Result<(), String> {
+    let cstr = CString::new(filter_json).map_err(|e| e.to_string())?;
+    let rc = unsafe { prisma_ffi::prisma_set_per_app_filter(cstr.as_ptr()) };
+    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_set_per_app_filter error {rc}")) }
+}
+
+#[tauri::command]
+pub fn clear_per_app_filter() -> Result<(), String> {
+    let rc = unsafe { prisma_ffi::prisma_set_per_app_filter(std::ptr::null()) };
+    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_clear_per_app_filter error {rc}")) }
+}
+
+#[tauri::command]
+pub fn get_running_apps() -> Result<Vec<String>, String> {
+    let ptr = prisma_ffi::prisma_get_running_apps();
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Ok(vec![]),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_per_app_filter() -> Result<Option<serde_json::Value>, String> {
+    let ptr = prisma_ffi::prisma_get_per_app_filter();
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Ok(None),
+        Some(s) => serde_json::from_str(&s).map(Some).map_err(|e| e.to_string()),
+    }
+}
+
 // ── speed test ────────────────────────────────────────────────────────────────
 
 #[tauri::command]

@@ -72,6 +72,7 @@ impl ConnectionPool {
             self.ctx.auth_secret,
             self.ctx.cipher_suite,
             destination,
+            self.ctx.server_key_pin.as_deref(),
         )
         .await?;
 

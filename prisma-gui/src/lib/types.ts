@@ -4,6 +4,13 @@ export interface Profile {
   tags: string[];
   created_at: string;
   config: unknown;
+  subscription_url?: string;
+  last_updated?: string;
+}
+
+export interface ImportResult {
+  count: number;
+  profiles: Profile[];
 }
 
 export interface Stats {
@@ -43,3 +50,9 @@ export const MODE_SOCKS5       = 0x01;
 export const MODE_SYSTEM_PROXY = 0x02;
 export const MODE_TUN          = 0x04;
 export const MODE_PER_APP      = 0x08;
+
+// Per-app proxy filter
+export interface PerAppFilter {
+  mode: "include" | "exclude";
+  apps: string[];
+}

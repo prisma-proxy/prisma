@@ -30,25 +30,25 @@ TCP / QUIC v2
 
 ## 组件
 
-### PrismaAuth — Padding 扩展信标
+### PrismaAuth — Padding 扩展信标 (Beacon)
 
-认证标签隐藏在 TLS `padding` 扩展中，其位置由共享密钥派生。
+认证标签隐藏在 TLS `padding` 扩展中，其位置由共享密钥 (Key) 派生。
 
-- **基于时间窗口轮换**：标签位置每小时变化一次（可配置）
-- **位置随机化**：标签偏移量随每个时间窗口变化，无固定模式
-- **前向保密**：过去的连接不可关联
-- **常数时间验证**：抵抗时序攻击
+- **基于时间窗口轮换 (Epoch Rotation)**：标签位置每小时变化一次（可配置）
+- **位置随机化 (Position Randomization)**：标签偏移量随每个时间窗口变化，无固定模式
+- **前向保密 (Forward Secrecy)**：过去的连接不可关联
+- **常数时间验证 (Constant-Time Verification)**：抵抗时序攻击
 
-### PrismaMask — 动态掩护服务器池
+### PrismaMask — 动态掩护服务器池 (Mask Server Pool)
 
-支持多个掩护服务器，具备自动健康检查和故障切换功能。
+支持多个掩护服务器，具备自动健康检查 (Health Check) 和故障切换 (Failover) 功能。
 
 - 每 60 秒通过 TCP 连接进行健康检查
-- 在健康服务器之间进行轮询负载均衡
+- 在健康服务器之间进行轮询负载均衡 (Load Balancing)
 - RTT 测量用于时序归一化
 - 掩护服务器宕机时自动切换
 
-### PrismaFP — 浏览器指纹模拟
+### PrismaFP — 浏览器指纹模拟 (Fingerprint Mimicry)
 
 在字节级别构建 TLS ClientHello，精确匹配真实浏览器。
 
@@ -57,9 +57,9 @@ TCP / QUIC v2
 - JA3/JA4 指纹验证
 - 填充至目标大小（Chrome 为 512 字节）
 
-### PrismaFlow — 流量归一化
+### PrismaFlow — 流量归一化 (Traffic Normalization)
 
-握手后的指纹防御机制。
+握手 (Handshake) 后的指纹防御机制。
 
 - HTTP/2 SETTINGS 帧模拟（匹配 Chrome/Firefox/Safari）
 - RTT 归一化（延迟响应以掩盖代理跳转）
