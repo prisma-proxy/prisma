@@ -57,6 +57,9 @@ impl FrameEncoder {
     ///
     /// Returns a slice of the internal buffer containing the complete wire frame,
     /// including the 2-byte outer length prefix (ready for a single `write_all`).
+    ///
+    /// For v5 sessions with header-authenticated encryption, pass the `header_key`
+    /// to bind the frame header (cmd+flags+stream_id) as AAD.
     pub fn seal_data_frame(
         &mut self,
         cipher: &dyn AeadCipher,
@@ -64,6 +67,19 @@ impl FrameEncoder {
         payload_len: usize,
         stream_id: u32,
         padding_range: &PaddingRange,
+    ) -> Result<&[u8], CryptoError> {
+        self.seal_data_frame_v5(cipher, nonce, payload_len, stream_id, padding_range, None)
+    }
+
+    /// v5: Encode and encrypt a data frame with optional header-authenticated AAD.
+    pub fn seal_data_frame_v5(
+        &mut self,
+        cipher: &dyn AeadCipher,
+        nonce: &[u8; NONCE_SIZE],
+        payload_len: usize,
+        stream_id: u32,
+        padding_range: &PaddingRange,
+        header_key: Option<&[u8; 32]>,
     ) -> Result<&[u8], CryptoError> {
         // Compute padding length
         let pad_len = if padding_range.max > 0 {
@@ -96,9 +112,12 @@ impl FrameEncoder {
 
         let plaintext_end = plaintext_start + plaintext_len;
 
+        // v5: compute AAD from header key + nonce for session-bound authentication
+        let aad = crate::protocol::codec::build_v5_aad(header_key, nonce);
+
         // Encrypt plaintext in-place
         let tag =
-            cipher.encrypt_in_place(nonce, &[], &mut self.buf[plaintext_start..plaintext_end])?;
+            cipher.encrypt_in_place(nonce, &aad, &mut self.buf[plaintext_start..plaintext_end])?;
 
         // Write tag after ciphertext
         self.buf[plaintext_end..plaintext_end + TAG_SIZE].copy_from_slice(&tag);
@@ -145,6 +164,16 @@ impl FrameDecoder {
         frame_len: usize,
         cipher: &dyn AeadCipher,
     ) -> Result<(u8, &'a [u8], [u8; NONCE_SIZE]), CryptoError> {
+        Self::unseal_data_frame_v5(frame_buf, frame_len, cipher, None)
+    }
+
+    /// v5: Decrypt a frame with optional header-authenticated AAD.
+    pub fn unseal_data_frame_v5<'a>(
+        frame_buf: &'a mut [u8],
+        frame_len: usize,
+        cipher: &dyn AeadCipher,
+        header_key: Option<&[u8; 32]>,
+    ) -> Result<(u8, &'a [u8], [u8; NONCE_SIZE]), CryptoError> {
         if frame_len < NONCE_SIZE + 2 {
             return Err(CryptoError::DecryptionFailed(
                 "Encrypted frame too short".into(),
@@ -168,9 +197,12 @@ impl FrameDecoder {
         let mut tag = [0u8; TAG_SIZE];
         tag.copy_from_slice(&frame_buf[tag_start..tag_start + TAG_SIZE]);
 
+        // v5: compute AAD from header key + nonce for session-bound authentication
+        let aad = crate::protocol::codec::build_v5_aad(header_key, &nonce);
+
         cipher.decrypt_in_place(
             &nonce,
-            &[],
+            &aad,
             &mut frame_buf[ciphertext_start..ciphertext_start + data_len],
             &tag,
         )?;
@@ -280,6 +312,103 @@ mod tests {
         let outer_len = u16::from_be_bytes([wire[0], wire[1]]) as usize;
         let mut frame_buf = wire[2..].to_vec();
         let (_cmd, plaintext_slice, _nonce) =
+            FrameDecoder::unseal_data_frame(&mut frame_buf, outer_len, cipher.as_ref()).unwrap();
+        assert_eq!(plaintext_slice, payload);
+    }
+
+    #[test]
+    fn test_v5_frame_encoder_with_header_key() {
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let padding_range = PaddingRange::new(0, 0);
+        let header_key = [0xAAu8; 32];
+
+        let mut encoder = FrameEncoder::new();
+        let payload = b"v5 header-auth payload";
+        let nonce = [3u8; NONCE_SIZE];
+
+        encoder.payload_mut()[..payload.len()].copy_from_slice(payload);
+        let wire = encoder
+            .seal_data_frame_v5(
+                cipher.as_ref(),
+                &nonce,
+                payload.len(),
+                42,
+                &padding_range,
+                Some(&header_key),
+            )
+            .unwrap();
+
+        let outer_len = u16::from_be_bytes([wire[0], wire[1]]) as usize;
+        let mut frame_buf = wire[2..].to_vec();
+        let (cmd, plaintext_slice, dec_nonce) = FrameDecoder::unseal_data_frame_v5(
+            &mut frame_buf,
+            outer_len,
+            cipher.as_ref(),
+            Some(&header_key),
+        )
+        .unwrap();
+        assert_eq!(cmd, CMD_DATA);
+        assert_eq!(plaintext_slice, payload);
+        assert_eq!(dec_nonce, nonce);
+    }
+
+    #[test]
+    fn test_v5_frame_encoder_wrong_header_key_fails() {
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let padding_range = PaddingRange::new(0, 0);
+        let header_key = [0xAAu8; 32];
+
+        let mut encoder = FrameEncoder::new();
+        let payload = b"should not decrypt";
+        let nonce = [4u8; NONCE_SIZE];
+
+        encoder.payload_mut()[..payload.len()].copy_from_slice(payload);
+        let wire = encoder
+            .seal_data_frame_v5(
+                cipher.as_ref(),
+                &nonce,
+                payload.len(),
+                0,
+                &padding_range,
+                Some(&header_key),
+            )
+            .unwrap();
+
+        let outer_len = u16::from_be_bytes([wire[0], wire[1]]) as usize;
+        let mut frame_buf = wire[2..].to_vec();
+
+        // Attempt to unseal with wrong header key should fail
+        let wrong_key = [0xBBu8; 32];
+        let result = FrameDecoder::unseal_data_frame_v5(
+            &mut frame_buf,
+            outer_len,
+            cipher.as_ref(),
+            Some(&wrong_key),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_v5_frame_encoder_no_header_key_compat() {
+        // Frames sealed without header key should unseal without header key (v4 compat)
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let padding_range = PaddingRange::new(5, 20);
+
+        let mut encoder = FrameEncoder::new();
+        let payload = b"v4 compat test";
+        let nonce = [5u8; NONCE_SIZE];
+
+        encoder.payload_mut()[..payload.len()].copy_from_slice(payload);
+        let wire = encoder
+            .seal_data_frame(cipher.as_ref(), &nonce, payload.len(), 0, &padding_range)
+            .unwrap();
+
+        let outer_len = u16::from_be_bytes([wire[0], wire[1]]) as usize;
+        let mut frame_buf = wire[2..].to_vec();
+        let (_cmd, plaintext_slice, _) =
             FrameDecoder::unseal_data_frame(&mut frame_buf, outer_len, cipher.as_ref()).unwrap();
         assert_eq!(plaintext_slice, payload);
     }

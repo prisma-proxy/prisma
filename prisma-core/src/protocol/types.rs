@@ -20,6 +20,9 @@ pub const CMD_SPEED_TEST: u8 = 0x0B;
 pub const CMD_DNS_QUERY: u8 = 0x0C;
 pub const CMD_DNS_RESPONSE: u8 = 0x0D;
 pub const CMD_CHALLENGE_RESP: u8 = 0x0E;
+/// v5: Connection migration request — client sends its migration token to resume
+/// a session on a new transport connection without a full handshake.
+pub const CMD_MIGRATION: u8 = 0x0F;
 
 // Flag bits (2-byte little-endian)
 pub const FLAG_PADDED: u16 = 0x0001;
@@ -30,6 +33,10 @@ pub const FLAG_COMPRESSED: u16 = 0x0010;
 pub const FLAG_0RTT: u16 = 0x0020;
 pub const FLAG_BUCKETED: u16 = 0x0040;
 pub const FLAG_CHAFF: u16 = 0x0080;
+/// v5: Header fields (cmd, flags, stream_id) are bound as AAD in encryption.
+pub const FLAG_HEADER_AUTHENTICATED: u16 = 0x0100;
+/// v5: Frame carries a connection migration token for seamless reconnection.
+pub const FLAG_MIGRATION: u16 = 0x0200;
 
 /// Server feature flags bitmask.
 pub const FEATURE_UDP_RELAY: u32 = 0x0001;
@@ -39,6 +46,14 @@ pub const FEATURE_SPEED_TEST: u32 = 0x0008;
 pub const FEATURE_DNS_TUNNEL: u32 = 0x0010;
 pub const FEATURE_BANDWIDTH_LIMIT: u32 = 0x0020;
 pub const FEATURE_TRANSPORT_ONLY_CIPHER: u32 = 0x0040;
+/// v5: Server supports extended anti-replay window (2048-bit).
+pub const FEATURE_EXTENDED_ANTI_REPLAY: u32 = 0x0080;
+/// v5: Server supports v5 key derivation with improved domain separation.
+pub const FEATURE_V5_KDF: u32 = 0x0100;
+/// v5: Server supports header-authenticated encryption (AAD binding).
+pub const FEATURE_HEADER_AUTH: u32 = 0x0200;
+/// v5: Server supports connection migration tokens.
+pub const FEATURE_CONNECTION_MIGRATION: u32 = 0x0400;
 
 // --- PrismaVeil handshake types (v4 only) ---
 
@@ -95,6 +110,10 @@ pub struct SessionTicket {
 /// PrismaClientInit flags.
 pub const CLIENT_INIT_FLAG_0RTT: u8 = 0x01;
 pub const CLIENT_INIT_FLAG_RESUMPTION: u8 = 0x02;
+/// v5: Client requests header-authenticated encryption.
+pub const CLIENT_INIT_FLAG_HEADER_AUTH: u8 = 0x04;
+/// v5: Client supports connection migration.
+pub const CLIENT_INIT_FLAG_MIGRATION: u8 = 0x08;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -177,6 +196,12 @@ pub enum Command {
     ChallengeResponse {
         hash: [u8; 32], // BLAKE3(challenge)
     },
+    /// v5: Connection migration — client presents its migration token to resume
+    /// a session on a new transport connection.
+    Migration {
+        token: [u8; 32],
+        session_id: [u8; 16],
+    },
 }
 
 impl Command {
@@ -196,6 +221,7 @@ impl Command {
             Command::DnsQuery { .. } => CMD_DNS_QUERY,
             Command::DnsResponse { .. } => CMD_DNS_RESPONSE,
             Command::ChallengeResponse { .. } => CMD_CHALLENGE_RESP,
+            Command::Migration { .. } => CMD_MIGRATION,
         }
     }
 }
@@ -230,6 +256,11 @@ pub struct SessionKeys {
     pub challenge: Option<[u8; 32]>,
     /// v3: session ticket for 0-RTT resumption.
     pub session_ticket: Option<Vec<u8>>,
+    /// v5: separate key for header-authenticated encryption AAD binding.
+    /// When present, frame headers (cmd+flags+stream_id) are bound as AAD.
+    pub header_key: Option<[u8; 32]>,
+    /// v5: connection migration token for seamless reconnection.
+    pub migration_token: Option<[u8; 32]>,
 }
 
 impl SessionKeys {

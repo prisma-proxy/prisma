@@ -414,6 +414,12 @@ pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
             buf
         }
         Command::ChallengeResponse { hash } => hash.to_vec(),
+        Command::Migration { token, session_id } => {
+            let mut buf = Vec::with_capacity(48);
+            buf.extend_from_slice(token);
+            buf.extend_from_slice(session_id);
+            buf
+        }
     }
 }
 
@@ -585,6 +591,16 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             hash.copy_from_slice(&payload[..32]);
             Ok(Command::ChallengeResponse { hash })
         }
+        CMD_MIGRATION => {
+            if payload.len() < 48 {
+                return Err(ProtocolError::InvalidFrame("Migration too short".into()));
+            }
+            let mut token = [0u8; 32];
+            token.copy_from_slice(&payload[..32]);
+            let mut session_id = [0u8; 16];
+            session_id.copy_from_slice(&payload[32..48]);
+            Ok(Command::Migration { token, session_id })
+        }
         _ => Err(ProtocolError::InvalidCommand(cmd)),
     }
 }
@@ -667,12 +683,26 @@ fn decode_proxy_destination(data: &[u8]) -> Result<ProxyDestination, ProtocolErr
 // [nonce:12][len:2][ciphertext][tag:16]
 
 /// Encrypt a plaintext data frame into the wire format.
+///
+/// v5 enhancement: when `aad` is non-empty, the frame header bytes
+/// (cmd + flags + stream_id) are bound as additional authenticated data,
+/// providing integrity over the plaintext structure that the AEAD tag covers.
 pub fn encrypt_frame(
     cipher: &dyn AeadCipher,
     nonce: &[u8; NONCE_SIZE],
     plaintext: &[u8],
 ) -> Result<Vec<u8>, CryptoError> {
-    let ciphertext = cipher.encrypt(nonce, plaintext, &[])?;
+    encrypt_frame_aad(cipher, nonce, plaintext, &[])
+}
+
+/// Encrypt a plaintext data frame with explicit AAD (v5 header authentication).
+pub fn encrypt_frame_aad(
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; NONCE_SIZE],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    let ciphertext = cipher.encrypt(nonce, plaintext, aad)?;
     let len = ciphertext.len() as u16;
     let mut wire = Vec::with_capacity(NONCE_SIZE + 2 + ciphertext.len());
     wire.extend_from_slice(nonce);
@@ -685,6 +715,15 @@ pub fn encrypt_frame(
 pub fn decrypt_frame(
     cipher: &dyn AeadCipher,
     wire: &[u8],
+) -> Result<(Vec<u8>, [u8; NONCE_SIZE]), CryptoError> {
+    decrypt_frame_aad(cipher, wire, &[])
+}
+
+/// Decrypt a wire-format encrypted frame with explicit AAD (v5 header authentication).
+pub fn decrypt_frame_aad(
+    cipher: &dyn AeadCipher,
+    wire: &[u8],
+    aad: &[u8],
 ) -> Result<(Vec<u8>, [u8; NONCE_SIZE]), CryptoError> {
     if wire.len() < NONCE_SIZE + 2 {
         return Err(CryptoError::DecryptionFailed(
@@ -701,8 +740,30 @@ pub fn decrypt_frame(
         ));
     }
     let ciphertext = &wire[ciphertext_start..ciphertext_start + len];
-    let plaintext = cipher.decrypt(&nonce, ciphertext, &[])?;
+    let plaintext = cipher.decrypt(&nonce, ciphertext, aad)?;
     Ok((plaintext, nonce))
+}
+
+/// Build AAD (additional authenticated data) from a v5 header key and nonce.
+///
+/// v5 header-authenticated encryption binds the session identity into each
+/// frame's AEAD tag. The AAD is BLAKE3(header_key, nonce), truncated to 16 bytes.
+/// This prevents cross-session frame injection: an attacker who captures
+/// encrypted frames from session A cannot replay them into session B,
+/// even if both sessions happen to use the same cipher key (which shouldn't
+/// happen, but defense-in-depth).
+///
+/// Returns an empty Vec for v4 sessions (no header_key).
+#[inline]
+pub fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Vec<u8> {
+    match header_key {
+        Some(key) => {
+            let hash = blake3::keyed_hash(key, nonce);
+            let bytes: [u8; 32] = hash.into();
+            bytes[..16].to_vec()
+        }
+        None => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -1008,5 +1069,109 @@ mod tests {
         let (decrypted, dec_nonce) = decrypt_frame(cipher.as_ref(), &wire).unwrap();
         assert_eq!(decrypted, plaintext);
         assert_eq!(dec_nonce, nonce);
+    }
+
+    // ===== v5 tests =====
+
+    #[test]
+    fn test_v5_encrypted_frame_aad_round_trip() {
+        use crate::crypto::aead::create_cipher;
+
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"hello v5 world";
+        let header_key = [0xAAu8; 32];
+        let aad = build_v5_aad(Some(&header_key), &nonce);
+
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, &aad).unwrap();
+        let (decrypted, dec_nonce) = decrypt_frame_aad(cipher.as_ref(), &wire, &aad).unwrap();
+        assert_eq!(decrypted, plaintext);
+        assert_eq!(dec_nonce, nonce);
+    }
+
+    #[test]
+    fn test_v5_aad_mismatch_fails_decryption() {
+        use crate::crypto::aead::create_cipher;
+
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"secret data";
+        let header_key = [0xAAu8; 32];
+        let aad = build_v5_aad(Some(&header_key), &nonce);
+
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, &aad).unwrap();
+
+        // Decryption with different AAD should fail
+        let wrong_key = [0xBBu8; 32];
+        let wrong_aad = build_v5_aad(Some(&wrong_key), &nonce);
+        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, &wrong_aad).is_err());
+
+        // Decryption with empty AAD should also fail
+        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, &[]).is_err());
+    }
+
+    #[test]
+    fn test_v5_aad_empty_for_v4_sessions() {
+        let aad = build_v5_aad(None, &[0u8; NONCE_SIZE]);
+        assert!(aad.is_empty());
+    }
+
+    #[test]
+    fn test_v5_aad_deterministic() {
+        let header_key = [0xCCu8; 32];
+        let nonce = [1u8; NONCE_SIZE];
+        let aad1 = build_v5_aad(Some(&header_key), &nonce);
+        let aad2 = build_v5_aad(Some(&header_key), &nonce);
+        assert_eq!(aad1, aad2);
+        assert_eq!(aad1.len(), 16);
+    }
+
+    #[test]
+    fn test_v5_aad_differs_per_nonce() {
+        let header_key = [0xCCu8; 32];
+        let nonce1 = [1u8; NONCE_SIZE];
+        let nonce2 = [2u8; NONCE_SIZE];
+        let aad1 = build_v5_aad(Some(&header_key), &nonce1);
+        let aad2 = build_v5_aad(Some(&header_key), &nonce2);
+        assert_ne!(aad1, aad2);
+    }
+
+    #[test]
+    fn test_v5_backward_compat_no_aad() {
+        use crate::crypto::aead::create_cipher;
+
+        // Frames encrypted without AAD (v4) should still decrypt with no AAD
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"v4 compatible frame";
+
+        let wire = encrypt_frame(cipher.as_ref(), &nonce, plaintext).unwrap();
+        let (decrypted, _) = decrypt_frame(cipher.as_ref(), &wire).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_migration_command_round_trip() {
+        let frame = DataFrame {
+            command: Command::Migration {
+                token: [0xAA; 32],
+                session_id: [0xBB; 16],
+            },
+            flags: FLAG_MIGRATION,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+    }
+
+    #[test]
+    fn test_migration_command_too_short() {
+        let result = decode_command_payload(CMD_MIGRATION, &[0u8; 47]);
+        assert!(result.is_err());
     }
 }

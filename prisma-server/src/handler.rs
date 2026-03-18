@@ -8,6 +8,7 @@ use prisma_core::config::server::{PortForwardingConfig, RuleAction, RuleConditio
 use prisma_core::crypto::aead::create_cipher;
 use prisma_core::crypto::kdf::derive_ticket_key;
 use prisma_core::protocol::codec::*;
+use prisma_core::protocol::handshake::is_valid_protocol_version;
 use prisma_core::protocol::handshake::PrismaHandshakeServer;
 use prisma_core::protocol::types::*;
 use prisma_core::types::{PaddingRange, ProxyAddress, ProxyDestination, PRISMA_PROTOCOL_VERSION};
@@ -55,7 +56,7 @@ pub async fn handle_tcp_connection(
             }
         }
     };
-    info!(session_id = %session_keys.session_id, "Handshake complete (TCP, v4)");
+    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (TCP)");
 
     let (read, write) = stream.into_split();
     run_registered_session(
@@ -138,7 +139,7 @@ where
 
     let version = client_hello_buf[0];
 
-    if version != PRISMA_PROTOCOL_VERSION {
+    if !is_valid_protocol_version(version) {
         // Not a supported protocol version — relay to fallback (treat as probe)
         warn!(
             version,
@@ -185,7 +186,7 @@ where
 
     util::write_framed(&mut stream, &server_init_bytes).await?;
 
-    info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged, v4)");
+    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (TCP camouflaged)");
 
     let (read, write) = tokio::io::split(stream);
     run_registered_session(
@@ -228,7 +229,7 @@ pub async fn handle_quic_stream(
             }
         };
 
-    info!(session_id = %session_keys.session_id, "Handshake complete (QUIC, v4)");
+    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (QUIC)");
     run_registered_session(
         session_keys,
         recv,
@@ -243,7 +244,7 @@ pub async fn handle_quic_stream(
     .await
 }
 
-/// Unified handshake over any AsyncRead + AsyncWrite pair (v4 only).
+/// Unified handshake over any AsyncRead + AsyncWrite pair (v4/v5).
 async fn perform_handshake<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -263,15 +264,16 @@ where
 
     let version = client_init_buf[0];
 
-    if version != PRISMA_PROTOCOL_VERSION {
+    if !is_valid_protocol_version(version) {
         return Err(anyhow::anyhow!(
-            "Unsupported protocol version: 0x{:02x}, expected v4 (0x{:02x})",
+            "Unsupported protocol version: 0x{:02x}, expected v4-v5 (0x{:02x}-0x{:02x})",
             version,
+            prisma_core::types::PRISMA_MIN_PROTOCOL_VERSION,
             PRISMA_PROTOCOL_VERSION
         ));
     }
 
-    // v4 handshake: 2-step with bucket sizes
+    // v4/v5 handshake: 2-step with bucket sizes
     let ticket_key = derive_ticket_key_from_state(state).await;
     let (bucket_sizes, server_features) = compute_server_features(state).await;
     let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
@@ -341,7 +343,7 @@ where
         client_name = %display_name,
         peer = %peer_addr,
         transport = ?transport,
-        protocol = "v4",
+        protocol_version = session_keys.protocol_version,
         "Client connected"
     );
 
