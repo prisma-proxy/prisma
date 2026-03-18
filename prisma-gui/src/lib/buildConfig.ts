@@ -165,6 +165,46 @@ export const DEFAULT_WIZARD: WizardState = {
   tags: [],
 };
 
+/**
+ * Converts GUI routing rules (from the Rules page store) to the Rust backend
+ * serde format for `prisma_core::router::Rule`.
+ *
+ * GUI format:  { type: "DOMAIN"|"IP-CIDR"|"GEOIP"|"FINAL", match: string, action: "PROXY"|"DIRECT"|"REJECT" }
+ * Rust format: { type: "domain"|"ip-cidr"|"geoip"|"all", value: string, action: "proxy"|"direct"|"block" }
+ */
+export function convertGuiRulesToBackend(
+  guiRules: { type: string; match: string; action: string }[]
+): Record<string, unknown>[] {
+  return guiRules.map((r) => {
+    // Map GUI action names to Rust serde names
+    let action: string;
+    switch (r.action) {
+      case "DIRECT":  action = "direct"; break;
+      case "REJECT":  action = "block";  break;
+      case "PROXY":
+      default:        action = "proxy";  break;
+    }
+
+    // Map GUI type names to Rust serde tag values
+    switch (r.type) {
+      case "DOMAIN":
+        return { type: "domain", value: r.match, action };
+      case "DOMAIN-SUFFIX":
+        return { type: "domain-suffix", value: r.match, action };
+      case "DOMAIN-KEYWORD":
+        return { type: "domain-keyword", value: r.match, action };
+      case "IP-CIDR":
+        return { type: "ip-cidr", value: r.match, action };
+      case "GEOIP":
+        return { type: "geoip", value: r.match.toLowerCase(), action };
+      case "FINAL":
+        return { type: "all", value: null, action };
+      default:
+        return { type: "domain", value: r.match, action };
+    }
+  });
+}
+
 /** Parse "Key: Value" lines into [key, value] tuples */
 function parseHeaderLines(text: string): [string, string][] {
   return text
@@ -374,7 +414,7 @@ export function buildClientConfig(w: WizardState, ports: { socks5Port: number; h
   if (pfs.length > 0) config.port_forwards = pfs;
 
   // Routing
-  if (w.routingGeoipPath || w.routingRules) {
+  {
     const routing: Record<string, unknown> = {};
     if (w.routingGeoipPath) routing.geoip_path = w.routingGeoipPath;
     if (w.routingRules) {

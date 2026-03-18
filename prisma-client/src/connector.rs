@@ -392,6 +392,7 @@ pub async fn connect_xhttp(
     extra_headers: &[(String, String)],
     user_agent: Option<&str>,
     referer: Option<&str>,
+    skip_cert_verify: bool,
 ) -> Result<TransportStream> {
     debug!(url = %stream_url, "Connecting to server via XHTTP stream-one");
 
@@ -408,11 +409,13 @@ pub async fn connect_xhttp(
     let (download_tx, download_rx) = mpsc::channel::<bytes::Bytes>(256);
 
     // Build the HTTP request
+    // Note: do NOT set `transfer-encoding: chunked` — it is forbidden in HTTP/2
+    // (RFC 7540 Section 8.1.2.2) and CDNs like Cloudflare will reject or strip it.
+    // HTTP/2 framing handles chunking natively.
     let mut req_builder = http::Request::builder()
         .method("POST")
         .uri(stream_url)
-        .header("content-type", "application/octet-stream")
-        .header("transfer-encoding", "chunked");
+        .header("content-type", "application/octet-stream");
 
     // Add obfuscation headers
     let ua = user_agent.unwrap_or("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
@@ -430,7 +433,7 @@ pub async fn connect_xhttp(
     let tcp_stream = TcpStream::connect(&addr).await?;
 
     if is_tls {
-        let tls_config = build_client_tls_config(true, &["h2".to_string()]);
+        let tls_config = build_client_tls_config(skip_cert_verify, &["h2".to_string()]);
         let connector = tokio_rustls::TlsConnector::from(Arc::new(tls_config));
         let sni = rustls::pki_types::ServerName::try_from(host.to_string())?;
         let tls_stream = connector.connect(sni, tcp_stream).await?;

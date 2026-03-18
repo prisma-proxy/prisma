@@ -16,7 +16,7 @@ import type { Rule } from "@/store/rules";
 import { notify } from "@/store/notifications";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
 
-const RULE_TYPES   = ["DOMAIN", "IP-CIDR", "GEOIP", "FINAL"] as const;
+const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 
 export default function Rules() {

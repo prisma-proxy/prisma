@@ -175,6 +175,7 @@ pub async fn packet_download_handler(
         .header("content-type", content_type)
         .header("cache-control", "no-cache")
         .header("connection", "keep-alive")
+        .header("x-accel-buffering", "no") // Prevent CDN/reverse-proxy buffering
         .body(Body::from_stream(stream))
         .unwrap()
         .into_response()
@@ -246,6 +247,7 @@ pub async fn stream_handler(
         .status(StatusCode::OK)
         .header("content-type", "application/octet-stream")
         .header("cache-control", "no-cache")
+        .header("x-accel-buffering", "no") // Prevent CDN/reverse-proxy buffering
         .body(Body::from_stream(stream))
         .unwrap()
         .into_response()

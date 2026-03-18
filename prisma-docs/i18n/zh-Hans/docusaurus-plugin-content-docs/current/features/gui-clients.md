@@ -7,30 +7,131 @@ import TabItem from '@theme/TabItem';
 
 # GUI 客户端
 
-Prisma 为所有主流平台提供原生 GUI 客户端。每个客户端通过 **prisma-ffi**（一个基于相同 Rust 代码库构建的 C-ABI 共享库）连接到核心 Prisma 逻辑。
+Prisma 为所有主流平台提供 GUI 客户端。主要的桌面客户端是 **prisma-gui**，一个基于 Tauri 2 + React 的跨平台应用，可在 Windows、macOS 和 Linux 上运行。移动平台使用原生客户端，通过 **prisma-ffi**（一个基于相同 Rust 代码库构建的 C-ABI 共享库）连接到核心 Prisma 逻辑。
 
 ```
 prisma-ffi  ←──────────────────────────────────────┐
     │                                               │
-    ├── prisma-gui-windows  (Rust + Win32/GDI)      │
-    ├── prisma-gui-android  (Kotlin + JNI)           │  same C API
-    ├── prisma-gui-ios      (Swift + xcframework)   │
-    └── prisma-gui-macos    (Swift + dylib)          │
+    ├── prisma-gui          (Tauri 2 + React)       │  桌面端 (Win/Mac/Linux)
+    ├── prisma-gui-android  (Kotlin + JNI)           │  同一 C API
+    └── prisma-gui-ios      (Swift + xcframework)   │
 ```
+
+---
+
+## prisma-gui（桌面端）
+
+主要的桌面客户端是一个 **Tauri 2** 应用，前端使用 **React + TypeScript**（v0.6.3）。它提供了一个功能完整的 GUI，可在 Windows、macOS 和 Linux 上通过单一代码库管理 Prisma 连接。
+
+### 架构
+
+```
+React (Vite + React Router) ─── Tauri IPC ─── Rust commands ─── prisma-ffi
+                                                    │
+                                            系统托盘 (桌面端)
+```
+
+前端使用 **Zustand** 进行状态管理，**Recharts** 绘制图表，**Radix UI** 作为组件库，**react-i18next** 实现国际化（英文 + 简体中文），**TailwindCSS** 进行样式设计。
+
+### 页面
+
+应用有 **6 个页面**，可通过侧边栏导航（可折叠）或窄视口下的底部导航访问：
+
+| 页面 | 描述 |
+|------|------|
+| **主页** | 连接开关、实时速度图表、会话统计（上传/下载速度、已传输数据、运行时间）、代理模式选择器（SOCKS5/系统代理/TUN/按应用）、连接质量指示器、每日数据用量、连接历史 |
+| **配置文件** | 配置文件列表，支持搜索、排序（按名称/最近使用/延迟）、每个配置文件的指标（延迟、总数据量、会话数、峰值速度）。通过 5 步向导创建/编辑（连接、认证、传输、路由和 TUN、审核）。支持以 TOML、prisma:// URI 或二维码分享配置文件。可从二维码或 JSON 文件导入。支持复制和批量导出/导入 |
+| **路由规则** | 路由规则编辑器，支持 DOMAIN、IP-CIDR、GEOIP 和 FINAL 规则类型。操作：PROXY、DIRECT、REJECT。支持 JSON 格式导入/导出规则 |
+| **日志** | 实时日志查看器，虚拟化滚动，搜索并高亮匹配文本，级别过滤（ALL/ERROR/WARN/INFO/DEBUG），级别统计标签，暂停/恢复自动滚动，导出为文本文件 |
+| **速度测试** | 通过代理运行速度测试，可配置服务器（Cloudflare/Google）和持续时间（5-60 秒）。测量下载、上传和延迟。持久化测试历史，支持列表和图表视图，汇总统计（平均值/最佳值） |
+| **设置** | 语言（英文/中文）、主题（跟随系统/浅色/深色）、开机启动、最小化到托盘、代理端口（HTTP/SOCKS5）、DNS 设置（直连/隧道/Fake-IP/智能）、自动重连（可配置延迟和最大尝试次数）、数据管理（导出/导入设置和完整备份）、自动更新检查和安装 |
+
+### 系统托盘集成
+
+在桌面平台上，prisma-gui 显示一个**系统托盘图标**，具有以下功能：
+
+- **状态感知图标** — 在断开连接、正在连接和已连接状态之间切换
+- **连接/断开切换** — 从托盘菜单快速连接/断开
+- **配置文件切换器** — 列出所有配置文件的子菜单，当前活跃的配置文件带有标记
+- **复制代理地址** — 将本地代理地址复制到剪贴板
+- **实时工具提示** — 显示实时上传/下载速度（如 "Prisma Up: 1.2 MB/s Down: 4.5 MB/s"）
+- **显示窗口/退出** — 标准窗口管理操作
+
+### 键盘快捷键
+
+所有快捷键使用 `Cmd`（macOS）或 `Ctrl`（Windows/Linux）作为修饰键：
+
+| 快捷键 | 操作 |
+|--------|------|
+| `Mod+1` 到 `Mod+6` | 导航到主页、配置文件、路由规则、日志、速度测试、设置 |
+| `Mod+K` | 切换连接/断开 |
+| `Mod+N` | 前往配置文件页面 |
+
+### 连接管理
+
+- **代理模式** — 在主页可选择：SOCKS5、系统代理、TUN、按应用（可同时启用多个）
+- **自动重连** — 在设置中配置重试延迟（秒）和最大尝试次数
+- **连接历史** — 记录连接/断开事件，包含配置文件名称、延迟、会话传输数据和时间戳
+- **连接质量指示器** — 基于速度稳定性的实时信号质量（优秀/良好/一般/较差）
+- **每日数据用量追踪** — 持久化的每日上传/下载追踪，自动清理 90 天前的数据
+
+### 通知
+
+- **状态栏** — 底部持久显示的状态栏，展示连接状态、实时速度/数据统计和消息通知
+- **通知历史** — 铃铛图标带未读标记；点击查看完整通知历史，包含时间戳和严重级别（错误、警告、成功、信息）
+- **桌面通知** — 通过 Tauri 通知插件
+
+### 剪贴板导入
+
+当应用窗口获得焦点时，会自动检查剪贴板中的 `prisma://` URI，并提示用户导入检测到的配置文件。
+
+### 构建
+
+```bash
+cd prisma-gui
+
+# 开发
+npm run dev
+npm run tauri dev
+
+# 生产
+npm run tauri build
+# 输出：平台特定的安装包（MSI、DMG、AppImage、deb）
+```
+
+### 安装
+
+从[发布页面](https://github.com/Yamimega/prisma/releases/latest)下载适合您平台的安装包：
+
+- **Windows**：`prisma-gui_x.y.z_x64-setup.exe` 或 `.msi`
+- **macOS**：`prisma-gui_x.y.z_aarch64.dmg` 或 `_x64.dmg`
+- **Linux**：`.AppImage`、`.deb` 或 `.rpm`
+
+---
 
 ## 功能对比
 
-| Feature | Windows | Android | iOS | macOS |
-|---------|---------|---------|-----|-------|
-| SOCKS5 proxy | ✓ | ✓ | ✓ | ✓ |
-| System proxy | ✓ | ✓ | — | ✓ |
-| TUN mode | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) | ✓ |
-| Per-app proxy | — | ✓ | ✓ (NEAppProxy) | — |
-| QR code import | ✓ | ✓ (camera) | ✓ (camera) | ✓ |
-| Speed graph | ✓ | ✓ | ✓ | ✓ |
-| Routing rules editor | ✓ | ✓ | ✓ | ✓ |
-| Auto-update | ✓ | ✓ | App Store | ✓ |
-| System tray / menu bar | ✓ | — | — | ✓ |
+| 功能 | prisma-gui（桌面端） | Android | iOS |
+|------|---------------------|---------|-----|
+| SOCKS5 代理 | ✓ | ✓ | ✓ |
+| 系统代理 | ✓ | ✓ | — |
+| TUN 模式 | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) |
+| 按应用代理 | ✓ | ✓ | ✓ (NEAppProxy) |
+| 二维码导入 | ✓ (粘贴 URI) | ✓ (摄像头) | ✓ (摄像头) |
+| 配置分享 (TOML/URI/QR) | ✓ | — | — |
+| 速度图表 | ✓ | ✓ | ✓ |
+| 速度测试（含历史） | ✓ | — | — |
+| 路由规则编辑器 | ✓ | ✓ | ✓ |
+| 自动更新 | ✓ | ✓ | App Store |
+| 系统托盘/菜单栏 | ✓ | — | — |
+| 键盘快捷键 | ✓ | — | — |
+| 剪贴板导入 | ✓ | — | — |
+| 自动重连 | ✓ | — | — |
+| 通知历史 | ✓ | — | — |
+| 国际化（英文 + 中文） | ✓ | — | — |
+| 完整备份/恢复 | ✓ | — | — |
+| 连接历史 | ✓ | — | — |
+| 每日数据用量追踪 | ✓ | — | — |
 
 ---
 
@@ -118,32 +219,6 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
-## Windows GUI
-
-使用 `windows-sys` 编写的原生 Win32 应用程序。UI 通过 GDI 绘制，不依赖外部 UI 框架。
-
-### 特性
-
-- **系统托盘**图标，右键菜单（连接、断开、打开、检查更新、退出）
-- **6 个页面** — 主页（速度图表 + 连接开关）、配置文件、路由规则、日志、速度测试、设置
-- **滚动速度图表** — 使用 GDI 折线绘制的 60 个采样点历史记录
-- **深色主题**，默认使用海军蓝/靛蓝色调
-
-### 构建
-
-```powershell
-cargo build --release -p prisma-gui-windows
-# Output: target/release/prisma-gui-windows.exe
-```
-
-该二进制文件将 `prisma-ffi` 作为工作区依赖链接 — 不需要单独的 DLL。
-
-### 安装
-
-从[发布页面](https://github.com/Yamimega/prisma/releases/latest)下载 `prisma-windows-x64.zip`。解压后运行 `prisma-gui-windows.exe`。首次运行时，应用会创建系统托盘图标并打开主窗口。
-
----
-
 ## Android
 
 基于 Jetpack Compose 的应用，目标 Android 7.0+（API 24）。Kotlin 代码通过 JNI 桥接（`libprisma_client.so`）调用 `prisma-ffi`。
@@ -227,46 +302,6 @@ Xcode 项目将此 xcframework 作为依赖链接。
 
 ---
 
-## macOS
-
-面向 macOS 13+ 的菜单栏应用，使用 Swift 和 AppKit 编写。应用以配件模式运行（无 Dock 图标），从菜单栏图标显示紧凑的弹出窗口。
-
-### 架构
-
-```
-AppDelegate
-    └── MenuBarController
-            ├── NSStatusItem  (menu bar icon, click → popover)
-            └── NSPopover
-                    └── MenuBarPopoverView (SwiftUI)
-                            └── PrismaFFIClient (ObservableObject)
-```
-
-在弹出窗口中点击"打开应用"会将激活策略切换为 `.regular`，显示包含主页、配置文件、规则、设置和日志视图的完整窗口。
-
-### 系统代理集成
-
-macOS 客户端可以通过 `networksetup` 配置系统 HTTP/HTTPS 代理：
-
-```swift
-PrismaFFI.setSystemProxy(host: "127.0.0.1", port: 8080)
-```
-
-这会调用 FFI 中的 `prisma_set_system_proxy`，该函数为活跃的网络服务调用 `networksetup -setwebproxy`。
-
-### 构建
-
-```bash
-# Swift Package Manager
-cd prisma-gui-macos
-swift build -c release
-
-# Or via Xcode
-xcodebuild -project PrismaMacOS.xcodeproj -scheme PrismaMacOS -configuration Release
-```
-
----
-
 ## 通过 QR 码分享配置
 
 所有客户端都支持通过扫描二维码导入配置文件。QR 负载是一个 `prisma://` URI，路径为 base64 编码的配置文件 JSON：
@@ -298,10 +333,10 @@ char* svg = prisma_profile_to_qr_svg(profile_json);
 
 Network Extension entitlements 需要在 Apple Developer 门户中启用了 NetworkExtension 功能的显式 App ID。Provisioning profiles 必须包含此功能。
 
-### Windows：应用无法启动
+### prisma-gui：系统代理设置失败
 
-确保 `prisma-gui-windows.exe` 运行时设置了有效的 `USERPROFILE` 环境变量 — 它将配置文件存储在 `%APPDATA%\prisma\profiles\` 下。
+设置系统代理需要平台特定的权限。在 macOS 上，应用调用 `networksetup`，可能会提示输入管理员凭据。在 Linux 上，系统代理配置取决于您的桌面环境。
 
-### macOS："Operation not permitted"（系统代理）
+### prisma-gui：托盘图标不可见
 
-通过 `networksetup` 更改系统代理需要管理员权限。应用会通过 macOS 授权对话框提示输入密码。
+在 Linux 上，系统托盘支持取决于您的桌面环境和合成器。请确保安装了兼容的系统托盘实现（如 `libappindicator`）。在 GNOME 上，您可能需要 AppIndicator 扩展。

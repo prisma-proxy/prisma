@@ -550,13 +550,22 @@ pub unsafe extern "C" fn prisma_speed_test(
     let server_str = cstr_to_str!(server);
     let dir_str = cstr_to_str!(direction);
 
+    // Get the SOCKS5 proxy address from the active connection
+    let socks5_addr = match client.connection.lock() {
+        Ok(conn) => match conn.socks5_addr() {
+            Some(addr) => addr.to_owned(),
+            None => return PRISMA_ERR_NOT_CONNECTED,
+        },
+        Err(_) => return PRISMA_ERR_INTERNAL,
+    };
+
     let server_owned = server_str.to_owned();
     let dir_owned = dir_str.to_owned();
     let cb_arc = Arc::clone(&client.callback);
     let runtime = Arc::clone(&client.runtime);
 
     runtime.spawn(async move {
-        let result = connection::run_speed_test(&server_owned, duration_secs, &dir_owned).await;
+        let result = connection::run_speed_test(&socks5_addr, &server_owned, duration_secs, &dir_owned).await;
         let event = match result {
             Ok((dl, ul)) => format!(
                 r#"{{"type":"speed_test_result","download_mbps":{:.2},"upload_mbps":{:.2}}}"#,

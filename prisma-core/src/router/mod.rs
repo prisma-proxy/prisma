@@ -101,6 +101,18 @@ impl Router {
         RouteAction::Proxy // default: tunnel everything
     }
 
+    /// Returns true if this router has any rules that require an IP address
+    /// (GeoIP or IP-CIDR). Used by callers to decide whether to resolve DNS
+    /// before routing so that domain-only connections can match GeoIP rules.
+    pub fn needs_ip_for_routing(&self) -> bool {
+        self.rules.iter().any(|r| {
+            matches!(
+                r.condition,
+                RuleCondition::GeoIp(_) | RuleCondition::IpCidr(_)
+            )
+        })
+    }
+
     fn matches(
         &self,
         idx: usize,
@@ -395,6 +407,69 @@ mod tests {
             router.route(Some("anything.com"), None, 443),
             RouteAction::Proxy
         );
+    }
+
+    #[test]
+    fn test_needs_ip_for_routing() {
+        // No IP-dependent rules
+        let rules = vec![Rule {
+            condition: RuleCondition::Domain("example.com".into()),
+            action: RouteAction::Direct,
+        }];
+        let router = Router::new(rules);
+        assert!(!router.needs_ip_for_routing());
+
+        // With GeoIP rule
+        let rules = vec![
+            Rule {
+                condition: RuleCondition::GeoIp("cn".into()),
+                action: RouteAction::Direct,
+            },
+            Rule {
+                condition: RuleCondition::All,
+                action: RouteAction::Proxy,
+            },
+        ];
+        let router = Router::new(rules);
+        assert!(router.needs_ip_for_routing());
+
+        // With IP-CIDR rule
+        let rules = vec![Rule {
+            condition: RuleCondition::IpCidr("192.168.0.0/16".into()),
+            action: RouteAction::Direct,
+        }];
+        let router = Router::new(rules);
+        assert!(router.needs_ip_for_routing());
+
+        // Empty rules
+        let router = Router::new(vec![]);
+        assert!(!router.needs_ip_for_routing());
+    }
+
+    #[test]
+    fn test_geoip_case_insensitive() {
+        use std::collections::HashMap;
+        use std::net::Ipv4Addr;
+
+        // Build a matcher with "cn" country code
+        let mut entries = HashMap::new();
+        let mask = !0u32 << 24;
+        let network = u32::from(Ipv4Addr::new(1, 0, 0, 0)) & mask;
+        entries.insert("cn".to_string(), vec![(network, mask)]);
+        let matcher = Arc::new(GeoIPMatcher::new_from_entries(entries));
+
+        let rules = vec![Rule {
+            condition: RuleCondition::GeoIp("CN".into()), // uppercase in rule
+            action: RouteAction::Direct,
+        }];
+        let router = Router::with_geoip(rules, Some(matcher));
+
+        // Should match even though rule says "CN" and DB has "cn"
+        let cn_ip: Option<IpAddr> = "1.0.0.1".parse().ok();
+        assert_eq!(router.route(None, cn_ip, 80), RouteAction::Direct);
+
+        let other_ip: Option<IpAddr> = "8.8.8.8".parse().ok();
+        assert_eq!(router.route(None, other_ip, 80), RouteAction::Proxy);
     }
 
     #[test]

@@ -159,15 +159,12 @@ async fn run_inner(
         dns_config: config.dns.clone(),
         dns_resolver: DnsResolver::new(&config.dns),
         router: Arc::new({
-            let geoip = config.routing.geoip_path.as_deref().and_then(|path| {
-                match GeoIPMatcher::load(path) {
-                    Ok(m) => Some(Arc::new(m)),
-                    Err(e) => {
-                        tracing::warn!("Failed to load GeoIP database: {}", e);
-                        None
-                    }
-                }
-            });
+            let has_geoip_rules = config
+                .routing
+                .rules
+                .iter()
+                .any(|r| matches!(r.condition, prisma_core::router::RuleCondition::GeoIp(_)));
+            let geoip = load_geoip_matcher(config.routing.geoip_path.as_deref(), has_geoip_rules);
             Router::with_geoip(config.routing.rules.clone(), geoip)
         }),
         // v4 fields
@@ -267,4 +264,128 @@ async fn run_inner(
     }
 
     Ok(())
+}
+
+/// Load the GeoIP matcher from a configured path, or by searching common
+/// locations if no path is given but GeoIP rules are present.
+///
+/// Without a GeoIP database, GeoIP routing rules silently never match,
+/// causing all traffic to fall through to the default action (Proxy).
+fn load_geoip_matcher(
+    configured_path: Option<&str>,
+    has_geoip_rules: bool,
+) -> Option<Arc<GeoIPMatcher>> {
+    // If an explicit path is configured, use it.
+    if let Some(path) = configured_path {
+        if !path.is_empty() {
+            return match GeoIPMatcher::load(path) {
+                Ok(m) => Some(Arc::new(m)),
+                Err(e) => {
+                    tracing::warn!(path = %path, "Failed to load GeoIP database: {}", e);
+                    None
+                }
+            };
+        }
+    }
+
+    // No explicit path — if there are no GeoIP rules, skip loading.
+    if !has_geoip_rules {
+        return None;
+    }
+
+    // GeoIP rules exist but no path configured. Search common locations.
+    tracing::info!("GeoIP rules found but no geoip_path configured, searching default locations");
+
+    let mut search_paths = Vec::new();
+
+    // 1. Next to the current executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            search_paths.push(dir.join("geoip.dat"));
+        }
+    }
+
+    // 2. Current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        search_paths.push(cwd.join("geoip.dat"));
+    }
+
+    // 3. Platform-specific data directories
+    #[cfg(target_os = "linux")]
+    {
+        search_paths.push(std::path::PathBuf::from("/usr/share/prisma/geoip.dat"));
+        search_paths.push(std::path::PathBuf::from(
+            "/usr/local/share/prisma/geoip.dat",
+        ));
+        if let Ok(home) = std::env::var("HOME") {
+            search_paths.push(std::path::PathBuf::from(format!(
+                "{}/.config/prisma/geoip.dat",
+                home
+            )));
+            search_paths.push(std::path::PathBuf::from(format!(
+                "{}/.local/share/prisma/geoip.dat",
+                home
+            )));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            search_paths.push(std::path::PathBuf::from(format!(
+                "{}/Library/Application Support/Prisma/geoip.dat",
+                home
+            )));
+        }
+        search_paths.push(std::path::PathBuf::from(
+            "/usr/local/share/prisma/geoip.dat",
+        ));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            search_paths.push(std::path::PathBuf::from(format!(
+                "{}\\Prisma\\geoip.dat",
+                appdata
+            )));
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            search_paths.push(std::path::PathBuf::from(format!(
+                "{}\\Prisma\\geoip.dat",
+                local
+            )));
+        }
+    }
+
+    // Also check v2ray/xray common locations
+    #[cfg(target_os = "linux")]
+    {
+        search_paths.push(std::path::PathBuf::from("/usr/share/v2ray/geoip.dat"));
+        search_paths.push(std::path::PathBuf::from("/usr/local/share/v2ray/geoip.dat"));
+        search_paths.push(std::path::PathBuf::from("/usr/share/xray/geoip.dat"));
+        search_paths.push(std::path::PathBuf::from("/usr/local/share/xray/geoip.dat"));
+    }
+
+    for path in &search_paths {
+        if path.exists() {
+            let path_str = path.to_string_lossy();
+            match GeoIPMatcher::load(&path_str) {
+                Ok(m) => {
+                    info!(path = %path_str, "Auto-detected GeoIP database");
+                    return Some(Arc::new(m));
+                }
+                Err(e) => {
+                    tracing::debug!(path = %path_str, error = %e, "Skipping invalid GeoIP file");
+                }
+            }
+        }
+    }
+
+    tracing::warn!(
+        "GeoIP routing rules are configured but no geoip.dat file was found. \
+         GeoIP rules will NOT match any traffic. Set routing.geoip_path or \
+         place geoip.dat next to the executable."
+    );
+    None
 }

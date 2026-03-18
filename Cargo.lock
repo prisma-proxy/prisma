@@ -2494,7 +2494,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-cli"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2526,7 +2526,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2604,16 +2604,18 @@ dependencies = [
 
 [[package]]
 name = "prisma-ffi"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
  "dirs",
+ "futures-util",
  "once_cell",
  "prisma-client",
  "prisma-core",
  "qrcode",
+ "reqwest",
  "rustls",
  "semver",
  "serde",
@@ -2632,7 +2634,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-mgmt"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2655,7 +2657,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-server"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",

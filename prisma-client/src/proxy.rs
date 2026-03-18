@@ -140,6 +140,7 @@ impl ProxyContext {
                 &self.xhttp_extra_headers,
                 self.user_agent.as_deref(),
                 self.referer.as_deref(),
+                self.skip_cert_verify,
             )
             .await
         } else if self.use_ws {

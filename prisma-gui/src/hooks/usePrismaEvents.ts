@@ -148,7 +148,10 @@ export function usePrismaEvents() {
           break;
 
         case "error":
-          store.setSpeedTestRunning(false);
+          // Only reset speed test state for speed-test-specific errors
+          if (data.code === "speed_test_failed") {
+            store.setSpeedTestRunning(false);
+          }
           notify.error(data.msg ?? `Error: ${data.code ?? "unknown"}`);
           break;
       }

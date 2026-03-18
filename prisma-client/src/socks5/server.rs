@@ -101,11 +101,35 @@ async fn handle_connect(
         ProxyAddress::Domain(d) => Some(d.as_str()),
         _ => None,
     };
-    let ip = match &destination.address {
+    let mut ip = match &destination.address {
         ProxyAddress::Ipv4(ip) => Some(std::net::IpAddr::V4(*ip)),
         ProxyAddress::Ipv6(ip) => Some(std::net::IpAddr::V6(*ip)),
         _ => None,
     };
+
+    // If the destination is a domain and the router has GeoIP/IP-CIDR rules,
+    // resolve the domain to an IP so those rules can match. Without this,
+    // GeoIP rules like "geoip:cn -> direct" would never match domain-based
+    // connections since `ip` would be None.
+    if ip.is_none() && ctx.router.needs_ip_for_routing() {
+        if let Some(d) = domain {
+            match ctx.dns_resolver.resolve_direct(d).await {
+                Ok(addrs) if !addrs.is_empty() => {
+                    debug!(domain = d, ip = %addrs[0], "Resolved domain for routing");
+                    ip = Some(std::net::IpAddr::V4(addrs[0]));
+                }
+                Ok(_) => {
+                    debug!(
+                        domain = d,
+                        "DNS resolution returned no addresses for routing"
+                    );
+                }
+                Err(e) => {
+                    debug!(domain = d, error = %e, "DNS resolution failed for routing");
+                }
+            }
+        }
+    }
 
     // Smart DNS: domains that should be tunneled are always proxied
     let force_proxy = domain.is_some_and(|d| ctx.dns_resolver.should_tunnel_dns(d));

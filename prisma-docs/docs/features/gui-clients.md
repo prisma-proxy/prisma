@@ -7,30 +7,131 @@ import TabItem from '@theme/TabItem';
 
 # GUI Clients
 
-Prisma ships native GUI clients for all major platforms. Each client connects to the core Prisma logic through **prisma-ffi**, a C-ABI shared library built from the same Rust codebase as the CLI.
+Prisma ships GUI clients for all major platforms. The primary desktop client is **prisma-gui**, a cross-platform Tauri 2 + React application that runs on Windows, macOS, and Linux. Mobile platforms use native clients that link against **prisma-ffi**, a C-ABI shared library built from the same Rust codebase as the CLI.
 
 ```
 prisma-ffi  ←──────────────────────────────────────┐
     │                                               │
-    ├── prisma-gui-windows  (Rust + Win32/GDI)      │
+    ├── prisma-gui          (Tauri 2 + React)       │  desktop (Win/Mac/Linux)
     ├── prisma-gui-android  (Kotlin + JNI)           │  same C API
-    ├── prisma-gui-ios      (Swift + xcframework)   │
-    └── prisma-gui-macos    (Swift + dylib)          │
+    └── prisma-gui-ios      (Swift + xcframework)   │
 ```
+
+---
+
+## prisma-gui (Desktop)
+
+The primary desktop client is a **Tauri 2** application with a **React + TypeScript** frontend (v0.6.3). It provides a full-featured GUI for managing Prisma connections across Windows, macOS, and Linux from a single codebase.
+
+### Architecture
+
+```
+React (Vite + React Router) ─── Tauri IPC ─── Rust commands ─── prisma-ffi
+                                                    │
+                                            System tray (desktop)
+```
+
+The frontend uses **Zustand** for state management, **Recharts** for graphs, **Radix UI** for components, **react-i18next** for internationalization (English + Simplified Chinese), and **TailwindCSS** for styling.
+
+### Pages
+
+The app has **6 pages** accessible via sidebar navigation (collapsible) or bottom navigation on narrow viewports:
+
+| Page | Description |
+|------|-------------|
+| **Home** | Connection toggle, real-time speed graph, session stats (upload/download speed, data transferred, uptime), proxy mode selector (SOCKS5/System Proxy/TUN/Per-App), connection quality indicator, daily data usage, connection history |
+| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate and bulk export/import |
+| **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT. Import/export rules as JSON |
+| **Logs** | Real-time log viewer with virtualized scrolling, search with text highlighting, level filter (ALL/ERROR/WARN/INFO/DEBUG), level statistics badges, pause/resume auto-scroll, export to text file |
+| **Speed Test** | Run speed tests through the proxy with configurable server (Cloudflare/Google) and duration (5-60s). Measures download, upload, and latency. Persistent test history with list and chart views, summary statistics (average/best) |
+| **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install |
+
+### System tray integration
+
+On desktop platforms, prisma-gui displays a **system tray icon** with the following features:
+
+- **Status-aware icon** — changes between disconnected, connecting, and connected states
+- **Connect/Disconnect toggle** — quick connect/disconnect from the tray menu
+- **Profile switcher** — submenu listing all profiles, with the active profile marked
+- **Copy Proxy Address** — copies the local proxy address to clipboard
+- **Live tooltip** — shows real-time upload/download speeds (e.g., "Prisma Up: 1.2 MB/s Down: 4.5 MB/s")
+- **Show Window / Quit** — standard window management actions
+
+### Keyboard shortcuts
+
+All shortcuts use `Cmd` (macOS) or `Ctrl` (Windows/Linux) as the modifier:
+
+| Shortcut | Action |
+|----------|--------|
+| `Mod+1` through `Mod+6` | Navigate to Home, Profiles, Rules, Logs, Speed Test, Settings |
+| `Mod+K` | Toggle connect/disconnect |
+| `Mod+N` | Go to Profiles page |
+
+### Connection management
+
+- **Proxy modes** — selectable on the Home page: SOCKS5, System Proxy, TUN, Per-App (toggle multiple simultaneously)
+- **Auto-reconnect** — configurable in Settings with retry delay (seconds) and maximum attempts
+- **Connection history** — records connect/disconnect events with profile name, latency, session data transferred, and timestamps
+- **Connection quality indicator** — real-time signal quality (Excellent/Good/Fair/Poor) based on speed stability
+- **Daily data usage tracking** — persistent per-day upload/download tracking with automatic 90-day pruning
+
+### Notifications
+
+- **Status bar** — persistent bar at the bottom showing connection status, live speed/data stats, and toast notifications
+- **Notification history** — bell icon with unread badge; click to view full notification history with timestamps and severity levels (error, warning, success, info)
+- **Desktop notifications** — via Tauri notification plugin
+
+### Clipboard import
+
+When the app window gains focus, it automatically checks the clipboard for `prisma://` URIs and prompts the user to import the detected profile.
+
+### Build
+
+```bash
+cd prisma-gui
+
+# Development
+npm run dev
+npm run tauri dev
+
+# Production
+npm run tauri build
+# Output: platform-specific installer (MSI, DMG, AppImage, deb)
+```
+
+### Installation
+
+Download the appropriate installer for your platform from the [releases page](https://github.com/Yamimega/prisma/releases/latest):
+
+- **Windows**: `prisma-gui_x.y.z_x64-setup.exe` or `.msi`
+- **macOS**: `prisma-gui_x.y.z_aarch64.dmg` or `_x64.dmg`
+- **Linux**: `.AppImage`, `.deb`, or `.rpm`
+
+---
 
 ## Feature comparison
 
-| Feature | Windows | Android | iOS | macOS |
-|---------|---------|---------|-----|-------|
-| SOCKS5 proxy | ✓ | ✓ | ✓ | ✓ |
-| System proxy | ✓ | ✓ | — | ✓ |
-| TUN mode | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) | ✓ |
-| Per-app proxy | — | ✓ | ✓ (NEAppProxy) | — |
-| QR code import | ✓ | ✓ (camera) | ✓ (camera) | ✓ |
-| Speed graph | ✓ | ✓ | ✓ | ✓ |
-| Routing rules editor | ✓ | ✓ | ✓ | ✓ |
-| Auto-update | ✓ | ✓ | App Store | ✓ |
-| System tray / menu bar | ✓ | — | — | ✓ |
+| Feature | prisma-gui (Desktop) | Android | iOS |
+|---------|---------------------|---------|-----|
+| SOCKS5 proxy | ✓ | ✓ | ✓ |
+| System proxy | ✓ | ✓ | — |
+| TUN mode | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) |
+| Per-app proxy | ✓ | ✓ | ✓ (NEAppProxy) |
+| QR code import | ✓ (paste URI) | ✓ (camera) | ✓ (camera) |
+| Profile sharing (TOML/URI/QR) | ✓ | — | — |
+| Speed graph | ✓ | ✓ | ✓ |
+| Speed test with history | ✓ | — | — |
+| Routing rules editor | ✓ | ✓ | ✓ |
+| Auto-update | ✓ | ✓ | App Store |
+| System tray / menu bar | ✓ | — | — |
+| Keyboard shortcuts | ✓ | — | — |
+| Clipboard import | ✓ | — | — |
+| Auto-reconnect | ✓ | — | — |
+| Notification history | ✓ | — | — |
+| i18n (English + Chinese) | ✓ | — | — |
+| Full backup/restore | ✓ | — | — |
+| Connection history | ✓ | — | — |
+| Daily data usage tracking | ✓ | — | — |
 
 ---
 
@@ -118,32 +219,6 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
-## Windows GUI
-
-A native Win32 application written in Rust using `windows-sys`. The UI is drawn with GDI — no external UI framework dependency.
-
-### Features
-
-- **System tray** icon with right-click menu (Connect, Disconnect, Open, Check Update, Quit)
-- **6 pages** — Home (speed graph + connect toggle), Profiles, Routing Rules, Logs, Speed Test, Settings
-- **Rolling speed graph** — 60-sample history drawn with GDI polylines
-- **Dark theme** by default with a navy/indigo palette
-
-### Build
-
-```powershell
-cargo build --release -p prisma-gui-windows
-# Output: target/release/prisma-gui-windows.exe
-```
-
-The binary links `prisma-ffi` as a workspace dependency — no separate DLL is needed.
-
-### Installation
-
-Download `prisma-windows-x64.zip` from the [releases page](https://github.com/Yamimega/prisma/releases/latest). Extract and run `prisma-gui-windows.exe`. On first run, the app creates a system tray icon and opens the main window.
-
----
-
 ## Android
 
 A Jetpack Compose application targeting Android 7.0+ (API 24). The Kotlin code calls `prisma-ffi` through a JNI bridge (`libprisma_client.so`).
@@ -227,46 +302,6 @@ The Profiles screen has a QR scanner sheet (using `AVCaptureMetadataOutput`). Th
 
 ---
 
-## macOS
-
-A menu bar application for macOS 13+ written in Swift and AppKit. The app runs as an accessory (no Dock icon) and shows a compact popover from the menu bar icon.
-
-### Architecture
-
-```
-AppDelegate
-    └── MenuBarController
-            ├── NSStatusItem  (menu bar icon, click → popover)
-            └── NSPopover
-                    └── MenuBarPopoverView (SwiftUI)
-                            └── PrismaFFIClient (ObservableObject)
-```
-
-Clicking "Open App" in the popover switches the activation policy to `.regular`, which reveals the full window with Home, Profiles, Rules, Settings, and Logs views.
-
-### System proxy integration
-
-The macOS client can configure the system HTTP/HTTPS proxy via `networksetup`:
-
-```swift
-PrismaFFI.setSystemProxy(host: "127.0.0.1", port: 8080)
-```
-
-This calls `prisma_set_system_proxy` in the FFI, which invokes `networksetup -setwebproxy` for the active network service.
-
-### Build
-
-```bash
-# Swift Package Manager
-cd prisma-gui-macos
-swift build -c release
-
-# Or via Xcode
-xcodebuild -project PrismaMacOS.xcodeproj -scheme PrismaMacOS -configuration Release
-```
-
----
-
 ## Profile sharing via QR code
 
 All clients support importing profiles by scanning a QR code. The QR payload is a `prisma://` URI where the path is the base64-encoded profile JSON:
@@ -298,10 +333,10 @@ The `prisma_client` JNI library was not found. Ensure the cross-compiled `.so` f
 
 Network Extension entitlements require an explicit App ID with the NetworkExtension capability enabled in the Apple Developer portal. Provisioning profiles must include this capability.
 
-### Windows: App won't start
+### prisma-gui: System proxy fails
 
-Ensure `prisma-gui-windows.exe` is run with a valid `USERPROFILE` environment variable set — it stores profiles under `%APPDATA%\prisma\profiles\`.
+Setting the system proxy requires platform-specific permissions. On macOS, the app calls `networksetup` which may prompt for administrator credentials. On Linux, system proxy configuration depends on your desktop environment.
 
-### macOS: "Operation not permitted" for system proxy
+### prisma-gui: Tray icon not visible
 
-System proxy changes via `networksetup` require administrator privileges. The app will prompt for your password via a macOS authorization dialog.
+On Linux, system tray support depends on your desktop environment and compositor. Ensure a compatible system tray implementation (e.g., `libappindicator`) is installed. On GNOME, you may need the AppIndicator extension.
