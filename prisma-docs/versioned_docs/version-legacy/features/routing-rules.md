@@ -124,7 +124,7 @@ Server-side rules use the same `type`/`value` syntax as client rules. Valid `act
 
 ### Dynamic rules (Management API)
 
-Rules can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/dashboard). Dynamic rules have lower priority numbers and take precedence over static config rules.
+Rules can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/legacy/features/dashboard). Dynamic rules have lower priority numbers and take precedence over static config rules.
 
 ```bash
 # List rules

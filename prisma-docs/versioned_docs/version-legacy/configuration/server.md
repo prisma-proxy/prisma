@@ -249,7 +249,7 @@ auth_secret = "hex-secret-2"
 name = "phone"
 ```
 
-Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/features/dashboard) without restarting the server.
+Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Dashboard](/docs/legacy/features/dashboard) without restarting the server.
 
 ## Management API configuration
 
