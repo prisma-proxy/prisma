@@ -24,6 +24,12 @@ export default function SettingsPage() {
     queryFn: api.getConfig,
   });
 
+  const { data: tls } = useQuery({
+    queryKey: ["tls"],
+    queryFn: api.getTlsInfo,
+    staleTime: 60_000,
+  });
+
   const patchConfig = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.patchConfig(data),
     onSuccess: () => {
@@ -113,6 +119,7 @@ export default function SettingsPage() {
             <SecurityForm
               key={`security-${config.allow_transport_only_cipher}-${config.prisma_tls.enabled}`}
               config={config}
+              tls={tls}
               onSave={(data) => patchConfig.mutate(data)}
               isLoading={patchConfig.isPending}
             />

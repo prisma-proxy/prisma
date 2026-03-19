@@ -15,6 +15,7 @@ import { formatBytes } from "@/lib/utils";
 import type { BackupInfo } from "@/lib/types";
 import { RotateCcw, FileDiff, Trash2, Download } from "lucide-react";
 import { api } from "@/lib/api";
+import { downloadFile } from "@/lib/export";
 
 interface BackupTableProps {
   backups: BackupInfo[];
@@ -49,16 +50,8 @@ export function BackupTable({
   async function handleDownload(name: string) {
     try {
       const content = await api.getBackup(name);
-      const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
-      const blob = new Blob([text], { type: "application/toml" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name.endsWith(".toml") ? name : `${name}.toml`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = name.endsWith(".toml") ? name : `${name}.toml`;
+      downloadFile(content, filename, "application/toml");
     } catch {
       toast(t("toast.downloadError"), "error");
     }

@@ -5,24 +5,16 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
 import { useI18n } from "@/lib/i18n";
+import { LoadingPlaceholder } from "@/components/ui/loading-placeholder";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-function ClientEditFallback() {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-center justify-center py-12">
-      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-    </div>
-  );
-}
-
 export default function ClientEditPage() {
   return (
-    <Suspense fallback={<ClientEditFallback />}>
+    <Suspense fallback={<LoadingPlaceholder />}>
       <ClientEditInner />
     </Suspense>
   );

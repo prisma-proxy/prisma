@@ -8,16 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { KeyValue } from "@/components/ui/key-value";
 import type { ConfigResponse } from "@/lib/types";
-
-function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right">{value}</span>
-    </div>
-  );
-}
 
 interface CamouflageFormProps {
   config: ConfigResponse;

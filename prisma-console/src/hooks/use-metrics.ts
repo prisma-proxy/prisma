@@ -8,19 +8,22 @@ import { api } from "@/lib/api";
 
 const MAX_HISTORY = 120; // 2 minutes at 1s intervals
 
+interface MetricsState {
+  current: MetricsSnapshot | null;
+  history: MetricsSnapshot[];
+}
+
 export function useMetrics() {
-  const [current, setCurrent] = useState<MetricsSnapshot | null>(null);
-  const [history, setHistory] = useState<MetricsSnapshot[]>([]);
+  const [state, setState] = useState<MetricsState>({ current: null, history: [] });
   const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
 
   useEffect(() => {
     wsRef.current = createWebSocket<MetricsSnapshot>(
       "/api/ws/metrics",
       (snapshot) => {
-        setCurrent(snapshot);
-        setHistory((prev) => {
-          const next = [...prev, snapshot];
-          return next.length > MAX_HISTORY ? next.slice(-MAX_HISTORY) : next;
+        setState((prev) => {
+          const history = [...prev.history.slice(-(MAX_HISTORY - 1)), snapshot];
+          return { current: snapshot, history };
         });
       }
     );
@@ -30,7 +33,7 @@ export function useMetrics() {
     };
   }, []);
 
-  return { current, history };
+  return state;
 }
 
 export type TimeRange = "1h" | "6h" | "24h" | "7d";

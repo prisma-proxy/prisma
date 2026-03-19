@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useI18n } from "@/lib/i18n";
+import { LoadingPlaceholder } from "@/components/ui/loading-placeholder";
 import ClientDetailPage from "@/components/clients/client-detail";
 
 function ClientDetailContent() {
@@ -21,18 +22,9 @@ function ClientDetailContent() {
   return <ClientDetailPage clientId={id} />;
 }
 
-function ClientDetailFallback() {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-center justify-center py-12">
-      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-    </div>
-  );
-}
-
 export default function Page() {
   return (
-    <Suspense fallback={<ClientDetailFallback />}>
+    <Suspense fallback={<LoadingPlaceholder />}>
       <ClientDetailContent />
     </Suspense>
   );

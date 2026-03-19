@@ -1,21 +1,16 @@
 import { getToken, clearToken } from "./auth";
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(init?.headers as Record<string, string>),
   };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(path, {
-    ...init,
-    headers,
-  });
+  const res = await fetch(path, { ...init, headers });
   if (res.status === 401) {
-    // Token invalid — clear and redirect
     clearToken();
     if (typeof window !== "undefined") {
       window.location.href = "/login/";
@@ -25,34 +20,21 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
+  return res;
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await apiRequest(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers as Record<string, string>) },
+  });
   const text = await res.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
 }
 
 async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    ...(init?.headers as Record<string, string>),
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(path, {
-    ...init,
-    headers,
-  });
-  if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined") {
-      window.location.href = "/login/";
-    }
-    throw new Error("Unauthorized");
-  }
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
-  }
+  const res = await apiRequest(path, init);
   return res.text();
 }
 

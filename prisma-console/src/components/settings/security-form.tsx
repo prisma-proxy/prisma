@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -10,42 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import type { ConfigResponse } from "@/lib/types";
-
-function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right">{value}</span>
-    </div>
-  );
-}
+import { KeyValue } from "@/components/ui/key-value";
+import type { ConfigResponse, TlsInfoResponse } from "@/lib/types";
 
 interface SecurityFormProps {
   config: ConfigResponse;
+  tls?: TlsInfoResponse;
   onSave: (data: Record<string, unknown>) => void;
   isLoading: boolean;
 }
 
-export function SecurityForm({ config, onSave, isLoading: saving }: SecurityFormProps) {
+export function SecurityForm({ config, tls, onSave, isLoading: saving }: SecurityFormProps) {
   const { t } = useI18n();
-
-  const { data: tls, isLoading: tlsLoading } = useQuery({
-    queryKey: ["tls"],
-    queryFn: api.getTlsInfo,
-  });
 
   const [allowTransportOnlyCipher, setAllowTransportOnlyCipher] = useState<boolean | null>(null);
   const [prismaTlsEnabled, setPrismaTlsEnabled] = useState<boolean | null>(null);
   const [prismaTlsAuthRotationHours, setPrismaTlsAuthRotationHours] = useState<number | null>(null);
-
-  if (tlsLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      </div>
-    );
-  }
 
   const eAllowTransportOnlyCipher = allowTransportOnlyCipher ?? config.allow_transport_only_cipher;
   const ePrismaTlsEnabled = prismaTlsEnabled ?? config.prisma_tls.enabled;
@@ -77,7 +55,7 @@ export function SecurityForm({ config, onSave, isLoading: saving }: SecurityForm
                     : "bg-red-500/15 text-red-700 dark:text-red-400"
                 }
               >
-                {tls?.enabled ? t("settings.enabled") : t("settings.disabled")}
+                {tls?.enabled ? t("common.enabled") : t("common.disabled")}
               </Badge>
             }
           />
