@@ -5,7 +5,6 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   type ReactNode,
 } from "react";
 import en from "./locales/en.json";
@@ -22,13 +21,14 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
+function getInitialLocale(): Locale {
+  if (typeof window === "undefined") return "en";
+  const saved = localStorage.getItem("prisma-locale") as Locale | null;
+  return saved && dictionaries[saved] ? saved : "en";
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem("prisma-locale") as Locale | null;
-    if (saved && dictionaries[saved]) setLocaleState(saved);
-  }, []);
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

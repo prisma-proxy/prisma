@@ -113,8 +113,8 @@ impl ProfileManager {
         let now = chrono::Utc::now().to_rfc3339();
         let mut saved: Vec<Profile> = Vec::new();
         for val in arr {
-            let mut p: Profile = serde_json::from_value(val)
-                .map_err(|e| anyhow::anyhow!("invalid profile: {e}"))?;
+            let mut p: Profile =
+                serde_json::from_value(val).map_err(|e| anyhow::anyhow!("invalid profile: {e}"))?;
             // Assign fresh ID and timestamps for new imports
             p.id = uuid::Uuid::new_v4().to_string();
             p.created_at = now.clone();
@@ -124,7 +124,10 @@ impl ProfileManager {
             saved.push(p);
         }
 
-        Ok(ImportResult { count: saved.len(), profiles: saved })
+        Ok(ImportResult {
+            count: saved.len(),
+            profiles: saved,
+        })
     }
 
     pub fn refresh_all() -> Result<ImportResult> {
@@ -146,8 +149,12 @@ impl ProfileManager {
         let now = chrono::Utc::now().to_rfc3339();
         let mut refreshed: Vec<Profile> = Vec::new();
         for mut p in all {
-            let Some(ref url) = p.subscription_url.clone() else { continue };
-            let raw: serde_json::Value = match ureq::get(url).call().ok()
+            let Some(ref url) = p.subscription_url.clone() else {
+                continue;
+            };
+            let raw: serde_json::Value = match ureq::get(url)
+                .call()
+                .ok()
                 .and_then(|mut r| r.body_mut().read_json().ok())
             {
                 Some(v) => v,
@@ -163,7 +170,11 @@ impl ProfileManager {
             // Update from first matching entry (same name) or first entry
             let updated = arr.into_iter().find_map(|v| {
                 let candidate: Profile = serde_json::from_value(v).ok()?;
-                if candidate.name == p.name { Some(candidate) } else { None }
+                if candidate.name == p.name {
+                    Some(candidate)
+                } else {
+                    None
+                }
             });
             if let Some(fresh) = updated {
                 p.config = fresh.config;
@@ -175,7 +186,10 @@ impl ProfileManager {
             }
         }
 
-        Ok(ImportResult { count: refreshed.len(), profiles: refreshed })
+        Ok(ImportResult {
+            count: refreshed.len(),
+            profiles: refreshed,
+        })
     }
 
     pub fn delete(id: &str) -> Result<()> {

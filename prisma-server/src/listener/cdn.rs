@@ -151,7 +151,7 @@ fn build_cdn_router(
         }
     }
 
-    // 4. Management API + dashboard on subpath (optional)
+    // 4. Management API + console on subpath (optional)
     if cdn.expose_management_api {
         let mgmt_state = prisma_mgmt::MgmtState {
             state: state.clone(),

@@ -35,8 +35,14 @@ prisma-console/.env*
 .claude/
 CLAUDE.md
 
+# Fuzzing
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+
 # Benchmark artifacts
 benchmark-results/
+criterion-reports/
 
 # Misc
 prisma-plan.md
@@ -51,6 +57,7 @@ prisma-gui/src-tauri/WixTools/
 
 # prisma-ffi build artifacts
 prisma-ffi/target/
+prisma-ffi/include/*.generated.h
 
 # Logs
 npm-debug.log*

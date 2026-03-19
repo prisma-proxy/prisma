@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import i18n from "../i18n";
 import { notify } from "../store/notifications";
 import { useStore } from "../store";
 import { useProfileMetrics } from "../store/profileMetrics";
@@ -78,7 +79,7 @@ export function usePrismaEvents() {
                 api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
               }
             }
-            notify.success("Connected");
+            notify.success(i18n.t("notifications.connected"));
           } else if (data.status === "connecting") {
             store.setManualDisconnect(false);
             store.setConnecting(true);

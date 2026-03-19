@@ -211,7 +211,7 @@ prisma server -c /etc/prisma/server.toml
 You should see output like:
 
 ```
-INFO  prisma_server > Prisma server v0.6.3 starting...
+INFO  prisma_server > Prisma server v0.9.0 starting...
 INFO  prisma_server > Listening on 0.0.0.0:8443 (TCP)
 INFO  prisma_server > Listening on 0.0.0.0:8443 (QUIC)
 INFO  prisma_server > Authorized clients: 1

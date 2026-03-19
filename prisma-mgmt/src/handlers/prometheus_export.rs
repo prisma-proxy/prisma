@@ -280,6 +280,8 @@ mod tests {
             connected_at: chrono::Utc::now(),
             bytes_up: Arc::new(std::sync::atomic::AtomicU64::new(500)),
             bytes_down: Arc::new(std::sync::atomic::AtomicU64::new(1000)),
+            destination: None,
+            matched_rule: None,
         };
 
         {

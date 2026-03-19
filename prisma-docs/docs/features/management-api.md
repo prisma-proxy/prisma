@@ -42,7 +42,7 @@ If `auth_token` is empty, authentication is disabled (development mode only).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"0.1.0"}
+# {"status":"ok","uptime_secs":3600,"version":"0.9.0"}
 ```
 
 ### Connections

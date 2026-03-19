@@ -204,6 +204,16 @@ pub async fn reload_config(State(state): State<MgmtState>) -> impl IntoResponse 
 
     info!("{}", message);
 
+    // Broadcast reload event to WebSocket subscribers
+    state
+        .state
+        .broadcast_reload_event(prisma_core::state::ReloadEvent {
+            timestamp: chrono::Utc::now(),
+            success: true,
+            message: message.clone(),
+            changes: changes.clone(),
+        });
+
     (
         StatusCode::OK,
         Json(ReloadResponse {

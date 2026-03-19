@@ -27,7 +27,7 @@ You should see output like:
 
 ```
 [INFO] Detected platform: linux-amd64
-[INFO] Downloading prisma v0.6.3...
+[INFO] Downloading prisma v0.9.0...
 [INFO] Verifying checksum...
 [INFO] Installing to /usr/local/bin/prisma
 [INFO] Installation complete!
@@ -139,7 +139,7 @@ prisma --version
 
 Expected output:
 ```
-prisma 0.6.3
+prisma 0.9.0
 ```
 
 You can also see all available commands:

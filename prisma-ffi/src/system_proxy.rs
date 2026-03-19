@@ -117,13 +117,161 @@ mod platform {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod platform {
     use anyhow::Result;
+    use std::process::Command;
 
-    pub fn set(_host: &str, _port: u16) -> Result<()> {
-        // On Linux: set environment variables (best-effort)
+    /// Detect which desktop environment is active.
+    fn detect_desktop() -> Desktop {
+        if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
+            let d = desktop.to_uppercase();
+            if d.contains("GNOME")
+                || d.contains("UNITY")
+                || d.contains("CINNAMON")
+                || d.contains("BUDGIE")
+            {
+                return Desktop::Gnome;
+            }
+            if d.contains("KDE") {
+                return Desktop::Kde;
+            }
+        }
+        if std::env::var("GNOME_DESKTOP_SESSION_ID").is_ok() {
+            return Desktop::Gnome;
+        }
+        if std::env::var("KDE_FULL_SESSION").is_ok() {
+            return Desktop::Kde;
+        }
+        Desktop::Unknown
+    }
+
+    enum Desktop {
+        Gnome,
+        Kde,
+        Unknown,
+    }
+
+    pub fn set(host: &str, port: u16) -> Result<()> {
+        let proxy = format!("socks5://{}:{}", host, port);
+
+        match detect_desktop() {
+            Desktop::Gnome => set_gnome(host, port)?,
+            Desktop::Kde => set_kde(host, port)?,
+            Desktop::Unknown => {}
+        }
+
+        // Always set environment variables as fallback (best-effort)
+        std::env::set_var("all_proxy", &proxy);
+        std::env::set_var("ALL_PROXY", &proxy);
+        std::env::set_var("socks_proxy", &proxy);
+        std::env::set_var("SOCKS_PROXY", &proxy);
+
+        tracing::info!("Linux system proxy set to {}:{}", host, port);
         Ok(())
     }
 
     pub fn clear() -> Result<()> {
+        match detect_desktop() {
+            Desktop::Gnome => clear_gnome()?,
+            Desktop::Kde => clear_kde()?,
+            Desktop::Unknown => {}
+        }
+
+        std::env::remove_var("all_proxy");
+        std::env::remove_var("ALL_PROXY");
+        std::env::remove_var("socks_proxy");
+        std::env::remove_var("SOCKS_PROXY");
+
+        tracing::info!("Linux system proxy cleared");
+        Ok(())
+    }
+
+    fn set_gnome(host: &str, port: u16) -> Result<()> {
+        let port_str = port.to_string();
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy.socks", "host", host])
+            .output();
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy.socks", "port", &port_str])
+            .output();
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy", "mode", "manual"])
+            .output();
+        Ok(())
+    }
+
+    fn clear_gnome() -> Result<()> {
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy", "mode", "none"])
+            .output();
+        Ok(())
+    }
+
+    fn set_kde(host: &str, port: u16) -> Result<()> {
+        let port_str = port.to_string();
+        let kwrite = if Command::new("kwriteconfig6").arg("--help").output().is_ok() {
+            "kwriteconfig6"
+        } else {
+            "kwriteconfig5"
+        };
+
+        let _ = Command::new(kwrite)
+            .args([
+                "--file",
+                "kioslaverc",
+                "--group",
+                "Proxy Settings",
+                "--key",
+                "ProxyType",
+                "1",
+            ])
+            .output();
+        let _ = Command::new(kwrite)
+            .args([
+                "--file",
+                "kioslaverc",
+                "--group",
+                "Proxy Settings",
+                "--key",
+                "socksProxy",
+                &format!("socks://{}:{}", host, port_str),
+            ])
+            .output();
+        let _ = Command::new("dbus-send")
+            .args([
+                "--type=signal",
+                "/KIO/Scheduler",
+                "org.kde.KIO.Scheduler.reparseSlaveConfiguration",
+                "string:''",
+            ])
+            .output();
+        Ok(())
+    }
+
+    fn clear_kde() -> Result<()> {
+        let kwrite = if Command::new("kwriteconfig6").arg("--help").output().is_ok() {
+            "kwriteconfig6"
+        } else {
+            "kwriteconfig5"
+        };
+
+        let _ = Command::new(kwrite)
+            .args([
+                "--file",
+                "kioslaverc",
+                "--group",
+                "Proxy Settings",
+                "--key",
+                "ProxyType",
+                "0",
+            ])
+            .output();
+        let _ = Command::new("dbus-send")
+            .args([
+                "--type=signal",
+                "/KIO/Scheduler",
+                "org.kde.KIO.Scheduler.reparseSlaveConfiguration",
+                "string:''",
+            ])
+            .output();
         Ok(())
     }
 }

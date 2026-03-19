@@ -12,10 +12,10 @@ use prisma_core::config::server::ManagementApiConfig;
 
 use crate::auth::{auth_middleware, AuthToken};
 use crate::handlers::{
-    alerts, backup, bandwidth, clients, config, connections, forwards, health, prometheus_export,
-    reload, routes, system,
+    acls, alerts, backup, bandwidth, clients, config, connections, forwards, health,
+    prometheus_export, reload, routes, system,
 };
-use crate::ws::{logs, metrics};
+use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
 
 pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
@@ -89,6 +89,12 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/routes", post(routes::create))
         .route("/api/routes/{id}", put(routes::update))
         .route("/api/routes/{id}", delete(routes::remove))
+        // ACLs
+        .route("/api/acls", get(acls::list))
+        .route(
+            "/api/acls/{client_id}",
+            get(acls::get).put(acls::set).delete(acls::remove),
+        )
         // Alerts
         .route(
             "/api/alerts/config",
@@ -99,6 +105,8 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         // WebSocket
         .route("/api/ws/metrics", get(metrics::ws_metrics))
         .route("/api/ws/logs", get(logs::ws_logs))
+        .route("/api/ws/connections", get(ws_connections::ws_connections))
+        .route("/api/ws/reload", get(ws_reload::ws_reload))
         // Auth middleware
         .layer(middleware::from_fn(auth_middleware))
         .layer(middleware::from_fn(move |mut req: Request, next: Next| {

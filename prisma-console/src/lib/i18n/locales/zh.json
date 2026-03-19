@@ -9,6 +9,7 @@
   "sidebar.trafficShaping": "流量整形",
   "sidebar.backups": "配置备份",
   "sidebar.speedTest": "速度测试",
+  "sidebar.connections": "连接",
   "sidebar.bandwidth": "带宽",
   "metrics.activeConnections": "活跃连接",
   "metrics.trafficUp": "上行流量",
@@ -327,5 +328,8 @@
   "speedTest.timeAgo.minutes": "{value}分钟前",
   "speedTest.timeAgo.hours": "{value}小时前",
   "speedTest.timeAgo.days": "{value}天前",
-  "toast.downloadError": "下载备份失败"
+  "toast.downloadError": "下载备份失败",
+  "logs.exportTitle": "导出日志",
+  "connections.title": "活跃连接",
+  "connections.exportTitle": "导出连接"
 }

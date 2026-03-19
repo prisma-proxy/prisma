@@ -97,7 +97,7 @@ Full documentation is available at **[yamimega.github.io/prisma](https://yamimeg
 - [TUN Mode](https://yamimega.github.io/prisma/docs/features/tun-mode) — system-wide proxy setup
 - [Config Examples](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 ready-to-use templates
 - [PrismaVeil Protocol](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — wire protocol specification
-- [Dashboard](https://yamimega.github.io/prisma/docs/features/dashboard) — web UI setup
+- [Console](https://yamimega.github.io/prisma/docs/features/console) — web UI setup
 - [Management API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API reference
 - [GUI Clients](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows, Android, iOS, macOS apps
 

@@ -116,6 +116,17 @@ pub fn ct_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
     a.ct_eq(b).into()
 }
 
+/// Constant-time comparison of two byte slices to prevent timing side-channels.
+/// Returns false if the slices differ in length (length comparison is NOT constant-time,
+/// but for password comparison the length is typically not a secret).
+pub fn ct_eq_slice(a: &[u8], b: &[u8]) -> bool {
+    use subtle::ConstantTimeEq;
+    if a.len() != b.len() {
+        return false;
+    }
+    a.ct_eq(b).into()
+}
+
 // --- Server key pinning ---
 
 /// Compute the SHA-256 pin of a server's public key (32 bytes).

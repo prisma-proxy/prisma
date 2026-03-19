@@ -356,3 +356,54 @@ pub fn speed_test(
     let rc = unsafe { prisma_ffi::prisma_speed_test(client, srv.as_ptr(), duration_secs, dir.as_ptr()) };
     if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_speed_test error {rc}")) }
 }
+
+// ── URI import ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn import_uri(uri: String) -> Result<serde_json::Value, String> {
+    let cstr = CString::new(uri).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_import_uri(cstr.as_ptr()) };
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("URI import failed".into()),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn import_batch(text: String) -> Result<serde_json::Value, String> {
+    let cstr = CString::new(text).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_import_batch(cstr.as_ptr()) };
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("batch import failed".into()),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+// ── proxy groups ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn proxy_groups_list() -> Result<serde_json::Value, String> {
+    let ptr = prisma_ffi::prisma_proxy_groups_list();
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Ok(serde_json::Value::Array(vec![])),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn proxy_group_select(group_name: String, server: String) -> Result<(), String> {
+    let gn = CString::new(group_name).map_err(|e| e.to_string())?;
+    let srv = CString::new(server).map_err(|e| e.to_string())?;
+    let rc = unsafe { prisma_ffi::prisma_proxy_group_select(gn.as_ptr(), srv.as_ptr()) };
+    if rc == PRISMA_OK { Ok(()) } else { Err(format!("proxy_group_select error {rc}")) }
+}
+
+#[tauri::command]
+pub fn proxy_group_test(group_name: String) -> Result<serde_json::Value, String> {
+    let gn = CString::new(group_name).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_proxy_group_test(gn.as_ptr()) };
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("group test failed".into()),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}

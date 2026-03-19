@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebarContent } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -15,6 +15,7 @@ import {
 
 const PAGE_TITLE_KEYS: Record<string, string> = {
   "/dashboard": "sidebar.overview",
+  "/dashboard/connections": "sidebar.connections",
   "/dashboard/servers": "sidebar.server",
   "/dashboard/clients": "sidebar.clients",
   "/dashboard/routing": "sidebar.routing",
@@ -31,19 +32,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { t } = useI18n();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("prisma-sidebar-collapsed") === "true";
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // Load collapsed state from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("prisma-sidebar-collapsed");
-    if (saved === "true") setSidebarCollapsed(true);
-  }, []);
-
-  // Close mobile sheet on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   // Resolve page title using i18n
   const titleKey =

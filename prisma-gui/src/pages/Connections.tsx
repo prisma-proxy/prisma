@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowUpDown,
@@ -7,6 +7,8 @@ import {
   XCircle,
   ArrowDown,
   ArrowUp,
+  X,
+  Radio,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -77,6 +79,16 @@ export default function Connections() {
   const connections = useConnections((s) => s.connections);
   const clearAll = useConnections((s) => s.clearAll);
   const clearClosed = useConnections((s) => s.clearClosed);
+  const closeConnectionById = useConnections((s) => s.closeConnectionById);
+
+  // Force re-render every second for live duration updates
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const hasActive = connections.some((c) => c.status === "active");
+    if (!hasActive) return;
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [connections]);
 
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
@@ -189,7 +201,12 @@ export default function Connections() {
       <div className="grid grid-cols-5 gap-2">
         <Card>
           <CardContent className="py-2 px-3 text-center">
-            <p className="text-lg font-bold">{counts.total}</p>
+            <div className="flex items-center justify-center gap-1">
+              <p className="text-lg font-bold">{counts.total}</p>
+              {counts.active > 0 && (
+                <Radio size={10} className="text-green-400 animate-pulse" />
+              )}
+            </div>
             <p className="text-[10px] text-muted-foreground">
               {t("connections.total")}
             </p>
@@ -368,6 +385,7 @@ export default function Connections() {
                     {t("connections.duration")}
                   </button>
                 </TableHead>
+                <TableHead className="w-[40px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -422,6 +440,18 @@ export default function Connections() {
                   </TableCell>
                   <TableCell className="py-1.5 text-right font-mono text-muted-foreground">
                     {fmtDuration(connDuration(conn))}
+                  </TableCell>
+                  <TableCell className="py-1.5">
+                    {conn.status === "active" && (
+                      <button
+                        type="button"
+                        className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => closeConnectionById(conn.id)}
+                        title={t("connections.close")}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

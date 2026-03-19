@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Gauge,
   BarChart3,
+  Network,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
 
 const navItems = [
   { labelKey: "sidebar.overview", href: "/dashboard/", icon: LayoutDashboard, exact: true },
+  { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network },
   { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server },
   { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users },
   { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route },
@@ -50,17 +52,13 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
   const pathname = usePathname();
   const { t } = useI18n();
 
-  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(() => {
+    if (typeof window === "undefined" || controlledCollapsed !== undefined) return false;
+    return localStorage.getItem("prisma-sidebar-collapsed") === "true";
+  });
 
   // Use controlled value if provided, otherwise internal state
   const collapsed = controlledCollapsed ?? internalCollapsed;
-
-  useEffect(() => {
-    if (controlledCollapsed === undefined) {
-      const saved = localStorage.getItem("prisma-sidebar-collapsed");
-      if (saved === "true") setInternalCollapsed(true);
-    }
-  }, [controlledCollapsed]);
 
   const toggleCollapsed = useCallback(() => {
     const next = !collapsed;

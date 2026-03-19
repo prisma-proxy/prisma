@@ -74,22 +74,17 @@ export default function ServersPage() {
             <CardTitle>{t("server.configuration")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.listenAddr")}</p>
-              <p className="text-sm font-mono">{config.listen_addr}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.quicListenAddr")}</p>
-              <p className="text-sm font-mono">{config.quic_listen_addr}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.maxConnections")}</p>
-              <p className="text-sm font-mono">{config.performance.max_connections}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.connectionTimeout")}</p>
-              <p className="text-sm font-mono">{config.performance.connection_timeout_secs}s</p>
-            </div>
+            {[
+              { label: t("settings.listenAddr"),       value: config.listen_addr },
+              { label: t("settings.quicListenAddr"),   value: config.quic_listen_addr },
+              { label: t("settings.maxConnections"),   value: config.performance.max_connections },
+              { label: t("settings.connectionTimeout"), value: `${config.performance.connection_timeout_secs}s` },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <p className="text-sm text-muted-foreground">{label}</p>
+                <p className="text-sm font-mono">{value}</p>
+              </div>
+            ))}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{t("settings.portForwarding")}:</span>
               <Badge
@@ -110,14 +105,15 @@ export default function ServersPage() {
                 </p>
               </div>
             )}
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.loggingLevel")}</p>
-              <p className="text-sm font-mono">{config.logging_level}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t("settings.loggingFormat")}</p>
-              <p className="text-sm font-mono">{config.logging_format}</p>
-            </div>
+            {[
+              { label: t("settings.loggingLevel"),  value: config.logging_level },
+              { label: t("settings.loggingFormat"), value: config.logging_format },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <p className="text-sm text-muted-foreground">{label}</p>
+                <p className="text-sm font-mono">{value}</p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

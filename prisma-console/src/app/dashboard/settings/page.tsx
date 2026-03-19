@@ -34,7 +34,7 @@ export default function SettingsPage() {
     mutationFn: (data: Record<string, unknown>) => api.patchConfig(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] });
-      setFeedback({ type: "success", message: "Settings saved successfully." });
+      setFeedback({ type: "success", message: t("toast.settingsSaved") });
       setTimeout(() => setFeedback(null), 3000);
     },
     onError: (error: Error) => {

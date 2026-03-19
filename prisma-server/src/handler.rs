@@ -6,7 +6,6 @@ use chrono::Utc;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::{PortForwardingConfig, RuleAction, RuleCondition};
 use prisma_core::crypto::aead::create_cipher;
-use prisma_core::crypto::kdf::derive_ticket_key;
 use prisma_core::protocol::codec::*;
 use prisma_core::protocol::handshake::is_valid_protocol_version;
 use prisma_core::protocol::handshake::PrismaHandshakeServer;
@@ -45,7 +44,7 @@ pub async fn handle_tcp_connection(
     };
     let session_keys = {
         let (mut read, mut write) = stream.split();
-        match perform_handshake(&mut read, &mut write, &auth, padding_range, &ctx.state).await {
+        match perform_handshake(&mut read, &mut write, &auth, padding_range, &ctx).await {
             Ok(keys) => keys,
             Err(e) => {
                 ctx.state
@@ -154,8 +153,8 @@ where
         return Ok(());
     }
 
-    // v4 handshake: 2-step
-    let ticket_key = derive_ticket_key_from_state(state).await;
+    // v4/v5 handshake: 2-step (ticket key from rotating key ring)
+    let ticket_key = ctx.ticket_key_ring.current_key();
 
     let (bucket_sizes, server_features) = compute_server_features(state).await;
 
@@ -218,7 +217,7 @@ pub async fn handle_quic_stream(
         PaddingRange::new(cfg.padding.min, cfg.padding.max)
     };
     let session_keys =
-        match perform_handshake(&mut recv, &mut send, &auth, padding_range, &ctx.state).await {
+        match perform_handshake(&mut recv, &mut send, &auth, padding_range, &ctx).await {
             Ok(keys) => keys,
             Err(e) => {
                 ctx.state
@@ -244,18 +243,75 @@ pub async fn handle_quic_stream(
     .await
 }
 
+/// Handle an incoming connection over a generic AsyncRead + AsyncWrite stream.
+///
+/// Used by transports that present a non-TCP stream to the Prisma protocol
+/// handler (e.g., ShadowTLS duplex streams).
+pub async fn handle_generic_connection<S>(
+    stream: S,
+    auth: AuthStore,
+    dns_cache: DnsCache,
+    forward_config: PortForwardingConfig,
+    ctx: ServerContext,
+    peer_addr: String,
+    transport: Transport,
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let padding_range = {
+        let cfg = ctx.state.config.read().await;
+        PaddingRange::new(cfg.padding.min, cfg.padding.max)
+    };
+    let (mut read, mut write) = tokio::io::split(stream);
+    let session_keys =
+        match perform_handshake(&mut read, &mut write, &auth, padding_range, &ctx).await {
+            Ok(keys) => keys,
+            Err(e) => {
+                ctx.state
+                    .metrics
+                    .handshake_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                return Err(e);
+            }
+        };
+
+    info!(
+        session_id = %session_keys.session_id,
+        protocol_version = session_keys.protocol_version,
+        transport = ?transport,
+        "Handshake complete"
+    );
+
+    run_registered_session(
+        session_keys,
+        read,
+        write,
+        transport,
+        peer_addr,
+        &auth,
+        dns_cache,
+        forward_config,
+        ctx,
+    )
+    .await
+}
+
 /// Unified handshake over any AsyncRead + AsyncWrite pair (v4/v5).
+///
+/// Uses the `TicketKeyRing` from the server context for automatic ticket key rotation.
 async fn perform_handshake<R, W>(
     reader: &mut R,
     writer: &mut W,
     auth: &AuthStore,
     padding_range: PaddingRange,
-    state: &ServerState,
+    ctx: &ServerContext,
 ) -> Result<SessionKeys>
 where
     R: AsyncReadExt + Unpin,
     W: AsyncWriteExt + Unpin,
 {
+    let state = &ctx.state;
     let client_init_buf = util::read_framed(reader).await?;
 
     if client_init_buf.is_empty() {
@@ -274,7 +330,8 @@ where
     }
 
     // v4/v5 handshake: 2-step with bucket sizes
-    let ticket_key = derive_ticket_key_from_state(state).await;
+    // Use the ticket key ring for automatic key rotation
+    let ticket_key = ctx.ticket_key_ring.current_key();
     let (bucket_sizes, server_features) = compute_server_features(state).await;
     let (server_init_bytes, server_state) = PrismaHandshakeServer::process_client_init(
         &client_init_buf,
@@ -305,18 +362,6 @@ async fn compute_server_features(state: &ServerState) -> (Vec<u16>, u32) {
         features |= FEATURE_TRANSPORT_ONLY_CIPHER;
     }
     (buckets, features)
-}
-
-/// Derive a ticket key from server state (uses first authorized client's secret as seed).
-async fn derive_ticket_key_from_state(state: &ServerState) -> [u8; 32] {
-    let auth_store = state.auth_store.read().await;
-    // Use a deterministic seed from server config
-    if let Some(entry) = auth_store.clients.values().next() {
-        derive_ticket_key(&entry.auth_secret)
-    } else {
-        // Fallback: all zeros (should not happen in production)
-        [0u8; 32]
-    }
 }
 
 /// Register a session in state, verify challenge response, run it, then clean up on exit.
@@ -359,13 +404,20 @@ where
         connected_at: Utc::now(),
         bytes_up: bytes_up.clone(),
         bytes_down: bytes_down.clone(),
+        destination: None,
+        matched_rule: None,
     };
     let session_id = session_keys.session_id;
+    let client_uuid = session_keys.client_id.0;
     ctx.state
         .connections
         .write()
         .await
         .insert(session_id, conn_info);
+
+    // Record per-client connection metrics
+    let client_acc = ctx.state.client_accumulator(client_uuid);
+    client_acc.record_connection();
 
     let result = handle_session_with_challenge(
         session_keys,
@@ -374,10 +426,17 @@ where
         dns_cache,
         forward_config,
         ctx.clone(),
-        bytes_up,
-        bytes_down,
+        bytes_up.clone(),
+        bytes_down.clone(),
     )
     .await;
+
+    // Record per-client byte totals and disconnect
+    let final_up = bytes_up.load(Ordering::Relaxed);
+    let final_down = bytes_down.load(Ordering::Relaxed);
+    client_acc.add_bytes_up(final_up);
+    client_acc.add_bytes_down(final_down);
+    client_acc.record_disconnect();
 
     ctx.state.connections.write().await.remove(&session_id);
     match &result {
@@ -385,12 +444,16 @@ where
             session_id = %session_id,
             client_name = %display_name,
             peer = %peer_addr,
+            bytes_up = final_up,
+            bytes_down = final_down,
             "Client disconnected"
         ),
         Err(e) => warn!(
             session_id = %session_id,
             client_name = %display_name,
             peer = %peer_addr,
+            bytes_up = final_up,
+            bytes_down = final_down,
             error = %e,
             "Client disconnected with error"
         ),
@@ -483,7 +546,16 @@ where
                 return Err(anyhow::anyhow!("Blocked by routing rule"));
             }
 
-            // Update connection mode
+            // Check per-client ACL
+            {
+                let client_id_str = session_keys.client_id.0.to_string();
+                if !state.acl_store.check(&client_id_str, dest).await {
+                    warn!(dest = %dest, client_id = %client_id_str, "Connection blocked by ACL");
+                    return Err(anyhow::anyhow!("Blocked by ACL"));
+                }
+            }
+
+            // Update connection mode and destination
             if let Some(conn) = state
                 .connections
                 .write()
@@ -491,6 +563,7 @@ where
                 .get_mut(&session_keys.session_id)
             {
                 conn.mode = SessionMode::Proxy;
+                conn.destination = Some(dest.to_string());
             }
 
             info!(dest = %dest, "Connecting to destination");

@@ -1,6 +1,6 @@
 target/
-prisma-dashboard/node_modules/
-prisma-dashboard/.next/
+prisma-console/node_modules/
+prisma-console/.next/
 prisma-docs/node_modules/
 prisma-docs/build/
 .git/

@@ -61,14 +61,14 @@ macOS may say the app "can't be opened because it is from an unidentified develo
 **For Ubuntu/Debian (.deb):**
 
 ```bash
-sudo dpkg -i prisma-gui_0.6.3_amd64.deb
+sudo dpkg -i prisma-gui_0.9.0_amd64.deb
 ```
 
 **For AppImage:**
 
 ```bash
-chmod +x prisma-gui-0.6.3.AppImage
-./prisma-gui-0.6.3.AppImage
+chmod +x prisma-gui-0.9.0.AppImage
+./prisma-gui-0.9.0.AppImage
 ```
 
 ## Option 2: prisma CLI
@@ -95,7 +95,7 @@ prisma --version
 
 Expected output:
 ```
-prisma 0.6.3
+prisma 0.9.0
 ```
 
 ## Option 3: Mobile

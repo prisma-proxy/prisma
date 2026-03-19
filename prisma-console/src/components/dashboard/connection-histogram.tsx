@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -28,9 +28,14 @@ const BUCKETS = [
 
 export function ConnectionHistogram({ connections }: ConnectionHistogramProps) {
   const { t } = useI18n();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const data = useMemo(() => {
-    const now = Date.now();
     const counts: Record<string, number> = {};
     for (const bucket of BUCKETS) {
       counts[bucket.label] = 0;
@@ -52,7 +57,7 @@ export function ConnectionHistogram({ connections }: ConnectionHistogramProps) {
       name: bucket.label,
       count: counts[bucket.label],
     }));
-  }, [connections]);
+  }, [connections, now]);
 
   return (
     <Card>

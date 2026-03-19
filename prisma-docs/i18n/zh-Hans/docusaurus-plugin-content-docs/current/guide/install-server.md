@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 
 ```
 [INFO] Detected platform: linux-amd64
-[INFO] Downloading prisma v0.6.3...
+[INFO] Downloading prisma v0.9.0...
 [INFO] Verifying checksum...
 [INFO] Installing to /usr/local/bin/prisma
 [INFO] Installation complete!
@@ -139,7 +139,7 @@ prisma --version
 
 预期输出：
 ```
-prisma 0.6.3
+prisma 0.9.0
 ```
 
 你还可以查看所有可用命令：

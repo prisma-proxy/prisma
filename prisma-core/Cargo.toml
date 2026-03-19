@@ -32,7 +32,8 @@ anyhow = { workspace = true }
 reed-solomon-erasure = { workspace = true }
 hickory-proto = { workspace = true }
 bytes = { workspace = true }
-subtle = "2"
+subtle = { workspace = true }
+zeroize = { workspace = true }
 prost = { workspace = true }
 tonic = { workspace = true }
 http = "1"
@@ -42,6 +43,8 @@ webpki-roots = "0.26"
 hex = "0.4"
 governor = { workspace = true }
 reqwest = { workspace = true }
+base64 = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
@@ -50,3 +53,8 @@ tokio-test = { workspace = true }
 tokio = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "crypto_bench"
+harness = false

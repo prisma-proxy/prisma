@@ -1,0 +1,342 @@
+/* =========================================================================
+   Developer Documentation — single-page layout styles
+   ========================================================================= */
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 3rem 0 2rem;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+  margin-bottom: 2rem;
+}
+
+.heroTitle {
+  font-size: 2.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.heroSubtitle {
+  font-size: 1.15rem;
+  color: var(--ifm-font-color-secondary);
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.heroVersion {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: var(--ifm-font-family-monospace);
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+  border-radius: 4px;
+}
+
+[data-theme='dark'] .heroVersion {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--ifm-color-primary-light);
+}
+
+/* ── Table of Contents ───────────────────────────────────────────── */
+.toc {
+  background: var(--ifm-card-background-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 2.5rem;
+}
+
+.tocTitle {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.tocList {
+  column-count: 3;
+  column-gap: 2rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.tocList li {
+  margin-bottom: 0.35rem;
+  break-inside: avoid;
+}
+
+.tocList a {
+  color: var(--ifm-link-color);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.tocList a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .tocList {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 500px) {
+  .tocList {
+    column-count: 1;
+  }
+}
+
+/* ── Sections ────────────────────────────────────────────────────── */
+.section {
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.section h2 {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+  scroll-margin-top: 80px;
+}
+
+.section h3 {
+  font-size: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  scroll-margin-top: 80px;
+}
+
+.section h4 {
+  font-size: 1.05rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  scroll-margin-top: 80px;
+  color: var(--ifm-color-primary);
+}
+
+.section p {
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+
+.section ul,
+.section ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.section li {
+  margin-bottom: 0.4rem;
+  line-height: 1.6;
+}
+
+/* ── Code blocks ─────────────────────────────────────────────────── */
+.codeBlock {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  margin: 0.75rem 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.codeBlock code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  white-space: pre;
+}
+
+/* ── Mermaid diagram wrapper ─────────────────────────────────────── */
+.diagram {
+  background: var(--ifm-card-background-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0 1.5rem;
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* ── Reference tables ────────────────────────────────────────────── */
+.refTable {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.refTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.refTable th,
+.refTable td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 1px solid var(--ifm-toc-border-color);
+}
+
+.refTable th {
+  background: var(--ifm-card-background-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.refTable tr:nth-child(2n) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme='dark'] .refTable tr:nth-child(2n) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.refTable code {
+  font-size: 0.82rem;
+  padding: 0.15rem 0.3rem;
+  background: var(--ifm-background-surface-color);
+  border-radius: 3px;
+}
+
+/* ── Module grid ─────────────────────────────────────────────────── */
+.moduleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.moduleCard {
+  background: var(--ifm-card-background-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.moduleCard strong {
+  font-size: 0.95rem;
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.moduleCard span {
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-secondary);
+  line-height: 1.4;
+}
+
+/* ── Info boxes ──────────────────────────────────────────────────── */
+.infoBox {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 4px solid #3b82f6;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.tipBox {
+  background: rgba(34, 197, 94, 0.08);
+  border-left: 4px solid #22c55e;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.warningBox {
+  background: rgba(234, 179, 8, 0.08);
+  border-left: 4px solid #eab308;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* ── Signature blocks ─────────────────────────────────────────────── */
+.sig {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.84rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ── Crate header ─────────────────────────────────────────────────── */
+.crateHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.crateHeader h3 {
+  margin: 0;
+}
+
+.crateBadge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 500;
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+}
+
+[data-theme='dark'] .crateBadge {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--ifm-color-primary-light);
+}
+
+.crateBadgeServer {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7c3aed;
+}
+
+[data-theme='dark'] .crateBadgeServer {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.crateBadgeCli {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+
+[data-theme='dark'] .crateBadgeCli {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.crateBadgeFfi {
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+}
+
+[data-theme='dark'] .crateBadgeFfi {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+}

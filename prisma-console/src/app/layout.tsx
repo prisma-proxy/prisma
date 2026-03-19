@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Prisma Dashboard",
-  description: "Management dashboard for Prisma",
+  title: "Prisma Console",
+  description: "Management console for Prisma",
 };
 
 export default function RootLayout({

@@ -97,7 +97,7 @@ prisma/
 - [TUN 模式](https://yamimega.github.io/prisma/docs/features/tun-mode) — 系统级代理配置
 - [配置示例](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 种场景即用模板
 - [PrismaVeil 协议](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — 线路协议规范
-- [仪表板](https://yamimega.github.io/prisma/docs/features/dashboard) — Web UI 配置
+- [控制台](https://yamimega.github.io/prisma/docs/features/console) — Web UI 配置
 - [管理 API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API 参考
 - [GUI 客户端](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows、Android、iOS、macOS 应用
 

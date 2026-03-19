@@ -320,7 +320,7 @@ export default function Profiles() {
       setTimeout(() => setShareCopied(false), 2000);
       notify.success(t("profiles.copiedToClipboard"));
     } catch {
-      notify.error("Clipboard not available");
+      notify.error(t("notifications.error"));
     }
   }
 

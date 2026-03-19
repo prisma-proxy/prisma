@@ -4,6 +4,8 @@ pub use prisma_core::state::*;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use prisma_core::crypto::ticket_key_ring::TicketKeyRing;
+
 use crate::bandwidth::limiter::BandwidthLimiterStore;
 use crate::bandwidth::quota::QuotaStore;
 
@@ -16,6 +18,8 @@ pub struct ServerContext {
     pub quotas: Arc<QuotaStore>,
     /// Path to the server config file, used for hot-reload.
     pub config_path: String,
+    /// Session ticket key ring with automatic rotation for forward secrecy.
+    pub ticket_key_ring: TicketKeyRing,
 }
 
 impl Deref for ServerContext {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileSpreadsheet, FileJson, Image } from "lucide-react";
+import { Download, FileSpreadsheet, FileJson, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,7 +44,7 @@ export function ExportDropdown({ onCSV, onJSON, onPNG }: ExportDropdownProps) {
         )}
         {onPNG && (
           <DropdownMenuItem onClick={onPNG}>
-            <Image className="h-4 w-4" />
+            <ImageIcon className="h-4 w-4" />
             {t("common.exportPNG")}
           </DropdownMenuItem>
         )}

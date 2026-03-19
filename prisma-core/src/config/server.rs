@@ -52,6 +52,67 @@ pub struct ServerConfig {
     /// Static routing rules (loaded from config, persist across restarts).
     #[serde(default)]
     pub routing: router::RoutingConfig,
+    /// ShadowTLS v3 configuration.
+    #[serde(default)]
+    pub shadow_tls: ShadowTlsServerConfig,
+    /// WireGuard-compatible UDP transport.
+    #[serde(default)]
+    pub wireguard: crate::wireguard::WireGuardServerConfig,
+    /// Per-client access control lists.
+    #[serde(default)]
+    pub acls: std::collections::HashMap<String, crate::acl::Acl>,
+    /// Graceful shutdown drain timeout in seconds (default: 30).
+    #[serde(default = "default_shutdown_drain_timeout")]
+    pub shutdown_drain_timeout_secs: u64,
+    /// Watch the config file for changes and auto-reload.
+    #[serde(default)]
+    pub config_watch: bool,
+    /// SSH transport configuration.
+    #[serde(default)]
+    pub ssh: SshServerConfig,
+    /// Session ticket key rotation interval in hours (default: 6).
+    #[serde(default = "default_ticket_rotation_hours")]
+    pub ticket_rotation_hours: u64,
+}
+
+/// ShadowTLS v3 server configuration.
+///
+/// ShadowTLS uses a real TLS handshake with a legitimate server as camouflage.
+/// Proxy data is multiplexed in TLS application data frames and authenticated
+/// using HMAC to distinguish proxy traffic from the cover server's real responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShadowTlsServerConfig {
+    /// Whether ShadowTLS listener is enabled.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Listen address for ShadowTLS connections (e.g., "0.0.0.0:8444").
+    #[serde(default = "default_shadow_tls_listen_addr")]
+    pub listen_addr: String,
+    /// The legitimate TLS server to forward handshakes to (e.g., "www.microsoft.com:443").
+    #[serde(default)]
+    pub handshake_server: Option<String>,
+    /// Pre-shared password used to derive the HMAC key for frame authentication.
+    #[serde(default)]
+    pub password: String,
+    /// SNI to expect from clients (for validation).
+    #[serde(default)]
+    pub sni: Option<String>,
+}
+
+impl Default for ShadowTlsServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_addr: default_shadow_tls_listen_addr(),
+            handshake_server: None,
+            password: String::new(),
+            sni: None,
+        }
+    }
+}
+
+fn default_shadow_tls_listen_addr() -> String {
+    "0.0.0.0:8444".into()
 }
 
 fn default_protocol_version() -> String {
@@ -160,11 +221,14 @@ pub struct ManagementApiConfig {
     #[serde(default, alias = "dashboard_dir")]
     pub console_dir: Option<String>,
     /// TLS configuration for the management API.
-    /// If omitted, inherits from the server's top-level `[tls]` section automatically.
-    /// Set `tls_enabled = false` to explicitly disable TLS on the management API.
+    /// If omitted and `tls_enabled = true`, inherits from the server's top-level
+    /// `[tls]` section automatically. By default TLS is **disabled** on the
+    /// management API so it serves plain HTTP; set `tls_enabled = true` to opt in.
     pub tls: Option<TlsConfig>,
-    /// Explicitly disable TLS even when a cert is available.
-    #[serde(default = "default_true")]
+    /// Enable TLS on the management API. When true and no `[management_api.tls]`
+    /// is provided, the server's top-level `[tls]` cert is inherited.
+    /// Defaults to `false` so the API is accessible via HTTP out of the box.
+    #[serde(default)]
     pub tls_enabled: bool,
 }
 
@@ -177,7 +241,7 @@ impl Default for ManagementApiConfig {
             cors_origins: Vec::new(),
             console_dir: None,
             tls: None,
-            tls_enabled: true,
+            tls_enabled: false,
         }
     }
 }
@@ -415,7 +479,7 @@ fn default_true() -> bool {
 }
 
 fn default_mgmt_listen_addr() -> String {
-    "0.0.0.0:9090".into()
+    "127.0.0.1:9090".into()
 }
 
 fn default_port_range_start() -> u16 {
@@ -511,6 +575,14 @@ fn default_auth_rotation_hours() -> u64 {
     1
 }
 
+fn default_shutdown_drain_timeout() -> u64 {
+    30
+}
+
+fn default_ticket_rotation_hours() -> u64 {
+    6
+}
+
 impl Default for PrismaTlsConfig {
     fn default() -> Self {
         Self {
@@ -545,6 +617,50 @@ impl Default for AntiRttConfig {
 
 fn default_normalization_ms() -> u32 {
     150
+}
+
+/// SSH transport server configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshServerConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_ssh_listen_addr")]
+    pub listen_addr: String,
+    #[serde(default)]
+    pub host_key_path: Option<String>,
+    #[serde(default)]
+    pub allowed_users: Vec<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub authorized_keys_path: Option<String>,
+    #[serde(default)]
+    pub fake_shell: bool,
+    #[serde(default = "default_ssh_banner")]
+    pub banner: String,
+}
+
+impl Default for SshServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_addr: default_ssh_listen_addr(),
+            host_key_path: None,
+            allowed_users: Vec::new(),
+            password: None,
+            authorized_keys_path: None,
+            fake_shell: false,
+            banner: default_ssh_banner(),
+        }
+    }
+}
+
+fn default_ssh_listen_addr() -> String {
+    "0.0.0.0:2222".into()
+}
+
+fn default_ssh_banner() -> String {
+    "SSH-2.0-OpenSSH_9.6".into()
 }
 
 fn default_level() -> String {

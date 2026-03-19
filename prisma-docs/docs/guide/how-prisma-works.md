@@ -114,7 +114,7 @@ This is where Prisma really stands out. Many firewalls and DPI systems can detec
 
 A **transport** is the method Prisma uses to send encrypted data between the client and server. Think of it as choosing how to deliver a package -- by car, by plane, or by courier.
 
-Prisma supports six transports. Here is a simple explanation of each:
+Prisma supports nine transports. Here is a simple explanation of each:
 
 ### TCP -- The Reliable Road
 
@@ -157,6 +157,27 @@ XPorta is Prisma's most advanced transport. It fragments proxy data into many sh
 
 - **Pros:** Virtually undetectable, looks like normal web app traffic
 - **Cons:** Slightly higher latency and overhead, more complex setup
+
+### ShadowTLS v3 -- TLS Camouflage
+
+ShadowTLS mimics a real TLS handshake to a cover server (e.g., a popular website). The initial handshake is indistinguishable from a genuine TLS connection, making it extremely resistant to protocol detection.
+
+- **Pros:** Passes DPI as real TLS traffic, very hard to fingerprint
+- **Cons:** Requires a cover server that supports TLS
+
+### SSH -- Universal Compatibility
+
+The SSH transport tunnels Prisma traffic through a standard SSH connection. SSH is almost never blocked because it is essential for server administration.
+
+- **Pros:** Almost never blocked, widely available
+- **Cons:** SSH traffic patterns can be fingerprinted by advanced DPI
+
+### WireGuard -- Kernel-Level Performance
+
+WireGuard is a modern VPN protocol known for its simplicity and performance. Prisma can use WireGuard as a transport layer for kernel-level forwarding speeds.
+
+- **Pros:** Very fast, minimal overhead, well-audited protocol
+- **Cons:** Uses UDP (may be blocked), WireGuard is detectable by DPI
 
 ## When to Use Which Transport
 
@@ -201,7 +222,7 @@ Without naming specific tools, here is how Prisma compares to the general catego
 |---------|---------------|-------------|--------|
 | Encryption | Yes | Sometimes | Yes (always) |
 | Hard to detect | No (easily identified) | Somewhat | Yes (multiple anti-detection layers) |
-| Multiple transports | Usually 1-2 | 1-2 | 6 transports with auto-fallback |
+| Multiple transports | Usually 1-2 | 1-2 | 9 transports with auto-fallback |
 | CDN support | Rare | Some | Full (WebSocket, gRPC, XHTTP, XPorta) |
 | Traffic shaping | No | No | Yes (padding, jitter, chaff) |
 | Active probe resistance | No | Some | Yes (camouflage, PrismaTLS) |
@@ -214,7 +235,7 @@ In this chapter, you learned:
 - Prisma has two parts: a **client** (on your computer) and a **server** (on a remote VPS)
 - When you browse the web, your traffic goes: browser -> client -> encrypted tunnel -> server -> website
 - The **PrismaVeil protocol** encrypts everything with state-of-the-art cryptography
-- Prisma has **six transport types** (QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta) for different situations
+- Prisma has **nine transport types** (QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard) for different situations
 - Prisma uses **padding, timing jitter, chaff injection, and camouflage** to make traffic undetectable
 - **QUIC** is the recommended starting transport; **XPorta** is for maximum stealth
 

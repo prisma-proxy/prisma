@@ -9,6 +9,7 @@
   "sidebar.trafficShaping": "Traffic Shaping",
   "sidebar.backups": "Config Backup",
   "sidebar.speedTest": "Speed Test",
+  "sidebar.connections": "Connections",
   "sidebar.bandwidth": "Bandwidth",
   "metrics.activeConnections": "Active Connections",
   "metrics.trafficUp": "Traffic Up",
@@ -327,5 +328,8 @@
   "speedTest.timeAgo.minutes": "{value}m ago",
   "speedTest.timeAgo.hours": "{value}h ago",
   "speedTest.timeAgo.days": "{value}d ago",
-  "toast.downloadError": "Failed to download backup"
+  "toast.downloadError": "Failed to download backup",
+  "logs.exportTitle": "Export Logs",
+  "connections.title": "Active Connections",
+  "connections.exportTitle": "Export Connections"
 }

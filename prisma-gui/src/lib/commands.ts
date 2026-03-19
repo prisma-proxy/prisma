@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter } from "./types";
+import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ImportedServer, ProxyGroupInfo, LatencyResult } from "./types";
 
-export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter };
+export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ImportedServer, ProxyGroupInfo, LatencyResult };
 
 export const api = {
   connect:          (configJson: string, modes: number) =>
@@ -97,4 +97,46 @@ export const api = {
 
   downloadFile: (url: string, destPath: string, proxyPort: number) =>
     invoke<void>("download_file", { url, destPath, proxyPort }),
+
+  // ── URI import ───────────────────────────────────────────────────────
+  importUri: (uri: string) =>
+    invoke<ImportedServer>("import_uri", { uri }),
+
+  importBatch: (text: string) =>
+    invoke<ImportedServer[]>("import_batch", { text }),
+
+  // ── Proxy groups ─────────────────────────────────────────────────────
+  proxyGroupsList: () =>
+    invoke<ProxyGroupInfo[]>("proxy_groups_list"),
+
+  proxyGroupSelect: (groupName: string, server: string) =>
+    invoke<void>("proxy_group_select", { groupName, server }),
+
+  proxyGroupTest: (groupName: string) =>
+    invoke<LatencyResult[]>("proxy_group_test", { groupName }),
+
+  // ── Mobile commands ────────────────────────────────────────────────
+  checkVpnPermission: () =>
+    invoke<boolean>("check_vpn_permission"),
+
+  requestVpnPermission: () =>
+    invoke<boolean>("request_vpn_permission"),
+
+  getNetworkType: () =>
+    invoke<number>("get_network_type"),
+
+  onNetworkChange: (networkType: number) =>
+    invoke<void>("on_network_change", { networkType }),
+
+  getBatteryStatus: () =>
+    invoke<BatteryStatus>("get_battery_status"),
+
+  onAppBackground: () =>
+    invoke<void>("on_app_background"),
+
+  onAppForeground: () =>
+    invoke<void>("on_app_foreground"),
+
+  onMemoryWarning: () =>
+    invoke<void>("on_memory_warning"),
 };

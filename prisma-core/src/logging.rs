@@ -10,10 +10,15 @@ use crate::state::LogEntry;
 static FILTER_HANDLE: OnceLock<reload::Handle<EnvFilter, tracing_subscriber::Registry>> =
     OnceLock::new();
 
+/// Inner subscriber type layered with the reloadable `EnvFilter`.
+type FilteredRegistry = tracing_subscriber::layer::Layered<
+    reload::Layer<EnvFilter, tracing_subscriber::Registry>,
+    tracing_subscriber::Registry,
+>;
+
 /// Global reload handle for swapping the BroadcastLayer at runtime.
-static BROADCAST_HANDLE: OnceLock<
-    reload::Handle<BroadcastLayer, tracing_subscriber::layer::Layered<reload::Layer<EnvFilter, tracing_subscriber::Registry>, tracing_subscriber::Registry>>,
-> = OnceLock::new();
+static BROADCAST_HANDLE: OnceLock<reload::Handle<BroadcastLayer, FilteredRegistry>> =
+    OnceLock::new();
 
 /// Update the log level filter at runtime (safe to call on reconnect).
 pub fn update_log_level(level: &str) {

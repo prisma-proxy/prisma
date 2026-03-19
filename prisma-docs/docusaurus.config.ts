@@ -57,8 +57,20 @@ const config: Config = {
           showLastUpdateTime: true,
           lastVersion: 'current',
           versions: {
-            current: {label: 'v0.7.2', path: ''},
+            current: {label: 'v0.9.0', path: ''},
+            '0.8.0': {label: 'v0.8.0', path: '0.8.0'},
             legacy: {label: 'Legacy', path: 'legacy'},
+          },
+          async sidebarItemsGenerator({defaultSidebarItemsGenerator, ...args}) {
+            const items = await defaultSidebarItemsGenerator(args);
+            // Remove the "guide" category — guide is now a standalone page at /guide
+            return items.filter(item => {
+              if (item.type === 'category' && item.label) {
+                const lower = item.label.toLowerCase();
+                return !lower.includes('guide');
+              }
+              return true;
+            });
           },
         },
         blog: false,
@@ -93,14 +105,18 @@ mermaid: {
           label: 'Docs',
         },
         {
-          type: 'doc',
-          docId: 'guide/index',
+          to: '/guide',
+          label: 'Guide',
           position: 'left',
-          label: "Beginner's Guide",
         },
         {
           to: '/benchmarks',
           label: 'Benchmarks',
+          position: 'left',
+        },
+        {
+          to: '/dev',
+          label: 'Dev',
           position: 'left',
         },
         {

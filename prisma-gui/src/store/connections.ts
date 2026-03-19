@@ -23,6 +23,7 @@ interface ConnectionsStore {
 
   addConnection: (conn: Omit<TrackedConnection, "id">) => void;
   closeConnection: (destination: string) => void;
+  closeConnectionById: (id: string) => void;
   closeAllActive: () => void;
   clearAll: () => void;
   clearClosed: () => void;
@@ -60,6 +61,15 @@ export const useConnections = create<ConnectionsStore>((set) => ({
     set((state) => ({
       connections: state.connections.map((c) =>
         c.status === "active" && c.destination === destination
+          ? { ...c, status: "closed" as const, closedAt: Date.now() }
+          : c
+      ),
+    })),
+
+  closeConnectionById: (id) =>
+    set((state) => ({
+      connections: state.connections.map((c) =>
+        c.id === id && c.status === "active"
           ? { ...c, status: "closed" as const, closedAt: Date.now() }
           : c
       ),

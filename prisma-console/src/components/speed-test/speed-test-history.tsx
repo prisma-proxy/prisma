@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Clock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -12,9 +13,15 @@ interface SpeedTestHistoryProps {
 
 export function SpeedTestHistory({ history, onClear }: SpeedTestHistoryProps) {
   const { t } = useI18n();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   function formatRelativeTime(timestamp: number): string {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    const seconds = Math.floor((now - timestamp) / 1000);
     if (seconds < 60) return t("speedTest.timeAgo.seconds", { value: seconds });
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return t("speedTest.timeAgo.minutes", { value: minutes });

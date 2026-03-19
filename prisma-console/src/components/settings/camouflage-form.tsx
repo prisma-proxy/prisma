@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,30 +157,20 @@ export function CamouflageForm({ config, onSave, isLoading: saving }: Camouflage
               onCheckedChange={(v: boolean) => setCdnEnableSseDisguise(v)}
             />
           </div>
-          <KeyValue
-            label={t("settings.cdnWsPath")}
-            value={<span className="font-mono text-xs">{config.cdn.ws_tunnel_path || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.cdnGrpcPath")}
-            value={<span className="font-mono text-xs">{config.cdn.grpc_tunnel_path || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.cdnXhttpUpload")}
-            value={<span className="font-mono text-xs">{config.cdn.xhttp_upload_path || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.cdnXhttpDownload")}
-            value={<span className="font-mono text-xs">{config.cdn.xhttp_download_path || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.cdnXhttpStream")}
-            value={<span className="font-mono text-xs">{config.cdn.xhttp_stream_path || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.cdnCoverSite")}
-            value={<span className="font-mono text-xs">{config.cdn.cover_upstream || "\u2014"}</span>}
-          />
+          {([
+            [t("settings.cdnWsPath"),        config.cdn.ws_tunnel_path],
+            [t("settings.cdnGrpcPath"),      config.cdn.grpc_tunnel_path],
+            [t("settings.cdnXhttpUpload"),   config.cdn.xhttp_upload_path],
+            [t("settings.cdnXhttpDownload"), config.cdn.xhttp_download_path],
+            [t("settings.cdnXhttpStream"),   config.cdn.xhttp_stream_path],
+            [t("settings.cdnCoverSite"),     config.cdn.cover_upstream],
+          ] as const).map(([label, val]) => (
+            <KeyValue
+              key={label}
+              label={label}
+              value={<span className="font-mono text-xs">{val || "\u2014"}</span>}
+            />
+          ))}
           <KeyValue
             label={t("settings.cdnXporta")}
             value={config.cdn.xporta_enabled ? t("settings.yes") : t("settings.no")}

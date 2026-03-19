@@ -22,13 +22,11 @@ export function SystemCards({ info }: SystemCardsProps) {
   const certColor =
     info.cert_expiry_days === null
       ? "text-muted-foreground"
-      : info.cert_expiry_days <= 0
+      : info.cert_expiry_days <= 7
         ? "text-red-600 dark:text-red-400"
-        : info.cert_expiry_days <= 7
-          ? "text-red-600 dark:text-red-400"
-          : info.cert_expiry_days <= 30
-            ? "text-yellow-600 dark:text-yellow-400"
-            : "text-green-600 dark:text-green-400";
+        : info.cert_expiry_days <= 30
+          ? "text-yellow-600 dark:text-yellow-400"
+          : "text-green-600 dark:text-green-400";
 
   const certBarColor =
     info.cert_expiry_days === null
@@ -43,38 +41,22 @@ export function SystemCards({ info }: SystemCardsProps) {
     <div className="space-y-6">
       {/* Info cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("system.version")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{info.version}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("system.platform")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{info.platform}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("system.pid")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold font-mono">{info.pid}</p>
-          </CardContent>
-        </Card>
+        {([
+          { label: t("system.version"),  value: info.version,  mono: false },
+          { label: t("system.platform"), value: info.platform, mono: false },
+          { label: t("system.pid"),      value: info.pid,      mono: true },
+        ] as const).map(({ label, value, mono }) => (
+          <Card key={label}>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-2xl font-bold${mono ? " font-mono" : ""}`}>{value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Resource gauges */}

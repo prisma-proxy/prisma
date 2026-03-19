@@ -37,10 +37,14 @@ tokio-stream = { workspace = true }
 dashmap = { workspace = true }
 rand = { workspace = true }
 blake3 = { workspace = true }
+subtle = { workspace = true }
+zeroize = { workspace = true }
 governor = { workspace = true }
 h3 = { workspace = true }
 h3-quinn = { workspace = true }
 nix = { workspace = true }
+russh = { workspace = true }
+notify = { workspace = true }
 
 [features]
 default = ["sysinfo"]

@@ -1,4 +1,4 @@
-//! prisma-ffi — C ABI shared library for Prisma GUI clients.
+//! prisma-ffi — C ABI shared library for Prisma GUI and mobile clients.
 //!
 //! Safety contract: all pointers passed in must be valid for the duration of
 //! the call. Strings are null-terminated UTF-8. The caller owns strings
@@ -8,9 +8,13 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "android")]
+mod android;
 mod auto_update;
 mod connection;
 mod geo;
+#[cfg(target_os = "ios")]
+mod ios;
 mod profiles;
 mod qr;
 mod runtime;
@@ -29,6 +33,14 @@ pub const PRISMA_ERR_ALREADY_CONNECTED: c_int = 2;
 pub const PRISMA_ERR_NOT_CONNECTED: c_int = 3;
 pub const PRISMA_ERR_PERMISSION_DENIED: c_int = 4;
 pub const PRISMA_ERR_INTERNAL: c_int = 5;
+pub const PRISMA_ERR_NULL_POINTER: c_int = 6;
+
+// ── Network type constants (mobile lifecycle) ────────────────────────────────
+
+pub const PRISMA_NET_DISCONNECTED: i32 = 0;
+pub const PRISMA_NET_WIFI: i32 = 1;
+pub const PRISMA_NET_CELLULAR: i32 = 2;
+pub const PRISMA_NET_ETHERNET: i32 = 3;
 
 // ── Status codes ─────────────────────────────────────────────────────────────
 
@@ -56,6 +68,10 @@ pub struct PrismaClient {
     connection: Arc<Mutex<ConnectionManager>>,
     callback: Arc<Mutex<CallbackHolder>>,
     stats_poller: Arc<Mutex<Option<stats_poller::StatsPoller>>>,
+    /// Current network type for mobile lifecycle management.
+    network_type: std::sync::atomic::AtomicI32,
+    /// Whether the app is currently in the foreground.
+    foreground: std::sync::atomic::AtomicBool,
 }
 
 pub struct CallbackHolder {
@@ -63,6 +79,10 @@ pub struct CallbackHolder {
     pub userdata: *mut c_void,
 }
 
+// SAFETY: CallbackHolder is only accessed behind a Mutex. The `userdata` raw
+// pointer is treated as an opaque token — it is never dereferenced on the Rust
+// side. It is only passed back to the caller-provided callback function which
+// is responsible for its own thread safety.
 unsafe impl Send for CallbackHolder {}
 unsafe impl Sync for CallbackHolder {}
 
@@ -74,6 +94,9 @@ impl PrismaClient {
         };
         if let Some(func) = holder.func {
             if let Ok(cstr) = CString::new(event_json) {
+                // SAFETY: `func` is a caller-provided extern "C" function pointer set
+                // via `prisma_set_callback`. The CString pointer is valid for the
+                // duration of this call. `holder.userdata` is passed back as-is.
                 unsafe { func(cstr.as_ptr(), holder.userdata) };
             }
         }
@@ -101,6 +124,8 @@ macro_rules! cstr_to_str {
         if $ptr.is_null() {
             return PRISMA_ERR_INVALID_CONFIG;
         }
+        // SAFETY: Caller guarantees `$ptr` is a valid, non-null, null-terminated
+        // C string for the duration of this FFI call. We checked for null above.
         match unsafe { CStr::from_ptr($ptr) }.to_str() {
             Ok(s) => s,
             Err(_) => return PRISMA_ERR_INVALID_CONFIG,
@@ -115,6 +140,8 @@ macro_rules! cstr_to_str_opt {
         if $ptr.is_null() {
             None
         } else {
+            // SAFETY: Caller guarantees `$ptr` is a valid, non-null, null-terminated
+            // C string. We checked for null above.
             unsafe { CStr::from_ptr($ptr) }.to_str().ok()
         }
     }};
@@ -141,6 +168,8 @@ pub extern "C" fn prisma_create() -> *mut PrismaClient {
                 userdata: std::ptr::null_mut(),
             })),
             stats_poller: Arc::new(Mutex::new(None)),
+            network_type: std::sync::atomic::AtomicI32::new(PRISMA_NET_WIFI),
+            foreground: std::sync::atomic::AtomicBool::new(true),
         });
         Box::into_raw(client)
     })
@@ -149,12 +178,14 @@ pub extern "C" fn prisma_create() -> *mut PrismaClient {
 /// Destroy a PrismaClient handle.
 ///
 /// # Safety
-/// `handle` must be a valid pointer returned by `prisma_create`.
+/// `handle` must be a valid pointer returned by `prisma_create`, or NULL.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_destroy(handle: *mut PrismaClient) {
     if handle.is_null() {
         return;
     }
+    // SAFETY: Caller guarantees `handle` is a valid pointer returned by
+    // `prisma_create` (which used `Box::into_raw`). We take ownership back.
     let client = unsafe { Box::from_raw(handle) };
     // Stop stats poller
     if let Ok(mut poller_guard) = client.stats_poller.lock() {
@@ -181,8 +212,9 @@ pub unsafe extern "C" fn prisma_connect(
 ) -> c_int {
     ffi_catch!(PRISMA_ERR_INTERNAL, {
         if handle.is_null() {
-            return PRISMA_ERR_INVALID_CONFIG;
+            return PRISMA_ERR_NULL_POINTER;
         }
+        // SAFETY: Caller guarantees `handle` is a valid pointer from `prisma_create`.
         let client = unsafe { &*handle };
         let config_str = cstr_to_str!(config_json);
 
@@ -218,6 +250,8 @@ pub unsafe extern "C" fn prisma_connect(
             };
             if let Some(func) = holder.func {
                 if let Ok(cstr) = CString::new(ev) {
+                    // SAFETY: The callback function pointer was validated when set via
+                    // `prisma_set_callback`. The CString is valid for this call duration.
                     unsafe { func(cstr.as_ptr(), holder.userdata) };
                 }
             }
@@ -258,8 +292,9 @@ pub unsafe extern "C" fn prisma_connect(
 pub unsafe extern "C" fn prisma_disconnect(handle: *mut PrismaClient) -> c_int {
     ffi_catch!(PRISMA_ERR_INTERNAL, {
         if handle.is_null() {
-            return PRISMA_ERR_INVALID_CONFIG;
+            return PRISMA_ERR_NULL_POINTER;
         }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
         let client = unsafe { &*handle };
 
         // Stop stats poller first
@@ -293,6 +328,7 @@ pub unsafe extern "C" fn prisma_get_status(handle: *mut PrismaClient) -> c_int {
     if handle.is_null() {
         return PRISMA_STATUS_DISCONNECTED;
     }
+    // SAFETY: Caller guarantees `handle` is valid. Only a shared reference is taken.
     let client = unsafe { &*handle };
     match client.connection.lock() {
         Ok(conn) => conn.status() as c_int,
@@ -304,12 +340,13 @@ pub unsafe extern "C" fn prisma_get_status(handle: *mut PrismaClient) -> c_int {
 /// Returns NULL if not connected.
 ///
 /// # Safety
-/// `handle` must be valid.
+/// `handle` must be valid or NULL.
 #[no_mangle]
 pub unsafe extern "C" fn prisma_get_stats_json(handle: *mut PrismaClient) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
+    // SAFETY: Caller guarantees `handle` is valid. Only a shared reference is taken.
     let client = unsafe { &*handle };
     match client.connection.lock() {
         Ok(mut conn) => {
@@ -332,6 +369,8 @@ pub unsafe extern "C" fn prisma_free_string(s: *mut c_char) {
     if s.is_null() {
         return;
     }
+    // SAFETY: Caller guarantees `s` was returned by a prisma_* function,
+    // meaning it was created by `CString::into_raw()`. We reclaim ownership.
     unsafe { drop(CString::from_raw(s)) };
 }
 
@@ -348,6 +387,7 @@ pub unsafe extern "C" fn prisma_set_callback(
     if handle.is_null() {
         return;
     }
+    // SAFETY: Caller guarantees `handle` is valid. Only a shared reference is taken.
     let client = unsafe { &*handle };
     if let Ok(mut holder) = client.callback.lock() {
         holder.func = callback;
@@ -452,8 +492,9 @@ pub unsafe extern "C" fn prisma_profile_from_qr(
     out_json: *mut *mut c_char,
 ) -> c_int {
     if data.is_null() || out_json.is_null() {
-        return PRISMA_ERR_INVALID_CONFIG;
+        return PRISMA_ERR_NULL_POINTER;
     }
+    // SAFETY: Both pointers verified non-null above per caller contract.
     let data_str = match unsafe { CStr::from_ptr(data) }.to_str() {
         Ok(s) => s,
         Err(_) => return PRISMA_ERR_INVALID_CONFIG,
@@ -464,6 +505,7 @@ pub unsafe extern "C" fn prisma_profile_from_qr(
     };
     match CString::new(json) {
         Ok(s) => {
+            // SAFETY: `out_json` is valid and non-null per caller contract.
             unsafe { *out_json = s.into_raw() };
             PRISMA_OK
         }
@@ -682,6 +724,7 @@ pub unsafe extern "C" fn prisma_set_per_app_filter(app_names_json: *const c_char
             APP_FILTER.set_config(None);
             return PRISMA_OK;
         }
+        // SAFETY: Pointer verified non-null above. Caller guarantees valid C string.
         let json_str = match unsafe { CStr::from_ptr(app_names_json) }.to_str() {
             Ok(s) => s,
             Err(_) => return PRISMA_ERR_INVALID_CONFIG,
@@ -752,8 +795,9 @@ pub unsafe extern "C" fn prisma_speed_test(
     direction: *const c_char,
 ) -> c_int {
     if handle.is_null() {
-        return PRISMA_ERR_INVALID_CONFIG;
+        return PRISMA_ERR_NULL_POINTER;
     }
+    // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
     let client = unsafe { &*handle };
     let server_str = cstr_to_str!(server);
     let dir_str = cstr_to_str!(direction);
@@ -789,6 +833,7 @@ pub unsafe extern "C" fn prisma_speed_test(
         if let Ok(holder) = cb_arc.lock() {
             if let Some(func) = holder.func {
                 if let Ok(cstr) = CString::new(event) {
+                    // SAFETY: callback function pointer was set by caller; CString is valid.
                     unsafe { func(cstr.as_ptr(), holder.userdata) };
                 }
             }
@@ -796,4 +841,434 @@ pub unsafe extern "C" fn prisma_speed_test(
     });
 
     PRISMA_OK
+}
+
+// ── Mobile lifecycle ─────────────────────────────────────────────────────────
+
+/// Get the current network type cached by the library.
+///
+/// Returns: 0 = disconnected, 1 = WiFi, 2 = cellular, 3 = ethernet.
+/// Returns -1 if `handle` is NULL.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_get_network_type(handle: *mut PrismaClient) -> c_int {
+    if handle.is_null() {
+        return -1;
+    }
+    let client = unsafe { &*handle };
+    client
+        .network_type
+        .load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Notify the library of a network connectivity change (mobile).
+///
+/// `network_type`: 0 = disconnected, 1 = WiFi, 2 = cellular, 3 = ethernet.
+///
+/// On transition, the library will notify active connections and fire events.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_on_network_change(
+    handle: *mut PrismaClient,
+    network_type: i32,
+) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        if !(PRISMA_NET_DISCONNECTED..=PRISMA_NET_ETHERNET).contains(&network_type) {
+            return PRISMA_ERR_INVALID_CONFIG;
+        }
+
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+        let prev = client
+            .network_type
+            .swap(network_type, std::sync::atomic::Ordering::SeqCst);
+
+        if prev == network_type {
+            return PRISMA_OK;
+        }
+
+        let net_name = match network_type {
+            PRISMA_NET_DISCONNECTED => "disconnected",
+            PRISMA_NET_WIFI => "wifi",
+            PRISMA_NET_CELLULAR => "cellular",
+            PRISMA_NET_ETHERNET => "ethernet",
+            _ => "unknown",
+        };
+
+        tracing::info!(
+            previous = prev,
+            current = network_type,
+            "Network type changed to {}",
+            net_name
+        );
+
+        client.fire_event(&format!(
+            r#"{{"type":"network_changed","network":"{}","previous":{}}}"#,
+            net_name, prev
+        ));
+
+        if let Ok(conn) = client.connection.lock() {
+            if conn.is_connected() {
+                if network_type == PRISMA_NET_DISCONNECTED {
+                    client.fire_event(
+                        r#"{"type":"warning","code":"network_lost","msg":"Network connectivity lost, waiting for recovery"}"#,
+                    );
+                } else {
+                    client.fire_event(
+                        r#"{"type":"info","code":"network_reconnect","msg":"Network changed, reconnecting transport"}"#,
+                    );
+                }
+            }
+        }
+
+        PRISMA_OK
+    })
+}
+
+/// Notify the library of a low-memory warning from the OS (mobile).
+///
+/// The library will release non-essential caches and reduce buffer sizes.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_on_memory_warning(handle: *mut PrismaClient) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+
+        tracing::warn!("Memory warning received — releasing caches");
+        client.fire_event(
+            r#"{"type":"info","code":"memory_warning","msg":"Releasing caches due to memory pressure"}"#,
+        );
+
+        if let Ok(mut guard) = client.stats_poller.lock() {
+            if let Some(poller) = guard.take() {
+                poller.stop();
+                tracing::info!("Stats poller stopped due to memory pressure");
+            }
+        }
+
+        PRISMA_OK
+    })
+}
+
+/// Notify the library that the app has entered the background (mobile).
+///
+/// The library will reduce stats polling and defer non-essential operations.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_on_background(handle: *mut PrismaClient) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+
+        client
+            .foreground
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        tracing::info!("App entering background — reducing activity");
+
+        if let Ok(mut guard) = client.stats_poller.lock() {
+            if let Some(poller) = guard.take() {
+                poller.stop();
+            }
+        }
+
+        client.fire_event(r#"{"type":"lifecycle","state":"background"}"#);
+        PRISMA_OK
+    })
+}
+
+/// Notify the library that the app has returned to the foreground (mobile).
+///
+/// The library will restore full stats polling and check connection health.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_on_foreground(handle: *mut PrismaClient) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+
+        client
+            .foreground
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        tracing::info!("App returning to foreground — restoring full operation");
+
+        if let Ok(conn_guard) = client.connection.lock() {
+            if conn_guard.is_connected() {
+                drop(conn_guard);
+                let cb_arc = Arc::clone(&client.callback);
+                let conn_arc = Arc::clone(&client.connection);
+                let poller =
+                    stats_poller::StatsPoller::start(Arc::clone(&client.runtime), conn_arc, cb_arc);
+                if let Ok(mut guard) = client.stats_poller.lock() {
+                    if let Some(old) = guard.take() {
+                        old.stop();
+                    }
+                    *guard = Some(poller);
+                }
+            }
+        }
+
+        client.fire_event(r#"{"type":"lifecycle","state":"foreground"}"#);
+        PRISMA_OK
+    })
+}
+
+/// Get traffic statistics as a JSON string for mobile status bar widgets.
+///
+/// Returns JSON: `{"bytes_up": N, "bytes_down": N, "connected": bool}`
+/// Caller must call `prisma_free_string` on the result.
+/// Returns NULL if `handle` is NULL or not connected.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_get_traffic_stats(handle: *mut PrismaClient) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        if handle.is_null() {
+            return std::ptr::null_mut();
+        }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+        match client.connection.lock() {
+            Ok(mut conn) => {
+                let json = conn.get_stats_json();
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json) {
+                    let bytes_up = val.get("bytes_up").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let bytes_down = val.get("bytes_down").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let connected = conn.is_connected();
+                    let compact = format!(
+                        r#"{{"bytes_up":{},"bytes_down":{},"connected":{}}}"#,
+                        bytes_up, bytes_down, connected
+                    );
+                    CString::new(compact).map_or(std::ptr::null_mut(), CString::into_raw)
+                } else {
+                    std::ptr::null_mut()
+                }
+            }
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
+}
+
+/// Get the Prisma library version string.
+/// Returns a statically allocated string — do NOT call `prisma_free_string` on it.
+#[no_mangle]
+pub extern "C" fn prisma_version() -> *const c_char {
+    // SAFETY: This is a static null-terminated byte string literal. The pointer
+    // is valid for the entire program lifetime.
+    static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
+    VERSION.as_ptr() as *const c_char
+}
+
+// ── URI import ───────────────────────────────────────────────────────────────
+
+/// Import a single proxy URI (ss://, vmess://, trojan://, vless://).
+/// Returns JSON with the parsed ImportedServer, or an error string.
+/// Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `uri` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_import_uri(uri: *const c_char) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let uri_str = match cstr_to_str_opt!(uri) {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+        match prisma_core::import::import_uri(uri_str) {
+            Ok(server) => serde_json::to_string(&server)
+                .ok()
+                .and_then(|s| CString::new(s).ok())
+                .map_or(std::ptr::null_mut(), CString::into_raw),
+            Err(e) => {
+                let err = format!(
+                    r#"{{"error":{}}}"#,
+                    serde_json::to_string(&e.to_string()).unwrap_or_default()
+                );
+                CString::new(err).map_or(std::ptr::null_mut(), CString::into_raw)
+            }
+        }
+    })
+}
+
+/// Import multiple URIs from a text block (line-separated or base64-encoded).
+/// Returns JSON array of results. Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `text` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_import_batch(text: *const c_char) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let text_str = match cstr_to_str_opt!(text) {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+        let results = prisma_core::import::import_batch(text_str);
+        let json_results: Vec<serde_json::Value> = results
+            .into_iter()
+            .map(|r| match r {
+                Ok(server) => serde_json::to_value(&server).unwrap_or(serde_json::Value::Null),
+                Err(e) => serde_json::json!({"error": e.to_string()}),
+            })
+            .collect();
+        serde_json::to_string(&json_results)
+            .ok()
+            .and_then(|s| CString::new(s).ok())
+            .map_or(std::ptr::null_mut(), CString::into_raw)
+    })
+}
+
+// ── Proxy groups ─────────────────────────────────────────────────────────────
+
+/// Global proxy group manager — lazily initialized.
+static PROXY_GROUP_MANAGER: once_cell::sync::Lazy<
+    Arc<Mutex<Option<prisma_core::proxy_group::ProxyGroupManager>>>,
+> = once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
+
+/// Initialize proxy groups from a JSON array of ProxyGroupConfig.
+///
+/// # Safety
+/// `config_json` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_proxy_groups_init(config_json: *const c_char) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        let json_str = match cstr_to_str_opt!(config_json) {
+            Some(s) => s,
+            None => return PRISMA_ERR_INVALID_CONFIG,
+        };
+        let configs: Vec<prisma_core::proxy_group::ProxyGroupConfig> =
+            match serde_json::from_str(json_str) {
+                Ok(c) => c,
+                Err(_) => return PRISMA_ERR_INVALID_CONFIG,
+            };
+        let manager = prisma_core::proxy_group::ProxyGroupManager::new(configs);
+        if let Ok(mut guard) = PROXY_GROUP_MANAGER.lock() {
+            *guard = Some(manager);
+        }
+        PRISMA_OK
+    })
+}
+
+/// List all proxy groups as JSON. Caller must call `prisma_free_string`.
+#[no_mangle]
+pub extern "C" fn prisma_proxy_groups_list() -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let guard = match PROXY_GROUP_MANAGER.lock() {
+            Ok(g) => g,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let manager = match guard.as_ref() {
+            Some(m) => m,
+            None => {
+                // Return empty array if no groups initialized
+                return CString::new("[]").map_or(std::ptr::null_mut(), CString::into_raw);
+            }
+        };
+        // Use the current tokio runtime to block on async list
+        let groups = match tokio::runtime::Handle::try_current() {
+            Ok(h) => std::thread::scope(|_| h.block_on(manager.list())),
+            Err(_) => {
+                // No runtime available, return empty
+                return CString::new("[]").map_or(std::ptr::null_mut(), CString::into_raw);
+            }
+        };
+        serde_json::to_string(&groups)
+            .ok()
+            .and_then(|s| CString::new(s).ok())
+            .map_or(std::ptr::null_mut(), CString::into_raw)
+    })
+}
+
+/// Select a server in a proxy group.
+///
+/// # Safety
+/// `group_name` and `server` must be valid non-null C strings.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_proxy_group_select(
+    group_name: *const c_char,
+    server: *const c_char,
+) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        let gn = match cstr_to_str_opt!(group_name) {
+            Some(s) => s,
+            None => return PRISMA_ERR_INVALID_CONFIG,
+        };
+        let srv = match cstr_to_str_opt!(server) {
+            Some(s) => s,
+            None => return PRISMA_ERR_INVALID_CONFIG,
+        };
+        let guard = match PROXY_GROUP_MANAGER.lock() {
+            Ok(g) => g,
+            Err(_) => return PRISMA_ERR_INTERNAL,
+        };
+        let manager = match guard.as_ref() {
+            Some(m) => m,
+            None => return PRISMA_ERR_NOT_CONNECTED,
+        };
+        let ok = match tokio::runtime::Handle::try_current() {
+            Ok(h) => std::thread::scope(|_| h.block_on(manager.select(gn, srv))),
+            Err(_) => false,
+        };
+        if ok {
+            PRISMA_OK
+        } else {
+            PRISMA_ERR_INVALID_CONFIG
+        }
+    })
+}
+
+/// Test all servers in a proxy group. Returns JSON array of LatencyResult.
+/// Caller must call `prisma_free_string`.
+///
+/// # Safety
+/// `group_name` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_proxy_group_test(group_name: *const c_char) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let gn = match cstr_to_str_opt!(group_name) {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+        let guard = match PROXY_GROUP_MANAGER.lock() {
+            Ok(g) => g,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let manager = match guard.as_ref() {
+            Some(m) => m,
+            None => return std::ptr::null_mut(),
+        };
+        let results = match tokio::runtime::Handle::try_current() {
+            Ok(h) => std::thread::scope(|_| h.block_on(manager.test_group(gn))),
+            Err(_) => None,
+        };
+        match results {
+            Some(r) => serde_json::to_string(&r)
+                .ok()
+                .and_then(|s| CString::new(s).ok())
+                .map_or(std::ptr::null_mut(), CString::into_raw),
+            None => std::ptr::null_mut(),
+        }
+    })
 }

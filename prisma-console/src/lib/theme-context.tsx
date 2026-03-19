@@ -19,49 +19,53 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
+function resolveTheme(t: Theme): "light" | "dark" {
+  if (typeof window === "undefined") return "dark";
+  if (t === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return t;
+}
+
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  return (localStorage.getItem("prisma-theme") as Theme | null) ?? "system";
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
+    resolveTheme(getInitialTheme())
+  );
 
-  const applyTheme = useCallback((t: Theme) => {
-    let resolved: "light" | "dark";
-    if (t === "system") {
-      resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-    } else {
-      resolved = t;
-    }
-    setResolvedTheme(resolved);
-    document.documentElement.classList.toggle("dark", resolved === "dark");
-  }, []);
-
+  // Sync DOM class on mount and when theme changes
   useEffect(() => {
-    const saved = localStorage.getItem("prisma-theme") as Theme | null;
-    if (saved) {
-      setThemeState(saved);
-      applyTheme(saved);
-    } else {
-      applyTheme("system");
-    }
+    const resolved = resolveTheme(theme);
+    document.documentElement.classList.toggle("dark", resolved === "dark");
+  }, [theme]);
 
+  // Listen for system preference changes
+  useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
-      const current = localStorage.getItem("prisma-theme") as Theme | null;
-      if (!current || current === "system") applyTheme("system");
+      const currentTheme = (localStorage.getItem("prisma-theme") as Theme | null) ?? "system";
+      if (currentTheme === "system") {
+        const resolved = resolveTheme("system");
+        setResolvedTheme(resolved);
+        document.documentElement.classList.toggle("dark", resolved === "dark");
+      }
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [applyTheme]);
+  }, []);
 
-  const setTheme = useCallback(
-    (t: Theme) => {
-      setThemeState(t);
-      localStorage.setItem("prisma-theme", t);
-      applyTheme(t);
-    },
-    [applyTheme]
-  );
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+    const resolved = resolveTheme(t);
+    setResolvedTheme(resolved);
+    localStorage.setItem("prisma-theme", t);
+    document.documentElement.classList.toggle("dark", resolved === "dark");
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>

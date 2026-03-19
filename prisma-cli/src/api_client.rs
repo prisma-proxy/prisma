@@ -20,7 +20,7 @@ impl ApiClient {
             }
             (None, Some(t)) => {
                 let u = std::env::var("PRISMA_MGMT_URL")
-                    .unwrap_or_else(|_| "https://127.0.0.1:9090".to_string());
+                    .unwrap_or_else(|_| "http://127.0.0.1:9090".to_string());
                 (u, t.to_string())
             }
             (None, None) => {
@@ -34,7 +34,7 @@ impl ApiClient {
                     // Try auto-detect from server.toml
                     Self::auto_detect().unwrap_or_else(|| {
                         (
-                            "https://127.0.0.1:9090".to_string(),
+                            "http://127.0.0.1:9090".to_string(),
                             env_token.unwrap_or_default(),
                         )
                     })
@@ -113,8 +113,13 @@ impl ApiClient {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        // Default to https since most setups use TLS
-        Some((format!("https://{}", listen), token))
+        // Check tls_enabled to determine scheme (defaults to false / HTTP)
+        let tls_enabled = mgmt
+            .get("tls_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let scheme = if tls_enabled { "https" } else { "http" };
+        Some((format!("{}://{}", scheme, listen), token))
     }
 
     pub fn is_json(&self) -> bool {

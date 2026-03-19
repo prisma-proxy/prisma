@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import i18n from "../i18n";
 import { useSettings } from "../store/settings";
 import { useStore } from "../store";
 import { useConnection } from "./useConnection";
@@ -45,9 +46,9 @@ export function useWindowEvents() {
       const addr = `127.0.0.1:${port || 1080}`;
       try {
         await writeText(addr);
-        notify.success(`Copied: ${addr}`);
+        notify.success(`${i18n.t("profiles.copiedToClipboard")}: ${addr}`);
       } catch {
-        notify.error("Clipboard not available");
+        notify.error(i18n.t("notifications.error"));
       }
     });
     return () => { unlisten.then((f) => f()); };

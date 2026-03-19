@@ -87,10 +87,10 @@ pub async fn reload_config(config_path: &str, ctx: &ServerContext) -> Result<Str
         *cfg = new_config;
     }
 
-    if changes.is_empty() {
+    let (success, message) = if changes.is_empty() {
         let msg = "Configuration reloaded — no changes detected".to_string();
         info!("{}", msg);
-        Ok(msg)
+        (true, msg)
     } else {
         for change in &changes {
             info!(change = %change, "Config reload");
@@ -102,8 +102,19 @@ pub async fn reload_config(config_path: &str, ctx: &ServerContext) -> Result<Str
             changes.join("; ")
         );
         info!("{}", summary);
-        Ok(summary)
-    }
+        (true, summary)
+    };
+
+    // Broadcast reload event to WebSocket subscribers
+    ctx.state
+        .broadcast_reload_event(prisma_core::state::ReloadEvent {
+            timestamp: chrono::Utc::now(),
+            success,
+            message: message.clone(),
+            changes,
+        });
+
+    Ok(message)
 }
 
 /// Update the auth store, bandwidth limits, and quotas based on the new config.

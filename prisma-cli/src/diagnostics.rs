@@ -80,6 +80,10 @@ fn build_proxy_context(
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
+        use_shadow_tls: config.transport == "shadow-tls",
+        shadow_tls_config: config.shadow_tls.clone(),
+        use_wireguard: config.transport == "wireguard",
+        wireguard_config: config.wireguard.clone(),
         metrics: prisma_client::metrics::ClientMetrics::new(),
         server_key_pin: config.server_key_pin.clone(),
     })

@@ -61,14 +61,14 @@ macOS 可能会提示"无法打开，因为它来自身份不明的开发者"。
 **Ubuntu/Debian（.deb）：**
 
 ```bash
-sudo dpkg -i prisma-gui_0.6.3_amd64.deb
+sudo dpkg -i prisma-gui_0.9.0_amd64.deb
 ```
 
 **AppImage：**
 
 ```bash
-chmod +x prisma-gui-0.6.3.AppImage
-./prisma-gui-0.6.3.AppImage
+chmod +x prisma-gui-0.9.0.AppImage
+./prisma-gui-0.9.0.AppImage
 ```
 
 ## 选项二：prisma CLI
@@ -95,7 +95,7 @@ prisma --version
 
 预期输出：
 ```
-prisma 0.6.3
+prisma 0.9.0
 ```
 
 ## 选项三：移动端

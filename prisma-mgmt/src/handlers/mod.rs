@@ -1,3 +1,4 @@
+pub mod acls;
 pub mod alerts;
 pub mod backup;
 pub mod bandwidth;

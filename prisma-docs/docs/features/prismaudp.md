@@ -4,7 +4,7 @@ sidebar_position: 7
 
 # PrismaUDP (Game Proxy)
 
-PrismaUDP is a sub-protocol within PrismaVeil v3 designed specifically for proxying UDP traffic — games, VoIP, video calls, and DNS.
+PrismaUDP is a sub-protocol within PrismaVeil designed specifically for proxying UDP traffic — games, VoIP, video calls, and DNS.
 
 ## Overview
 

@@ -5,13 +5,16 @@ mod completions;
 mod config_ops;
 mod connections;
 mod console;
+mod daemon;
 mod diagnose;
 mod diagnostics;
+mod import;
 mod init;
 mod logs;
 mod metrics;
 mod routes;
 mod status;
+mod subscription;
 mod validate;
 
 use std::path::{Path, PathBuf};
@@ -22,7 +25,12 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PROTOCOL_VERSION: u8 = prisma_core::types::PRISMA_PROTOCOL_VERSION;
 
 #[derive(Parser)]
-#[command(name = "prisma", about = "Prisma proxy infrastructure suite")]
+#[command(
+    name = "prisma",
+    about = "Prisma proxy infrastructure suite",
+    version = VERSION,
+    after_help = "Run 'prisma <command> --help' for more information on a specific command."
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -31,6 +39,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     json: bool,
 
+    /// Enable verbose (debug) output
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     /// Management API URL (overrides env PRISMA_MGMT_URL and auto-detect)
     #[arg(long, global = true, env = "PRISMA_MGMT_URL")]
     mgmt_url: Option<String>,
@@ -38,22 +50,101 @@ pub struct Cli {
     /// Management API auth token (overrides env PRISMA_MGMT_TOKEN and auto-detect)
     #[arg(long, global = true, env = "PRISMA_MGMT_TOKEN")]
     mgmt_token: Option<String>,
+
+    // --- Hidden daemon-internal flags ---
+    /// Internal: indicates this process is a daemon child (do not use directly)
+    #[arg(long, hide = true)]
+    _daemon_child: bool,
+
+    /// Internal: PID file path passed from parent daemon spawner
+    #[arg(long, hide = true)]
+    _pid_file: Option<String>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the proxy server
+    /// Start the proxy server (supports -d for background daemon mode)
     Server {
+        #[command(subcommand)]
+        action: Option<ServerAction>,
+
         /// Path to server config file
         #[arg(short, long, default_value = "server.toml")]
         config: String,
+
+        /// Run as a background daemon
+        #[arg(short = 'd', long)]
+        daemon: bool,
+
+        /// PID file path (default: /tmp/prisma-server.pid)
+        #[arg(long)]
+        pid_file: Option<String>,
+
+        /// Log file path when daemonized (default: /var/log/prisma/prisma-server.log)
+        #[arg(long)]
+        log_file: Option<String>,
     },
-    /// Start the proxy client
+    /// Start the proxy client (supports -d for background daemon mode)
     Client {
+        #[command(subcommand)]
+        action: Option<ClientAction>,
+
         /// Path to client config file
         #[arg(short, long, default_value = "client.toml")]
         config: String,
+
+        /// Run as a background daemon
+        #[arg(short = 'd', long)]
+        daemon: bool,
+
+        /// PID file path (default: /tmp/prisma-client.pid)
+        #[arg(long)]
+        pid_file: Option<String>,
+
+        /// Log file path when daemonized (default: /var/log/prisma/prisma-client.log)
+        #[arg(long)]
+        log_file: Option<String>,
     },
+    /// Launch the web console (supports -d for background daemon mode)
+    Console {
+        #[command(subcommand)]
+        action: Option<ConsoleAction>,
+
+        /// Management API URL to proxy requests to
+        #[arg(long, default_value = "http://127.0.0.1:9090")]
+        mgmt_url: String,
+        /// Auth token for management API
+        #[arg(long)]
+        token: Option<String>,
+        /// Port to serve the console on
+        #[arg(long, default_value = "9091")]
+        port: u16,
+        /// Address to bind the console server to
+        #[arg(long, default_value = "0.0.0.0")]
+        bind: String,
+        /// Don't auto-open browser
+        #[arg(long)]
+        no_open: bool,
+        /// Force re-download of console assets
+        #[arg(long)]
+        update: bool,
+        /// Serve console from a local directory instead of downloading
+        #[arg(long)]
+        dir: Option<String>,
+
+        /// Run as a background daemon
+        #[arg(short = 'd', long)]
+        daemon: bool,
+
+        /// PID file path (default: /tmp/prisma-console.pid)
+        #[arg(long)]
+        pid_file: Option<String>,
+
+        /// Log file path when daemonized (default: /var/log/prisma/prisma-console.log)
+        #[arg(long)]
+        log_file: Option<String>,
+    },
+
     /// Generate a new client key (UUID + auth secret)
     GenKey,
     /// Generate a self-signed TLS certificate for development
@@ -115,35 +206,24 @@ enum Commands {
     },
     /// Show version, protocol version, supported ciphers and transports
     Version,
-    /// Launch the web console (auto-downloads UI, proxies management API)
-    Console {
-        /// Management API URL to proxy requests to
-        #[arg(long, default_value = "https://127.0.0.1:9090")]
-        mgmt_url: String,
-        /// Auth token for management API
-        #[arg(long)]
-        token: Option<String>,
-        /// Port to serve the console on
-        #[arg(long, default_value = "9091")]
-        port: u16,
-        /// Address to bind the console server to
-        #[arg(long, default_value = "0.0.0.0")]
-        bind: String,
-        /// Don't auto-open browser
-        #[arg(long)]
-        no_open: bool,
-        /// Force re-download of console assets
-        #[arg(long)]
-        update: bool,
-        /// Serve console from a local directory instead of downloading
-        #[arg(long)]
-        dir: Option<String>,
-    },
     /// Generate shell completion scripts
     Completions {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
+    },
+
+    /// Import server configs from URIs (prisma://, vmess://, vless://, ss://, trojan://)
+    Import {
+        /// Single URI to import
+        #[arg(long)]
+        uri: Option<String>,
+        /// Path to a file containing URIs (one per line or base64-encoded)
+        #[arg(long)]
+        file: Option<String>,
+        /// Subscription URL to fetch and import
+        #[arg(long)]
+        url: Option<String>,
     },
 
     // --- Management API commands ---
@@ -215,6 +295,94 @@ enum Commands {
         /// Path to client config file
         #[arg(short, long, default_value = "client.toml")]
         config: String,
+    },
+    /// Manage server subscriptions
+    #[command(subcommand)]
+    Subscription(SubscriptionCmd),
+    /// Test latency to servers
+    LatencyTest {
+        /// Subscription URL to fetch servers from
+        #[arg(long)]
+        url: Option<String>,
+        /// Comma-separated server addresses (host:port)
+        #[arg(long)]
+        servers: Option<String>,
+    },
+}
+
+// --- Subcommands for daemon-aware services ---
+
+#[derive(Subcommand)]
+enum ServerAction {
+    /// Stop the running server daemon
+    Stop {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+    /// Check if the server daemon is running
+    Status {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ClientAction {
+    /// Stop the running client daemon
+    Stop {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+    /// Check if the client daemon is running
+    Status {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConsoleAction {
+    /// Stop the running console daemon
+    Stop {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+    /// Check if the console daemon is running
+    Status {
+        /// PID file path
+        #[arg(long)]
+        pid_file: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SubscriptionCmd {
+    /// Add a new subscription
+    Add {
+        #[arg(short, long)]
+        url: String,
+        #[arg(short, long)]
+        name: String,
+    },
+    /// Update (re-fetch) a subscription
+    Update {
+        #[arg(short, long)]
+        url: String,
+    },
+    /// List servers from a subscription URL
+    List {
+        #[arg(short, long)]
+        url: String,
+    },
+    /// Test latency to all servers from a subscription
+    Test {
+        #[arg(short, long)]
+        url: String,
     },
 }
 
@@ -400,20 +568,154 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     let global_json = cli.json;
+    let global_verbose = cli.verbose;
     let global_mgmt_url = cli.mgmt_url;
     let global_mgmt_token = cli.mgmt_token;
+    let is_daemon_child = cli._daemon_child;
+    let daemon_pid_file = cli._pid_file;
+
+    // If verbose mode, set RUST_LOG if not already set
+    if global_verbose && std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+
+    // If we are a daemon child, write the PID file before doing anything else
+    if is_daemon_child {
+        if let Some(ref pf) = daemon_pid_file {
+            daemon::write_pid_file(Path::new(pf))?;
+        }
+    }
 
     match cli.command {
-        Commands::Server { config } => {
-            let path = resolve_config(&config, "server.toml");
-            prisma_server::run(path.to_str().unwrap()).await?;
+        Commands::Server {
+            action,
+            config,
+            daemon: daemon_flag,
+            pid_file,
+            log_file,
+        } => {
+            match action {
+                Some(ServerAction::Stop { pid_file: pf }) => {
+                    daemon::stop_service("server", pf.as_deref().or(pid_file.as_deref()))?;
+                }
+                Some(ServerAction::Status { pid_file: pf }) => {
+                    daemon::check_status(
+                        "server",
+                        pf.as_deref().or(pid_file.as_deref()),
+                        global_json,
+                    )?;
+                }
+                None => {
+                    if daemon_flag && !is_daemon_child {
+                        // Spawn as background daemon
+                        let args = collect_args_for_daemon();
+                        daemon::daemonize(
+                            "server",
+                            &args,
+                            pid_file.as_deref(),
+                            log_file.as_deref(),
+                        )?;
+                    } else {
+                        // Run in foreground (or we ARE the daemon child)
+                        let path = resolve_config(&config, "server.toml");
+                        if global_verbose {
+                            eprintln!("[verbose] Starting server with config: {}", path.display());
+                        }
+                        prisma_server::run(path.to_str().unwrap()).await?;
+                    }
+                }
+            }
         }
-        Commands::Client { config } => {
-            let path = resolve_config(&config, "client.toml");
-            prisma_client::run(path.to_str().unwrap()).await?;
+        Commands::Client {
+            action,
+            config,
+            daemon: daemon_flag,
+            pid_file,
+            log_file,
+        } => match action {
+            Some(ClientAction::Stop { pid_file: pf }) => {
+                daemon::stop_service("client", pf.as_deref().or(pid_file.as_deref()))?;
+            }
+            Some(ClientAction::Status { pid_file: pf }) => {
+                daemon::check_status("client", pf.as_deref().or(pid_file.as_deref()), global_json)?;
+            }
+            None => {
+                if daemon_flag && !is_daemon_child {
+                    let args = collect_args_for_daemon();
+                    daemon::daemonize("client", &args, pid_file.as_deref(), log_file.as_deref())?;
+                } else {
+                    let path = resolve_config(&config, "client.toml");
+                    if global_verbose {
+                        eprintln!("[verbose] Starting client with config: {}", path.display());
+                    }
+                    prisma_client::run(path.to_str().unwrap()).await?;
+                }
+            }
+        },
+        Commands::Console {
+            action,
+            mgmt_url,
+            token,
+            port,
+            bind,
+            no_open,
+            update,
+            dir,
+            daemon: daemon_flag,
+            pid_file,
+            log_file,
+        } => {
+            match action {
+                Some(ConsoleAction::Stop { pid_file: pf }) => {
+                    daemon::stop_service("console", pf.as_deref().or(pid_file.as_deref()))?;
+                }
+                Some(ConsoleAction::Status { pid_file: pf }) => {
+                    daemon::check_status(
+                        "console",
+                        pf.as_deref().or(pid_file.as_deref()),
+                        global_json,
+                    )?;
+                }
+                None => {
+                    if daemon_flag && !is_daemon_child {
+                        let args = collect_args_for_daemon();
+                        daemon::daemonize(
+                            "console",
+                            &args,
+                            pid_file.as_deref(),
+                            log_file.as_deref(),
+                        )?;
+                    } else {
+                        // Auto-detect token: --token flag > PRISMA_MGMT_TOKEN env > server.toml
+                        let token = token
+                            .or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok())
+                            .or_else(|| {
+                                api_client::ApiClient::resolve(None, None, false)
+                                    .ok()
+                                    .and_then(|c| {
+                                        let t = c.token();
+                                        if t.is_empty() {
+                                            None
+                                        } else {
+                                            Some(t.to_string())
+                                        }
+                                    })
+                            });
+                        if global_verbose {
+                            eprintln!(
+                                "[verbose] Starting console on {}:{}, proxying to {}",
+                                bind, port, mgmt_url
+                            );
+                        }
+                        console::run_console(mgmt_url, token, port, bind, no_open, update, dir)
+                            .await?;
+                    }
+                }
+            }
         }
+
         Commands::GenKey => {
-            gen_key();
+            gen_key(global_json);
         }
         Commands::GenCert { output, cn } => {
             gen_cert(&output, &cn)?;
@@ -446,36 +748,27 @@ async fn main() -> anyhow::Result<()> {
             run_speed_test(&server, duration, &direction, &config).await?;
         }
         Commands::Version => {
-            print_version();
-        }
-        Commands::Console {
-            mgmt_url,
-            token,
-            port,
-            bind,
-            no_open,
-            update,
-            dir,
-        } => {
-            // Auto-detect token: --token flag > PRISMA_MGMT_TOKEN env > server.toml
-            let token = token
-                .or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok())
-                .or_else(|| {
-                    api_client::ApiClient::resolve(None, None, false)
-                        .ok()
-                        .and_then(|c| {
-                            let t = c.token();
-                            if t.is_empty() {
-                                None
-                            } else {
-                                Some(t.to_string())
-                            }
-                        })
-                });
-            console::run_console(mgmt_url, token, port, bind, no_open, update, dir).await?;
+            print_version(global_json);
         }
         Commands::Completions { shell } => {
             completions::generate(shell);
+        }
+        Commands::Import { uri, file, url } => {
+            if let Some(uri) = uri {
+                import::run_single(&uri, global_json)?;
+            } else if let Some(file) = file {
+                import::run_file(&file, global_json)?;
+            } else if let Some(url) = url {
+                import::run_url(&url, global_json)?;
+            } else {
+                anyhow::bail!(
+                    "Provide one of --uri, --file, or --url.\n\n\
+                     Examples:\n  \
+                     prisma import --uri 'prisma://...'\n  \
+                     prisma import --file servers.txt\n  \
+                     prisma import --url 'https://example.com/subscribe'"
+                );
+            }
         }
 
         // --- Management API commands ---
@@ -621,9 +914,100 @@ async fn main() -> anyhow::Result<()> {
             let path = resolve_config(&config, "client.toml");
             diagnose::run(path.to_str().unwrap()).await?;
         }
+        Commands::Subscription(cmd) => match cmd {
+            SubscriptionCmd::Add { url, name } => subscription::add(&url, &name).await?,
+            SubscriptionCmd::Update { url } => subscription::update(&url).await?,
+            SubscriptionCmd::List { url } => subscription::list(&url).await?,
+            SubscriptionCmd::Test { url } => subscription::test(&url).await?,
+        },
+        Commands::LatencyTest { url, servers } => {
+            let infos: Vec<prisma_client::latency::ServerInfo> = if let Some(u) = url {
+                prisma_core::subscription::fetch_subscription(&u)
+                    .await?
+                    .into_iter()
+                    .map(|s| prisma_client::latency::ServerInfo {
+                        name: s.name,
+                        server_addr: s.server_addr,
+                    })
+                    .collect()
+            } else if let Some(addrs) = servers {
+                addrs
+                    .split(',')
+                    .map(|a| {
+                        let a = a.trim().to_string();
+                        prisma_client::latency::ServerInfo {
+                            name: a.clone(),
+                            server_addr: a,
+                        }
+                    })
+                    .collect()
+            } else {
+                anyhow::bail!(
+                    "Provide --url or --servers.\n\n\
+                     Examples:\n  \
+                     prisma latency-test --url 'https://example.com/subscribe'\n  \
+                     prisma latency-test --servers '1.2.3.4:8443,5.6.7.8:8443'"
+                );
+            };
+            println!("Testing latency to {} servers...", infos.len());
+            let cfg = prisma_client::latency::LatencyTestConfig::default();
+            let results: Vec<prisma_client::latency::LatencyResult> =
+                prisma_client::latency::test_all_servers(&infos, &cfg).await;
+
+            if global_json {
+                let json_results: Vec<serde_json::Value> = results
+                    .iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "name": r.name,
+                            "server_addr": r.server_addr,
+                            "latency_ms": r.latency_ms,
+                            "success": r.success,
+                            "error": r.error,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&json_results)?);
+            } else {
+                let rows: Vec<Vec<String>> = results
+                    .iter()
+                    .map(|r| {
+                        vec![
+                            r.name.clone(),
+                            r.server_addr.clone(),
+                            r.latency_ms
+                                .map(|ms| format!("{}ms", ms))
+                                .unwrap_or_else(|| "timeout".into()),
+                            if r.success {
+                                "OK".into()
+                            } else {
+                                r.error.clone().unwrap_or_else(|| "FAIL".into())
+                            },
+                        ]
+                    })
+                    .collect();
+                api_client::print_table(&["Name", "Address", "Latency", "Status"], &rows);
+                if let Some(best) = results.first().filter(|r| r.success) {
+                    println!(
+                        "\nBest: {} ({}) - {}ms",
+                        best.name,
+                        best.server_addr,
+                        best.latency_ms.unwrap_or(0)
+                    );
+                }
+            }
+        }
     }
 
     Ok(())
+}
+
+/// Collect the original CLI arguments, filtering out --_daemon_child and --_pid_file.
+/// Used when the daemon parent needs to re-exec itself.
+fn collect_args_for_daemon() -> Vec<String> {
+    std::env::args()
+        .skip(1) // skip the binary name
+        .collect()
 }
 
 /// Resolve config file path. If the given path exists, use it directly.
@@ -674,7 +1058,7 @@ fn resolve_config(given: &str, default_name: &str) -> PathBuf {
             }
         }
 
-        // Nothing found — print helpful message and fall through to the default
+        // Nothing found -- print helpful message and fall through to the default
         eprintln!(
             "Config file '{}' not found in current directory or standard locations:",
             default_name
@@ -690,11 +1074,22 @@ fn resolve_config(given: &str, default_name: &str) -> PathBuf {
     given_path.to_path_buf()
 }
 
-fn gen_key() {
+fn gen_key(json: bool) {
     let client_id = uuid::Uuid::new_v4();
     let mut secret = [0u8; 32];
     rand::Rng::fill(&mut rand::thread_rng(), &mut secret);
     let secret_hex: String = secret.iter().map(|b| format!("{:02x}", b)).collect();
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "client_id": client_id.to_string(),
+                "auth_secret": secret_hex,
+            })
+        );
+        return;
+    }
 
     println!("Client ID:   {}", client_id);
     println!("Auth Secret: {}", secret_hex);
@@ -927,11 +1322,45 @@ async fn run_speed_test(
     Ok(())
 }
 
-fn print_version() {
+fn print_version(json: bool) {
+    if json {
+        let version_info = serde_json::json!({
+            "version": VERSION,
+            "protocol_version": PROTOCOL_VERSION,
+            "components": {
+                "prisma-cli": VERSION,
+                "prisma-core": VERSION,
+                "prisma-server": VERSION,
+                "prisma-client": VERSION,
+                "prisma-mgmt": VERSION,
+                "prisma-ffi": VERSION,
+            },
+            "ciphers": ["chacha20-poly1305", "aes-256-gcm"],
+            "transports": ["quic", "prisma-tls", "ws", "grpc", "xhttp", "xporta"],
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH,
+        });
+        println!("{}", serde_json::to_string_pretty(&version_info).unwrap());
+        return;
+    }
+
     println!(
         "prisma {} (PrismaVeil Protocol v{})",
         VERSION, PROTOCOL_VERSION
     );
+    println!(
+        "  OS/Arch: {}/{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    println!();
+    println!("Components:");
+    println!("  prisma-cli     {}", VERSION);
+    println!("  prisma-core    {}", VERSION);
+    println!("  prisma-server  {}", VERSION);
+    println!("  prisma-client  {}", VERSION);
+    println!("  prisma-mgmt    {}", VERSION);
+    println!("  prisma-ffi     {}", VERSION);
     println!();
     println!("Protocol features:");
     println!("  - 2-step handshake (1 RTT)");

@@ -31,8 +31,15 @@ dirs = "5"
 once_cell = "1"
 rustls = { workspace = true }
 
+[features]
+default = []
+android = ["jni"]
+
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", optional = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

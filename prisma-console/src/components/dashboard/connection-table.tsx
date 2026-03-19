@@ -30,6 +30,15 @@ interface ConnectionTableProps {
   onDisconnect: (sessionId: string) => void;
 }
 
+function SortIndicator({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (sortKey !== col) return null;
+  return sortDir === "asc" ? (
+    <ArrowUp className="inline h-3 w-3 ml-1" />
+  ) : (
+    <ArrowDown className="inline h-3 w-3 ml-1" />
+  );
+}
+
 function formatConnectedAt(connectedAt: string): string {
   const date = new Date(connectedAt);
   return date.toLocaleTimeString([], {
@@ -138,15 +147,6 @@ export function ConnectionTable({
     setSelected(new Set());
   }
 
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return null;
-    return sortDir === "asc" ? (
-      <ArrowUp className="inline h-3 w-3 ml-1" />
-    ) : (
-      <ArrowDown className="inline h-3 w-3 ml-1" />
-    );
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -209,22 +209,22 @@ export function ConnectionTable({
                   />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("peer_addr")}>
-                  {t("connections.peer")}<SortIcon col="peer_addr" />
+                  {t("connections.peer")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="peer_addr" />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("transport")}>
-                  {t("connections.transport")}<SortIcon col="transport" />
+                  {t("connections.transport")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="transport" />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("mode")}>
-                  {t("connections.mode")}<SortIcon col="mode" />
+                  {t("connections.mode")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="mode" />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("connected_at")}>
-                  {t("connections.connected")}<SortIcon col="connected_at" />
+                  {t("connections.connected")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="connected_at" />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("bytes_up")}>
-                  {t("connections.bytesUp")}<SortIcon col="bytes_up" />
+                  {t("connections.bytesUp")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="bytes_up" />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => handleSort("bytes_down")}>
-                  {t("connections.bytesDown")}<SortIcon col="bytes_down" />
+                  {t("connections.bytesDown")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="bytes_down" />
                 </TableHead>
                 <TableHead className="text-right">{t("connections.action")}</TableHead>
               </TableRow>

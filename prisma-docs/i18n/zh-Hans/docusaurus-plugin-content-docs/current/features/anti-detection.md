@@ -216,9 +216,13 @@ dns = "fake"   # TUN 模式下使用虚假 DNS
 | QUIC + Salamander | 最高 | 否 | 是（原生） |
 | QUIC（标准） | 高 | 否 | 是（原生） |
 | PrismaTLS | 最高 | 否 | TCP 回退 |
+| ShadowTLS v3 | 最高 | 否 | TCP 回退 |
+| XPorta | 最高 | 是 | TCP 回退 |
 | XHTTP (stream-one) | 高 | 是 | TCP 回退 |
 | WebSocket | 中 | 是 | TCP 回退 |
 | gRPC | 中 | 是 | TCP 回退 |
+| SSH | 中 | 否 | TCP 回退 |
+| WireGuard | 中 | 否 | 是（原生） |
 | TCP + TLS | 中 | 否 | TCP 回退 |
 | TCP（原始） | 低 | 否 | TCP 回退 |
 

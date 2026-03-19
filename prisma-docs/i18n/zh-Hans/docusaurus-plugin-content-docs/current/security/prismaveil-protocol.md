@@ -22,7 +22,7 @@ sequenceDiagram
     participant C as 客户端
     participant S as 服务端
 
-    C->>S: PrismaClientInit (version=0x04, flags, X25519 公钥, client_id, 时间戳, cipher_suite, auth_token, 填充)
+    C->>S: PrismaClientInit (version=0x05, flags, X25519 公钥, client_id, 时间戳, cipher_suite, auth_token, 填充)
     Note over S: ECDH → 初步密钥
     S->>C: PrismaServerInit [已加密] (状态, session_id, X25519 公钥, 挑战值, 填充范围, 特性, 桶大小, 会话票据, 填充)
     Note over C: 派生最终会话密钥
@@ -74,7 +74,7 @@ sequenceDiagram
     participant C as 客户端
     participant S as 服务端
 
-    C->>S: ClientResume (version=0x04, flags=RESUMPTION, X25519 公钥, 会话票据, 加密的 0-RTT 数据)
+    C->>S: ClientResume (version=0x05, flags=RESUMPTION, X25519 公钥, 会话票据, 加密的 0-RTT 数据)
     S->>C: ServerResume
     Note over C,S: 加密数据帧（已恢复）
 ```
@@ -229,7 +229,7 @@ current_port = base_port + HMAC-SHA256(shared_secret, epoch)[0..2] % port_range
 
 | 常量 | 值 | 描述 |
 |------|-----|------|
-| `PRISMA_PROTOCOL_VERSION` | `0x04` | 当前协议版本 |
+| `PRISMA_PROTOCOL_VERSION` | `0x05` | 当前协议版本 |
 | `MAX_FRAME_SIZE` | 16384 | 最大帧大小（字节） |
 | `NONCE_SIZE` | 12 | Nonce 大小（字节） |
 | `MAX_PADDING_SIZE` | 256 | 最大填充大小（字节） |

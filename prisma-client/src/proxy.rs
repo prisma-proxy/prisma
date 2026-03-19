@@ -14,7 +14,7 @@ use crate::connector::{self, TransportStream};
 use crate::dns_resolver::DnsResolver;
 use crate::metrics::ClientMetrics;
 use crate::xporta_stream;
-use prisma_core::config::client::XPortaClientConfig;
+use prisma_core::config::client::{ShadowTlsClientConfig, XPortaClientConfig};
 use prisma_core::xporta::types::XPortaEncoding;
 
 /// Shared configuration for all proxy sessions (SOCKS5 and HTTP).
@@ -62,11 +62,19 @@ pub struct ProxyContext {
     pub traffic_shaping: TrafficShapingConfig,
     /// Whether to use PrismaTLS transport mode.
     pub use_prisma_tls: bool,
+    /// Whether to use ShadowTLS v3 transport mode.
+    pub use_shadow_tls: bool,
+    /// ShadowTLS v3 client configuration.
+    pub shadow_tls_config: Option<ShadowTlsClientConfig>,
     /// Shared traffic counters for GUI/FFI stats.
     pub metrics: ClientMetrics,
     /// Server public key pin (hex-encoded SHA-256) for server authentication
     /// independent of TLS. See `prisma_core::util::compute_server_key_pin`.
     pub server_key_pin: Option<String>,
+    /// Whether to use WireGuard-compatible UDP transport.
+    pub use_wireguard: bool,
+    /// WireGuard client configuration.
+    pub wireguard_config: Option<prisma_core::wireguard::WireGuardClientConfig>,
 }
 
 impl ProxyContext {
@@ -74,7 +82,11 @@ impl ProxyContext {
     pub async fn connect(&self) -> Result<TransportStream> {
         let prefer_quic_v2 = self.quic_version == "v2" || self.quic_version == "auto";
 
-        let transport = if self.use_xporta {
+        let transport = if self.use_shadow_tls {
+            "ShadowTLS"
+        } else if self.use_wireguard {
+            "WireGuard"
+        } else if self.use_xporta {
             "XPorta"
         } else if self.use_xhttp {
             "XHTTP"
@@ -104,7 +116,23 @@ impl ProxyContext {
             &self.alpn_protocols
         };
 
-        let result = if self.use_xporta {
+        let result = if self.use_shadow_tls {
+            let stls_cfg = self
+                .shadow_tls_config
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("ShadowTLS transport requires shadow_tls config"))?;
+            connector::connect_shadow_tls(&stls_cfg.server_addr, &stls_cfg.password, &stls_cfg.sni)
+                .await
+        } else if self.use_wireguard {
+            let wg_cfg = self
+                .wireguard_config
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("WireGuard transport requires wireguard config"))?;
+            let stream =
+                crate::wg_stream::WgStream::connect(&wg_cfg.endpoint, wg_cfg.keepalive_secs)
+                    .await?;
+            Ok(TransportStream::WireGuard(stream))
+        } else if self.use_xporta {
             let xporta_cfg = self
                 .xporta_config
                 .as_ref()

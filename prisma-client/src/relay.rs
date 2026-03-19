@@ -4,12 +4,17 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, warn};
 
+use prisma_core::buffer_pool::BufferPool;
 use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
 use prisma_core::types::MAX_FRAME_SIZE;
 
 use crate::metrics::ClientMetrics;
 use crate::tunnel::TunnelConnection;
+
+/// Shared buffer pool for client relay sessions.
+static CLIENT_BUFFER_POOL: std::sync::LazyLock<BufferPool> =
+    std::sync::LazyLock::new(|| BufferPool::for_relay(32));
 
 /// Bidirectional relay between SOCKS5 client and encrypted tunnel.
 ///
@@ -65,7 +70,7 @@ pub async fn relay(
 
     // tunnel → SOCKS5: decrypt frames, send raw data
     let tunnel_to_socks = async move {
-        let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
+        let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
         loop {
             let mut len_buf = [0u8; 2];
             if tunnel_read.read_exact(&mut len_buf).await.is_err() {
@@ -141,7 +146,7 @@ where
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
 
     let mut encoder = FrameEncoder::new();
-    let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
+    let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
 
     loop {
         tokio::select! {

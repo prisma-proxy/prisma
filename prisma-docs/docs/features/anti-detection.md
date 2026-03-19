@@ -216,9 +216,13 @@ Different transports have different detectability profiles:
 | QUIC + Salamander | Highest | No | Yes (native) |
 | QUIC (standard) | High | No | Yes (native) |
 | PrismaTLS | Highest | No | TCP fallback |
+| ShadowTLS v3 | Highest | No | TCP fallback |
+| XPorta | Highest | Yes | TCP fallback |
 | XHTTP (stream-one) | High | Yes | TCP fallback |
 | WebSocket | Medium | Yes | TCP fallback |
 | gRPC | Medium | Yes | TCP fallback |
+| SSH | Medium | No | TCP fallback |
+| WireGuard | Medium | No | Yes (native) |
 | TCP + TLS | Medium | No | TCP fallback |
 | TCP (raw) | Low | No | TCP fallback |
 

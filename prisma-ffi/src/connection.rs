@@ -64,8 +64,16 @@ impl ConnectionManager {
         let config_toml = toml::to_string(&config)?;
         let client_id = config.identity.client_id.clone();
         // Sanitize: keep alphanumeric and hyphens only (client_id is hex so always safe)
-        let safe_id: String = client_id.chars().filter(|c| c.is_alphanumeric() || *c == '-').take(64).collect();
-        let file_stem = if safe_id.is_empty() { "active_connection".to_string() } else { safe_id };
+        let safe_id: String = client_id
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .take(64)
+            .collect();
+        let file_stem = if safe_id.is_empty() {
+            "active_connection".to_string()
+        } else {
+            safe_id
+        };
 
         // Create broadcast channel for log forwarding
         let (log_tx, mut log_rx) =

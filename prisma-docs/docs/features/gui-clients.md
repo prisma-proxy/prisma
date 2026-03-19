@@ -21,7 +21,7 @@ prisma-ffi  ←─────────────────────�
 
 ## prisma-gui (Desktop)
 
-The primary desktop client is a **Tauri 2** application with a **React + TypeScript** frontend (v0.6.3). It provides a full-featured GUI for managing Prisma connections across Windows, macOS, and Linux from a single codebase.
+The primary desktop client is a **Tauri 2** application with a **React + TypeScript** frontend. It provides a full-featured GUI for managing Prisma connections across Windows, macOS, and Linux from a single codebase.
 
 ### Architecture
 
@@ -198,7 +198,7 @@ The callback receives JSON events:
 {"type":"log","level":"INFO","target":"prisma_client","msg":"Connected to server"}
 
 // Update available
-{"type":"update_available","version":"0.7.0","changelog":"..."}
+{"type":"update_available","version":"0.9.0","changelog":"..."}
 ```
 
 ### Building prisma-ffi

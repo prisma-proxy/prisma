@@ -1,7 +1,16 @@
 {
   "bundle": {
     "android": {
-      "minSdkVersion": 24
+      "minSdkVersion": 26
     }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Prisma",
+        "fullscreen": false
+      }
+    ]
   }
 }

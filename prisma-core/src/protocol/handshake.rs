@@ -447,6 +447,7 @@ impl PrismaHandshakeServer {
 }
 
 /// Server state after handshake: waiting for client's challenge response in first data frame.
+#[derive(Debug)]
 pub struct PrismaServerCompleted {
     pub session_key: [u8; 32],
     pub challenge: [u8; 32],

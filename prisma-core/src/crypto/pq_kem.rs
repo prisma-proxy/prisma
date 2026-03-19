@@ -86,8 +86,7 @@ pub fn mlkem_encapsulate(ek_bytes: &[u8]) -> Option<(Vec<u8>, [u8; 32])> {
     if ek_bytes.len() != MLKEM_ENCAP_KEY_SIZE {
         return None;
     }
-    let ek_encoded =
-        Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(ek_bytes).ok()?;
+    let ek_encoded = Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(ek_bytes).ok()?;
     let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&ek_encoded);
     let (ct, shared) = ek.encapsulate(&mut OsRng).ok()?;
     let mut shared_arr = [0u8; 32];
@@ -160,8 +159,7 @@ pub fn server_respond(client_init: &HybridClientInit) -> Option<([u8; 32], Hybri
     if ek_bytes.len() != MLKEM_ENCAP_KEY_SIZE {
         return None;
     }
-    let ek_encoded =
-        Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(ek_bytes).ok()?;
+    let ek_encoded = Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(ek_bytes).ok()?;
     let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&ek_encoded);
     let (ct, mlkem_shared) = ek.encapsulate(&mut OsRng).ok()?;
 
@@ -187,7 +185,9 @@ pub fn client_finish(
 ) -> Option<[u8; 32]> {
     // X25519 exchange
     let server_x25519_pub = PublicKey::from(server_init.x25519_public);
-    let x25519_shared = client_state.x25519_keypair.diffie_hellman(&server_x25519_pub);
+    let x25519_shared = client_state
+        .x25519_keypair
+        .diffie_hellman(&server_x25519_pub);
 
     // ML-KEM-768 decapsulation
     use ml_kem::kem::Decapsulate;

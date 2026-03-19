@@ -6,6 +6,7 @@ pub mod forward;
 pub mod grpc_stream;
 pub mod handler;
 pub mod listener;
+pub mod mux_handler;
 pub mod outbound;
 pub mod relay;
 pub mod reload;
@@ -16,11 +17,14 @@ pub mod xhttp_stream;
 pub mod xporta_stream;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::load_server_config;
 use prisma_core::config::server::RoutingRule;
+use prisma_core::crypto::kdf::derive_ticket_key;
+use prisma_core::crypto::ticket_key_ring::TicketKeyRing;
 use prisma_core::logging::init_logging_with_broadcast;
 use prisma_core::state::{LogEntry, MetricsSnapshot, ServerState};
 use tracing::info;
@@ -114,11 +118,36 @@ pub async fn run(config_path: &str) -> Result<()> {
         }
     }
 
+    // Initialize session ticket key ring with automatic rotation.
+    // Derive the initial ticket key from the first client's auth secret.
+    let initial_ticket_key = {
+        let auth_store = state.auth_store.read().await;
+        if let Some(entry) = auth_store.clients.values().next() {
+            derive_ticket_key(&entry.auth_secret)
+        } else {
+            [0u8; 32] // Fallback, should not happen in production
+        }
+    };
+    let ticket_rotation_hours = {
+        let cfg = state.config.read().await;
+        cfg.ticket_rotation_hours
+    };
+    let ticket_key_ring = TicketKeyRing::new(
+        initial_ticket_key,
+        Some(Duration::from_secs(ticket_rotation_hours * 3600)),
+        Some(3), // Retain 3 expired keys for graceful rotation
+    );
+    info!(
+        rotation_interval_hours = ticket_rotation_hours,
+        "Session ticket key ring initialized"
+    );
+
     let ctx = ServerContext {
         state: state.clone(),
         bandwidth,
         quotas,
         config_path: config_path.to_string(),
+        ticket_key_ring,
     };
 
     // Start metrics ticker (1s snapshots)
@@ -188,6 +217,22 @@ pub async fn run(config_path: &str) -> Result<()> {
         });
     }
 
+    // Start ShadowTLS listener if enabled
+    if config.shadow_tls.enabled {
+        let stls_config = config.clone();
+        let stls_auth = auth_store.clone();
+        let stls_dns = dns_cache.clone();
+        let stls_ctx = ctx.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                listener::shadowtls::listen(&stls_config, stls_auth, stls_dns, stls_ctx).await
+            {
+                tracing::error!("ShadowTLS listener error: {}", e);
+            }
+        });
+        info!(addr = %config.shadow_tls.listen_addr, "ShadowTLS v3 listener spawned");
+    }
+
     // Start CDN listener if enabled
     if config.cdn.enabled {
         let cdn_config = config.clone();
@@ -222,6 +267,34 @@ pub async fn run(config_path: &str) -> Result<()> {
             tracing::error!("QUIC listener error: {}", e);
         }
     });
+
+    // Start SSH listener if enabled
+    if config.ssh.enabled {
+        let ssh_config = config.clone();
+        let ssh_auth = auth_store.clone();
+        let ssh_dns = dns_cache.clone();
+        let ssh_ctx = ctx.clone();
+        tokio::spawn(async move {
+            if let Err(e) = listener::ssh::listen(&ssh_config, ssh_auth, ssh_dns, ssh_ctx).await {
+                tracing::error!("SSH listener error: {}", e);
+            }
+        });
+        info!(addr = %config.ssh.listen_addr, "SSH transport listener spawned");
+    }
+
+    // Start WireGuard-compatible UDP listener if enabled
+    if config.wireguard.enabled {
+        let wg_config = config.clone();
+        let wg_auth = auth_store.clone();
+        let wg_dns = dns_cache.clone();
+        let wg_ctx = ctx.clone();
+        tokio::spawn(async move {
+            if let Err(e) = listener::wireguard::listen(&wg_config, wg_auth, wg_dns, wg_ctx).await {
+                tracing::error!("WireGuard listener error: {}", e);
+            }
+        });
+        info!(addr = %config.wireguard.listen_addr, "WireGuard-compatible UDP listener spawned");
+    }
 
     tokio::select! {
         _ = tcp_handle => {},
@@ -259,6 +332,12 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
     if config.cdn.enabled {
         eprintln!("  CDN    listening on  {}", config.cdn.listen_addr);
     }
+    if config.shadow_tls.enabled {
+        eprintln!("  STLS   listening on  {}", config.shadow_tls.listen_addr);
+    }
+    if config.ssh.enabled {
+        eprintln!("  SSH    listening on  {}", config.ssh.listen_addr);
+    }
     eprintln!("  ─────────────────────────────────────");
     eprintln!("  Config:    {}", config_path);
     eprintln!("  Clients:   {}", config.authorized_clients.len());
@@ -276,6 +355,15 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
     }
     if config.prisma_tls.enabled {
         transports.push("PrismaTLS");
+    }
+    if config.shadow_tls.enabled {
+        transports.push("ShadowTLS");
+    }
+    if config.ssh.enabled {
+        transports.push("SSH");
+    }
+    if config.wireguard.enabled {
+        transports.push("WireGuard");
     }
     eprintln!("  Transports: {}", transports.join(", "));
 

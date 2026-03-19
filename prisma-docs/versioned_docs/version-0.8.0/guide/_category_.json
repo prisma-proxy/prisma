@@ -1,0 +1,9 @@
+{
+  "label": "Beginner's Guide",
+  "position": 0,
+  "collapsed": false,
+  "link": {
+    "type": "doc",
+    "id": "guide/index"
+  }
+}

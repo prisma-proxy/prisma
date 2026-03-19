@@ -56,3 +56,60 @@ export interface PerAppFilter {
   mode: "include" | "exclude";
   apps: string[];
 }
+
+// Battery status (mobile)
+export interface BatteryStatus {
+  level: number;    // 0-100, or -1 if unknown
+  charging: boolean;
+  low_power_mode: boolean;
+}
+
+// Network type constants (match prisma-ffi)
+export const NET_DISCONNECTED = 0;
+export const NET_WIFI         = 1;
+export const NET_CELLULAR     = 2;
+export const NET_ETHERNET     = 3;
+
+// ── URI import types ──────────────────────────────────────────────────────────
+
+export type ImportProtocol = "shadowsocks" | "vmess" | "trojan" | "vless";
+
+export interface ImportedServer {
+  original_protocol: ImportProtocol;
+  server_name: string;
+  host: string;
+  port: number;
+  config: unknown;
+  error?: string;
+}
+
+// ── Proxy group types ─────────────────────────────────────────────────────────
+
+export type GroupType = "select" | "auto_url" | "fallback" | "load_balance";
+export type LoadBalanceStrategy = "round_robin" | "random";
+
+export interface ProxyGroupInfo {
+  name: string;
+  group_type: GroupType;
+  servers: string[];
+  selected: string | null;
+  test_url: string;
+  test_interval_secs: number;
+  lb_strategy: LoadBalanceStrategy;
+}
+
+export interface LatencyResult {
+  server: string;
+  latency_ms: number | null;
+  available: boolean;
+  error?: string;
+}
+
+// ── Subscription types ────────────────────────────────────────────────────────
+
+export interface SubscriptionInfo {
+  url: string;
+  profileCount: number;
+  lastUpdated: string | null;
+  profiles: Profile[];
+}

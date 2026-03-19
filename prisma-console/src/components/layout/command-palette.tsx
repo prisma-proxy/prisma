@@ -23,6 +23,7 @@ interface SearchResult {
 
 const PAGES: { label: string; href: string; i18nKey: string }[] = [
   { label: "Overview", href: "/dashboard", i18nKey: "sidebar.overview" },
+  { label: "Connections", href: "/dashboard/connections", i18nKey: "sidebar.connections" },
   { label: "Server", href: "/dashboard/servers", i18nKey: "sidebar.server" },
   { label: "Clients", href: "/dashboard/clients", i18nKey: "sidebar.clients" },
   { label: "Routing Rules", href: "/dashboard/routing", i18nKey: "sidebar.routing" },
@@ -65,10 +66,10 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Reset query on close
-  useEffect(() => {
-    if (!open) setQuery("");
-  }, [open]);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery("");
+  }, []);
 
   const results = useMemo<SearchResult[]>(() => {
     const q = query.toLowerCase().trim();
@@ -76,7 +77,6 @@ export function CommandPalette() {
 
     const matches: SearchResult[] = [];
 
-    // Search pages
     for (const page of PAGES) {
       const localizedLabel = t(page.i18nKey);
       if (
@@ -94,7 +94,6 @@ export function CommandPalette() {
       }
     }
 
-    // Search clients from query cache
     const clients = queryClient.getQueryData<ClientInfo[]>(["clients"]);
     if (clients) {
       for (const client of clients) {
@@ -114,7 +113,6 @@ export function CommandPalette() {
       }
     }
 
-    // Search config keys
     const config = queryClient.getQueryData<ConfigResponse>(["config"]);
     if (config) {
       for (const { key, label, accessor } of CONFIG_KEYS) {
@@ -154,7 +152,7 @@ export function CommandPalette() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg p-0 gap-0" showCloseButton={false}>
         <DialogTitle className="sr-only">Search</DialogTitle>
         <div className="flex items-center border-b px-3">

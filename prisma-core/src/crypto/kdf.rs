@@ -1,3 +1,5 @@
+use zeroize::Zeroizing;
+
 /// Derive a 32-byte key from context material using BLAKE3's key derivation mode.
 ///
 /// The `domain` string provides cryptographic domain separation so that
@@ -12,18 +14,21 @@ fn blake3_derive(domain: &str, context: &[u8]) -> [u8; 32] {
 }
 
 /// Build the standard KDF context: shared secret, both public keys, and timestamp.
+///
+/// Returns a `Zeroizing<Vec<u8>>` so the context (which contains the shared secret)
+/// is zeroized when dropped.
 fn build_kdf_context(
     shared_secret: &[u8; 32],
     client_pub: &[u8; 32],
     server_pub: &[u8; 32],
     timestamp: u64,
-) -> Vec<u8> {
+) -> Zeroizing<Vec<u8>> {
     let mut context = Vec::with_capacity(32 + 32 + 32 + 8);
     context.extend_from_slice(shared_secret);
     context.extend_from_slice(client_pub);
     context.extend_from_slice(server_pub);
     context.extend_from_slice(&timestamp.to_be_bytes());
-    context
+    Zeroizing::new(context)
 }
 
 /// Derive a session key from the shared secret and contextual binding data.

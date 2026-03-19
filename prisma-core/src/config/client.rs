@@ -53,6 +53,15 @@ pub struct ClientConfig {
     // XMUX connection pool
     #[serde(default)]
     pub xmux: Option<XmuxConfig>,
+    /// Enable XMUX stream multiplexing over transport connections.
+    #[serde(default)]
+    pub mux_enabled: bool,
+    /// Maximum number of concurrent streams per mux connection.
+    #[serde(default = "default_mux_max_streams")]
+    pub mux_max_streams: u32,
+    /// Maximum number of mux transport connections in the pool.
+    #[serde(default = "default_mux_max_connections")]
+    pub mux_max_connections: u16,
     // Header obfuscation
     #[serde(default)]
     pub user_agent: Option<String>,
@@ -119,6 +128,50 @@ pub struct ClientConfig {
     /// Generate with: `prisma-cli server-key-pin --key <hex-encoded-server-public-key>`
     #[serde(default)]
     pub server_key_pin: Option<String>,
+    /// Server list subscriptions for automatic server discovery and updates.
+    #[serde(default)]
+    pub subscriptions: Vec<SubscriptionConfig>,
+    /// ShadowTLS v3 transport configuration.
+    #[serde(default)]
+    pub shadow_tls: Option<ShadowTlsClientConfig>,
+    /// WireGuard-compatible UDP transport.
+    #[serde(default)]
+    pub wireguard: Option<crate::wireguard::WireGuardClientConfig>,
+}
+
+/// A subscription source for fetching server lists from a URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionConfig {
+    /// HTTP(S) URL to fetch the server list from.
+    pub url: String,
+    /// Human-readable name for this subscription.
+    pub name: String,
+    /// Auto-update interval in seconds (0 = disabled).
+    #[serde(default = "default_subscription_interval")]
+    pub update_interval_secs: u64,
+    /// ISO 8601 timestamp of the last successful update.
+    #[serde(default)]
+    pub last_updated: Option<String>,
+}
+
+fn default_subscription_interval() -> u64 {
+    3600
+}
+
+/// ShadowTLS v3 client configuration.
+///
+/// ShadowTLS wraps the proxy connection in a real TLS handshake with a legitimate
+/// cover server. After handshake, proxy data is sent as authenticated TLS application
+/// data frames, indistinguishable from real TLS traffic to DPI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShadowTlsClientConfig {
+    /// Address of the ShadowTLS server (e.g., "proxy.example.com:8444").
+    pub server_addr: String,
+    /// Pre-shared password (must match server). Used to derive HMAC key.
+    pub password: String,
+    /// SNI for the cover server TLS handshake (e.g., "www.microsoft.com").
+    /// This determines what the TLS ClientHello looks like to DPI.
+    pub sni: String,
 }
 
 /// TUN device configuration.
@@ -300,6 +353,14 @@ fn default_cipher_suite() -> String {
 
 fn default_transport() -> String {
     "quic".into()
+}
+
+fn default_mux_max_streams() -> u32 {
+    128
+}
+
+fn default_mux_max_connections() -> u16 {
+    4
 }
 
 /// XPorta client configuration — next-generation CDN transport.

@@ -28,7 +28,7 @@ prisma server -c /etc/prisma/server.toml
 You should see:
 
 ```
-INFO  prisma_server > Prisma server v0.6.3 starting...
+INFO  prisma_server > Prisma server v0.9.0 starting...
 INFO  prisma_server > Listening on 0.0.0.0:8443 (TCP)
 INFO  prisma_server > Listening on 0.0.0.0:8443 (QUIC)
 INFO  prisma_server > Authorized clients: 1
@@ -59,7 +59,7 @@ prisma client -c ~/client.toml
 You should see:
 
 ```
-INFO  prisma_client > Prisma client v0.6.3 starting...
+INFO  prisma_client > Prisma client v0.9.0 starting...
 INFO  prisma_client > SOCKS5 proxy listening on 127.0.0.1:1080
 INFO  prisma_client > HTTP proxy listening on 127.0.0.1:8080
 INFO  prisma_client > Connecting to 203.0.113.45:8443 via QUIC...

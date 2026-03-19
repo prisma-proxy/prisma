@@ -10,9 +10,9 @@ import styles from './index.module.css';
 function getFeatures() {
   return [
     {
-      title: translate({id: 'homepage.features.multiTransport.title', message: 'Multi-Transport'}),
+      title: translate({id: 'homepage.features.multiTransport.title', message: '9 Transports'}),
       icon: '🔀',
-      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta — auto-fallback across transports when censors block one.'}),
+      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard — auto-fallback across transports when censors block one.'}),
     },
     {
       title: translate({id: 'homepage.features.prismaTls.title', message: 'PrismaTLS'}),
@@ -27,17 +27,27 @@ function getFeatures() {
     {
       title: translate({id: 'homepage.features.cdnCompatible.title', message: 'CDN Compatible'}),
       icon: '☁️',
-      description: translate({id: 'homepage.features.cdnCompatible.description', message: 'Hide your server behind Cloudflare. XPorta makes traffic indistinguishable from normal REST API calls.'}),
+      description: translate({id: 'homepage.features.cdnCompatible.description', message: 'Hide your server behind Cloudflare. XPorta makes traffic indistinguishable from normal REST API calls. XMUX connection pooling for stealth.'}),
+    },
+    {
+      title: translate({id: 'homepage.features.proxyGroups.title', message: 'Proxy Groups & Subscriptions'}),
+      icon: '🔗',
+      description: translate({id: 'homepage.features.proxyGroups.description', message: 'Select, AutoUrl, Fallback, and LoadBalance proxy groups. Multi-protocol subscription import (SS/VMess/Trojan/VLESS) with auto-update.'}),
     },
     {
       title: translate({id: 'homepage.features.tunMode.title', message: 'TUN Mode'}),
       icon: '🌐',
-      description: translate({id: 'homepage.features.tunMode.description', message: 'System-wide proxy via virtual network interface. All apps proxied automatically — no per-app configuration.'}),
+      description: translate({id: 'homepage.features.tunMode.description', message: 'System-wide proxy via virtual network interface. All apps proxied automatically — no per-app configuration needed.'}),
+    },
+    {
+      title: translate({id: 'homepage.features.crossPlatform.title', message: 'Cross-Platform'}),
+      icon: '📱',
+      description: translate({id: 'homepage.features.crossPlatform.description', message: 'Desktop GUI (Tauri 2), Android (Kotlin + JNI), iOS (Swift + xcframework), and CLI. All powered by the same Rust core via C FFI.'}),
     },
     {
       title: translate({id: 'homepage.features.builtInRust.title', message: 'Built in Rust'}),
       icon: '⚡',
-      description: translate({id: 'homepage.features.builtInRust.description', message: 'Zero-copy I/O, async runtime, memory safety. Handles thousands of concurrent connections with minimal resources.'}),
+      description: translate({id: 'homepage.features.builtInRust.description', message: 'Zero-copy I/O with io_uring support, async runtime, memory safety. Handles thousands of concurrent connections with minimal resources.'}),
     },
   ];
 }
@@ -47,9 +57,11 @@ function getHighlights() {
     { label: translate({id: 'homepage.highlights.encryption', message: 'Encryption'}), value: 'ChaCha20-Poly1305 / AES-256-GCM / Transport-Only' },
     { label: translate({id: 'homepage.highlights.keyExchange', message: 'Key Exchange'}), value: 'X25519 ECDH + BLAKE3 KDF' },
     { label: translate({id: 'homepage.highlights.handshake', message: 'Handshake'}), value: '1 RTT (0-RTT with tickets)' },
+    { label: translate({id: 'homepage.highlights.transports', message: 'Transports'}), value: '9 (QUIC, TCP, WS, gRPC, XHTTP, XPorta, ShadowTLS, SSH, WG)' },
     { label: translate({id: 'homepage.highlights.udpRelay', message: 'UDP Relay'}), value: 'PrismaUDP + FEC Reed-Solomon' },
     { label: translate({id: 'homepage.highlights.congestion', message: 'Congestion'}), value: 'BBR / Brutal / Adaptive' },
     { label: translate({id: 'homepage.highlights.obfuscation', message: 'Obfuscation'}), value: 'Salamander v2 (nonce-based)' },
+    { label: translate({id: 'homepage.highlights.platforms', message: 'Platforms'}), value: 'Windows, macOS, Linux, Android, iOS, FreeBSD' },
   ];
 }
 
@@ -109,7 +121,7 @@ function HighlightsSection() {
     <section className={styles.highlights}>
       <div className="container">
         <Heading as="h2" className={styles.sectionTitle}>
-          <Translate id="homepage.protocol">Protocol v4</Translate>
+          <Translate id="homepage.protocol">Protocol v5</Translate>
         </Heading>
         <div className={styles.highlightGrid}>
           {getHighlights().map((h, i) => (

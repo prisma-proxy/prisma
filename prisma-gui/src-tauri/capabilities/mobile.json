@@ -6,7 +6,15 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:path:default",
     "notification:default",
-    "os:allow-platform"
+    "os:allow-platform",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file"
   ]
 }

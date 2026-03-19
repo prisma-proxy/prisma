@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MetricsSnapshot } from "@/lib/types";
 import { createWebSocket } from "@/lib/ws";

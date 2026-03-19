@@ -5,11 +5,15 @@ import { useWindowEvents } from "./hooks/useWindowEvents";
 import { useAutoReconnect } from "./hooks/useAutoReconnect";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useClipboardImport } from "./hooks/useClipboardImport";
+import { useMobileLifecycle } from "./hooks/useMobileLifecycle";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
 import StatusBar from "./components/StatusBar";
 import Home from "./pages/Home";
 import Profiles from "./pages/Profiles";
+import Subscriptions from "./pages/Subscriptions";
+import ProxyGroups from "./pages/ProxyGroups";
+import Import from "./pages/Import";
 import Rules from "./pages/Rules";
 import Connections from "./pages/Connections";
 import Logs from "./pages/Logs";
@@ -23,16 +27,20 @@ export default function App() {
   useAutoReconnect();
   useKeyboardShortcuts();
   useClipboardImport();
+  useMobileLifecycle();
   const { isMobile } = usePlatform();
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {!isMobile && <Sidebar />}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-hidden">
+        <main className={`flex-1 overflow-hidden ${isMobile ? "pb-16" : ""}`}>
           <Routes>
             <Route path="/"          element={<Home />} />
             <Route path="/profiles"  element={<Profiles />} />
+            <Route path="/subscriptions" element={<Subscriptions />} />
+            <Route path="/proxy-groups" element={<ProxyGroups />} />
+            <Route path="/import"    element={<Import />} />
             <Route path="/rules"     element={<Rules />} />
             <Route path="/connections" element={<Connections />} />
             <Route path="/logs"      element={<Logs />} />
@@ -41,7 +49,7 @@ export default function App() {
             <Route path="/settings"  element={<Settings />} />
           </Routes>
         </main>
-        <StatusBar />
+        {!isMobile && <StatusBar />}
       </div>
       {isMobile && <BottomNav />}
     </div>

@@ -1,4 +1,5 @@
 mod commands;
+mod mobile;
 mod state;
 
 #[cfg(desktop)]
@@ -72,6 +73,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // ── Shared commands ──────────────────────────────────────
             commands::connect,
             commands::disconnect,
             commands::get_status,
@@ -104,6 +106,20 @@ pub fn run() {
             commands::get_profiles_dir,
             commands::open_folder,
             commands::download_file,
+            commands::import_uri,
+            commands::import_batch,
+            commands::proxy_groups_list,
+            commands::proxy_group_select,
+            commands::proxy_group_test,
+            // ── Mobile commands (compile on all targets) ──────────────
+            mobile::check_vpn_permission,
+            mobile::request_vpn_permission,
+            mobile::get_network_type,
+            mobile::on_network_change,
+            mobile::get_battery_status,
+            mobile::on_app_background,
+            mobile::on_app_foreground,
+            mobile::on_memory_warning,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

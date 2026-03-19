@@ -6,7 +6,10 @@ import { useTranslation } from "react-i18next";
 import {
   RefreshCw, Download, FolderOpen, Copy, Trash2, FileDown,
   FileUp, RotateCcw, Info, Shield, Search, AppWindow, Loader2,
+  Wifi, Signal, Battery, ShieldCheck,
 } from "lucide-react";
+import { usePlatform } from "@/hooks/usePlatform";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,6 +108,22 @@ export default function Settings() {
   const clearNotifications = useNotifications((s) => s.clearAll);
 
   const perApp = usePerApp();
+  const { isMobile } = usePlatform();
+  const { label: networkLabel } = useNetworkStatus();
+
+  const [vpnPermission, setVpnPermission] = useState<boolean | null>(null);
+  const [batteryLevel, setBatteryLevel] = useState<number>(-1);
+  const [batteryCharging, setBatteryCharging] = useState(false);
+
+  // Fetch mobile-specific info on mount
+  useEffect(() => {
+    if (!isMobile) return;
+    api.checkVpnPermission().then(setVpnPermission).catch(() => {});
+    api.getBatteryStatus().then((s) => {
+      setBatteryLevel(s.level);
+      setBatteryCharging(s.charging);
+    }).catch(() => {});
+  }, [isMobile]);
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [geoipDownloading, setGeoipDownloading] = useState(false);
@@ -188,7 +207,7 @@ export default function Settings() {
     let plat: string;
     try { plat = osPlatform(); } catch { plat = "unknown"; }
     const info = [
-      `Prisma v0.7.0`,
+      `Prisma v0.9.0`,
       `Platform: ${plat}`,
       `Language: ${language}`,
       `Theme: ${theme}`,
@@ -205,14 +224,14 @@ export default function Settings() {
       await writeText(info);
       notify.success(t("settings.copiedSystemInfo"));
     } catch {
-      notify.error("Clipboard not available");
+      notify.error(t("notifications.error"));
     }
   }
 
   async function handleExportSettings() {
     try {
       const data = {
-        version: "0.7.0",
+        version: "0.9.0",
         exportedAt: new Date().toISOString(),
         settings: {
           language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
@@ -303,7 +322,7 @@ export default function Settings() {
       for (const k of SETTINGS_KEYS) settingsData[k] = allSettings[k];
 
       const backup = {
-        version: "0.7.0",
+        version: "0.9.0",
         exportedAt: new Date().toISOString(),
         settings: settingsData,
         profiles,
@@ -330,7 +349,7 @@ export default function Settings() {
     }
 
     if (!data || typeof data !== "object") {
-      notify.error("Invalid backup file");
+      notify.error(t("notifications.error"));
       return;
     }
 
@@ -400,9 +419,9 @@ export default function Settings() {
     }
 
     if (errors.length > 0) {
-      notify.warning(`Backup restored with errors: ${errors.join(", ")}`);
+      notify.warning(t("settings.backupImported", { count: 7 - errors.length }));
     } else {
-      notify.success("Backup restored successfully");
+      notify.success(t("settings.backupImported", { count: 7 - errors.length }));
     }
   }
 
@@ -665,6 +684,69 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* Mobile Settings — only shown on iOS/Android */}
+      {isMobile && (
+        <>
+          <Separator />
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.mobile")}</p>
+
+            {/* Network status */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {networkLabel === "wifi" ? <Wifi size={14} /> : <Signal size={14} />}
+                <div>
+                  <Label>{t("settings.networkType")}</Label>
+                  <p className="text-xs text-muted-foreground">{t(`settings.net_${networkLabel}`)}</p>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground capitalize">{networkLabel}</span>
+            </div>
+
+            {/* Battery */}
+            {batteryLevel >= 0 && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Battery size={14} />
+                  <div>
+                    <Label>{t("settings.battery")}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {batteryCharging ? t("settings.batteryCharging") : t("settings.batteryOnBattery")}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground">{batteryLevel}%</span>
+              </div>
+            )}
+
+            {/* VPN permission */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={14} />
+                <div>
+                  <Label>{t("settings.vpnPermission")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.vpnPermissionDesc")}</p>
+                </div>
+              </div>
+              {vpnPermission === true ? (
+                <span className="text-xs text-green-500">{t("settings.vpnGranted")}</span>
+              ) : vpnPermission === false ? (
+                <Button variant="outline" size="sm" onClick={async () => {
+                  try {
+                    const ok = await api.requestVpnPermission();
+                    setVpnPermission(ok);
+                  } catch (e) { notify.error(String(e)); }
+                }}>
+                  {t("settings.vpnRequest")}
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">{t("common.loading")}</span>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <Separator />
 
@@ -939,7 +1021,7 @@ export default function Settings() {
         <p className="text-xs font-semibold uppercase tracking-wider">{t("settings.about")}</p>
         <div className="flex items-center gap-2">
           <Shield size={14} />
-          <span>Prisma v0.7.0</span>
+          <span>Prisma v0.9.0</span>
         </div>
         <p>{t("settings.platform")}: {platformName}</p>
         <p>License: GPLv3.0</p>
