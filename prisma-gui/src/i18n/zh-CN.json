@@ -121,7 +121,18 @@
     "export": "导出规则",
     "import": "导入规则",
     "exported": "规则已导出",
-    "imported": "已导入 {{count}} 条规则"
+    "imported": "已导入 {{count}} 条规则",
+    "presets": "预设",
+    "applyPreset": "应用",
+    "presetApplied": "已从「{{name}}」应用 {{count}} 条规则",
+    "presetBlockAds": "拦截广告",
+    "presetBlockAdsDesc": "拦截常见广告和跟踪域名",
+    "presetBypassLAN": "绕过局域网",
+    "presetBypassLANDesc": "局域网地址直连",
+    "presetChinaDirect": "国内直连",
+    "presetChinaDirectDesc": "中国域名和 IP 直连",
+    "presetGlobalProxy": "全局代理",
+    "presetGlobalProxyDesc": "所有流量通过代理"
   },
   "connections": {
     "title": "连接",
@@ -129,7 +140,7 @@
     "active": "活跃",
     "closed": "已关闭",
     "proxy": "代理",
-    "directLabel": "直连",
+    "direct": "直连",
     "blocked": "已拦截",
     "search": "搜索域名、规则、传输协议...",
     "allActions": "全部动作",

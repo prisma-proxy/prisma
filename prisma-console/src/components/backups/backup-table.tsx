@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
 import { formatBytes } from "@/lib/utils";
 import type { BackupInfo } from "@/lib/types";
 import { RotateCcw, FileDiff, Trash2, Download } from "lucide-react";
@@ -35,24 +36,6 @@ function formatTimestamp(timestamp: string): string {
   });
 }
 
-async function handleDownload(name: string) {
-  try {
-    const content = await api.getBackup(name);
-    const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
-    const blob = new Blob([text], { type: "application/toml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name.endsWith(".toml") ? name : `${name}.toml`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch {
-    // Download failed silently
-  }
-}
-
 export function BackupTable({
   backups,
   onRestore,
@@ -61,6 +44,25 @@ export function BackupTable({
   deletingName,
 }: BackupTableProps) {
   const { t } = useI18n();
+  const { toast } = useToast();
+
+  async function handleDownload(name: string) {
+    try {
+      const content = await api.getBackup(name);
+      const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+      const blob = new Blob([text], { type: "application/toml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name.endsWith(".toml") ? name : `${name}.toml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast(t("toast.downloadError"), "error");
+    }
+  }
 
   if (backups.length === 0) {
     return (

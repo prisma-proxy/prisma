@@ -2,12 +2,14 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { RuleList } from "@/components/routing/rule-list";
 import { RuleEditor } from "@/components/routing/rule-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RoutingRule } from "@/lib/types";
 
 export default function RoutingPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   const { data: routes, isLoading } = useQuery({
@@ -47,7 +49,7 @@ export default function RoutingPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Routing Rules</h2>
+        <h2 className="text-lg font-semibold">{t("routing.routingRules")}</h2>
         <RuleEditor
           onSubmit={async (rule) => { await createRoute.mutateAsync(rule); }}
           isLoading={createRoute.isPending}
@@ -56,12 +58,12 @@ export default function RoutingPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rules</CardTitle>
+          <CardTitle>{t("routing.rules")}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground">Loading routes...</p>
+              <p className="text-sm text-muted-foreground">{t("routing.loadingRoutes")}</p>
             </div>
           ) : (
             <RuleList

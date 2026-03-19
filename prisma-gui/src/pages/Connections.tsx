@@ -215,7 +215,7 @@ export default function Connections() {
           <CardContent className="py-2 px-3 text-center">
             <p className="text-lg font-bold text-green-400">{counts.direct}</p>
             <p className="text-[10px] text-muted-foreground">
-              {t("connections.directLabel")}
+              {t("connections.direct")}
             </p>
           </CardContent>
         </Card>
@@ -254,7 +254,7 @@ export default function Connections() {
             <SelectItem value="ALL">{t("connections.allActions")}</SelectItem>
             <SelectItem value="proxy">{t("connections.proxy")}</SelectItem>
             <SelectItem value="direct">
-              {t("connections.directLabel")}
+              {t("connections.direct")}
             </SelectItem>
             <SelectItem value="blocked">{t("connections.blocked")}</SelectItem>
           </SelectContent>

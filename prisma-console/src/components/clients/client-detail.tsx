@@ -70,7 +70,7 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
         </Link>
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">
-            {client.name || "Unnamed"}
+            {client.name || t("clients.unnamed")}
           </h2>
           {client.enabled ? (
             <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">

@@ -28,12 +28,11 @@ export default function Home() {
   const profiles = useStore((s) => s.profiles);
   const proxyModes = useStore((s) => s.proxyModes);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
-  const setProxyModes = useStore((s) => s.setProxyModes);
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
   const setProfiles = useStore((s) => s.setProfiles);
 
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
-  const { toggle } = useConnection();
+  const { toggle, switchProxyMode } = useConnection();
   const events = useConnectionHistory((s) => s.events);
   const todayUsage = useDataUsage((s) => s.getToday());
   const recentEvents = events.slice(-10).reverse();
@@ -96,8 +95,10 @@ export default function Home() {
     if (vals.includes("sys"))    flags |= MODE_SYSTEM_PROXY;
     if (vals.includes("tun"))    flags |= MODE_TUN;
     if (vals.includes("app"))    flags |= MODE_PER_APP;
-    setProxyModes(flags || MODE_SYSTEM_PROXY);
-  }, [setProxyModes]);
+    const newModes = flags || MODE_SYSTEM_PROXY;
+    const oldModes = useStore.getState().proxyModes;
+    switchProxyMode(oldModes, newModes);
+  }, [switchProxyMode]);
 
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
   const latencyColor = latency === null ? "text-muted-foreground" : latency < 100 ? "text-green-500" : latency < 300 ? "text-yellow-500" : "text-red-500";

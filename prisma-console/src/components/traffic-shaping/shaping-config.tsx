@@ -27,7 +27,7 @@ export function ShapingConfig({ config }: ShapingConfigProps) {
               <Badge variant="secondary">{config.traffic_shaping.padding_mode}</Badge>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Padding Range</span>
+              <span className="text-muted-foreground">{t("trafficShaping.paddingRange")}</span>
               <span className="font-mono text-xs">
                 {config.padding.min} - {config.padding.max} bytes
               </span>

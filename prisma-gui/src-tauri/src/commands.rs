@@ -167,7 +167,18 @@ pub fn refresh_tray_profiles(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
+    let _ = prisma_ffi::prisma_clear_system_proxy();
     app.exit(0);
+}
+
+#[tauri::command]
+pub fn set_tray_proxy_mode(app: tauri::AppHandle, mode: u32) {
+    if let Ok(mut guard) = crate::state::PROXY_MODE.lock() {
+        *guard = mode;
+    }
+    #[cfg(desktop)]
+    let _ = crate::tray::refresh_profiles(&app);
+    let _ = &app;
 }
 
 // ── tray state ────────────────────────────────────────────────────────────────

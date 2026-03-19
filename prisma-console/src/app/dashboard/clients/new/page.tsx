@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useCreateClient } from "@/hooks/use-clients";
+import { useI18n } from "@/lib/i18n";
 import { ClientForm } from "@/components/clients/client-form";
 import { KeyDisplay } from "@/components/clients/key-display";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CreateClientResponse } from "@/lib/types";
 
 export default function NewClientPage() {
+  const { t } = useI18n();
   const createClient = useCreateClient();
   const [result, setResult] = useState<CreateClientResponse | null>(null);
 
@@ -26,15 +28,15 @@ export default function NewClientPage() {
       <div className="flex items-center gap-4">
         <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
-            Back to clients
+            {t("clients.backToClients")}
           </Button>
         </Link>
-        <h2 className="text-lg font-semibold">Add New Client</h2>
+        <h2 className="text-lg font-semibold">{t("clients.addNewClient")}</h2>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>{result ? "Client Created" : "Create Client"}</CardTitle>
+          <CardTitle>{result ? t("clients.clientCreated") : t("clients.createClient")}</CardTitle>
         </CardHeader>
         <CardContent>
           {result ? (

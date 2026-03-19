@@ -104,13 +104,13 @@ export function SpeedTestRunner() {
               <p className="text-2xl font-bold text-green-500 dark:text-green-400">
                 {liveDl.toFixed(1)}
               </p>
-              <p className="text-xs text-muted-foreground">{"\u2193"} Mbps</p>
+              <p className="text-xs text-muted-foreground">{"\u2193"} {t("chart.mbps")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">
                 {liveUl.toFixed(1)}
               </p>
-              <p className="text-xs text-muted-foreground">{"\u2191"} Mbps</p>
+              <p className="text-xs text-muted-foreground">{"\u2191"} {t("chart.mbps")}</p>
             </div>
           </div>
         </div>

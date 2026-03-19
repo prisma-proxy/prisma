@@ -33,7 +33,7 @@ export function AlertsForm() {
       },
       {
         onSuccess: () => {
-          setFeedback({ type: "success", message: "Alert settings saved successfully." });
+          setFeedback({ type: "success", message: t("settings.alertsSaved") });
           setTimeout(() => setFeedback(null), 3000);
         },
         onError: (error: Error) => {
@@ -84,7 +84,7 @@ export function AlertsForm() {
                 min={1}
               />
               <p className="text-xs text-muted-foreground">
-                Alert when certificate expires within this many days.
+                {t("settings.certExpiryHelp")}
               </p>
             </div>
 
@@ -101,7 +101,7 @@ export function AlertsForm() {
                 max={100}
               />
               <p className="text-xs text-muted-foreground">
-                Alert when client quota usage exceeds this percentage.
+                {t("settings.quotaHelp")}
               </p>
             </div>
 
@@ -117,7 +117,7 @@ export function AlertsForm() {
                 min={1}
               />
               <p className="text-xs text-muted-foreground">
-                Alert when handshake failures reach this count.
+                {t("settings.handshakeSpikeHelp")}
               </p>
             </div>
 

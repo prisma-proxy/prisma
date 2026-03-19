@@ -18,3 +18,6 @@ pub static ACTIVE_PROFILE_ID: Mutex<Option<String>> = Mutex::new(None);
 
 /// SOCKS5 port for "Copy Proxy Address" tray menu item.
 pub static SOCKS5_PORT: Mutex<u16> = Mutex::new(0);
+
+/// Current proxy mode for tray checkmark display (default: MODE_SYSTEM_PROXY = 0x02).
+pub static PROXY_MODE: Mutex<u32> = Mutex::new(0x02);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2, Info, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Info, Download, Upload, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import { useRules } from "@/store/rules";
 import type { Rule } from "@/store/rules";
 import { notify } from "@/store/notifications";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
+import { RULE_PRESETS } from "@/lib/rulePresets";
 
 const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
@@ -23,9 +24,11 @@ export default function Rules() {
   const { t } = useTranslation();
   const rules = useRules((s) => s.rules);
   const addRule = useRules((s) => s.add);
+  const addMany = useRules((s) => s.addMany);
   const removeRule = useRules((s) => s.remove);
 
   const [open,   setOpen]   = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [type,   setType]   = useState<Rule["type"]>("DOMAIN");
   const [match,  setMatch]  = useState("");
   const [action, setAction] = useState<Rule["action"]>("PROXY");
@@ -74,6 +77,9 @@ export default function Rules() {
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-lg">{t("rules.title")}</h1>
         <div className="flex gap-1">
+          <Button size="sm" variant="ghost" onClick={() => setPresetsOpen(true)} title={t("rules.presets")}>
+            <Layers size={14} />
+          </Button>
           <Button size="sm" variant="ghost" onClick={handleExportRules} title={t("rules.export")}>
             <Download size={14} />
           </Button>
@@ -165,6 +171,31 @@ export default function Rules() {
             <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
             <Button onClick={handleAdd}>{t("rules.addRule")}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={presetsOpen} onOpenChange={setPresetsOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("rules.presets")}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            {RULE_PRESETS.map((preset) => (
+              <div key={preset.id} className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <div className="font-medium text-sm">{t(preset.nameKey)}</div>
+                  <div className="text-xs text-muted-foreground">{t(preset.descKey)}</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const count = addMany(preset.rules);
+                    notify.success(t("rules.presetApplied", { count, name: t(preset.nameKey) }));
+                  }}
+                >
+                  {t("rules.applyPreset")}
+                </Button>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -39,7 +39,7 @@ export type Resolution = "1s" | "10s" | "60s";
 export function useMetricsHistory(period: TimeRange = "1h", resolution: Resolution = "10s") {
   return useQuery({
     queryKey: ["metrics-history", period, resolution],
-    queryFn: () => api.getMetricsHistory(`${period}&resolution=${resolution}`),
+    queryFn: () => api.getMetricsHistory(period, resolution),
     refetchInterval: 30000,
   });
 }

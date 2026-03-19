@@ -121,7 +121,18 @@
     "export": "Export rules",
     "import": "Import rules",
     "exported": "Rules exported",
-    "imported": "Imported {{count}} rule(s)"
+    "imported": "Imported {{count}} rule(s)",
+    "presets": "Presets",
+    "applyPreset": "Apply",
+    "presetApplied": "Applied {{count}} rule(s) from \"{{name}}\"",
+    "presetBlockAds": "Block Ads",
+    "presetBlockAdsDesc": "Block common advertising and tracker domains",
+    "presetBypassLAN": "Bypass LAN",
+    "presetBypassLANDesc": "Direct access for local network addresses",
+    "presetChinaDirect": "China Direct",
+    "presetChinaDirectDesc": "Route Chinese domains and IPs directly",
+    "presetGlobalProxy": "Global Proxy",
+    "presetGlobalProxyDesc": "Route all traffic through the proxy"
   },
   "connections": {
     "title": "Connections",
@@ -129,7 +140,7 @@
     "active": "Active",
     "closed": "Closed",
     "proxy": "Proxy",
-    "directLabel": "Direct",
+    "direct": "Direct",
     "blocked": "Blocked",
     "search": "Search domain, rule, transport...",
     "allActions": "All Actions",

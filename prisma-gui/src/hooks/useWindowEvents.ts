@@ -12,7 +12,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 export function useWindowEvents() {
   const minimizeToTray = useSettings((s) => s.minimizeToTray);
   const socks5Port = useSettings((s) => s.socks5Port);
-  const { switchTo, toggle } = useConnection();
+  const { switchTo, toggle, switchProxyMode } = useConnection();
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -52,6 +52,16 @@ export function useWindowEvents() {
     });
     return () => { unlisten.then((f) => f()); };
   }, []);
+
+  // Handle tray proxy mode change
+  useEffect(() => {
+    const unlisten = listen<number>("tray://proxy-mode-change", (event) => {
+      const newMode = event.payload;
+      const currentModes = useStore.getState().proxyModes;
+      switchProxyMode(currentModes, newMode);
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, [switchProxyMode]);
 
   // Handle tray profile selection
   useEffect(() => {

@@ -73,6 +73,9 @@ export const api = {
   setTrayPort: (port: number) =>
     invoke<void>("set_tray_port", { port }),
 
+  setTrayProxyMode: (mode: number) =>
+    invoke<void>("set_tray_proxy_mode", { mode }),
+
   // Per-app proxy
   setPerAppFilter: (filterJson: string) =>
     invoke<void>("set_per_app_filter", { filterJson }),

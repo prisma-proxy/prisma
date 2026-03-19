@@ -11,6 +11,7 @@ export interface Rule {
 interface RulesStore {
   rules: Rule[];
   add: (rule: Rule) => void;
+  addMany: (newRules: Omit<Rule, "id">[]) => number;
   remove: (id: string) => void;
   clear: () => void;
 }
@@ -22,6 +23,19 @@ export const useRules = create<RulesStore>()(
 
       add: (rule) =>
         set((state) => ({ rules: [...state.rules, rule] })),
+
+      addMany: (newRules) => {
+        let added = 0;
+        set((state) => {
+          const existing = new Set(state.rules.map((r) => `${r.type}|${r.match}|${r.action}`));
+          const toAdd = newRules
+            .filter((r) => !existing.has(`${r.type}|${r.match}|${r.action}`))
+            .map((r) => ({ ...r, id: crypto.randomUUID() }));
+          added = toAdd.length;
+          return { rules: [...state.rules, ...toAdd] };
+        });
+        return added;
+      },
 
       remove: (id) =>
         set((state) => ({ rules: state.rules.filter((r) => r.id !== id) })),

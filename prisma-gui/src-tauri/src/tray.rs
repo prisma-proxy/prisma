@@ -3,11 +3,22 @@ use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::image::Image;
 
-const TRAY_SIZE: u32 = 32;
+const TRAY_SIZE: u32 = 22;
 
 fn icon_off()         -> Image<'static> { Image::new(include_bytes!("../icons/tray-off.rgba"),        TRAY_SIZE, TRAY_SIZE) }
 fn icon_on()          -> Image<'static> { Image::new(include_bytes!("../icons/tray-on.rgba"),         TRAY_SIZE, TRAY_SIZE) }
 fn icon_connecting()  -> Image<'static> { Image::new(include_bytes!("../icons/tray-connecting.rgba"), TRAY_SIZE, TRAY_SIZE) }
+
+fn build_proxy_mode_submenu<M: tauri::Manager<tauri::Wry>>(mgr: &M) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
+    let current = crate::state::PROXY_MODE.lock().map(|g| *g).unwrap_or(0x02);
+    let check = |flag: u32| if current == flag { "\u{2713} " } else { "  " };
+
+    SubmenuBuilder::new(mgr, "Proxy Mode")
+        .item(&MenuItem::with_id(mgr, "mode:system", format!("{}System Proxy", check(0x02)), true, None::<&str>)?)
+        .item(&MenuItem::with_id(mgr, "mode:direct", format!("{}Direct (SOCKS5 only)", check(0x01)), true, None::<&str>)?)
+        .item(&MenuItem::with_id(mgr, "mode:pac",    format!("{}PAC", check(0x10)), true, None::<&str>)?)
+        .build()
+}
 
 pub fn setup(app: &App) -> tauri::Result<()> {
     let connect = MenuItem::with_id(app, "tray-connect", "Connect", true, None::<&str>)?;
@@ -19,6 +30,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "tray-show", "Show Window", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit Prisma",  true, None::<&str>)?;
     let copy_addr = MenuItem::with_id(app, "tray-copy-addr", "Copy Proxy Address", true, None::<&str>)?;
+    let mode_sub = build_proxy_mode_submenu(app)?;
 
     let profiles_sub = SubmenuBuilder::new(app, "Profiles")
         .item(&MenuItem::with_id(app, "profile:none", "(no profiles)", false, None::<&str>)?)
@@ -27,6 +39,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     let menu = MenuBuilder::new(app)
         .item(&connect)
         .separator()
+        .item(&mode_sub)
         .item(&profiles_sub)
         .separator()
         .item(&copy_addr)
@@ -40,7 +53,10 @@ pub fn setup(app: &App) -> tauri::Result<()> {
         .icon(icon_off())
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "tray-quit" => app.exit(0),
+            "tray-quit" => {
+                let _ = prisma_ffi::prisma_clear_system_proxy();
+                app.exit(0);
+            }
             "tray-show" => {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
@@ -52,6 +68,15 @@ pub fn setup(app: &App) -> tauri::Result<()> {
             }
             "tray-copy-addr" => {
                 let _ = app.emit("tray://copy-proxy-address", ());
+            }
+            "mode:system" => {
+                let _ = app.emit("tray://proxy-mode-change", 0x02u32);
+            }
+            "mode:direct" => {
+                let _ = app.emit("tray://proxy-mode-change", 0x01u32);
+            }
+            "mode:pac" => {
+                let _ = app.emit("tray://proxy-mode-change", 0x10u32);
             }
             id if id.starts_with("profile:") => {
                 let profile_id = id["profile:".len()..].to_owned();
@@ -151,10 +176,12 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
         }
     }
     let profiles_sub = sub.build()?;
+    let mode_sub = build_proxy_mode_submenu(app)?;
 
     let menu = MenuBuilder::new(app)
         .item(&connect)
         .separator()
+        .item(&mode_sub)
         .item(&profiles_sub)
         .separator()
         .item(&copy_addr)

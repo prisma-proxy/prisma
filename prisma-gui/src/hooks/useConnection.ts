@@ -6,7 +6,7 @@ import { useRules } from "@/store/rules";
 import { useSettings } from "@/store/settings";
 import { mergeSettingsIntoConfig } from "@/lib/buildConfig";
 import type { Profile } from "@/lib/types";
-import { MODE_SOCKS5 } from "@/lib/types";
+import { MODE_SOCKS5, MODE_SYSTEM_PROXY } from "@/lib/types";
 
 export function useConnection() {
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
@@ -97,5 +97,23 @@ export function useConnection() {
     }
   }, [connectTo, disconnect, setProxyModes]);
 
-  return { connectTo, disconnect, switchTo, toggle, toggleProxyOnly };
+  const switchProxyMode = useCallback(async (oldModes: number, newModes: number) => {
+    const store = useStore.getState();
+    if (store.connected) {
+      const hadSystem = (oldModes & MODE_SYSTEM_PROXY) !== 0;
+      const hasSystem = (newModes & MODE_SYSTEM_PROXY) !== 0;
+      if (hadSystem && !hasSystem) {
+        api.clearSystemProxy().catch(() => {});
+      } else if (!hadSystem && hasSystem) {
+        const httpPort = useSettings.getState().httpPort || 0;
+        if (httpPort > 0) {
+          api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
+        }
+      }
+    }
+    setProxyModes(newModes);
+    api.setTrayProxyMode(newModes).catch(() => {});
+  }, [setProxyModes]);
+
+  return { connectTo, disconnect, switchTo, toggle, toggleProxyOnly, switchProxyMode };
 }

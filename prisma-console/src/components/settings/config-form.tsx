@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n";
 import type { ConfigResponse } from "@/lib/types";
 import { LOG_LEVELS } from "@/lib/types";
 
@@ -25,6 +26,7 @@ const loggingLevels = LOG_LEVELS.map((l) => l.toLowerCase());
 const loggingFormats = ["pretty", "json"];
 
 export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
+  const { t } = useI18n();
   const [loggingLevel, setLoggingLevel] = useState(config.logging_level);
   const [loggingFormat, setLoggingFormat] = useState(config.logging_format);
   const [maxConnections, setMaxConnections] = useState(config.performance.max_connections);
@@ -46,16 +48,16 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-muted-foreground">
-          Read-only
+          {t("settings.readOnly")}
         </h3>
         <div className="grid gap-1.5">
-          <Label>Listen Address</Label>
+          <Label>{t("settings.listenAddr")}</Label>
           <p className="rounded-lg border bg-muted/30 px-2.5 py-1.5 text-sm text-muted-foreground">
             {config.listen_addr}
           </p>
         </div>
         <div className="grid gap-1.5">
-          <Label>QUIC Listen Address</Label>
+          <Label>{t("settings.quicListenAddr")}</Label>
           <p className="rounded-lg border bg-muted/30 px-2.5 py-1.5 text-sm text-muted-foreground">
             {config.quic_listen_addr}
           </p>
@@ -64,11 +66,11 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
 
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-muted-foreground">
-          Editable Settings
+          {t("settings.editableSettings")}
         </h3>
 
         <div className="grid gap-1.5">
-          <Label>Logging Level</Label>
+          <Label>{t("settings.loggingLevel")}</Label>
           <Select value={loggingLevel} onValueChange={(v) => v && setLoggingLevel(v)}>
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -84,7 +86,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
         </div>
 
         <div className="grid gap-1.5">
-          <Label>Logging Format</Label>
+          <Label>{t("settings.loggingFormat")}</Label>
           <Select value={loggingFormat} onValueChange={(v) => v && setLoggingFormat(v)}>
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -100,7 +102,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
         </div>
 
         <div className="grid gap-1.5">
-          <Label htmlFor="max-connections">Max Connections</Label>
+          <Label htmlFor="max-connections">{t("settings.maxConnections")}</Label>
           <Input
             id="max-connections"
             type="number"
@@ -113,7 +115,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
         </div>
 
         <div className="flex items-center justify-between">
-          <Label htmlFor="port-forwarding">Port Forwarding</Label>
+          <Label htmlFor="port-forwarding">{t("settings.portForwarding")}</Label>
           <Switch
             id="port-forwarding"
             checked={portForwardingEnabled}
@@ -125,7 +127,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
       </div>
 
       <Button type="submit" disabled={isLoading}>
-        {isLoading ? "Saving..." : "Save Settings"}
+        {isLoading ? t("settings.saving") : t("settings.save")}
       </Button>
     </form>
   );

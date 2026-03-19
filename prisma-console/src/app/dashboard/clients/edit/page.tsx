@@ -4,21 +4,32 @@ import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
+import { useI18n } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+function ClientEditFallback() {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center justify-center py-12">
+      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+    </div>
+  );
+}
+
 export default function ClientEditPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-12"><p className="text-sm text-muted-foreground">Loading...</p></div>}>
+    <Suspense fallback={<ClientEditFallback />}>
       <ClientEditInner />
     </Suspense>
   );
 }
 
 function ClientEditInner() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const id = searchParams.get("id") ?? "";
   const router = useRouter();
@@ -38,10 +49,10 @@ function ClientEditInner() {
   if (!id) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">No client ID specified.</p>
+        <p className="text-sm text-muted-foreground">{t("clients.noClientId")}</p>
         <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
-            Back to clients
+            {t("clients.backToClients")}
           </Button>
         </Link>
       </div>
@@ -51,7 +62,7 @@ function ClientEditInner() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">Loading client...</p>
+        <p className="text-sm text-muted-foreground">{t("clients.loadingClient")}</p>
       </div>
     );
   }
@@ -59,10 +70,10 @@ function ClientEditInner() {
   if (!client) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">Client not found.</p>
+        <p className="text-sm text-muted-foreground">{t("clients.clientNotFound")}</p>
         <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
-            Back to clients
+            {t("clients.backToClients")}
           </Button>
         </Link>
       </div>
@@ -99,36 +110,36 @@ function ClientEditInner() {
       <div className="flex items-center gap-4">
         <Link href="/dashboard/clients/">
           <Button variant="outline" size="sm">
-            Back to clients
+            {t("clients.backToClients")}
           </Button>
         </Link>
-        <h2 className="text-lg font-semibold">Client Details</h2>
+        <h2 className="text-lg font-semibold">{t("clients.clientDetails")}</h2>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Edit Client</CardTitle>
+          <CardTitle>{t("clients.editClient")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-6">
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Client ID</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("clients.clientId")}</p>
               <p className="font-mono text-sm break-all">{client.id}</p>
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="client-name">Name</Label>
+              <Label htmlFor="client-name">{t("clients.name")}</Label>
               <Input
                 id="client-name"
                 type="text"
-                placeholder="Client name"
+                placeholder={t("clients.clientNamePlaceholder")}
                 value={currentName}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
 
             <div className="flex items-center justify-between">
-              <Label htmlFor="client-enabled">Enabled</Label>
+              <Label htmlFor="client-enabled">{t("common.enabled")}</Label>
               <Switch
                 id="client-enabled"
                 checked={currentEnabled}
@@ -138,7 +149,7 @@ function ClientEditInner() {
 
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={updateClient.isPending}>
-                {updateClient.isPending ? "Saving..." : "Save Changes"}
+                {updateClient.isPending ? t("common.saving") : t("clients.saveChanges")}
               </Button>
 
               <Button
@@ -148,10 +159,10 @@ function ClientEditInner() {
                 disabled={deleteClient.isPending}
               >
                 {deleteClient.isPending
-                  ? "Deleting..."
+                  ? t("common.deleting")
                   : confirmDelete
-                    ? "Confirm Delete"
-                    : "Delete Client"}
+                    ? t("clients.confirmDeleteBtn")
+                    : t("clients.deleteClient")}
               </Button>
 
               {confirmDelete && (
@@ -161,7 +172,7 @@ function ClientEditInner() {
                   size="sm"
                   onClick={() => setConfirmDelete(false)}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               )}
             </div>

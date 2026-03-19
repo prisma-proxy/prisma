@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,30 +14,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
-
-function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right">{value}</span>
-    </div>
-  );
-}
+import type { ConfigResponse } from "@/lib/types";
 
 const PADDING_MODES = ["none", "random", "fixed", "adaptive"];
 const CONGESTION_MODES = ["auto", "bbr", "cubic", "none"];
 
 interface TrafficFormProps {
-  onSave?: (data: Record<string, unknown>) => void;
-  isLoading?: boolean;
+  config: ConfigResponse;
+  onSave: (data: Record<string, unknown>) => void;
+  isLoading: boolean;
 }
 
-export function TrafficForm({ onSave, isLoading: saving }: TrafficFormProps) {
+export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormProps) {
   const { t } = useI18n();
-  const { data: config, isLoading } = useQuery({
-    queryKey: ["config"],
-    queryFn: api.getConfig,
-  });
 
   // Traffic shaping
   const [paddingMode, setPaddingMode] = useState<string | null>(null);
@@ -63,14 +49,6 @@ export function TrafficForm({ onSave, isLoading: saving }: TrafficFormProps) {
   const [portHoppingIntervalSecs, setPortHoppingIntervalSecs] = useState<number | null>(null);
   const [portHoppingGracePeriodSecs, setPortHoppingGracePeriodSecs] = useState<number | null>(null);
 
-  if (isLoading || !config) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
   const ePaddingMode = paddingMode ?? config.traffic_shaping.padding_mode;
   const eTimingJitterMs = timingJitterMs ?? config.traffic_shaping.timing_jitter_ms;
   const eChaffIntervalMs = chaffIntervalMs ?? config.traffic_shaping.chaff_interval_ms;
@@ -89,7 +67,6 @@ export function TrafficForm({ onSave, isLoading: saving }: TrafficFormProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!onSave) return;
     onSave({
       traffic_shaping_padding_mode: ePaddingMode,
       traffic_shaping_timing_jitter_ms: eTimingJitterMs,
@@ -116,324 +93,196 @@ export function TrafficForm({ onSave, isLoading: saving }: TrafficFormProps) {
           <CardTitle>{t("trafficShaping.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {onSave ? (
-            <>
-              <div className="grid gap-1.5">
-                <Label>{t("trafficShaping.paddingMode")}</Label>
-                <Select value={ePaddingMode} onValueChange={(v) => v && setPaddingMode(v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PADDING_MODES.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="padding-min">Padding Min</Label>
-                  <Input
-                    id="padding-min"
-                    type="number"
-                    value={ePaddingMin}
-                    onChange={(e) => setPaddingMin(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="padding-max">Padding Max</Label>
-                  <Input
-                    id="padding-max"
-                    type="number"
-                    value={ePaddingMax}
-                    onChange={(e) => setPaddingMax(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="jitter-ms">{t("trafficShaping.jitter")} (ms)</Label>
-                <Input
-                  id="jitter-ms"
-                  type="number"
-                  value={eTimingJitterMs}
-                  onChange={(e) => setTimingJitterMs(parseInt(e.target.value, 10) || 0)}
-                  min={0}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="chaff-ms">Chaff Interval (ms)</Label>
-                <Input
-                  id="chaff-ms"
-                  type="number"
-                  value={eChaffIntervalMs}
-                  onChange={(e) => setChaffIntervalMs(parseInt(e.target.value, 10) || 0)}
-                  min={0}
-                />
-                <p className="text-xs text-muted-foreground">Set to 0 to disable chaff.</p>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="coalesce-ms">Coalescing Window (ms)</Label>
-                <Input
-                  id="coalesce-ms"
-                  type="number"
-                  value={eCoalesceWindowMs}
-                  onChange={(e) => setCoalesceWindowMs(parseInt(e.target.value, 10) || 0)}
-                  min={0}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <KeyValue
-                label={t("trafficShaping.paddingMode")}
-                value={<span className="font-mono text-xs">{config.traffic_shaping.padding_mode || "\u2014"}</span>}
+          <div className="grid gap-1.5">
+            <Label>{t("trafficShaping.paddingMode")}</Label>
+            <Select value={ePaddingMode} onValueChange={(v) => v && setPaddingMode(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PADDING_MODES.map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="padding-min">{t("settings.paddingMin")}</Label>
+              <Input
+                id="padding-min"
+                type="number"
+                value={ePaddingMin}
+                onChange={(e) => setPaddingMin(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label="Padding Range"
-                value={<span className="font-mono text-xs">{config.padding.min}\u2013{config.padding.max} bytes</span>}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="padding-max">{t("settings.paddingMax")}</Label>
+              <Input
+                id="padding-max"
+                type="number"
+                value={ePaddingMax}
+                onChange={(e) => setPaddingMax(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label={t("trafficShaping.bucketSizes")}
-                value={<span className="font-mono text-xs">{config.traffic_shaping.bucket_sizes?.join(", ") || "\u2014"}</span>}
-              />
-              <KeyValue
-                label={t("trafficShaping.jitter")}
-                value={<span className="font-mono text-xs">{config.traffic_shaping.timing_jitter_ms} ms</span>}
-              />
-              <KeyValue
-                label={t("trafficShaping.chaff")}
-                value={
-                  <Badge
-                    className={
-                      config.traffic_shaping.chaff_interval_ms > 0
-                        ? "bg-green-500/15 text-green-700 dark:text-green-400"
-                        : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400"
-                    }
-                  >
-                    {config.traffic_shaping.chaff_interval_ms > 0 ? `${config.traffic_shaping.chaff_interval_ms}ms` : "Disabled"}
-                  </Badge>
-                }
-              />
-              <KeyValue
-                label="Coalescing Window"
-                value={<span className="font-mono text-xs">{config.traffic_shaping.coalesce_window_ms} ms</span>}
-              />
-            </>
-          )}
-          <KeyValue
-            label={t("trafficShaping.bucketSizes")}
-            value={<span className="font-mono text-xs">{config.traffic_shaping.bucket_sizes?.join(", ") || "\u2014"}</span>}
-          />
-          <KeyValue
-            label={t("settings.dnsUpstream")}
-            value={<span className="font-mono text-xs">{config.dns_upstream || "\u2014"}</span>}
-          />
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="jitter-ms">{t("trafficShaping.jitter")} (ms)</Label>
+            <Input
+              id="jitter-ms"
+              type="number"
+              value={eTimingJitterMs}
+              onChange={(e) => setTimingJitterMs(parseInt(e.target.value, 10) || 0)}
+              min={0}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="chaff-ms">{t("settings.chaffInterval")}</Label>
+            <Input
+              id="chaff-ms"
+              type="number"
+              value={eChaffIntervalMs}
+              onChange={(e) => setChaffIntervalMs(parseInt(e.target.value, 10) || 0)}
+              min={0}
+            />
+            <p className="text-xs text-muted-foreground">{t("settings.chaffDisableHint")}</p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="coalesce-ms">{t("settings.coalescingWindow")}</Label>
+            <Input
+              id="coalesce-ms"
+              type="number"
+              value={eCoalesceWindowMs}
+              onChange={(e) => setCoalesceWindowMs(parseInt(e.target.value, 10) || 0)}
+              min={0}
+            />
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Congestion Control</CardTitle>
+          <CardTitle>{t("settings.congestionControl")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {onSave ? (
-            <>
-              <div className="grid gap-1.5">
-                <Label>{t("settings.congestionMode")}</Label>
-                <Select value={eCongestionMode} onValueChange={(v) => v && setCongestionMode(v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONGESTION_MODES.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="congestion-bandwidth">{t("settings.congestionBandwidth")}</Label>
-                <Input
-                  id="congestion-bandwidth"
-                  value={eCongestionTargetBandwidth}
-                  onChange={(e) => setCongestionTargetBandwidth(e.target.value)}
-                  placeholder="e.g. 100mbps"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <KeyValue
-                label="Mode"
-                value={<span className="font-mono text-xs">{config.congestion.mode || "\u2014"}</span>}
-              />
-              <KeyValue
-                label="Target Bandwidth"
-                value={<span className="font-mono text-xs">{config.congestion.target_bandwidth || "\u2014"}</span>}
-              />
-            </>
-          )}
+          <div className="grid gap-1.5">
+            <Label>{t("settings.congestionMode")}</Label>
+            <Select value={eCongestionMode} onValueChange={(v) => v && setCongestionMode(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONGESTION_MODES.map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="congestion-bandwidth">{t("settings.congestionBandwidth")}</Label>
+            <Input
+              id="congestion-bandwidth"
+              value={eCongestionTargetBandwidth}
+              onChange={(e) => setCongestionTargetBandwidth(e.target.value)}
+              placeholder="e.g. 100mbps"
+            />
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Port Hopping</CardTitle>
+          <CardTitle>{t("settings.portHoppingTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {onSave ? (
-            <>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="port-hopping-enabled">Enabled</Label>
-                <Switch
-                  id="port-hopping-enabled"
-                  checked={ePortHoppingEnabled}
-                  onCheckedChange={(v: boolean) => setPortHoppingEnabled(v)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="port-hopping-base">Base Port</Label>
-                  <Input
-                    id="port-hopping-base"
-                    type="number"
-                    value={ePortHoppingBasePort}
-                    onChange={(e) => setPortHoppingBasePort(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="port-hopping-range">Range</Label>
-                  <Input
-                    id="port-hopping-range"
-                    type="number"
-                    value={ePortHoppingRange}
-                    onChange={(e) => setPortHoppingRange(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="port-hopping-interval">Interval (s)</Label>
-                  <Input
-                    id="port-hopping-interval"
-                    type="number"
-                    value={ePortHoppingIntervalSecs}
-                    onChange={(e) => setPortHoppingIntervalSecs(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="port-hopping-grace">Grace Period (s)</Label>
-                  <Input
-                    id="port-hopping-grace"
-                    type="number"
-                    value={ePortHoppingGracePeriodSecs}
-                    onChange={(e) => setPortHoppingGracePeriodSecs(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <KeyValue
-                label="Status"
-                value={
-                  <Badge
-                    className={
-                      config.port_hopping.enabled
-                        ? "bg-green-500/15 text-green-700 dark:text-green-400"
-                        : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400"
-                    }
-                  >
-                    {config.port_hopping.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                }
+          <div className="flex items-center justify-between">
+            <Label htmlFor="port-hopping-enabled">{t("settings.status")}</Label>
+            <Switch
+              id="port-hopping-enabled"
+              checked={ePortHoppingEnabled}
+              onCheckedChange={(v: boolean) => setPortHoppingEnabled(v)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="port-hopping-base">{t("settings.basePort")}</Label>
+              <Input
+                id="port-hopping-base"
+                type="number"
+                value={ePortHoppingBasePort}
+                onChange={(e) => setPortHoppingBasePort(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label="Base Port"
-                value={<span className="font-mono text-xs">{config.port_hopping.base_port}</span>}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="port-hopping-range">{t("settings.range")}</Label>
+              <Input
+                id="port-hopping-range"
+                type="number"
+                value={ePortHoppingRange}
+                onChange={(e) => setPortHoppingRange(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label="Range"
-                value={<span className="font-mono text-xs">{config.port_hopping.range}</span>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="port-hopping-interval">{t("settings.interval")}</Label>
+              <Input
+                id="port-hopping-interval"
+                type="number"
+                value={ePortHoppingIntervalSecs}
+                onChange={(e) => setPortHoppingIntervalSecs(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label="Interval"
-                value={<span className="font-mono text-xs">{config.port_hopping.interval_secs}s</span>}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="port-hopping-grace">{t("settings.gracePeriod")}</Label>
+              <Input
+                id="port-hopping-grace"
+                type="number"
+                value={ePortHoppingGracePeriodSecs}
+                onChange={(e) => setPortHoppingGracePeriodSecs(parseInt(e.target.value, 10) || 0)}
+                min={0}
               />
-              <KeyValue
-                label="Grace Period"
-                value={<span className="font-mono text-xs">{config.port_hopping.grace_period_secs}s</span>}
-              />
-            </>
-          )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Anti-RTT</CardTitle>
+            <CardTitle>{t("settings.antiRttTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            {onSave ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="anti-rtt-enabled">Enabled</Label>
-                  <Switch
-                    id="anti-rtt-enabled"
-                    checked={eAntiRttEnabled}
-                    onCheckedChange={(v: boolean) => setAntiRttEnabled(v)}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="anti-rtt-ms">Normalization (ms)</Label>
-                  <Input
-                    id="anti-rtt-ms"
-                    type="number"
-                    value={eAntiRttNormalizationMs}
-                    onChange={(e) => setAntiRttNormalizationMs(parseInt(e.target.value, 10) || 0)}
-                    min={0}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <KeyValue
-                  label="Status"
-                  value={
-                    <Badge
-                      className={
-                        config.anti_rtt.enabled
-                          ? "bg-green-500/15 text-green-700 dark:text-green-400"
-                          : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400"
-                      }
-                    >
-                      {config.anti_rtt.enabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                  }
-                />
-                <KeyValue
-                  label="Normalization"
-                  value={<span className="font-mono text-xs">{config.anti_rtt.normalization_ms} ms</span>}
-                />
-              </>
-            )}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="anti-rtt-enabled">{t("settings.status")}</Label>
+              <Switch
+                id="anti-rtt-enabled"
+                checked={eAntiRttEnabled}
+                onCheckedChange={(v: boolean) => setAntiRttEnabled(v)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="anti-rtt-ms">{t("settings.normalization")}</Label>
+              <Input
+                id="anti-rtt-ms"
+                type="number"
+                value={eAntiRttNormalizationMs}
+                onChange={(e) => setAntiRttNormalizationMs(parseInt(e.target.value, 10) || 0)}
+                min={0}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {onSave && (
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
-      )}
+      <Button type="submit" disabled={saving}>
+        {saving ? t("settings.saving") : t("settings.save")}
+      </Button>
     </form>
   );
 }

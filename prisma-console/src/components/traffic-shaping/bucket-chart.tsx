@@ -21,7 +21,7 @@ export function BucketChart({ bucketSizes }: BucketChartProps) {
   const { t } = useI18n();
 
   const data = bucketSizes.map((size, idx) => ({
-    label: `Bucket ${idx + 1}`,
+    label: t("trafficShaping.bucketLabel", { index: idx + 1 }),
     size,
   }));
 
@@ -51,7 +51,7 @@ export function BucketChart({ bucketSizes }: BucketChartProps) {
                 width={80}
               />
               <Tooltip
-                formatter={(value) => [formatBytes(Number(value)), "Size"]}
+                formatter={(value) => [formatBytes(Number(value)), t("trafficShaping.sizeLabel")]}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   border: "1px solid hsl(var(--border))",

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { formatDuration } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,8 @@ import { TlsInfo } from "@/components/settings/tls-info";
 import { ForwardsTable } from "@/components/server/forwards-table";
 
 export default function ServersPage() {
+  const { t } = useI18n();
+
   const { data: health, isLoading: healthLoading } = useQuery({
     queryKey: ["health"],
     queryFn: api.getHealth,
@@ -34,7 +37,7 @@ export default function ServersPage() {
   if (healthLoading || configLoading || tlsLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">Loading server info...</p>
+        <p className="text-sm text-muted-foreground">{t("server.loadingInfo")}</p>
       </div>
     );
   }
@@ -44,21 +47,21 @@ export default function ServersPage() {
       {health && (
         <Card>
           <CardHeader>
-            <CardTitle>Health</CardTitle>
+            <CardTitle>{t("server.health")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Status:</span>
+              <span className="text-sm text-muted-foreground">{t("server.status")}:</span>
               <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
                 {health.status}
               </Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Version</p>
+              <p className="text-sm text-muted-foreground">{t("server.version")}</p>
               <p className="text-sm font-mono">{health.version}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Uptime</p>
+              <p className="text-sm text-muted-foreground">{t("server.uptime")}</p>
               <p className="text-sm font-mono">{formatDuration(health.uptime_secs)}</p>
             </div>
           </CardContent>
@@ -68,27 +71,27 @@ export default function ServersPage() {
       {config && (
         <Card>
           <CardHeader>
-            <CardTitle>Server Configuration</CardTitle>
+            <CardTitle>{t("server.configuration")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <p className="text-sm text-muted-foreground">Listen Address</p>
+              <p className="text-sm text-muted-foreground">{t("settings.listenAddr")}</p>
               <p className="text-sm font-mono">{config.listen_addr}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">QUIC Listen Address</p>
+              <p className="text-sm text-muted-foreground">{t("settings.quicListenAddr")}</p>
               <p className="text-sm font-mono">{config.quic_listen_addr}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Max Connections</p>
+              <p className="text-sm text-muted-foreground">{t("settings.maxConnections")}</p>
               <p className="text-sm font-mono">{config.performance.max_connections}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Connection Timeout</p>
+              <p className="text-sm text-muted-foreground">{t("settings.connectionTimeout")}</p>
               <p className="text-sm font-mono">{config.performance.connection_timeout_secs}s</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Port Forwarding:</span>
+              <span className="text-sm text-muted-foreground">{t("settings.portForwarding")}:</span>
               <Badge
                 className={
                   config.port_forwarding.enabled
@@ -96,23 +99,23 @@ export default function ServersPage() {
                     : "bg-red-500/15 text-red-700 dark:text-red-400"
                 }
               >
-                {config.port_forwarding.enabled ? "Enabled" : "Disabled"}
+                {config.port_forwarding.enabled ? t("common.enabled") : t("common.disabled")}
               </Badge>
             </div>
             {config.port_forwarding.enabled && (
               <div>
-                <p className="text-sm text-muted-foreground">Port Forwarding Range</p>
+                <p className="text-sm text-muted-foreground">{t("settings.portForwardingRange")}</p>
                 <p className="text-sm font-mono">
-                  {config.port_forwarding.port_range_start}\u2013{config.port_forwarding.port_range_end}
+                  {config.port_forwarding.port_range_start}–{config.port_forwarding.port_range_end}
                 </p>
               </div>
             )}
             <div>
-              <p className="text-sm text-muted-foreground">Logging Level</p>
+              <p className="text-sm text-muted-foreground">{t("settings.loggingLevel")}</p>
               <p className="text-sm font-mono">{config.logging_level}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Logging Format</p>
+              <p className="text-sm text-muted-foreground">{t("settings.loggingFormat")}</p>
               <p className="text-sm font-mono">{config.logging_format}</p>
             </div>
           </CardContent>

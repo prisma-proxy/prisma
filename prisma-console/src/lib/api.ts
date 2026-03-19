@@ -30,11 +30,42 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string>),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(path, {
+    ...init,
+    headers,
+  });
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login/";
+    }
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  }
+  return res.text();
+}
+
 export const api = {
   getHealth: () => apiFetch<import("./types").HealthResponse>("/api/health"),
   getMetrics: () => apiFetch<import("./types").MetricsSnapshot>("/api/metrics"),
-  getMetricsHistory: (period?: string) =>
-    apiFetch<import("./types").MetricsSnapshot[]>(`/api/metrics/history${period ? `?period=${period}` : ""}`),
+  getMetricsHistory: (period?: string, resolution?: string) => {
+    const params = new URLSearchParams();
+    if (period) params.set("period", period);
+    if (resolution) params.set("resolution", resolution);
+    const qs = params.toString();
+    return apiFetch<import("./types").MetricsSnapshot[]>(`/api/metrics/history${qs ? `?${qs}` : ""}`);
+  },
   getConnections: () => apiFetch<import("./types").ConnectionInfo[]>("/api/connections"),
   disconnectConnection: (id: string) =>
     apiFetch<void>(`/api/connections/${id}`, { method: "DELETE" }),
@@ -101,7 +132,7 @@ export const api = {
   createBackup: () =>
     apiFetch<import("./types").BackupInfo>("/api/config/backup", { method: "POST" }),
   getBackup: (name: string) =>
-    apiFetch<string>(`/api/config/backups/${encodeURIComponent(name)}`),
+    apiFetchText(`/api/config/backups/${encodeURIComponent(name)}`),
   restoreBackup: (name: string) =>
     apiFetch<void>(`/api/config/backups/${encodeURIComponent(name)}/restore`, { method: "POST" }),
   deleteBackup: (name: string) =>

@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useI18n } from "@/lib/i18n";
 import type { ClientInfo } from "@/lib/types";
 
 interface ClientTableProps {
@@ -21,10 +22,12 @@ interface ClientTableProps {
 }
 
 export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
+  const { t } = useI18n();
+
   if (clients.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        No clients registered
+        {t("clients.noClients")}
       </p>
     );
   }
@@ -33,9 +36,9 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead>{t("clients.name")}</TableHead>
+          <TableHead>{t("clients.status")}</TableHead>
+          <TableHead className="text-right">{t("clients.actions")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -46,17 +49,17 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
                 href={`/dashboard/clients/detail/?id=${client.id}`}
                 className="hover:underline text-primary"
               >
-                {client.name || "Unnamed"}
+                {client.name || t("clients.unnamed")}
               </Link>
             </TableCell>
             <TableCell>
               {client.enabled ? (
                 <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
-                  Active
+                  {t("clients.active")}
                 </Badge>
               ) : (
                 <Badge className="bg-red-500/15 text-red-700 dark:text-red-400">
-                  Disabled
+                  {t("clients.disabled")}
                 </Badge>
               )}
             </TableCell>
@@ -74,7 +77,7 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
                   size="sm"
                   onClick={() => onDelete(client.id)}
                 >
-                  Delete
+                  {t("common.delete")}
                 </Button>
               </div>
             </TableCell>

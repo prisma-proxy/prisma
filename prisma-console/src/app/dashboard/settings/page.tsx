@@ -87,24 +87,36 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="camouflage">
-          <CamouflageForm
-            onSave={(data) => patchConfig.mutate(data)}
-            isLoading={patchConfig.isPending}
-          />
+          {config && (
+            <CamouflageForm
+              key={`camo-${config.camouflage.enabled}-${config.cdn.enabled}`}
+              config={config}
+              onSave={(data) => patchConfig.mutate(data)}
+              isLoading={patchConfig.isPending}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="traffic">
-          <TrafficForm
-            onSave={(data) => patchConfig.mutate(data)}
-            isLoading={patchConfig.isPending}
-          />
+          {config && (
+            <TrafficForm
+              key={`traffic-${config.traffic_shaping.padding_mode}-${config.port_hopping.enabled}`}
+              config={config}
+              onSave={(data) => patchConfig.mutate(data)}
+              isLoading={patchConfig.isPending}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="security">
-          <SecurityForm
-            onSave={(data) => patchConfig.mutate(data)}
-            isLoading={patchConfig.isPending}
-          />
+          {config && (
+            <SecurityForm
+              key={`security-${config.allow_transport_only_cipher}-${config.prisma_tls.enabled}`}
+              config={config}
+              onSave={(data) => patchConfig.mutate(data)}
+              isLoading={patchConfig.isPending}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="alerts">

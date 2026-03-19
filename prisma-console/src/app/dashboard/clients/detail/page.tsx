@@ -2,16 +2,18 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useI18n } from "@/lib/i18n";
 import ClientDetailPage from "@/components/clients/client-detail";
 
 function ClientDetailContent() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
 
   if (!id) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">No client ID specified</p>
+        <p className="text-sm text-muted-foreground">{t("clients.noClientId")}</p>
       </div>
     );
   }
@@ -19,9 +21,18 @@ function ClientDetailContent() {
   return <ClientDetailPage clientId={id} />;
 }
 
+function ClientDetailFallback() {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center justify-center py-12">
+      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+    </div>
+  );
+}
+
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-12"><p className="text-sm text-muted-foreground">Loading...</p></div>}>
+    <Suspense fallback={<ClientDetailFallback />}>
       <ClientDetailContent />
     </Suspense>
   );

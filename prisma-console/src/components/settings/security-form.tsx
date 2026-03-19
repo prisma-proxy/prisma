@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import type { ConfigResponse } from "@/lib/types";
 
 function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -21,16 +22,13 @@ function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 interface SecurityFormProps {
-  onSave?: (data: Record<string, unknown>) => void;
-  isLoading?: boolean;
+  config: ConfigResponse;
+  onSave: (data: Record<string, unknown>) => void;
+  isLoading: boolean;
 }
 
-export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
+export function SecurityForm({ config, onSave, isLoading: saving }: SecurityFormProps) {
   const { t } = useI18n();
-  const { data: config, isLoading: configLoading } = useQuery({
-    queryKey: ["config"],
-    queryFn: api.getConfig,
-  });
 
   const { data: tls, isLoading: tlsLoading } = useQuery({
     queryKey: ["tls"],
@@ -41,7 +39,7 @@ export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
   const [prismaTlsEnabled, setPrismaTlsEnabled] = useState<boolean | null>(null);
   const [prismaTlsAuthRotationHours, setPrismaTlsAuthRotationHours] = useState<number | null>(null);
 
-  if (configLoading || tlsLoading || !config) {
+  if (tlsLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
@@ -55,7 +53,6 @@ export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!onSave) return;
     onSave({
       allow_transport_only_cipher: eAllowTransportOnlyCipher,
       prisma_tls_enabled: ePrismaTlsEnabled,
@@ -71,7 +68,7 @@ export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <KeyValue
-            label="TLS Status"
+            label={t("settings.tlsStatus")}
             value={
               <Badge
                 className={
@@ -80,20 +77,20 @@ export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
                     : "bg-red-500/15 text-red-700 dark:text-red-400"
                 }
               >
-                {tls?.enabled ? "Enabled" : "Disabled"}
+                {tls?.enabled ? t("settings.enabled") : t("settings.disabled")}
               </Badge>
             }
           />
           <div>
-            <p className="text-muted-foreground">Certificate Path</p>
+            <p className="text-muted-foreground">{t("settings.certPath")}</p>
             <p className="font-mono text-xs mt-1">
-              {tls?.cert_path ?? "Not configured"}
+              {tls?.cert_path ?? t("settings.notConfigured")}
             </p>
           </div>
           <div>
-            <p className="text-muted-foreground">Key Path</p>
+            <p className="text-muted-foreground">{t("settings.keyPath")}</p>
             <p className="font-mono text-xs mt-1">
-              {tls?.key_path ?? "Not configured"}
+              {tls?.key_path ?? t("settings.notConfigured")}
             </p>
           </div>
         </CardContent>
@@ -101,82 +98,45 @@ export function SecurityForm({ onSave, isLoading: saving }: SecurityFormProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Security Settings</CardTitle>
+          <CardTitle>{t("settings.securitySettings")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {onSave ? (
-            <>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="transport-cipher">Transport-Only Cipher</Label>
-                <Switch
-                  id="transport-cipher"
-                  checked={eAllowTransportOnlyCipher}
-                  onCheckedChange={(v: boolean) => setAllowTransportOnlyCipher(v)}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="prisma-tls-enabled">PrismaTLS</Label>
-                <Switch
-                  id="prisma-tls-enabled"
-                  checked={ePrismaTlsEnabled}
-                  onCheckedChange={(v: boolean) => setPrismaTlsEnabled(v)}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="prisma-tls-rotation">Auth Rotation (hours)</Label>
-                <Input
-                  id="prisma-tls-rotation"
-                  type="number"
-                  value={ePrismaTlsAuthRotationHours}
-                  onChange={(e) => setPrismaTlsAuthRotationHours(parseInt(e.target.value, 10) || 0)}
-                  min={1}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <KeyValue
-                label="Transport-Only Cipher"
-                value={
-                  <Badge
-                    className={
-                      config.allow_transport_only_cipher
-                        ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-                        : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400"
-                    }
-                  >
-                    {config.allow_transport_only_cipher ? "Allowed" : "Disallowed"}
-                  </Badge>
-                }
-              />
-              <KeyValue
-                label="PrismaTLS"
-                value={
-                  <Badge
-                    className={
-                      config.prisma_tls.enabled
-                        ? "bg-green-500/15 text-green-700 dark:text-green-400"
-                        : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400"
-                    }
-                  >
-                    {config.prisma_tls.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                }
-              />
-            </>
-          )}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="transport-cipher">{t("settings.transportCipher")}</Label>
+            <Switch
+              id="transport-cipher"
+              checked={eAllowTransportOnlyCipher}
+              onCheckedChange={(v: boolean) => setAllowTransportOnlyCipher(v)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="prisma-tls-enabled">{t("settings.prismaTls")}</Label>
+            <Switch
+              id="prisma-tls-enabled"
+              checked={ePrismaTlsEnabled}
+              onCheckedChange={(v: boolean) => setPrismaTlsEnabled(v)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="prisma-tls-rotation">{t("settings.authRotation")}</Label>
+            <Input
+              id="prisma-tls-rotation"
+              type="number"
+              value={ePrismaTlsAuthRotationHours}
+              onChange={(e) => setPrismaTlsAuthRotationHours(parseInt(e.target.value, 10) || 0)}
+              min={1}
+            />
+          </div>
           <KeyValue
-            label="Protocol Version"
+            label={t("settings.protocolVersion")}
             value={<span className="font-mono text-xs">{config.protocol_version || "\u2014"}</span>}
           />
         </CardContent>
       </Card>
 
-      {onSave && (
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
-      )}
+      <Button type="submit" disabled={saving}>
+        {saving ? t("settings.saving") : t("settings.save")}
+      </Button>
     </form>
   );
 }

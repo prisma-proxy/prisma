@@ -5,17 +5,6 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import type { SpeedTestEntry } from "@/hooks/use-speed-test";
 
-function formatRelativeTime(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 interface SpeedTestHistoryProps {
   history: SpeedTestEntry[];
   onClear: () => void;
@@ -23,6 +12,17 @@ interface SpeedTestHistoryProps {
 
 export function SpeedTestHistory({ history, onClear }: SpeedTestHistoryProps) {
   const { t } = useI18n();
+
+  function formatRelativeTime(timestamp: number): string {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return t("speedTest.timeAgo.seconds", { value: seconds });
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return t("speedTest.timeAgo.minutes", { value: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t("speedTest.timeAgo.hours", { value: hours });
+    const days = Math.floor(hours / 24);
+    return t("speedTest.timeAgo.days", { value: days });
+  }
 
   if (history.length === 0) return null;
 

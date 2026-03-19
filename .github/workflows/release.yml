@@ -220,7 +220,19 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p gui-artifacts
-          cp prisma-gui/src-tauri/target/universal-apple-darwin/release/Prisma gui-artifacts/prisma-gui-macos-universal
+          BASE="prisma-gui/src-tauri/target/universal-apple-darwin/release"
+          # Prefer the DMG if bundling produced one
+          DMG=$(find "${BASE}/bundle/dmg" -name '*.dmg' 2>/dev/null | head -1)
+          if [ -n "$DMG" ]; then
+            cp "$DMG" gui-artifacts/Prisma-macos-universal.dmg
+          fi
+          # Also copy the portable binary from inside the .app bundle
+          APP_BIN="${BASE}/bundle/macos/Prisma.app/Contents/MacOS/Prisma"
+          if [ -f "$APP_BIN" ]; then
+            cp "$APP_BIN" gui-artifacts/prisma-gui-macos-universal
+          elif [ -f "${BASE}/prisma-gui" ]; then
+            cp "${BASE}/prisma-gui" gui-artifacts/prisma-gui-macos-universal
+          fi
           ls -la gui-artifacts/
 
       - name: Upload GUI artifacts
@@ -382,7 +394,7 @@ jobs:
             echo "| Platform | Binary |"
             echo "|----------|--------|"
             echo "| 🪟 Windows | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
-            echo "| 🍎 macOS (Universal) | [prisma-gui-macos-universal](${BASE_URL}/prisma-gui-macos-universal) |"
+            echo "| 🍎 macOS (Universal) | [Prisma-macos-universal.dmg](${BASE_URL}/Prisma-macos-universal.dmg) |"
 
             echo ""
             echo "> Verify integrity: \`sha256sum -c checksums-sha256.txt\` (Linux/macOS) · \`Get-FileHash\` (Windows)"
