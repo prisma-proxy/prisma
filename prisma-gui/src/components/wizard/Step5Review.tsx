@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { WizardState } from "@/lib/buildConfig";
 import { buildClientConfig, validateWizard } from "@/lib/buildConfig";
-import { useSettings } from "@/store/settings";
 
 interface Props {
   state: WizardState;
@@ -16,8 +15,6 @@ interface Props {
 
 export default function Step5Review({ state, onChange }: Props) {
   const { t } = useTranslation();
-  const socks5Port = useSettings((s) => s.socks5Port);
-  const httpPort = useSettings((s) => s.httpPort);
   const [tagInput, setTagInput] = useState("");
   const errors = validateWizard(state);
 
@@ -33,7 +30,7 @@ export default function Step5Review({ state, onChange }: Props) {
     onChange({ tags: state.tags.filter((t) => t !== tag) });
   }
 
-  const preview = JSON.stringify(buildClientConfig(state, { socks5Port, httpPort }), null, 2);
+  const preview = JSON.stringify(buildClientConfig(state), null, 2);
 
   return (
     <div className="space-y-4">

@@ -30,7 +30,7 @@ export default function Home() {
   const setProfiles = useStore((s) => s.setProfiles);
 
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
-  const { toggle, toggleProxyOnly } = useConnection();
+  const { toggle } = useConnection();
   const events = useConnectionHistory((s) => s.events);
   const todayUsage = useDataUsage.getState().getToday();
   const recentEvents = events.slice(-10).reverse();
@@ -50,11 +50,6 @@ export default function Home() {
     setBusy(true);
     try { await toggle(); } finally { setBusy(false); }
   }, [toggle]);
-
-  const handleProxyOnly = useCallback(async () => {
-    setBusy(true);
-    try { await toggleProxyOnly(); } finally { setBusy(false); }
-  }, [toggleProxyOnly]);
 
   const modeValues: string[] = [];
   if (proxyModes & MODE_SOCKS5)       modeValues.push("socks5");
@@ -175,7 +170,7 @@ export default function Home() {
           variant="outline"
           size="sm"
         >
-          <ToggleGroupItem value="socks5">SOCKS5</ToggleGroupItem>
+          <ToggleGroupItem value="socks5">{t("home.modeProxyOnly")}</ToggleGroupItem>
           <ToggleGroupItem value="sys">{t("home.modeSystem")}</ToggleGroupItem>
           <ToggleGroupItem value="tun">TUN</ToggleGroupItem>
           <ToggleGroupItem value="app">{t("home.modePerApp")}</ToggleGroupItem>
@@ -198,16 +193,6 @@ export default function Home() {
             <><Wifi /> {t("home.connect")}</>
           )}
         </Button>
-        {!connected && !connecting && (
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={handleProxyOnly}
-            title={t("home.proxyOnlyTooltip")}
-          >
-            {t("home.proxyOnly")}
-          </Button>
-        )}
         {connected && (
           <Button
             variant="outline"

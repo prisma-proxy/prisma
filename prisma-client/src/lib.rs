@@ -36,6 +36,18 @@ use dns_resolver::DnsResolver;
 use metrics::ClientMetrics;
 use proxy::ProxyContext;
 
+/// Guard that aborts all held task handles when dropped, ensuring spawned
+/// services are cleaned up when the owning future is cancelled.
+struct TaskGuard(Vec<tokio::task::JoinHandle<()>>);
+
+impl Drop for TaskGuard {
+    fn drop(&mut self) {
+        for h in &self.0 {
+            h.abort();
+        }
+    }
+}
+
 /// Run client in standalone mode (CLI). Sets up its own logging.
 pub async fn run(config_path: &str) -> Result<()> {
     let config = load_client_config(config_path)
@@ -43,7 +55,7 @@ pub async fn run(config_path: &str) -> Result<()> {
 
     init_logging(&config.logging.level, &config.logging.format);
 
-    run_inner(config, ClientMetrics::new(), None).await
+    run_inner(config, ClientMetrics::new(), None, None).await
 }
 
 /// Run client in embedded mode (GUI/FFI). Uses broadcast logging and shared metrics.
@@ -57,28 +69,34 @@ pub async fn run_embedded(
 
     init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
 
-    run_inner(config, metrics, None).await
+    run_inner(config, metrics, None, None).await
 }
 
 /// Run client in embedded mode with an optional per-app filter.
+///
+/// When `shutdown` is provided, the client will cleanly abort all spawned
+/// service tasks when the signal fires. This ensures that SOCKS5, HTTP, TUN,
+/// DNS, PAC, and port-forward servers are all stopped on disconnect.
 pub async fn run_embedded_with_filter(
     config_path: &str,
     log_tx: broadcast::Sender<LogEntry>,
     metrics: ClientMetrics,
     app_filter: Option<Arc<tun::process::AppFilter>>,
+    shutdown: Option<tokio::sync::oneshot::Receiver<()>>,
 ) -> Result<()> {
     let config = load_client_config(config_path)
         .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
 
     init_logging_with_broadcast(&config.logging.level, &config.logging.format, log_tx);
 
-    run_inner(config, metrics, app_filter).await
+    run_inner(config, metrics, app_filter, shutdown).await
 }
 
 async fn run_inner(
     config: prisma_core::config::client::ClientConfig,
     metrics: ClientMetrics,
     app_filter: Option<Arc<tun::process::AppFilter>>,
+    shutdown: Option<tokio::sync::oneshot::Receiver<()>>,
 ) -> Result<()> {
     info!("Prisma client starting");
     info!(socks5 = %config.socks5_listen_addr, server = %config.server_addr);
@@ -297,16 +315,39 @@ async fn run_inner(
         None
     };
 
-    // All services run forever; wait for any to exit
-    tokio::select! {
-        _ = socks5_handle => {},
-        _ = async { if let Some(h) = http_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
-        _ = async { if let Some(h) = forward_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
-        _ = async { if let Some(h) = dns_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
-        _ = async { if let Some(h) = pac_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
-        _ = async { if let Some(h) = tun_handle { h.await.ok(); } else { std::future::pending::<()>().await; } } => {},
+    // Collect all spawned task handles into the guard. When the guard is
+    // dropped (either via shutdown signal or future cancellation), every
+    // service task is aborted, preventing leaked background work.
+    let mut handles: Vec<tokio::task::JoinHandle<()>> = vec![socks5_handle];
+    if let Some(h) = http_handle {
+        handles.push(h);
+    }
+    if let Some(h) = forward_handle {
+        handles.push(h);
+    }
+    if let Some(h) = dns_handle {
+        handles.push(h);
+    }
+    if let Some(h) = pac_handle {
+        handles.push(h);
+    }
+    if let Some(h) = tun_handle {
+        handles.push(h);
+    }
+    let _guard = TaskGuard(handles);
+
+    // Wait for shutdown signal if provided; otherwise wait forever (CLI mode
+    // runs until the process is killed, and cancellation drops the guard).
+    if let Some(rx) = shutdown {
+        let _ = rx.await;
+        info!("Shutdown signal received, stopping all services");
+    } else {
+        // CLI mode: pend forever; process termination or future cancellation
+        // will drop the guard and abort tasks.
+        std::future::pending::<()>().await;
     }
 
+    // _guard is dropped here, aborting all spawned service tasks.
     Ok(())
 }
 

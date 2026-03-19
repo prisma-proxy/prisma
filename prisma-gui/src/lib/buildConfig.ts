@@ -71,22 +71,7 @@ export interface WizardState {
   fecDataShards: number;
   fecParityShards: number;
 
-  // Step 4 — Routing, TUN, DNS, Logging, Port Forwards
-  tunEnabled: boolean;
-  tunDevice: string;
-  tunMtu: number;
-  tunIncludeRoutes: string[];
-  tunExcludeRoutes: string[];
-  dnsMode: "direct" | "fake" | "smart" | "tunnel";
-  dnsUpstream: string;
-  fakeIpRange: string;
-  logLevel: string;
-  logFormat: string;
-  portForwards: string; // multiline "name,local_addr,remote_port" per line
-  routingGeoipPath: string;
-  routingRules: string; // JSON array string for advanced users
-
-  // Step 5
+  // Step 4
   tags: string[];
 }
 
@@ -149,19 +134,6 @@ export const DEFAULT_WIZARD: WizardState = {
   fecEnabled: false,
   fecDataShards: 10,
   fecParityShards: 3,
-  tunEnabled: false,
-  tunDevice: "prisma-tun0",
-  tunMtu: 1500,
-  tunIncludeRoutes: [],
-  tunExcludeRoutes: [],
-  dnsMode: "direct",
-  dnsUpstream: "8.8.8.8:53",
-  fakeIpRange: "198.18.0.0/15",
-  logLevel: "info",
-  logFormat: "pretty",
-  portForwards: "",
-  routingGeoipPath: "",
-  routingRules: "",
   tags: [],
 };
 
@@ -205,21 +177,9 @@ export function convertGuiRulesToBackend(
   });
 }
 
-/** Parse "Key: Value" lines into [key, value] tuples */
-function parseHeaderLines(text: string): [string, string][] {
-  return text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => {
-      const idx = l.indexOf(":");
-      if (idx < 0) return [l, ""] as [string, string];
-      return [l.slice(0, idx).trim(), l.slice(idx + 1).trim()] as [string, string];
-    });
-}
-
 /** Parse port forward lines: "name,local_addr,remote_port" */
-function parsePortForwards(text: string): { name: string; local_addr: string; remote_port: number }[] {
+export function parsePortForwards(text: string): { name: string; local_addr: string; remote_port: number }[] {
+  if (!text) return [];
   return text
     .split("\n")
     .map((l) => l.trim())
@@ -235,13 +195,28 @@ function parsePortForwards(text: string): { name: string; local_addr: string; re
     .filter((pf) => pf.name && pf.local_addr && pf.remote_port > 0);
 }
 
+/** Parse "Key: Value" lines into [key, value] tuples */
+function parseHeaderLines(text: string): [string, string][] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const idx = l.indexOf(":");
+      if (idx < 0) return [l, ""] as [string, string];
+      return [l.slice(0, idx).trim(), l.slice(idx + 1).trim()] as [string, string];
+    });
+}
+
+
 /**
  * Maps WizardState → ClientConfig JSON matching the Rust ClientConfig struct.
  *
- * Rust struct uses flat top-level fields, NOT nested transport objects.
- * Proxy ports (socks5, http) come from the global settings store, not per-profile.
+ * Produces only the protocol/transport fields for the profile. Global settings
+ * (proxy ports, DNS, logging, TUN, routing rules) are merged at connect time
+ * by useConnection.ts and do NOT appear here.
  */
-export function buildClientConfig(w: WizardState, ports: { socks5Port: number; httpPort: number | null }): Record<string, unknown> {
+export function buildClientConfig(w: WizardState): Record<string, unknown> {
   const config: Record<string, unknown> = {
     // Required fields
     server_addr: `${w.serverHost}:${w.serverPort}`,
@@ -258,12 +233,6 @@ export function buildClientConfig(w: WizardState, ports: { socks5Port: number; h
     quic_version: w.quicVersion,
     transport_mode: w.transportMode,
   };
-
-  // Proxy listen addresses from global settings
-  config.socks5_listen_addr = `127.0.0.1:${ports.socks5Port || 1080}`;
-  if (ports.httpPort && ports.httpPort > 0) {
-    config.http_listen_addr = `127.0.0.1:${ports.httpPort}`;
-  }
 
   // TLS options
   if (w.skipCertVerify) config.skip_cert_verify = true;
@@ -383,50 +352,6 @@ export function buildClientConfig(w: WizardState, ports: { socks5Port: number; h
     };
   }
 
-  // TUN — nested TunConfig
-  if (w.tunEnabled) {
-    config.tun = {
-      enabled: true,
-      device_name: w.tunDevice,
-      mtu: w.tunMtu,
-      include_routes: w.tunIncludeRoutes.length > 0 ? w.tunIncludeRoutes : ["0.0.0.0/0"],
-      exclude_routes: w.tunExcludeRoutes,
-    };
-  }
-
-  // DNS — nested DnsConfig
-  config.dns = {
-    mode: w.dnsMode,
-    upstream: w.dnsUpstream,
-    ...(w.dnsMode === "fake" ? { fake_ip_range: w.fakeIpRange } : {}),
-  };
-
-  // Logging
-  if (w.logLevel !== "info" || w.logFormat !== "pretty") {
-    config.logging = {
-      level: w.logLevel,
-      format: w.logFormat,
-    };
-  }
-
-  // Port forwards
-  const pfs = parsePortForwards(w.portForwards);
-  if (pfs.length > 0) config.port_forwards = pfs;
-
-  // Routing
-  {
-    const routing: Record<string, unknown> = {};
-    if (w.routingGeoipPath) routing.geoip_path = w.routingGeoipPath;
-    if (w.routingRules) {
-      try {
-        routing.rules = JSON.parse(w.routingRules);
-      } catch {
-        // invalid JSON — skip
-      }
-    }
-    if (Object.keys(routing).length > 0) config.routing = routing;
-  }
-
   // PrismaAuth secret (v4)
   if (w.prismaAuthSecret) {
     config.prisma_auth_secret = w.prismaAuthSecret;
@@ -439,16 +364,12 @@ export function buildClientConfig(w: WizardState, ports: { socks5Port: number; h
 export function parseProfileToWizard(name: string, config: unknown, tags?: string[]): WizardState {
   const c = (config ?? {}) as Record<string, unknown>;
   const identity = (c.identity ?? {}) as Record<string, unknown>;
-  const tun = (c.tun ?? {}) as Record<string, unknown>;
-  const dns = (c.dns ?? {}) as Record<string, unknown>;
   const congestion = (c.congestion ?? {}) as Record<string, unknown>;
   const ph = (c.port_hopping ?? {}) as Record<string, unknown>;
   const xporta = (c.xporta ?? {}) as Record<string, unknown>;
   const xmux = (c.xmux ?? null) as Record<string, unknown> | null;
   const ts = (c.traffic_shaping ?? {}) as Record<string, unknown>;
   const fec = (c.udp_fec ?? {}) as Record<string, unknown>;
-  const logging = (c.logging ?? {}) as Record<string, unknown>;
-  const routing = (c.routing ?? {}) as Record<string, unknown>;
 
   // Parse server_addr "host:port"
   const serverAddr = String(c.server_addr ?? "");
@@ -464,12 +385,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     ? (c.xhttp_extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
     : "";
 
-  // Parse port forwards back to CSV lines
-  const pfArr = Array.isArray(c.port_forwards) ? (c.port_forwards as Record<string, unknown>[]) : [];
-  const portForwards = pfArr
-    .map((pf) => `${pf.name},${pf.local_addr},${pf.remote_port}`)
-    .join("\n");
-
   // Parse alpn back to comma-separated
   const alpnArr = Array.isArray(c.alpn_protocols) ? (c.alpn_protocols as string[]) : [];
   const alpnProtocols = alpnArr.length > 0 ? alpnArr.join(",") : "h2,http/1.1";
@@ -477,10 +392,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
   // Parse fallback order
   const foArr = Array.isArray(c.fallback_order) ? (c.fallback_order as string[]) : [];
   const fallbackOrder = foArr.length > 0 ? foArr.join(",") : "quic-v2,prisma-tls,ws-cdn,xporta";
-
-  // Routing rules back to JSON string
-  const routingRulesArr = Array.isArray(routing.rules) ? routing.rules : [];
-  const routingRules = routingRulesArr.length > 0 ? JSON.stringify(routingRulesArr, null, 2) : "";
 
   return {
     name,
@@ -541,19 +452,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fecEnabled: Boolean(fec.enabled),
     fecDataShards: Number(fec.data_shards ?? 10),
     fecParityShards: Number(fec.parity_shards ?? 3),
-    tunEnabled: Boolean(tun.enabled),
-    tunDevice: String(tun.device_name ?? "prisma-tun0"),
-    tunMtu: Number(tun.mtu ?? 1500),
-    tunIncludeRoutes: (tun.include_routes as string[]) ?? [],
-    tunExcludeRoutes: (tun.exclude_routes as string[]) ?? [],
-    dnsMode: (dns.mode as WizardState["dnsMode"]) ?? "direct",
-    dnsUpstream: String(dns.upstream ?? "8.8.8.8:53"),
-    fakeIpRange: String(dns.fake_ip_range ?? "198.18.0.0/15"),
-    logLevel: String(logging.level ?? "info"),
-    logFormat: String(logging.format ?? "pretty"),
-    portForwards,
-    routingGeoipPath: String(routing.geoip_path ?? ""),
-    routingRules,
     tags: tags ?? [],
   };
 }
@@ -571,12 +469,5 @@ export function validateWizard(w: WizardState): string[] {
     errs.push("FEC data shards must be at least 1");
   if (w.fecEnabled && w.fecParityShards < 1)
     errs.push("FEC parity shards must be at least 1");
-  if (w.routingRules) {
-    try {
-      JSON.parse(w.routingRules);
-    } catch {
-      errs.push("Routing rules must be valid JSON");
-    }
-  }
   return errs;
 }

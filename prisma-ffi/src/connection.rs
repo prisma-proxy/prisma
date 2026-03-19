@@ -58,8 +58,14 @@ impl ConnectionManager {
         self.prev_bytes_down = 0;
         self.socks5_addr = Some(config.socks5_listen_addr.clone());
 
-        // Serialize config to a temp file for the client loader
-        let config_json = serde_json::to_string(&config)?;
+        // Serialize config to a per-profile TOML file for config isolation.
+        // Using TOML provides CLI compatibility and human-readable configs.
+        // The client_id uniquely identifies each profile, giving each its own file.
+        let config_toml = toml::to_string(&config)?;
+        let client_id = config.identity.client_id.clone();
+        // Sanitize: keep alphanumeric and hyphens only (client_id is hex so always safe)
+        let safe_id: String = client_id.chars().filter(|c| c.is_alphanumeric() || *c == '-').take(64).collect();
+        let file_stem = if safe_id.is_empty() { "active_connection".to_string() } else { safe_id };
 
         // Create broadcast channel for log forwarding
         let (log_tx, mut log_rx) =
@@ -92,11 +98,14 @@ impl ConnectionManager {
         });
 
         runtime.spawn(async move {
-            // Write config to a temp file
-            let tmp_dir = std::env::temp_dir();
-            let config_path = tmp_dir.join("prisma_ffi_client.json");
+            // Write config to per-profile TOML file in the profiles directory.
+            // Falls back to temp dir if profiles dir is unavailable.
+            let config_path = crate::profiles::ProfileManager::profiles_dir_str()
+                .ok()
+                .map(|d| std::path::PathBuf::from(d).join(format!("{}.client.toml", file_stem)))
+                .unwrap_or_else(|| std::env::temp_dir().join(format!("{}.client.toml", file_stem)));
 
-            if let Err(e) = tokio::fs::write(&config_path, &config_json).await {
+            if let Err(e) = tokio::fs::write(&config_path, &config_toml).await {
                 on_event(format!(
                     r#"{{"type":"error","code":"config_write","msg":{}}}"#,
                     serde_json::to_string(&e.to_string()).unwrap_or_default()
@@ -120,11 +129,17 @@ impl ConnectionManager {
                 None
             };
 
-            // Use run_embedded for log + metrics forwarding
-            let run_result = tokio::select! {
-                result = prisma_client::run_embedded_with_filter(&config_path_str, log_tx, metrics, app_filter) => result,
-                _ = stop_rx => Ok(()),
-            };
+            // Use run_embedded for log + metrics forwarding.
+            // Pass stop_rx directly so run_inner can abort all spawned tasks
+            // when the shutdown signal fires (prevents leaked service tasks).
+            let run_result = prisma_client::run_embedded_with_filter(
+                &config_path_str,
+                log_tx,
+                metrics,
+                app_filter,
+                Some(stop_rx),
+            )
+            .await;
 
             // Clear system proxy on disconnect
             if modes & crate::PRISMA_MODE_SYSTEM_PROXY != 0 {
@@ -138,8 +153,8 @@ impl ConnectionManager {
                 ));
             }
 
-            // Clean up temp file
-            let _ = std::fs::remove_file(&config_path);
+            // Clean up config file after disconnect
+            let _ = tokio::fs::remove_file(&config_path).await;
         });
 
         self.status = PRISMA_STATUS_CONNECTED;
@@ -180,10 +195,14 @@ impl ConnectionManager {
 }
 
 /// Speed test download URLs per server.
+///
+/// All servers use the Cloudflare speed-test endpoint for bandwidth measurement
+/// because Google does not provide a public download speed-test URL.
+/// (`generate_204` returns HTTP 204 No Content with an empty body, so it always
+/// measured 0 bytes.)
 fn speed_test_download_url(server: &str, bytes: u64) -> String {
     match server {
-        "cloudflare" => format!("https://speed.cloudflare.com/__down?bytes={bytes}"),
-        "google" => "https://www.google.com/generate_204".to_string(),
+        "cloudflare" | "google" => format!("https://speed.cloudflare.com/__down?bytes={bytes}"),
         _ => format!("https://speed.cloudflare.com/__down?bytes={bytes}"),
     }
 }

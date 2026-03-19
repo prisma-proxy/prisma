@@ -12,6 +12,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-destroy",
     "shell:allow-open",
+    "core:path:default",
     "notification:default",
     "os:allow-platform",
     "autostart:allow-enable",

@@ -14,6 +14,15 @@ export interface AppSettings {
   autoReconnect: boolean;
   reconnectDelaySecs: number;
   reconnectMaxAttempts: number;
+  logLevel: "trace" | "debug" | "info" | "warn" | "error";
+  logFormat: "pretty" | "json" | "compact";
+  tunEnabled: boolean;
+  tunDevice: string;
+  tunMtu: number;
+  tunIncludeRoutes: string;  // newline-separated CIDRs
+  tunExcludeRoutes: string;  // newline-separated CIDRs
+  portForwards: string;      // "name,local_addr,remote_port" per line
+  routingGeoipPath: string;
 }
 
 interface SettingsStore extends AppSettings {
@@ -35,6 +44,15 @@ export const useSettings = create<SettingsStore>()(
       autoReconnect: false,
       reconnectDelaySecs: 5,
       reconnectMaxAttempts: 5,
+      logLevel: "info",
+      logFormat: "pretty",
+      tunEnabled: false,
+      tunDevice: "prisma-tun0",
+      tunMtu: 1500,
+      tunIncludeRoutes: "",
+      tunExcludeRoutes: "",
+      portForwards: "",
+      routingGeoipPath: "",
       patch: (values) => set(values),
     }),
     { name: "prisma-settings" }

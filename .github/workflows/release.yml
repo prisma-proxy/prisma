@@ -213,7 +213,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path gui-artifacts
-          Copy-Item "prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release/Prisma.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
+          Copy-Item "prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release/prisma-gui.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
           Get-ChildItem gui-artifacts/
 
       - name: Collect artifact (macOS)

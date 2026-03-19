@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { platform as osPlatform } from "@tauri-apps/plugin-os";
 import { useTranslation } from "react-i18next";
@@ -13,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -35,6 +35,9 @@ const SETTINGS_KEYS: (keyof AppSettings)[] = [
   "language", "theme", "startOnBoot", "minimizeToTray",
   "socks5Port", "httpPort", "dnsMode", "dnsUpstream", "fakeIpRange",
   "autoReconnect", "reconnectDelaySecs", "reconnectMaxAttempts",
+  "logLevel", "logFormat",
+  "tunEnabled", "tunDevice", "tunMtu", "tunIncludeRoutes", "tunExcludeRoutes",
+  "portForwards", "routingGeoipPath",
 ];
 
 // ── Port input with local state, commits on blur ─────────────────────────────
@@ -88,7 +91,11 @@ export default function Settings() {
   const {
     language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
     dnsMode, dnsUpstream, fakeIpRange,
-    autoReconnect, reconnectDelaySecs, reconnectMaxAttempts, patch,
+    autoReconnect, reconnectDelaySecs, reconnectMaxAttempts,
+    logLevel, logFormat,
+    tunEnabled, tunDevice, tunMtu, tunIncludeRoutes, tunExcludeRoutes,
+    portForwards, routingGeoipPath,
+    patch,
   } = useSettings();
   const clearHistory = useConnectionHistory((s) => s.clear);
   const historyCount = useConnectionHistory((s) => s.events.length);
@@ -165,7 +172,7 @@ export default function Settings() {
 
   async function handleOpenConfigFolder() {
     try {
-      const dir = await appLocalDataDir();
+      const dir = await api.getProfilesDir();
       await shellOpen(dir);
     } catch (e) {
       notify.error(String(e));
@@ -176,7 +183,7 @@ export default function Settings() {
     let plat: string;
     try { plat = osPlatform(); } catch { plat = "unknown"; }
     const info = [
-      `Prisma v0.6.3`,
+      `Prisma v0.7.0`,
       `Platform: ${plat}`,
       `Language: ${language}`,
       `Theme: ${theme}`,
@@ -199,7 +206,7 @@ export default function Settings() {
 
   function handleExportSettings() {
     const data = {
-      version: "0.6.3",
+      version: "0.7.0",
       exportedAt: new Date().toISOString(),
       settings: {
         language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
@@ -243,6 +250,15 @@ export default function Settings() {
       autoReconnect: false,
       reconnectDelaySecs: 5,
       reconnectMaxAttempts: 5,
+      logLevel: "info",
+      logFormat: "pretty",
+      tunEnabled: false,
+      tunDevice: "prisma-tun0",
+      tunMtu: 1500,
+      tunIncludeRoutes: "",
+      tunExcludeRoutes: "",
+      portForwards: "",
+      routingGeoipPath: "",
     });
     i18n.changeLanguage("en");
     notify.success(t("settings.settingsReset"));
@@ -274,7 +290,7 @@ export default function Settings() {
       for (const k of SETTINGS_KEYS) settingsData[k] = allSettings[k];
 
       const backup = {
-        version: "0.6.3",
+        version: "0.7.0",
         exportedAt: new Date().toISOString(),
         settings: settingsData,
         profiles,
@@ -548,6 +564,99 @@ export default function Settings() {
 
       <Separator />
 
+      {/* Logging */}
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.logging")}</p>
+        <p className="text-xs text-muted-foreground">{t("settings.appliedOnConnect")}</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label>{t("settings.logLevel")}</Label>
+            <Select value={logLevel} onValueChange={(v) => patch({ logLevel: v as typeof logLevel })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="trace">Trace</SelectItem>
+                <SelectItem value="debug">Debug</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="warn">Warn</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>{t("settings.logFormat")}</Label>
+            <Select value={logFormat} onValueChange={(v) => patch({ logFormat: v as typeof logFormat })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pretty">Pretty</SelectItem>
+                <SelectItem value="json">JSON</SelectItem>
+                <SelectItem value="compact">Compact</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* TUN Mode */}
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.tun")}</p>
+        <p className="text-xs text-muted-foreground">{t("settings.tunDesc")}</p>
+        <div className="flex items-center justify-between">
+          <Label>{t("settings.tunEnable")}</Label>
+          <Switch checked={tunEnabled} onCheckedChange={(v) => patch({ tunEnabled: v })} />
+        </div>
+        {tunEnabled && (
+          <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label>{t("settings.tunDevice")}</Label>
+                <Input value={tunDevice} onChange={(e) => patch({ tunDevice: e.target.value })} placeholder="prisma-tun0" />
+              </div>
+              <div className="w-28 space-y-1">
+                <Label>{t("settings.tunMtu")}</Label>
+                <Input type="number" value={tunMtu} onChange={(e) => patch({ tunMtu: parseInt(e.target.value, 10) || 1500 })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>{t("settings.tunIncludeRoutes")} <span className="text-muted-foreground text-xs">({t("settings.tunRouteHint")})</span></Label>
+              <Textarea rows={3} className="font-mono text-xs" value={tunIncludeRoutes} onChange={(e) => patch({ tunIncludeRoutes: e.target.value })} placeholder="0.0.0.0/0" />
+            </div>
+            <div className="space-y-1">
+              <Label>{t("settings.tunExcludeRoutes")} <span className="text-muted-foreground text-xs">({t("settings.tunRouteHint")})</span></Label>
+              <Textarea rows={2} className="font-mono text-xs" value={tunExcludeRoutes} onChange={(e) => patch({ tunExcludeRoutes: e.target.value })} placeholder="192.168.0.0/16" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      {/* Routing */}
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.routing")}</p>
+        <p className="text-xs text-muted-foreground">{t("settings.appliedOnConnect")}</p>
+        <div className="space-y-1">
+          <Label htmlFor="s-geoip">{t("settings.routingGeoipPath")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
+          <Input id="s-geoip" value={routingGeoipPath} onChange={(e) => patch({ routingGeoipPath: e.target.value })} placeholder="/path/to/geoip.dat" className="font-mono text-xs" />
+          <p className="text-xs text-muted-foreground">{t("settings.routingGeoipHint")}</p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Port Forwarding */}
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.portForwarding")}</p>
+        <p className="text-xs text-muted-foreground">{t("settings.appliedOnConnect")}</p>
+        <div className="space-y-1">
+          <Label>{t("settings.portForwardRules")} <span className="text-muted-foreground text-xs">({t("settings.portForwardHint")})</span></Label>
+          <Textarea rows={3} className="font-mono text-xs" value={portForwards} onChange={(e) => patch({ portForwards: e.target.value })} placeholder={"ssh,127.0.0.1:22,2222\nweb,127.0.0.1:8080,8080"} />
+        </div>
+      </div>
+
+      <Separator />
+
       {/* Per-App Proxy */}
       <div className="space-y-4">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.perApp")}</p>
@@ -759,7 +868,7 @@ export default function Settings() {
         <p className="text-xs font-semibold uppercase tracking-wider">{t("settings.about")}</p>
         <div className="flex items-center gap-2">
           <Shield size={14} />
-          <span>Prisma v0.6.3</span>
+          <span>Prisma v0.7.0</span>
         </div>
         <p>{t("settings.platform")}: {platformName}</p>
         <p>License: GPLv3.0</p>

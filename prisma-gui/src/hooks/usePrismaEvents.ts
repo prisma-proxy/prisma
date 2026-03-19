@@ -46,8 +46,11 @@ export function usePrismaEvents() {
 
       switch (data.type) {
         case "status_changed":
-          store.setManualDisconnect(false);
           if (data.status === "connected") {
+            // Only clear manualDisconnect on successful connection, not on
+            // disconnect events.  Clearing it on disconnect would allow
+            // useAutoReconnect to fire immediately after a manual disconnect.
+            store.setManualDisconnect(false);
             store.setConnected(true);
             // Record connect latency for profile metrics
             {
@@ -77,6 +80,7 @@ export function usePrismaEvents() {
             }
             notify.success("Connected");
           } else if (data.status === "connecting") {
+            store.setManualDisconnect(false);
             store.setConnecting(true);
           } else {
             // Disconnected — record session bytes + uptime
@@ -96,6 +100,10 @@ export function usePrismaEvents() {
             }
             // Clear OS-level system proxy on disconnect
             api.clearSystemProxy().catch(() => {});
+            // Mark all active connections as closed so the user can see what
+            // was connected before disconnect, then clear stale logs.
+            useConnections.getState().closeAllActive();
+            store.clearLogs();
             store.setConnected(false);
           }
           break;
@@ -116,16 +124,22 @@ export function usePrismaEvents() {
             const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
             if (deltaUp > 0 || deltaDown > 0) {
               useDataUsage.getState().recordUsage(deltaUp, deltaDown);
-              // Distribute traffic deltas to active connections for analytics
+              // Distribute traffic deltas to active connections for analytics.
+              // If no active connections are tracked (log parsing didn't capture
+              // them or they closed too quickly), attribute to "unknown" so that
+              // daily totals and summary stats still accumulate.
               const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
+              const analytics = useAnalytics.getState();
               if (activeConns.length > 0) {
                 const perUp = Math.floor(deltaUp / activeConns.length);
                 const perDown = Math.floor(deltaDown / activeConns.length);
-                const analytics = useAnalytics.getState();
                 for (const conn of activeConns) {
                   const domain = conn.destination.replace(/:\d+$/, "");
                   analytics.addTraffic(domain, perUp, perDown, conn.rule);
                 }
+              } else {
+                // Fallback: record unattributed traffic so totals are accurate
+                analytics.addTraffic("(unattributed)", deltaUp, deltaDown);
               }
             }
           }

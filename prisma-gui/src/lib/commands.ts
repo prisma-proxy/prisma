@@ -85,4 +85,7 @@ export const api = {
 
   getPerAppFilter: () =>
     invoke<PerAppFilter | null>("get_per_app_filter"),
+
+  getProfilesDir: () =>
+    invoke<string>("get_profiles_dir"),
 };

@@ -117,8 +117,10 @@ function flushPending() {
 
       if (update.rule) {
         const prevRule = ruleStats[update.rule] ?? { match_count: 0, bytes_total: 0 };
+        // Only increment match_count for new connection registrations (bytes == 0),
+        // not for subsequent traffic updates which would inflate the count.
         ruleStats[update.rule] = {
-          match_count: prevRule.match_count + 1,
+          match_count: prevRule.match_count + (isNewConn ? 1 : 0),
           bytes_total: prevRule.bytes_total + update.bytes_up + update.bytes_down,
         };
       }
@@ -142,7 +144,7 @@ export const useAnalytics = create<AnalyticsStore>()(
       addTraffic: (domain, bytes_up, bytes_down, rule) => {
         pendingUpdates.push({ domain, bytes_up, bytes_down, rule });
         if (!flushTimer) {
-          flushTimer = setTimeout(flushPending, 5_000);
+          flushTimer = setTimeout(flushPending, 1_000);
         }
       },
 

@@ -23,6 +23,7 @@ interface ConnectionsStore {
 
   addConnection: (conn: Omit<TrackedConnection, "id">) => void;
   closeConnection: (destination: string) => void;
+  closeAllActive: () => void;
   clearAll: () => void;
   clearClosed: () => void;
 }
@@ -64,6 +65,15 @@ export const useConnections = create<ConnectionsStore>((set) => ({
       ),
     })),
 
+  closeAllActive: () =>
+    set((state) => ({
+      connections: state.connections.map((c) =>
+        c.status === "active"
+          ? { ...c, status: "closed" as const, closedAt: Date.now() }
+          : c
+      ),
+    })),
+
   clearAll: () => set({ connections: [] }),
 
   clearClosed: () =>
@@ -73,48 +83,97 @@ export const useConnections = create<ConnectionsStore>((set) => ({
 }));
 
 // --- Log message parser ---
+//
+// Rust's tracing crate with BroadcastLayer (prisma-core/src/logging.rs) formats
+// log messages as: message first, then structured key=value fields.
+//
+// The `message` field from string literals passes through `record_debug` which
+// wraps it in quotes via `format!("{:?}", value)`.  Fields using `%` (Display)
+// go through `record_str` and appear unquoted.
+//
+// Examples of actual log messages reaching the frontend:
+//   "SOCKS5 CONNECT" dest=example.com:443
+//   "SOCKS5 CONNECT direct (bypassing proxy)" dest=1.2.3.4:80
+//   "SOCKS5 CONNECT blocked by routing rule" dest=ads.example.com:443
+//   "HTTP CONNECT" dest=example.com:443
+//   "TUN tunnel established" dest=example.com:443
+//   "Relay session ended"
+//   "Direct relay session ended"
+//   "TUN TCP relay session ended"
+//   "Connected to server" server=1.2.3.4:8443 transport=QUIC
 
-// Matches: SOCKS5 CONNECT <dest>, HTTP CONNECT <dest>
+// Matches the text part (after stripping quotes)
 const CONNECT_RE = /^(SOCKS5|HTTP) CONNECT$/;
-// Matches: ... CONNECT direct (bypassing proxy) — dest in structured field
 const DIRECT_RE = /^(SOCKS5|HTTP) CONNECT direct \(bypassing proxy\)$/;
-// Matches: ... CONNECT blocked by routing rule
 const BLOCKED_RE = /^(SOCKS5|HTTP) CONNECT blocked by routing rule$/;
-// Relay ended
+const TUN_CONNECT_RE = /^TUN tunnel established$/;
 const RELAY_END_RE = /^(Relay|Direct relay|TUN TCP relay) session ended$/;
 
 /**
- * Parse a log message and update the connections store if applicable.
- * Log messages from prisma-client contain structured tracing fields
- * formatted as key=value pairs at the start, e.g.: `dest=example.com:443 SOCKS5 CONNECT`
+ * Parse structured fields from a tracing log message.
+ *
+ * Tracing BroadcastLayer format: `"message text" key=value key2=value2`
+ * - The message part may be wrapped in double quotes (from record_debug)
+ *   or appear bare (from record_str).
+ * - Structured fields follow as `key=value` or `key="quoted value"` pairs.
+ *
+ * Returns { text, fields } where text is the unquoted message text and
+ * fields is a map of key-value pairs.
  */
-export function parseLogForConnection(msg: string): void {
-  // Cheap pre-check: skip the vast majority of log messages that aren't connection-related
-  if (!msg.includes("CONNECT") && !msg.includes("session ended")) return;
-
-  const store = useConnections.getState();
-
-  // Extract structured fields from the log message
-  // Format: "key=value key2=value2 actual message text"
+function parseTracingMessage(msg: string): { text: string; fields: Record<string, string> } {
   const fields: Record<string, string> = {};
-  let textPart = msg;
+  let rest = msg;
+  let text = "";
 
-  // Parse key=value or key="quoted value" fields at the start
+  // Try to extract a leading quoted message: "some text"
+  const quotedMsgRe = /^"([^"]*)"(.*)$/;
+  const qm = rest.match(quotedMsgRe);
+  if (qm) {
+    text = qm[1];
+    rest = qm[2].trimStart();
+  } else {
+    // No leading quoted message — the entire string might be bare text with
+    // fields appended.  Try to split at the first key=value boundary.
+    // Look for ` word=` pattern to find where fields start.
+    const fieldStart = rest.search(/\s\w+=/);
+    if (fieldStart > 0) {
+      text = rest.slice(0, fieldStart);
+      rest = rest.slice(fieldStart).trimStart();
+    } else {
+      text = rest;
+      rest = "";
+    }
+  }
+
+  // Parse remaining key=value pairs
   const fieldRe = /^(\w+)=((?:"[^"]*")|(?:\S+))\s*/;
   let match: RegExpMatchArray | null;
-  while ((match = textPart.match(fieldRe))) {
+  while ((match = rest.match(fieldRe))) {
     let val = match[2];
     if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
     fields[match[1]] = val;
-    textPart = textPart.slice(match[0].length);
+    rest = rest.slice(match[0].length);
   }
+
+  return { text, fields };
+}
+
+/**
+ * Parse a log message and update the connections store if applicable.
+ */
+export function parseLogForConnection(msg: string): void {
+  // Cheap pre-check: skip the vast majority of log messages that aren't connection-related
+  if (!msg.includes("CONNECT") && !msg.includes("session ended") && !msg.includes("TUN tunnel")) return;
+
+  const store = useConnections.getState();
+  const { text, fields } = parseTracingMessage(msg);
 
   const dest = fields["dest"] || "";
   const transport = fields["transport"] || "";
 
   // Proxy connection (routed through tunnel)
-  if (CONNECT_RE.test(textPart) && dest) {
-    const source = textPart.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
+  if (CONNECT_RE.test(text) && dest) {
+    const source = text.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
     const rule = source;
     store.addConnection({
       destination: dest,
@@ -127,15 +186,14 @@ export function parseLogForConnection(msg: string): void {
       bytesDown: 0,
       bytesUp: 0,
     });
-    // Extract domain (strip port)
     const domain = dest.replace(/:\d+$/, "");
     useAnalytics.getState().addTraffic(domain, 0, 0, rule);
     return;
   }
 
   // Direct connection (bypassing proxy)
-  if (DIRECT_RE.test(textPart) && dest) {
-    const source = textPart.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
+  if (DIRECT_RE.test(text) && dest) {
+    const source = text.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
     const rule = `${source} / Direct`;
     store.addConnection({
       destination: dest,
@@ -154,8 +212,8 @@ export function parseLogForConnection(msg: string): void {
   }
 
   // Blocked connection
-  if (BLOCKED_RE.test(textPart) && dest) {
-    const source = textPart.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
+  if (BLOCKED_RE.test(text) && dest) {
+    const source = text.startsWith("SOCKS5") ? "SOCKS5" : "HTTP";
     const rule = `${source} / Block`;
     store.addConnection({
       destination: dest,
@@ -173,10 +231,28 @@ export function parseLogForConnection(msg: string): void {
     return;
   }
 
-  // Relay session ended — close the most recent active connection
-  if (RELAY_END_RE.test(textPart)) {
+  // TUN tunnel established (tracked like proxy connections)
+  if (TUN_CONNECT_RE.test(text) && dest) {
+    const rule = "TUN";
+    store.addConnection({
+      destination: dest,
+      action: "proxy",
+      rule,
+      transport: transport || "TUN",
+      status: "active",
+      startedAt: Date.now(),
+      closedAt: null,
+      bytesDown: 0,
+      bytesUp: 0,
+    });
+    const domain = dest.replace(/:\d+$/, "");
+    useAnalytics.getState().addTraffic(domain, 0, 0, rule);
+    return;
+  }
+
+  // Relay session ended — close the oldest active connection (FIFO)
+  if (RELAY_END_RE.test(text)) {
     const conns = store.connections;
-    // Close the oldest active connection (FIFO)
     const active = conns.find((c) => c.status === "active");
     if (active) {
       store.closeConnection(active.destination);

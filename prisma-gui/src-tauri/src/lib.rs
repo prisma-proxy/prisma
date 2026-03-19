@@ -95,6 +95,9 @@ pub fn run() {
             commands::clear_per_app_filter,
             commands::get_running_apps,
             commands::get_per_app_filter,
+            commands::import_subscription,
+            commands::refresh_subscriptions,
+            commands::get_profiles_dir,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

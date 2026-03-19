@@ -250,6 +250,34 @@ pub fn get_per_app_filter() -> Result<Option<serde_json::Value>, String> {
     }
 }
 
+// ── subscriptions ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn import_subscription(url: String) -> Result<serde_json::Value, String> {
+    let cstr = CString::new(url).map_err(|e| e.to_string())?;
+    let ptr = unsafe { prisma_ffi::prisma_import_subscription(cstr.as_ptr()) };
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("import failed".into()),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn refresh_subscriptions() -> Result<serde_json::Value, String> {
+    let ptr = prisma_ffi::prisma_refresh_subscriptions();
+    match unsafe { read_owned_cstr(ptr) } {
+        None => Err("refresh failed".into()),
+        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+    }
+}
+
+// ── profiles dir ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_profiles_dir() -> Result<String, String> {
+    prisma_ffi::ProfileManager::profiles_dir_str().map_err(|e| e.to_string())
+}
+
 // ── speed test ────────────────────────────────────────────────────────────────
 
 #[tauri::command]

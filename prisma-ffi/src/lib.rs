@@ -392,6 +392,37 @@ pub unsafe extern "C" fn prisma_profile_delete(id: *const c_char) -> c_int {
     }
 }
 
+/// Import profiles from a subscription URL. Returns JSON ImportResult. Caller must free.
+///
+/// # Safety
+/// `url` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_import_subscription(url: *const c_char) -> *mut c_char {
+    let url_str = match cstr_to_str_opt!(url) {
+        Some(s) => s,
+        None => return std::ptr::null_mut(),
+    };
+    match profiles::ProfileManager::import_from_url(url_str) {
+        Ok(result) => serde_json::to_string(&result)
+            .ok()
+            .and_then(|s| CString::new(s).ok())
+            .map_or(std::ptr::null_mut(), CString::into_raw),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Refresh all subscription profiles. Returns JSON ImportResult. Caller must free.
+#[no_mangle]
+pub extern "C" fn prisma_refresh_subscriptions() -> *mut c_char {
+    match profiles::ProfileManager::refresh_all() {
+        Ok(result) => serde_json::to_string(&result)
+            .ok()
+            .and_then(|s| CString::new(s).ok())
+            .map_or(std::ptr::null_mut(), CString::into_raw),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 // ── QR code ──────────────────────────────────────────────────────────────────
 
 /// Encode a profile JSON to a QR SVG string. Caller must call `prisma_free_string`.

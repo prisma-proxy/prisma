@@ -6,11 +6,9 @@ import {
 import { Button } from "@/components/ui/button";
 import type { WizardState } from "@/lib/buildConfig";
 import { DEFAULT_WIZARD, buildClientConfig, validateWizard } from "@/lib/buildConfig";
-import { useSettings } from "@/store/settings";
 import Step1Connection from "./wizard/Step1Connection";
 import Step2Auth from "./wizard/Step2Auth";
 import Step3Transport from "./wizard/Step3Transport";
-import Step4RoutingTun from "./wizard/Step4RoutingTun";
 import Step5Review from "./wizard/Step5Review";
 
 interface Props {
@@ -22,14 +20,11 @@ interface Props {
 
 export default function ProfileWizard({ open, onOpenChange, initial, onSave }: Props) {
   const { t } = useTranslation();
-  const socks5Port = useSettings((s) => s.socks5Port);
-  const httpPort = useSettings((s) => s.httpPort);
 
   const STEP_LABELS = [
     t("wizard.connection"),
     t("wizard.auth"),
     t("wizard.transport"),
-    t("wizard.routingTun"),
     t("wizard.review"),
   ];
 
@@ -65,7 +60,7 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
     setSaving(true);
     setSaveError("");
     try {
-      await onSave(state.name, buildClientConfig(state, { socks5Port, httpPort }), state.tags);
+      await onSave(state.name, buildClientConfig(state), state.tags);
       handleOpen(false);
     } catch (e) {
       setSaveError(String(e));
@@ -120,8 +115,7 @@ export default function ProfileWizard({ open, onOpenChange, initial, onSave }: P
           {step === 0 && <Step1Connection state={state} onChange={patch} />}
           {step === 1 && <Step2Auth state={state} onChange={patch} />}
           {step === 2 && <Step3Transport state={state} onChange={patch} />}
-          {step === 3 && <Step4RoutingTun state={state} onChange={patch} />}
-          {step === 4 && <Step5Review state={state} onChange={patch} />}
+          {step === 3 && <Step5Review state={state} onChange={patch} />}
         </div>
 
         {saveError && (

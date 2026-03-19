@@ -215,7 +215,7 @@ where
         }
     }
 
-    debug!("TUN TCP relay ended");
+    debug!("TUN TCP relay session ended");
     Ok(())
 }
 
