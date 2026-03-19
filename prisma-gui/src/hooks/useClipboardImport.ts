@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { notify } from "@/store/notifications";
 import { api } from "@/lib/commands";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 
 export function useClipboardImport() {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export function useClipboardImport() {
   useEffect(() => {
     async function checkClipboard() {
       try {
-        const text = await navigator.clipboard.readText();
+        const text = await readText();
         if (!text || !text.startsWith("prisma://")) return;
         if (text === lastUri.current) return;
         lastUri.current = text;

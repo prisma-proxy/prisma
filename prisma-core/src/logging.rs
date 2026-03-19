@@ -1,6 +1,33 @@
+use std::sync::OnceLock;
+
+use tracing_subscriber::layer::Layer as _;
+use tracing_subscriber::reload;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::state::LogEntry;
+
+/// Global reload handle for swapping the EnvFilter at runtime.
+static FILTER_HANDLE: OnceLock<reload::Handle<EnvFilter, tracing_subscriber::Registry>> =
+    OnceLock::new();
+
+/// Global reload handle for swapping the BroadcastLayer at runtime.
+static BROADCAST_HANDLE: OnceLock<
+    reload::Handle<BroadcastLayer, tracing_subscriber::layer::Layered<reload::Layer<EnvFilter, tracing_subscriber::Registry>, tracing_subscriber::Registry>>,
+> = OnceLock::new();
+
+/// Update the log level filter at runtime (safe to call on reconnect).
+pub fn update_log_level(level: &str) {
+    if let Some(handle) = FILTER_HANDLE.get() {
+        let _ = handle.reload(EnvFilter::new(level));
+    }
+}
+
+/// Update the broadcast sender at runtime (safe to call on reconnect).
+pub fn update_broadcast_tx(tx: tokio::sync::broadcast::Sender<LogEntry>) {
+    if let Some(handle) = BROADCAST_HANDLE.get() {
+        let _ = handle.reload(BroadcastLayer { tx });
+    }
+}
 
 /// Initialize the logging/tracing system.
 ///
@@ -9,18 +36,18 @@ use crate::state::LogEntry;
 pub fn init_logging(level: &str, format: &str) {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
 
-    // Use try_init to avoid panicking if a global subscriber is already set
-    // (e.g. when called from FFI where connect/disconnect cycles reuse the process).
+    // Use try_init to avoid panicking if a global subscriber is already set.
     let _ = match format {
         "json" => fmt().with_env_filter(filter).json().try_init(),
         _ => fmt().with_env_filter(filter).pretty().try_init(),
     };
 }
 
-/// Initialize logging with a broadcast layer for the management API.
+/// Initialize logging with a broadcast layer for GUI/FFI.
 ///
-/// Log entries are sent on `log_tx` for WebSocket subscribers.
-/// The broadcast layer is additive — console output still works.
+/// On first call: installs the global subscriber with reloadable filter
+/// and broadcast layers. On subsequent calls: hot-swaps the filter level
+/// and broadcast sender so that reconnections pick up new settings.
 pub fn init_logging_with_broadcast(
     level: &str,
     format: &str,
@@ -29,19 +56,31 @@ pub fn init_logging_with_broadcast(
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
 
+    // If already initialized, just hot-swap the filter + broadcast sender.
+    if FILTER_HANDLE.get().is_some() {
+        update_log_level(level);
+        update_broadcast_tx(log_tx);
+        return;
+    }
+
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+    let (filter_layer, filter_handle) = reload::Layer::new(filter);
     let broadcast_layer = BroadcastLayer { tx: log_tx };
+    let (broadcast_reload, broadcast_handle) = reload::Layer::new(broadcast_layer);
 
-    let registry = tracing_subscriber::registry()
-        .with(filter)
-        .with(broadcast_layer);
-
-    // Use try_init to avoid panicking if a global subscriber is already set
-    // (e.g. when called from FFI where connect/disconnect cycles reuse the process).
-    let _ = match format {
-        "json" => registry.with(fmt::layer().json()).try_init(),
-        _ => registry.with(fmt::layer().pretty()).try_init(),
+    let fmt_layer = match format {
+        "json" => fmt::layer().json().boxed(),
+        _ => fmt::layer().pretty().boxed(),
     };
+    let registry = tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(broadcast_reload)
+        .with(fmt_layer);
+
+    if registry.try_init().is_ok() {
+        let _ = FILTER_HANDLE.set(filter_handle);
+        let _ = BROADCAST_HANDLE.set(broadcast_handle);
+    }
 }
 
 /// Tracing layer that broadcasts log events.

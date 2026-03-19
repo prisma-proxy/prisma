@@ -36,9 +36,14 @@ export default function Rules() {
     setOpen(false);
   }
 
-  function handleExportRules() {
-    downloadJson(rules, `prisma-rules-${Date.now()}.json`);
-    notify.success(t("rules.exported"));
+  async function handleExportRules() {
+    try {
+      await downloadJson(rules, `prisma-rules-${Date.now()}.json`);
+      notify.success(t("rules.exported"));
+    } catch (e) {
+      if (e instanceof Error && e.message === "No file selected") return;
+      notify.error(String(e));
+    }
   }
 
   async function handleImportRules() {

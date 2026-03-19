@@ -271,6 +271,59 @@ pub fn refresh_subscriptions() -> Result<serde_json::Value, String> {
     }
 }
 
+// ── open folder ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn open_folder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// ── file download ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn download_file(
+    url: String,
+    dest_path: String,
+    proxy_port: u16,
+) -> Result<(), String> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120));
+    if proxy_port > 0 {
+        let proxy = reqwest::Proxy::all(format!("socks5://127.0.0.1:{}", proxy_port))
+            .map_err(|e| e.to_string())?;
+        builder = builder.proxy(proxy);
+    }
+    let client = builder.build().map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    tokio::fs::write(&dest_path, &bytes).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ── profiles dir ──────────────────────────────────────────────────────────────
 
 #[tauri::command]

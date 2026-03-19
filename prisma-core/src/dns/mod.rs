@@ -83,7 +83,7 @@ impl Default for DnsConfig {
 }
 
 fn default_dns_listen_addr() -> String {
-    "127.0.0.1:53".into()
+    "127.0.0.1:10053".into()
 }
 
 fn default_fake_ip_range() -> String {

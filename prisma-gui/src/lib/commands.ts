@@ -88,4 +88,10 @@ export const api = {
 
   getProfilesDir: () =>
     invoke<string>("get_profiles_dir"),
+
+  openFolder: (path: string) =>
+    invoke<void>("open_folder", { path }),
+
+  downloadFile: (url: string, destPath: string, proxyPort: number) =>
+    invoke<void>("download_file", { url, destPath, proxyPort }),
 };

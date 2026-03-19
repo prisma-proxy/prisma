@@ -1,47 +1,40 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { save, open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Download a JSON-serializable value as a .json file. */
-export function downloadJson(data: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  downloadBlob(blob, filename);
+/** Save a JSON-serializable value via native "Save As" dialog. */
+export async function downloadJson(data: unknown, filename: string): Promise<void> {
+  const path = await save({
+    defaultPath: filename,
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (!path) return; // user cancelled
+  await writeTextFile(path, JSON.stringify(data, null, 2));
 }
 
-/** Download a text string as a file. */
-export function downloadText(text: string, filename: string): void {
-  const blob = new Blob([text], { type: "text/plain" });
-  downloadBlob(blob, filename);
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+/** Save a text string via native "Save As" dialog. */
+export async function downloadText(text: string, filename: string): Promise<void> {
+  const ext = filename.split(".").pop() ?? "txt";
+  const path = await save({
+    defaultPath: filename,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (!path) return;
+  await writeTextFile(path, text);
 }
 
 /** Open a file picker for .json files and return the parsed content. */
-export function pickJsonFile(): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) { reject(new Error("No file selected")); return; }
-      try {
-        const text = await file.text();
-        resolve(JSON.parse(text));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    input.click();
+export async function pickJsonFile(): Promise<unknown> {
+  const selected = await open({
+    filters: [{ name: "JSON", extensions: ["json"] }],
+    multiple: false,
   });
+  if (!selected) throw new Error("No file selected");
+  const text = await readTextFile(selected);
+  return JSON.parse(text);
 }

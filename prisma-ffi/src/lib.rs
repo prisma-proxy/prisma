@@ -18,7 +18,7 @@ mod stats_poller;
 mod system_proxy;
 
 use connection::ConnectionManager;
-use profiles::ProfileManager;
+pub use profiles::ProfileManager;
 use runtime::PrismaRuntime;
 
 // ── Error codes ──────────────────────────────────────────────────────────────

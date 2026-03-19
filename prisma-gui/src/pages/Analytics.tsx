@@ -15,6 +15,7 @@ import {
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAnalytics } from "@/store/analytics";
 import { fmtBytes } from "@/lib/format";
+import { downloadText } from "@/lib/utils";
 
 type TrendRange = 7 | 30;
 
@@ -76,15 +77,11 @@ export default function Analytics() {
     return Object.entries(ruleStats).sort((a, b) => b[1].bytes_total - a[1].bytes_total);
   }, [ruleStats]);
 
-  function handleExport() {
+  async function handleExport() {
     const csv = exportCsv();
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `prisma-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      await downloadText(csv, `prisma-analytics-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch { /* user cancelled */ }
   }
 
   return (

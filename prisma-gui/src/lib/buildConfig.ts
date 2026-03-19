@@ -195,6 +195,82 @@ export function parsePortForwards(text: string): { name: string; local_addr: str
     .filter((pf) => pf.name && pf.local_addr && pf.remote_port > 0);
 }
 
+/**
+ * Merge global settings + GUI routing rules into a raw profile config,
+ * producing a complete ClientConfig-shaped object ready for the backend.
+ */
+export function mergeSettingsIntoConfig(
+  profileConfig: Record<string, unknown>,
+  settings: import("@/store/settings").AppSettings,
+  guiRules: { type: string; match: string; action: string }[],
+): Record<string, unknown> {
+  const config = { ...profileConfig };
+
+  // Ports
+  config.socks5_listen_addr = `127.0.0.1:${settings.socks5Port || 1080}`;
+  if (settings.httpPort && settings.httpPort > 0) {
+    config.http_listen_addr = `127.0.0.1:${settings.httpPort}`;
+  } else {
+    delete config.http_listen_addr;
+  }
+
+  // DNS
+  config.dns = {
+    mode: settings.dnsMode,
+    upstream: settings.dnsUpstream,
+    ...(settings.dnsMode === "fake" ? { fake_ip_range: settings.fakeIpRange } : {}),
+  };
+
+  // Logging
+  if (settings.logLevel !== "info" || settings.logFormat !== "pretty") {
+    config.logging = { level: settings.logLevel, format: settings.logFormat };
+  } else {
+    delete config.logging;
+  }
+
+  // TUN
+  if (settings.tunEnabled) {
+    const incl = settings.tunIncludeRoutes.split("\n").map(s => s.trim()).filter(Boolean);
+    const excl = settings.tunExcludeRoutes.split("\n").map(s => s.trim()).filter(Boolean);
+    config.tun = {
+      enabled: true,
+      device_name: settings.tunDevice || "prisma-tun0",
+      mtu: settings.tunMtu || 1500,
+      include_routes: incl.length > 0 ? incl : ["0.0.0.0/0"],
+      exclude_routes: excl,
+    };
+  } else {
+    delete config.tun;
+  }
+
+  // Port forwards
+  const pfs = parsePortForwards(settings.portForwards);
+  if (pfs.length > 0) {
+    config.port_forwards = pfs;
+  } else {
+    delete config.port_forwards;
+  }
+
+  // Routing rules + geo paths
+  const routing = { ...((config.routing ?? {}) as Record<string, unknown>) };
+  if (guiRules.length > 0) {
+    const backendRules = convertGuiRulesToBackend(guiRules);
+    const existingRules = Array.isArray(routing.rules) ? routing.rules : [];
+    routing.rules = [...backendRules, ...existingRules];
+  }
+  if (settings.routingGeoipPath && !routing.geoip_path) {
+    routing.geoip_path = settings.routingGeoipPath;
+  }
+  if (settings.routingGeositePath && !routing.geosite_path) {
+    routing.geosite_path = settings.routingGeositePath;
+  }
+  if (Object.keys(routing).length > 0) {
+    config.routing = routing;
+  }
+
+  return config;
+}
+
 /** Parse "Key: Value" lines into [key, value] tuples */
 function parseHeaderLines(text: string): [string, string][] {
   return text

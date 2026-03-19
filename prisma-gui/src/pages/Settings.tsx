@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open as shellOpen } from "@tauri-apps/plugin-shell";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { platform as osPlatform } from "@tauri-apps/plugin-os";
 import { useTranslation } from "react-i18next";
 import {
   RefreshCw, Download, FolderOpen, Copy, Trash2, FileDown,
-  FileUp, RotateCcw, Info, Shield, Search, AppWindow,
+  FileUp, RotateCcw, Info, Shield, Search, AppWindow, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStore } from "@/store";
 import { useSettings, type AppSettings } from "@/store/settings";
@@ -37,7 +40,7 @@ const SETTINGS_KEYS: (keyof AppSettings)[] = [
   "autoReconnect", "reconnectDelaySecs", "reconnectMaxAttempts",
   "logLevel", "logFormat",
   "tunEnabled", "tunDevice", "tunMtu", "tunIncludeRoutes", "tunExcludeRoutes",
-  "portForwards", "routingGeoipPath",
+  "portForwards", "routingGeoipPath", "routingGeositePath",
 ];
 
 // ── Port input with local state, commits on blur ─────────────────────────────
@@ -94,7 +97,7 @@ export default function Settings() {
     autoReconnect, reconnectDelaySecs, reconnectMaxAttempts,
     logLevel, logFormat,
     tunEnabled, tunDevice, tunMtu, tunIncludeRoutes, tunExcludeRoutes,
-    portForwards, routingGeoipPath,
+    portForwards, routingGeoipPath, routingGeositePath,
     patch,
   } = useSettings();
   const clearHistory = useConnectionHistory((s) => s.clear);
@@ -104,6 +107,8 @@ export default function Settings() {
   const perApp = usePerApp();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [geoipDownloading, setGeoipDownloading] = useState(false);
+  const [geositeDownloading, setGeositeDownloading] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmClearDataOpen, setConfirmClearDataOpen] = useState(false);
   const [platformName, setPlatformName] = useState("unknown");
@@ -173,7 +178,7 @@ export default function Settings() {
   async function handleOpenConfigFolder() {
     try {
       const dir = await api.getProfilesDir();
-      await shellOpen(dir);
+      await api.openFolder(dir);
     } catch (e) {
       notify.error(String(e));
     }
@@ -197,25 +202,32 @@ export default function Settings() {
     ].join("\n");
 
     try {
-      await navigator.clipboard.writeText(info);
+      await writeText(info);
       notify.success(t("settings.copiedSystemInfo"));
     } catch {
       notify.error("Clipboard not available");
     }
   }
 
-  function handleExportSettings() {
-    const data = {
-      version: "0.7.0",
-      exportedAt: new Date().toISOString(),
-      settings: {
-        language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
-        dnsMode, dnsUpstream, fakeIpRange,
-        autoReconnect, reconnectDelaySecs, reconnectMaxAttempts,
-      },
-    };
-    downloadJson(data, `prisma-settings-${Date.now()}.json`);
-    notify.success(t("settings.settingsExported"));
+  async function handleExportSettings() {
+    try {
+      const data = {
+        version: "0.7.0",
+        exportedAt: new Date().toISOString(),
+        settings: {
+          language, theme, startOnBoot, minimizeToTray, socks5Port, httpPort,
+          dnsMode, dnsUpstream, fakeIpRange,
+          autoReconnect, reconnectDelaySecs, reconnectMaxAttempts,
+          logLevel, logFormat,
+          tunEnabled, tunDevice, tunMtu, tunIncludeRoutes, tunExcludeRoutes,
+          portForwards, routingGeoipPath, routingGeositePath,
+        },
+      };
+      await downloadJson(data, `prisma-settings-${Date.now()}.json`);
+      notify.success(t("settings.settingsExported"));
+    } catch (e) {
+      notify.error(String(e));
+    }
   }
 
   async function handleImportSettings() {
@@ -259,6 +271,7 @@ export default function Settings() {
       tunExcludeRoutes: "",
       portForwards: "",
       routingGeoipPath: "",
+      routingGeositePath: "",
     });
     i18n.changeLanguage("en");
     notify.success(t("settings.settingsReset"));
@@ -301,7 +314,7 @@ export default function Settings() {
         dataUsage: useDataUsage.getState().daily,
       };
 
-      downloadJson(backup, `prisma-backup-${Date.now()}.json`);
+      await downloadJson(backup, `prisma-backup-${Date.now()}.json`);
       notify.success(t("settings.backupExported"));
     } catch (e) {
       notify.error(`Export failed: ${String(e)}`);
@@ -438,6 +451,29 @@ export default function Settings() {
       notify.success(t("settings.perAppSaved"));
     } catch (e) {
       notify.error(t("settings.perAppError"));
+    }
+  }
+
+  const GEO_URLS = {
+    geoip: "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat",
+    geosite: "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat",
+  } as const;
+
+  async function handleDownloadGeoDB(kind: "geoip" | "geosite", useProxy: boolean) {
+    const setLoading = kind === "geoip" ? setGeoipDownloading : setGeositeDownloading;
+    const settingsKey = kind === "geoip" ? "routingGeoipPath" : "routingGeositePath";
+    setLoading(true);
+    try {
+      const dir = await api.getProfilesDir();
+      const destPath = `${dir}/${kind}.dat`;
+      const proxyPort = useProxy ? (socks5Port || 1080) : 0;
+      await api.downloadFile(GEO_URLS[kind], destPath, proxyPort);
+      patch({ [settingsKey]: destPath });
+      notify.success(t("settings.downloadFileOk", { path: destPath }));
+    } catch (e) {
+      notify.error(t("settings.downloadFileFailed", { error: String(e) }));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -636,10 +672,45 @@ export default function Settings() {
       <div className="space-y-4">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.routing")}</p>
         <p className="text-xs text-muted-foreground">{t("settings.appliedOnConnect")}</p>
+
+        {/* GeoIP */}
         <div className="space-y-1">
           <Label htmlFor="s-geoip">{t("settings.routingGeoipPath")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
-          <Input id="s-geoip" value={routingGeoipPath} onChange={(e) => patch({ routingGeoipPath: e.target.value })} placeholder="/path/to/geoip.dat" className="font-mono text-xs" />
+          <div className="flex gap-2">
+            <Input id="s-geoip" value={routingGeoipPath} onChange={(e) => patch({ routingGeoipPath: e.target.value })} placeholder="/path/to/geoip.dat" className="font-mono text-xs flex-1" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={geoipDownloading} className="shrink-0">
+                  {geoipDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDownloadGeoDB("geoip", false)}>{t("settings.downloadDirect")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadGeoDB("geoip", true)}>{t("settings.downloadViaProxy")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <p className="text-xs text-muted-foreground">{t("settings.routingGeoipHint")}</p>
+        </div>
+
+        {/* Geosite */}
+        <div className="space-y-1">
+          <Label htmlFor="s-geosite">{t("settings.routingGeositePath")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
+          <div className="flex gap-2">
+            <Input id="s-geosite" value={routingGeositePath} onChange={(e) => patch({ routingGeositePath: e.target.value })} placeholder="/path/to/geosite.dat" className="font-mono text-xs flex-1" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={geositeDownloading} className="shrink-0">
+                  {geositeDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDownloadGeoDB("geosite", false)}>{t("settings.downloadDirect")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadGeoDB("geosite", true)}>{t("settings.downloadViaProxy")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings.routingGeositeHint")}</p>
         </div>
       </div>
 

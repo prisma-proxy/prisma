@@ -7,6 +7,7 @@ import { useStore } from "../store";
 import { useConnection } from "./useConnection";
 import { notify } from "../store/notifications";
 import { api } from "../lib/commands";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 export function useWindowEvents() {
   const minimizeToTray = useSettings((s) => s.minimizeToTray);
@@ -43,7 +44,7 @@ export function useWindowEvents() {
       const port = useSettings.getState().socks5Port;
       const addr = `127.0.0.1:${port || 1080}`;
       try {
-        await navigator.clipboard.writeText(addr);
+        await writeText(addr);
         notify.success(`Copied: ${addr}`);
       } catch {
         notify.error("Clipboard not available");

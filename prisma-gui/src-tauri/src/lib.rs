@@ -57,6 +57,9 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(state::AppState {
             client: std::sync::Mutex::new(client as usize),
         })
@@ -98,6 +101,8 @@ pub fn run() {
             commands::import_subscription,
             commands::refresh_subscriptions,
             commands::get_profiles_dir,
+            commands::open_folder,
+            commands::download_file,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

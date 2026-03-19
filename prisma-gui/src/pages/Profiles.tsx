@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap } from "lucide-react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,9 +31,11 @@ import { notify } from "@/store/notifications";
 import { api } from "@/lib/commands";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtDuration } from "@/lib/format";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
-import { parseProfileToWizard } from "@/lib/buildConfig";
+import { parseProfileToWizard, mergeSettingsIntoConfig } from "@/lib/buildConfig";
 import type { WizardState } from "@/lib/buildConfig";
+import { useRules } from "@/store/rules";
 import type { Profile } from "@/lib/types";
+import { useSettings } from "@/store/settings";
 
 type ShareTab = "toml" | "uri" | "qr";
 
@@ -290,8 +293,13 @@ export default function Profiles() {
     setShareTab("toml");
     setShareOpen(true);
 
-    // Load all three formats in parallel
-    const configJson = JSON.stringify(p.config);
+    const config = mergeSettingsIntoConfig(
+      p.config as Record<string, unknown>,
+      useSettings.getState(),
+      useRules.getState().rules,
+    );
+
+    const configJson = JSON.stringify(config);
     const profileJson = JSON.stringify(p);
     const [tomlRes, uriRes, qrRes] = await Promise.allSettled([
       api.profileConfigToToml(configJson),
@@ -307,7 +315,7 @@ export default function Profiles() {
     const text = shareTab === "toml" ? shareToml : shareUri;
     if (!text) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await writeText(text);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
       notify.success(t("profiles.copiedToClipboard"));
@@ -350,9 +358,9 @@ export default function Profiles() {
     }
   }
 
-  function handleExportAll() {
+  async function handleExportAll() {
     try {
-      downloadJson(profiles, `prisma-profiles-${Date.now()}.json`);
+      await downloadJson(profiles, `prisma-profiles-${Date.now()}.json`);
     } catch {
       notify.error(t("profiles.exportFailed"));
     }

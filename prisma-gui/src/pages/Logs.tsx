@@ -82,11 +82,13 @@ export default function Logs() {
     return () => clearTimeout(scrollTimerRef.current);
   }, [filtered.length, paused, virtualizer]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     const lines = filtered.map(
       (l) => `[${new Date(l.time).toISOString()}] [${l.level}] ${l.msg}`
     );
-    downloadText(lines.join("\n"), `prisma-logs-${new Date().toISOString().slice(0, 10)}.txt`);
+    try {
+      await downloadText(lines.join("\n"), `prisma-logs-${new Date().toISOString().slice(0, 10)}.txt`);
+    } catch { /* user cancelled */ }
   }, [filtered]);
 
   return (

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import StatusBadge from "@/components/StatusBadge";
 import SpeedGraph from "@/components/SpeedGraph";
 import { useStore } from "@/store";
@@ -14,6 +15,8 @@ import { useConnectionHistory } from "@/store/connectionHistory";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtUptime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/commands";
+import { notify } from "@/store/notifications";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useDataUsage } from "@/store/dataUsage";
 import { MODE_SOCKS5, MODE_SYSTEM_PROXY, MODE_TUN, MODE_PER_APP } from "@/lib/types";
 
@@ -32,12 +35,13 @@ export default function Home() {
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
   const { toggle } = useConnection();
   const events = useConnectionHistory((s) => s.events);
-  const todayUsage = useDataUsage.getState().getToday();
+  const todayUsage = useDataUsage((s) => s.getToday());
   const recentEvents = events.slice(-10).reverse();
 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [latency, setLatency] = useState<number | null>(null);
 
   useEffect(() => {
     api.listProfiles()
@@ -45,6 +49,35 @@ export default function Home() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [setProfiles]);
+
+  // Derive server address from active profile (stable string, avoids profiles array dep)
+  const serverAddr = useMemo(() => {
+    const profile = activeProfileIdx !== null ? profiles[activeProfileIdx] : null;
+    if (!profile) return null;
+    const config = profile.config as Record<string, unknown>;
+    return typeof config.server_addr === "string" ? config.server_addr : null;
+  }, [activeProfileIdx, profiles]);
+
+  useEffect(() => {
+    if (!connected || !serverAddr) {
+      setLatency(null);
+      return;
+    }
+
+    const addr = serverAddr; // capture narrowed string
+    let cancelled = false;
+    async function ping() {
+      try {
+        const ms = await api.pingServer(addr);
+        if (!cancelled) setLatency(ms);
+      } catch {
+        if (!cancelled) setLatency(null);
+      }
+    }
+    ping();
+    const interval = setInterval(ping, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [connected, serverAddr]);
 
   const handleConnect = useCallback(async () => {
     setBusy(true);
@@ -67,6 +100,7 @@ export default function Home() {
   }, [setProxyModes]);
 
   const activeProfile = activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
+  const latencyColor = latency === null ? "text-muted-foreground" : latency < 100 ? "text-green-500" : latency < 300 ? "text-yellow-500" : "text-red-500";
 
   return (
     <ScrollArea className="h-full">
@@ -116,7 +150,7 @@ export default function Home() {
 
       {/* Session stats */}
       {connected && stats && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <ArrowDown size={14} className="text-green-400 mb-0.5" />
@@ -143,6 +177,15 @@ export default function Home() {
               <Timer size={14} className="text-yellow-400 mb-0.5" />
               <p className="text-sm font-bold font-mono">{fmtUptime(stats.uptime_secs)}</p>
               <p className="text-[10px] text-muted-foreground">{t("home.uptime")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-2 px-3 flex flex-col items-center">
+              <Signal size={14} className={`mb-0.5 ${latencyColor}`} />
+              <p className={`text-sm font-bold ${latencyColor}`}>
+                {latency !== null ? `${latency}ms` : "—"}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{t("home.latency")}</p>
             </CardContent>
           </Card>
         </div>
@@ -194,19 +237,28 @@ export default function Home() {
           )}
         </Button>
         {connected && (
-          <Button
-            variant="outline"
-            size="icon"
-            title={t("home.copyPacUrl")}
-            onClick={async () => {
-              try {
-                const url = await api.getPacUrl(0);
-                await navigator.clipboard.writeText(url);
-              } catch {}
-            }}
-          >
-            <ClipboardCopy size={16} />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={async () => {
+                    try {
+                      const url = await api.getPacUrl(0);
+                      await writeText(url);
+                      notify.success(t("home.pacUrlCopied"));
+                    } catch (e) {
+                      notify.error(String(e));
+                    }
+                  }}
+                >
+                  <ClipboardCopy size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("home.copyPacUrl")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
 

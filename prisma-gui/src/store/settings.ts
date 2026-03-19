@@ -23,6 +23,7 @@ export interface AppSettings {
   tunExcludeRoutes: string;  // newline-separated CIDRs
   portForwards: string;      // "name,local_addr,remote_port" per line
   routingGeoipPath: string;
+  routingGeositePath: string;
 }
 
 interface SettingsStore extends AppSettings {
@@ -53,6 +54,7 @@ export const useSettings = create<SettingsStore>()(
       tunExcludeRoutes: "",
       portForwards: "",
       routingGeoipPath: "",
+      routingGeositePath: "",
       patch: (values) => set(values),
     }),
     { name: "prisma-settings" }
