@@ -320,6 +320,47 @@ pub struct PortForwardConfig {
     pub name: String,
     pub local_addr: String,
     pub remote_port: u16,
+    /// Protocol: "tcp" (default) or "udp".
+    #[serde(default = "default_forward_protocol")]
+    pub protocol: String,
+    /// Server bind address override (default: 0.0.0.0).
+    #[serde(default)]
+    pub bind_addr: Option<String>,
+    /// Max concurrent connections for this forward (default: unlimited/0).
+    #[serde(default)]
+    pub max_connections: Option<u32>,
+    /// Close idle connections after N seconds (default: 300).
+    #[serde(default)]
+    pub idle_timeout_secs: Option<u64>,
+    /// Timeout for connecting to local service (default: 10).
+    #[serde(default)]
+    pub connect_timeout_secs: Option<u64>,
+    /// Per-forward upload limit (e.g., "10mbps").
+    #[serde(default)]
+    pub bandwidth_up: Option<String>,
+    /// Per-forward download limit (e.g., "10mbps").
+    #[serde(default)]
+    pub bandwidth_down: Option<String>,
+    /// IP whitelist for server-side listener (empty = allow all).
+    #[serde(default)]
+    pub allowed_ips: Vec<String>,
+    /// Enable/disable individual forwards (default: true).
+    #[serde(default = "default_true_val")]
+    pub enabled: bool,
+    /// Auto-retry if local connection fails (default: false).
+    #[serde(default)]
+    pub retry_on_failure: bool,
+    /// Custom buffer size (default: 8192).
+    #[serde(default)]
+    pub buffer_size: Option<usize>,
+}
+
+fn default_forward_protocol() -> String {
+    "tcp".into()
+}
+
+fn default_true_val() -> bool {
+    true
 }
 
 fn default_protocol_version() -> String {

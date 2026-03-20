@@ -606,6 +606,7 @@ where
         Command::RegisterForward {
             remote_port,
             ref name,
+            ..
         } => {
             if let Some(conn) = state
                 .connections
@@ -617,6 +618,7 @@ where
             }
 
             info!(port = remote_port, name = %name, "Client requesting port forwarding mode");
+            let client_uuid = Some(session_keys.client_id.0);
             forward::run_forward_session_with_first_command(
                 tunnel_read,
                 tunnel_write,
@@ -627,6 +629,8 @@ where
                 state.metrics.clone(),
                 bytes_up,
                 bytes_down,
+                state.forward_registry.clone(),
+                client_uuid,
             )
             .await
         }

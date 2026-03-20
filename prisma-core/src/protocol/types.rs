@@ -158,11 +158,21 @@ pub enum Command {
     RegisterForward {
         remote_port: u16,
         name: String,
+        /// Protocol: "tcp" or "udp".
+        protocol: String,
+        /// Server bind address override.
+        bind_addr: Option<String>,
+        /// Max concurrent connections for this forward.
+        max_connections: Option<u32>,
+        /// IP whitelist for server-side listener (empty = allow all).
+        allowed_ips: Vec<String>,
     },
     /// Server → Client: acknowledge a port forward registration.
     ForwardReady {
         remote_port: u16,
         success: bool,
+        /// Why registration failed (only set when success=false).
+        error_reason: Option<String>,
     },
     /// Server → Client: a new inbound connection arrived on a forwarded port.
     /// The `stream_id` on the enclosing DataFrame identifies this forwarded connection.

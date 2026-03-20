@@ -406,21 +406,66 @@ pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
         Command::Close => Vec::new(),
         Command::Ping(seq) => seq.to_be_bytes().to_vec(),
         Command::Pong(seq) => seq.to_be_bytes().to_vec(),
-        Command::RegisterForward { remote_port, name } => {
+        Command::RegisterForward {
+            remote_port,
+            name,
+            protocol,
+            bind_addr,
+            max_connections,
+            allowed_ips,
+        } => {
             let name_bytes = name.as_bytes();
-            let mut buf = Vec::with_capacity(2 + 1 + name_bytes.len());
+            let proto_bytes = protocol.as_bytes();
+            let mut buf = Vec::with_capacity(64);
             buf.extend_from_slice(&remote_port.to_be_bytes());
+            // name: [len:1][bytes]
             buf.push(name_bytes.len() as u8);
             buf.extend_from_slice(name_bytes);
+            // protocol: [len:1][bytes]
+            buf.push(proto_bytes.len() as u8);
+            buf.extend_from_slice(proto_bytes);
+            // bind_addr: [has:1] then [len:1][bytes] if present
+            if let Some(ref addr) = bind_addr {
+                let addr_bytes = addr.as_bytes();
+                buf.push(1);
+                buf.push(addr_bytes.len() as u8);
+                buf.extend_from_slice(addr_bytes);
+            } else {
+                buf.push(0);
+            }
+            // max_connections: [has:1] then [u32:4] if present
+            if let Some(mc) = max_connections {
+                buf.push(1);
+                buf.extend_from_slice(&mc.to_be_bytes());
+            } else {
+                buf.push(0);
+            }
+            // allowed_ips: [count:2] then for each [len:1][bytes]
+            buf.extend_from_slice(&(allowed_ips.len() as u16).to_be_bytes());
+            for ip in allowed_ips {
+                let ip_bytes = ip.as_bytes();
+                buf.push(ip_bytes.len() as u8);
+                buf.extend_from_slice(ip_bytes);
+            }
             buf
         }
         Command::ForwardReady {
             remote_port,
             success,
+            error_reason,
         } => {
-            let mut buf = Vec::with_capacity(3);
+            let mut buf = Vec::with_capacity(16);
             buf.extend_from_slice(&remote_port.to_be_bytes());
             buf.push(u8::from(*success));
+            // error_reason: [has:1] then [len:2][bytes] if present
+            if let Some(ref reason) = error_reason {
+                let reason_bytes = reason.as_bytes();
+                buf.push(1);
+                buf.extend_from_slice(&(reason_bytes.len() as u16).to_be_bytes());
+                buf.extend_from_slice(reason_bytes);
+            } else {
+                buf.push(0);
+            }
             buf
         }
         Command::ForwardConnect { remote_port } => remote_port.to_be_bytes().to_vec(),
@@ -511,15 +556,123 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
                 ));
             }
             let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
-            let name_len = payload[2] as usize;
-            if payload.len() < 3 + name_len {
+            let mut cursor = 2;
+            // name: [len:1][bytes]
+            let name_len = payload[cursor] as usize;
+            cursor += 1;
+            if payload.len() < cursor + name_len {
                 return Err(ProtocolError::InvalidFrame(
                     "RegisterForward name truncated".into(),
                 ));
             }
-            let name = String::from_utf8(payload[3..3 + name_len].to_vec())
+            let name = String::from_utf8(payload[cursor..cursor + name_len].to_vec())
                 .map_err(|_| ProtocolError::InvalidFrame("Invalid forward name".into()))?;
-            Ok(Command::RegisterForward { remote_port, name })
+            cursor += name_len;
+
+            // protocol: [len:1][bytes] — optional for backward compat
+            let protocol = if cursor < payload.len() {
+                let proto_len = payload[cursor] as usize;
+                cursor += 1;
+                if payload.len() < cursor + proto_len {
+                    return Err(ProtocolError::InvalidFrame(
+                        "RegisterForward protocol truncated".into(),
+                    ));
+                }
+                let proto = String::from_utf8(payload[cursor..cursor + proto_len].to_vec())
+                    .map_err(|_| ProtocolError::InvalidFrame("Invalid forward protocol".into()))?;
+                cursor += proto_len;
+                proto
+            } else {
+                "tcp".into()
+            };
+
+            // bind_addr: [has:1] then [len:1][bytes] if present
+            let bind_addr = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if cursor >= payload.len() {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward bind_addr len truncated".into(),
+                        ));
+                    }
+                    let addr_len = payload[cursor] as usize;
+                    cursor += 1;
+                    if payload.len() < cursor + addr_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward bind_addr truncated".into(),
+                        ));
+                    }
+                    let addr = String::from_utf8(payload[cursor..cursor + addr_len].to_vec())
+                        .map_err(|_| {
+                            ProtocolError::InvalidFrame("Invalid forward bind_addr".into())
+                        })?;
+                    cursor += addr_len;
+                    Some(addr)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // max_connections: [has:1] then [u32:4] if present
+            let max_connections = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if payload.len() < cursor + 4 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward max_connections truncated".into(),
+                        ));
+                    }
+                    let mc = u32::from_be_bytes(payload[cursor..cursor + 4].try_into().unwrap());
+                    cursor += 4;
+                    Some(mc)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // allowed_ips: [count:2] then for each [len:1][bytes]
+            let allowed_ips = if cursor + 2 <= payload.len() {
+                let count = u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+                cursor += 2;
+                let mut ips = Vec::with_capacity(count);
+                for _ in 0..count {
+                    if cursor >= payload.len() {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward allowed_ips truncated".into(),
+                        ));
+                    }
+                    let ip_len = payload[cursor] as usize;
+                    cursor += 1;
+                    if payload.len() < cursor + ip_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward allowed_ip truncated".into(),
+                        ));
+                    }
+                    let ip = String::from_utf8(payload[cursor..cursor + ip_len].to_vec()).map_err(
+                        |_| ProtocolError::InvalidFrame("Invalid forward allowed_ip".into()),
+                    )?;
+                    cursor += ip_len;
+                    ips.push(ip);
+                }
+                ips
+            } else {
+                Vec::new()
+            };
+
+            Ok(Command::RegisterForward {
+                remote_port,
+                name,
+                protocol,
+                bind_addr,
+                max_connections,
+                allowed_ips,
+            })
         }
         CMD_FORWARD_READY => {
             if payload.len() < 3 {
@@ -527,9 +680,43 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             }
             let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
             let success = payload[2] != 0;
+            let mut cursor = 3;
+
+            // error_reason: [has:1] then [len:2][bytes] if present — optional for backward compat
+            let error_reason = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if payload.len() < cursor + 2 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "ForwardReady error_reason len truncated".into(),
+                        ));
+                    }
+                    let reason_len =
+                        u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+                    cursor += 2;
+                    if payload.len() < cursor + reason_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "ForwardReady error_reason truncated".into(),
+                        ));
+                    }
+                    let reason = String::from_utf8(payload[cursor..cursor + reason_len].to_vec())
+                        .map_err(|_| {
+                        ProtocolError::InvalidFrame("Invalid forward error_reason".into())
+                    })?;
+                    let _ = cursor + reason_len;
+                    Some(reason)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             Ok(Command::ForwardReady {
                 remote_port,
                 success,
+                error_reason,
             })
         }
         CMD_FORWARD_CONNECT => {

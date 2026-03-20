@@ -222,9 +222,14 @@ pub async fn run(config_path: &str) -> Result<()> {
             alert_config: std::sync::Arc::new(tokio::sync::RwLock::new(alert_config)),
         };
 
+        let mgmt_addr = mgmt_config.listen_addr.clone();
         tokio::spawn(async move {
             if let Err(e) = prisma_mgmt::serve(mgmt_config, mgmt_state).await {
-                tracing::error!("Management API error: {}", e);
+                tracing::error!(
+                    addr = %mgmt_addr,
+                    error = %e,
+                    "Management API failed to start — check address/port availability"
+                );
             }
         });
     }
@@ -423,11 +428,10 @@ async fn run_config_watcher(
                 match event.kind {
                     EventKind::Modify(_) | EventKind::Create(_) => {
                         // Only trigger for our specific config file
-                        let is_our_file = event.paths.iter().any(|p| {
-                            p.file_name()
-                                .map(|n| n == file_name)
-                                .unwrap_or(false)
-                        });
+                        let is_our_file = event
+                            .paths
+                            .iter()
+                            .any(|p| p.file_name().map(|n| n == file_name).unwrap_or(false));
                         if is_our_file {
                             let _ = tx.try_send(());
                         }

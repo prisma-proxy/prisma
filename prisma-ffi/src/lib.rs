@@ -1272,3 +1272,120 @@ pub unsafe extern "C" fn prisma_proxy_group_test(group_name: *const c_char) -> *
         }
     })
 }
+
+// ── Port forwarding ──────────────────────────────────────────────────────────
+
+/// List all active port forwards with their status and metrics as a JSON array.
+///
+/// Returns a JSON array of objects with fields:
+/// `name`, `remote_port`, `local_addr`, `active_connections`, `total_connections`,
+/// `bytes_up`, `bytes_down`, `last_connection_at`, `registered`.
+///
+/// Caller must call `prisma_free_string` on the result.
+/// Returns `"[]"` if no forwards are active.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_port_forwards_list(handle: *mut PrismaClient) -> *mut c_char {
+    ffi_catch!(std::ptr::null_mut(), {
+        let _ = handle; // handle reserved for future per-client forward managers
+        let json = match tokio::runtime::Handle::try_current() {
+            Ok(h) => std::thread::scope(|_| {
+                h.block_on(prisma_client::forward::get_forward_metrics_json())
+            }),
+            Err(_) => "[]".to_owned(),
+        };
+        CString::new(json).map_or(std::ptr::null_mut(), CString::into_raw)
+    })
+}
+
+/// Dynamically add a port forward at runtime.
+///
+/// `json` must be a valid JSON object matching PortForwardConfig, e.g.:
+/// ```json
+/// {"name":"ssh","local_addr":"127.0.0.1:22","remote_port":2222,"enabled":true}
+/// ```
+///
+/// Returns PRISMA_OK on success, or an error code.
+///
+/// # Safety
+/// `handle` must be valid. `json` must be a valid non-null C string.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_port_forward_add(
+    handle: *mut PrismaClient,
+    json: *const c_char,
+) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        let json_str = cstr_to_str!(json);
+
+        let config: prisma_core::config::client::PortForwardConfig =
+            match serde_json::from_str(json_str) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("Invalid port forward JSON: {}", e);
+                    return PRISMA_ERR_INVALID_CONFIG;
+                }
+            };
+
+        let mgr = match prisma_client::forward::global_forward_manager() {
+            Some(m) => m,
+            None => {
+                tracing::error!("Port forwarding is not active");
+                return PRISMA_ERR_NOT_CONNECTED;
+            }
+        };
+
+        // Send Add control message (non-blocking try_send to avoid deadlock at FFI boundary)
+        match mgr
+            .control_tx
+            .try_send(prisma_client::forward::ForwardControl::Add(config))
+        {
+            Ok(_) => PRISMA_OK,
+            Err(e) => {
+                tracing::error!("Failed to send add-forward control: {}", e);
+                PRISMA_ERR_INTERNAL
+            }
+        }
+    })
+}
+
+/// Dynamically remove a port forward by remote port at runtime.
+///
+/// Returns PRISMA_OK on success, or an error code.
+///
+/// # Safety
+/// `handle` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_port_forward_remove(
+    handle: *mut PrismaClient,
+    remote_port: u16,
+) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+
+        let mgr = match prisma_client::forward::global_forward_manager() {
+            Some(m) => m,
+            None => {
+                tracing::error!("Port forwarding is not active");
+                return PRISMA_ERR_NOT_CONNECTED;
+            }
+        };
+
+        match mgr
+            .control_tx
+            .try_send(prisma_client::forward::ForwardControl::Remove(remote_port))
+        {
+            Ok(_) => PRISMA_OK,
+            Err(e) => {
+                tracing::error!("Failed to send remove-forward control: {}", e);
+                PRISMA_ERR_INTERNAL
+            }
+        }
+    })
+}

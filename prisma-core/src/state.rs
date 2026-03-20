@@ -207,6 +207,8 @@ pub struct ServerState {
     pub shutdown_tx: broadcast::Sender<()>,
     /// Per-client access control lists.
     pub acl_store: AclStore,
+    /// Registry of active port-forward listeners with per-forward metrics.
+    pub forward_registry: ForwardRegistry,
 }
 
 impl ServerState {
@@ -236,6 +238,7 @@ impl ServerState {
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_tx,
             acl_store: AclStore::from_config(config.acls.clone()),
+            forward_registry: new_forward_registry(),
         }
     }
 
@@ -429,4 +432,89 @@ pub async fn metrics_ticker(state: ServerState) {
             let _ = state.metrics_tx.send(snapshot);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Forward registry — per-forward metrics and active connection tracking
+// ---------------------------------------------------------------------------
+
+/// Metrics and state for a single port-forward listener.
+pub struct ForwardEntry {
+    pub remote_port: u16,
+    pub name: String,
+    pub client_id: Option<Uuid>,
+    pub bind_addr: String,
+    pub protocol: String,
+    pub allowed_ips: Vec<String>,
+    pub registered_at: DateTime<Utc>,
+
+    // Metrics (atomics for lock-free access)
+    pub connections_total: AtomicU64,
+    pub active_connections: AtomicUsize,
+    pub bytes_up: AtomicU64,
+    pub bytes_down: AtomicU64,
+
+    /// Active connection details, keyed by stream_id.
+    pub active_conns: RwLock<HashMap<u32, ForwardConnectionInfo>>,
+
+    /// Shutdown signal to stop the listener.
+    pub shutdown_tx: broadcast::Sender<()>,
+}
+
+impl ForwardEntry {
+    pub fn new(
+        remote_port: u16,
+        name: String,
+        client_id: Option<Uuid>,
+        bind_addr: String,
+        allowed_ips: Vec<String>,
+    ) -> Self {
+        let (shutdown_tx, _) = broadcast::channel::<()>(1);
+        Self {
+            remote_port,
+            name,
+            client_id,
+            bind_addr,
+            protocol: "tcp".into(),
+            allowed_ips,
+            registered_at: Utc::now(),
+            connections_total: AtomicU64::new(0),
+            active_connections: AtomicUsize::new(0),
+            bytes_up: AtomicU64::new(0),
+            bytes_down: AtomicU64::new(0),
+            active_conns: RwLock::new(HashMap::new()),
+            shutdown_tx,
+        }
+    }
+
+    /// Request that the listener shut down.
+    pub fn request_shutdown(&self) {
+        let _ = self.shutdown_tx.send(());
+    }
+}
+
+/// Information about a single active forwarded connection.
+#[derive(Debug, Clone, Serialize)]
+pub struct ForwardConnectionInfo {
+    pub stream_id: u32,
+    pub peer_addr: String,
+    pub connected_at: DateTime<Utc>,
+    pub bytes_up: u64,
+    pub bytes_down: u64,
+}
+
+/// Registry of all active port forwards, keyed by remote port.
+pub type ForwardRegistry = Arc<RwLock<HashMap<u16, Arc<ForwardEntry>>>>;
+
+/// Create a new empty forward registry.
+pub fn new_forward_registry() -> ForwardRegistry {
+    Arc::new(RwLock::new(HashMap::new()))
+}
+
+/// Count how many forwards a given client owns in the registry.
+pub async fn count_client_forwards(registry: &ForwardRegistry, client_id: Uuid) -> usize {
+    let map = registry.read().await;
+    map.values()
+        .filter(|e| e.client_id == Some(client_id))
+        .count()
 }

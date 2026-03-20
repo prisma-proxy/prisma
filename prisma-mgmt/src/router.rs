@@ -84,6 +84,11 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/config/backups/{name}/diff", get(backup::diff_backup))
         // Forwards
         .route("/api/forwards", get(forwards::list))
+        .route("/api/forwards/{port}", delete(forwards::delete_forward))
+        .route(
+            "/api/forwards/{port}/connections",
+            get(forwards::list_connections),
+        )
         // Routes
         .route("/api/routes", get(routes::list))
         .route("/api/routes", post(routes::create))

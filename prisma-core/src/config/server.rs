@@ -190,11 +190,90 @@ pub struct PortForwardingConfig {
     pub port_range_start: u16,
     #[serde(default = "default_port_range_end")]
     pub port_range_end: u16,
+    /// Max port forwards per client (default: 10).
+    #[serde(default)]
+    pub max_forwards_per_client: Option<u32>,
+    /// Default max connections per forward (default: 100).
+    #[serde(default)]
+    pub max_connections_per_forward: Option<u32>,
+    /// Default idle timeout in seconds (default: 300).
+    #[serde(default)]
+    pub default_idle_timeout_secs: Option<u64>,
+    /// Specific allowed ports (in addition to range).
+    #[serde(default)]
+    pub allowed_ports: Vec<u16>,
+    /// Specific denied ports (overrides range).
+    #[serde(default)]
+    pub denied_ports: Vec<u16>,
+    /// Global forward bandwidth limit (upload).
+    #[serde(default)]
+    pub global_bandwidth_up: Option<String>,
+    /// Global forward bandwidth limit (download).
+    #[serde(default)]
+    pub global_bandwidth_down: Option<String>,
+    /// Require clients to name their forwards (default: false).
+    #[serde(default)]
+    pub require_name: bool,
+    /// Log each forwarded connection (default: true).
+    #[serde(default = "default_log_connections")]
+    pub log_connections: bool,
+    /// IP CIDRs allowed to connect to forwarded ports (empty = allow all).
+    #[serde(default)]
+    pub allowed_ips: Vec<String>,
+    /// Bind addresses the server allows clients to request (empty = only wildcard).
+    #[serde(default)]
+    pub allowed_bind_addrs: Vec<String>,
+}
+
+fn default_log_connections() -> bool {
+    true
 }
 
 impl PortForwardingConfig {
+    /// Check whether a given port is allowed for forwarding.
+    ///
+    /// A port is allowed when:
+    /// 1. Port forwarding is globally enabled, AND
+    /// 2. The port is NOT in the `denied_ports` list, AND
+    /// 3. The port is either within the configured range OR in the `allowed_ports` list.
     pub fn is_port_allowed(&self, port: u16) -> bool {
-        self.enabled && port >= self.port_range_start && port <= self.port_range_end
+        if !self.enabled {
+            return false;
+        }
+        // Denied ports always take precedence
+        if self.denied_ports.contains(&port) {
+            return false;
+        }
+        // Check range or explicit allow list
+        let in_range = port >= self.port_range_start && port <= self.port_range_end;
+        let in_allowed = self.allowed_ports.contains(&port);
+        in_range || in_allowed
+    }
+
+    /// Check whether a requested bind address is permitted by server policy.
+    pub fn is_bind_addr_allowed(&self, addr: &str) -> bool {
+        if addr == "0.0.0.0" || addr == "::" {
+            return true; // Wildcard always allowed
+        }
+        if self.allowed_bind_addrs.is_empty() {
+            return false; // Only wildcard when no explicit list
+        }
+        self.allowed_bind_addrs.iter().any(|a| a == addr)
+    }
+
+    /// Effective max forwards per client (defaults to 10).
+    pub fn effective_max_forwards_per_client(&self) -> usize {
+        self.max_forwards_per_client.unwrap_or(10) as usize
+    }
+
+    /// Effective max connections per individual forward (defaults to 100).
+    pub fn effective_max_connections_per_forward(&self) -> usize {
+        self.max_connections_per_forward.unwrap_or(100) as usize
+    }
+
+    /// Effective idle timeout in seconds (defaults to 300). 0 = disabled.
+    pub fn effective_idle_timeout_secs(&self) -> u64 {
+        self.default_idle_timeout_secs.unwrap_or(300)
     }
 }
 
@@ -204,6 +283,17 @@ impl Default for PortForwardingConfig {
             enabled: false,
             port_range_start: default_port_range_start(),
             port_range_end: default_port_range_end(),
+            max_forwards_per_client: None,
+            max_connections_per_forward: None,
+            default_idle_timeout_secs: None,
+            allowed_ports: Vec::new(),
+            denied_ports: Vec::new(),
+            global_bandwidth_up: None,
+            global_bandwidth_down: None,
+            require_name: false,
+            log_connections: true,
+            allowed_ips: Vec::new(),
+            allowed_bind_addrs: Vec::new(),
         }
     }
 }

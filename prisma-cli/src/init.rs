@@ -140,7 +140,7 @@ port_range_end = 20000
 # Management API + console
 [management_api]
 enabled = true
-listen_addr = "127.0.0.1:9090"
+listen_addr = "127.0.0.1:9090"         # Use "0.0.0.0:9090" for public network access
 auth_token = "{mgmt_token}"
 # console_dir = "./prisma-console/out"
 # cors_origins = ["http://localhost:3000"]

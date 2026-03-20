@@ -191,6 +191,7 @@ async fn dispatch_frame<W: AsyncWrite + Unpin + Send + 'static>(
                 Command::ForwardReady {
                     remote_port: ready_port,
                     success: true,
+                    error_reason: None,
                 },
                 assoc_id,
             )

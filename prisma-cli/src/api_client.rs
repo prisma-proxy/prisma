@@ -119,7 +119,15 @@ impl ApiClient {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         let scheme = if tls_enabled { "https" } else { "http" };
-        Some((format!("{}://{}", scheme, listen), token))
+        // Convert bind-all address 0.0.0.0 to loopback for connection purposes
+        let connect_addr = if listen.starts_with("0.0.0.0:") {
+            listen.replacen("0.0.0.0", "127.0.0.1", 1)
+        } else if listen.starts_with("[::]:") {
+            listen.replacen("[::]", "[::1]", 1)
+        } else {
+            listen.to_string()
+        };
+        Some((format!("{}://{}", scheme, connect_addr), token))
     }
 
     pub fn is_json(&self) -> bool {
