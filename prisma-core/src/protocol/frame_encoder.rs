@@ -117,7 +117,7 @@ impl FrameEncoder {
 
         // Encrypt plaintext in-place
         let tag =
-            cipher.encrypt_in_place(nonce, &aad, &mut self.buf[plaintext_start..plaintext_end])?;
+            cipher.encrypt_in_place(nonce, aad.as_slice(), &mut self.buf[plaintext_start..plaintext_end])?;
 
         // Write tag after ciphertext
         self.buf[plaintext_end..plaintext_end + TAG_SIZE].copy_from_slice(&tag);
@@ -202,7 +202,7 @@ impl FrameDecoder {
 
         cipher.decrypt_in_place(
             &nonce,
-            &aad,
+            aad.as_slice(),
             &mut frame_buf[ciphertext_start..ciphertext_start + data_len],
             &tag,
         )?;

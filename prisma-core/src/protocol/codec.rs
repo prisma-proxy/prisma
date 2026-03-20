@@ -1061,16 +1061,36 @@ pub(crate) fn decrypt_frame_aad(
 /// even if both sessions happen to use the same cipher key (which shouldn't
 /// happen, but defense-in-depth).
 ///
-/// Returns an empty Vec when no header_key is provided.
+/// Returns a 16-byte AAD when header_key is provided, or an empty slice when not.
+/// Uses a fixed-size array to avoid heap allocation on the hot path.
 #[inline]
-pub(crate) fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Vec<u8> {
+pub(crate) fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Aad {
     match header_key {
         Some(key) => {
             let hash = blake3::keyed_hash(key, nonce);
             let bytes: [u8; 32] = hash.into();
-            bytes[..16].to_vec()
+            let mut aad = [0u8; 16];
+            aad.copy_from_slice(&bytes[..16]);
+            Aad::Some(aad)
         }
-        None => Vec::new(),
+        None => Aad::None,
+    }
+}
+
+/// Zero-allocation AAD container for v5 header-authenticated encryption.
+#[derive(Debug)]
+pub(crate) enum Aad {
+    Some([u8; 16]),
+    None,
+}
+
+impl Aad {
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            Aad::Some(ref bytes) => bytes,
+            Aad::None => &[],
+        }
     }
 }
 
@@ -1398,8 +1418,8 @@ mod tests {
         let header_key = [0xAAu8; 32];
         let aad = build_v5_aad(Some(&header_key), &nonce);
 
-        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, &aad).unwrap();
-        let (decrypted, dec_nonce) = decrypt_frame_aad(cipher.as_ref(), &wire, &aad).unwrap();
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, aad.as_slice()).unwrap();
+        let (decrypted, dec_nonce) = decrypt_frame_aad(cipher.as_ref(), &wire, aad.as_slice()).unwrap();
         assert_eq!(decrypted, plaintext);
         assert_eq!(dec_nonce, nonce);
     }
@@ -1415,12 +1435,12 @@ mod tests {
         let header_key = [0xAAu8; 32];
         let aad = build_v5_aad(Some(&header_key), &nonce);
 
-        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, &aad).unwrap();
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, aad.as_slice()).unwrap();
 
         // Decryption with different AAD should fail
         let wrong_key = [0xBBu8; 32];
         let wrong_aad = build_v5_aad(Some(&wrong_key), &nonce);
-        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, &wrong_aad).is_err());
+        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, wrong_aad.as_slice()).is_err());
 
         // Decryption with empty AAD should also fail
         assert!(decrypt_frame_aad(cipher.as_ref(), &wire, &[]).is_err());
@@ -1429,7 +1449,7 @@ mod tests {
     #[test]
     fn test_v5_aad_empty_without_header_key() {
         let aad = build_v5_aad(None, &[0u8; NONCE_SIZE]);
-        assert!(aad.is_empty());
+        assert!(aad.as_slice().is_empty());
     }
 
     #[test]
@@ -1438,8 +1458,8 @@ mod tests {
         let nonce = [1u8; NONCE_SIZE];
         let aad1 = build_v5_aad(Some(&header_key), &nonce);
         let aad2 = build_v5_aad(Some(&header_key), &nonce);
-        assert_eq!(aad1, aad2);
-        assert_eq!(aad1.len(), 16);
+        assert_eq!(aad1.as_slice(), aad2.as_slice());
+        assert_eq!(aad1.as_slice().len(), 16);
     }
 
     #[test]
@@ -1449,7 +1469,7 @@ mod tests {
         let nonce2 = [2u8; NONCE_SIZE];
         let aad1 = build_v5_aad(Some(&header_key), &nonce1);
         let aad2 = build_v5_aad(Some(&header_key), &nonce2);
-        assert_ne!(aad1, aad2);
+        assert_ne!(aad1.as_slice(), aad2.as_slice());
     }
 
     #[test]

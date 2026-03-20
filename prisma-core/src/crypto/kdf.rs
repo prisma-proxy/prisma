@@ -86,7 +86,7 @@ pub fn derive_v5_header_key(session_key: &[u8; 32]) -> [u8; 32] {
 /// This token allows a client to resume a session on a new transport
 /// connection without repeating the full handshake, provided the session
 /// is still valid.
-pub(crate) fn derive_v5_migration_token(session_key: &[u8; 32], session_id: &[u8; 16]) -> [u8; 32] {
+pub fn derive_v5_migration_token(session_key: &[u8; 32], session_id: &[u8; 16]) -> [u8; 32] {
     let mut context = Vec::with_capacity(48);
     context.extend_from_slice(session_key);
     context.extend_from_slice(session_id);

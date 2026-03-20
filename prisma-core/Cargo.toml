@@ -60,3 +60,15 @@ criterion = { workspace = true }
 [[bench]]
 name = "crypto_bench"
 harness = false
+
+[[bench]]
+name = "relay_bench"
+harness = false
+
+[[bench]]
+name = "codec_bench"
+harness = false
+
+[[bench]]
+name = "handshake_bench"
+harness = false
