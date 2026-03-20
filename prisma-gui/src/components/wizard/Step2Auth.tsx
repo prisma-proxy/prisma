@@ -87,14 +87,14 @@ export default function Step2Auth({ state, onChange }: Props) {
         <Label>{t("wizard.protocolVersion")}</Label>
         <Select
           value={state.protocolVersion}
-          onValueChange={(v) => onChange({ protocolVersion: v as "v4" | "v3" })}
+          onValueChange={(v) => onChange({ protocolVersion: v as "v5" | "v4" })}
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="v5">{t("wizard.protocolV5")}</SelectItem>
             <SelectItem value="v4">{t("wizard.protocolV4")}</SelectItem>
-            <SelectItem value="v3">{t("wizard.protocolV3")}</SelectItem>
           </SelectContent>
         </Select>
       </div>

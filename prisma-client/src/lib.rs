@@ -146,7 +146,7 @@ async fn run_inner(
     info!(
         fingerprint = %config.fingerprint,
         quic_version = %config.quic_version,
-        "Prisma v4 protocol"
+        "PrismaVeil v5 protocol"
     );
 
     if use_ws {
