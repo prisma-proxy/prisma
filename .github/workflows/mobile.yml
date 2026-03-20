@@ -1,0 +1,206 @@
+name: Mobile Builds
+
+on:
+  push:
+    tags: ['v*']
+    paths:
+      - 'prisma-ffi/**'
+      - 'prisma-ios/**'
+      - 'prisma-android/**'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'prisma-ffi/**'
+      - 'prisma-ios/**'
+      - 'prisma-android/**'
+  workflow_dispatch:
+    inputs:
+      build_ios:
+        description: 'Build iOS app'
+        required: false
+        default: true
+        type: boolean
+      build_android:
+        description: 'Build Android app'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_TOOLCHAIN: stable
+
+jobs:
+  # ── Build FFI libraries for mobile ──────────────────────────────────────────
+  build-ffi-ios:
+    name: FFI / iOS aarch64
+    runs-on: macos-latest
+    if: github.event.inputs.build_ios != 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ios-ffi
+
+      - name: Build FFI for iOS
+        run: cargo build --release -p prisma-ffi --target aarch64-apple-ios
+
+      - name: Upload iOS FFI library
+        uses: actions/upload-artifact@v4
+        with:
+          name: libprisma-ffi-ios
+          path: |
+            target/aarch64-apple-ios/release/libprisma_ffi.a
+            prisma-ffi/include/prisma_ffi.h
+
+  build-ffi-android:
+    name: FFI / Android ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    if: github.event.inputs.build_android != 'false'
+    strategy:
+      matrix:
+        include:
+          - label: arm64
+            target: aarch64-linux-android
+            ndk_triple: aarch64-linux-android
+            jni_dir: arm64-v8a
+          - label: armv7
+            target: armv7-linux-androideabi
+            ndk_triple: armv7a-linux-androideabi
+            jni_dir: armeabi-v7a
+          - label: x86_64
+            target: x86_64-linux-android
+            ndk_triple: x86_64-linux-android
+            jni_dir: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-ffi-${{ matrix.label }}
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: Configure NDK environment
+        run: |
+          TOOLCHAIN="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "CC=${TOOLCHAIN}/bin/${{ matrix.ndk_triple }}24-clang" >> "$GITHUB_ENV"
+          echo "CXX=${TOOLCHAIN}/bin/${{ matrix.ndk_triple }}24-clang++" >> "$GITHUB_ENV"
+          echo "AR=${TOOLCHAIN}/bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_$(echo '${{ matrix.target }}' | tr 'a-z-' 'A-Z_')_LINKER=${TOOLCHAIN}/bin/${{ matrix.ndk_triple }}24-clang" >> "$GITHUB_ENV"
+
+      - name: Build FFI for Android
+        run: cargo build --release -p prisma-ffi --features android --target ${{ matrix.target }}
+
+      - name: Upload Android FFI library
+        uses: actions/upload-artifact@v4
+        with:
+          name: libprisma-ffi-android-${{ matrix.label }}
+          path: target/${{ matrix.target }}/release/libprisma_ffi.so
+
+  # ── Build iOS App ───────────────────────────────────────────────────────────
+  build-ios-app:
+    name: iOS App
+    runs-on: macos-latest
+    needs: build-ffi-ios
+    if: github.event.inputs.build_ios != 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download iOS FFI
+        uses: actions/download-artifact@v4
+        with:
+          name: libprisma-ffi-ios
+          path: target/aarch64-apple-ios/release/
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: prisma-ios
+        run: xcodegen generate
+
+      - name: Build iOS app (archive)
+        working-directory: prisma-ios
+        run: |
+          xcodebuild archive \
+            -project Prisma.xcodeproj \
+            -scheme Prisma \
+            -configuration Release \
+            -archivePath build/Prisma.xcarchive \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify || true
+
+      - name: Upload iOS archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: prisma-ios-archive
+          path: prisma-ios/build/Prisma.xcarchive
+
+  # ── Build Android App ───────────────────────────────────────────────────────
+  build-android-app:
+    name: Android App
+    runs-on: ubuntu-latest
+    needs: [build-ffi-android]
+    if: github.event.inputs.build_android != 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download Android FFI (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: libprisma-ffi-android-arm64
+          path: prisma-android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Download Android FFI (armv7)
+        uses: actions/download-artifact@v4
+        with:
+          name: libprisma-ffi-android-armv7
+          path: prisma-android/app/src/main/jniLibs/armeabi-v7a/
+
+      - name: Download Android FFI (x86_64)
+        uses: actions/download-artifact@v4
+        with:
+          name: libprisma-ffi-android-x86_64
+          path: prisma-android/app/src/main/jniLibs/x86_64/
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK (release)
+        working-directory: prisma-android
+        run: ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: prisma-android-apk
+          path: prisma-android/app/build/outputs/apk/release/*.apk

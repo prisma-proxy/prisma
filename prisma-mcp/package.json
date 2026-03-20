@@ -1,0 +1,27 @@
+{
+  "name": "prisma-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Prisma AI agent development — provides workspace intelligence, build status, version management, and evolution tracking",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "prisma-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "tsc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.1",
+    "toml": "^3.0.0",
+    "glob": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}

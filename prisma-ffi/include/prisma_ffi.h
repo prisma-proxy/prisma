@@ -112,6 +112,12 @@ PrismaError   prisma_clear_system_proxy(void);
 char*         prisma_check_update_json(void); /* {version,url,changelog} or NULL; caller must prisma_free_string() */
 PrismaError   prisma_apply_update(const char* download_url, const char* sha256);
 
+/* ── URI import ──────────────────────────────────────────────────────────── */
+/** Import a single proxy URI (ss://, vmess://, trojan://, prisma://). Caller must prisma_free_string(). */
+char*         prisma_import_uri(const char* uri);
+/** Import multiple URIs from text (line-separated or base64). Caller must prisma_free_string(). */
+char*         prisma_import_batch(const char* text);
+
 /* ── Network testing ─────────────────────────────────────────────────────── */
 char*         prisma_ping(const char* server_addr); /* caller must prisma_free_string() */
 

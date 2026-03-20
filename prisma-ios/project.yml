@@ -1,0 +1,100 @@
+# XcodeGen project specification for Prisma iOS
+# Generate the Xcode project with: xcodegen generate
+#
+# Prerequisites:
+#   brew install xcodegen
+#   ./scripts/build-ios.sh release
+#
+# Then: xcodegen generate && open Prisma.xcodeproj
+
+name: Prisma
+options:
+  bundleIdPrefix: com.prisma
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_BITCODE: NO
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  Prisma:
+    type: application
+    platform: iOS
+    sources:
+      - path: Prisma
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - path: Prisma/Assets.xcassets
+      - path: Prisma/Info.plist
+    settings:
+      base:
+        INFOPLIST_FILE: Prisma/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Prisma/Prisma.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.prisma.client
+        SWIFT_OBJC_BRIDGING_HEADER: Prisma/Core/Bridging-Header.h
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../target/aarch64-apple-ios/release"
+          - "$(PROJECT_DIR)/../target/aarch64-apple-ios/debug"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../prisma-ffi/include"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-lprisma_ffi"
+          - "-framework NetworkExtension"
+          - "-framework Security"
+          - "-framework SystemConfiguration"
+          - "-lc++"
+          - "-lz"
+          - "-lresolv"
+    dependencies:
+      - target: PrismaTunnel
+        embed: true
+        codeSign: true
+
+  PrismaTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PrismaTunnel
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: PrismaTunnel/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PrismaTunnel/PrismaTunnel.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.prisma.client.tunnel
+        SWIFT_OBJC_BRIDGING_HEADER: Prisma/Core/Bridging-Header.h
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../target/aarch64-apple-ios/release"
+          - "$(PROJECT_DIR)/../target/aarch64-apple-ios/debug"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../prisma-ffi/include"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-lprisma_ffi"
+          - "-framework NetworkExtension"
+          - "-lc++"
+          - "-lz"
+          - "-lresolv"
+
+schemes:
+  Prisma:
+    build:
+      targets:
+        Prisma: all
+        PrismaTunnel: all
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -32,8 +32,9 @@ prisma-console/.next/
 prisma-console/out/
 prisma-console/.env*
 
-.claude/
-CLAUDE.md
+# Claude agent memory (per-machine state, not tracked)
+.claude/agent-memory/
+**/.claude/agent-memory/
 
 # Fuzzing
 fuzz/target/
@@ -58,6 +59,25 @@ prisma-gui/src-tauri/WixTools/
 # prisma-ffi build artifacts
 prisma-ffi/target/
 prisma-ffi/include/*.generated.h
+
+# prisma-mcp (MCP dev server)
+prisma-mcp/node_modules/
+prisma-mcp/dist/
+prisma-mcp/.prisma-mcp.db
+
+# prisma-ios build artifacts
+prisma-ios/build/
+prisma-ios/*.xcodeproj
+prisma-ios/*.xcworkspace
+prisma-ios/Pods/
+prisma-ios/DerivedData/
+
+# prisma-android build artifacts
+prisma-android/.gradle/
+prisma-android/build/
+prisma-android/app/build/
+prisma-android/local.properties
+prisma-android/.idea/
 
 # Logs
 npm-debug.log*
