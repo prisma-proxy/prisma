@@ -32,8 +32,7 @@ pub struct ServerConfig {
     /// Upstream DNS server for CMD_DNS_QUERY forwarding.
     #[serde(default = "default_dns_upstream")]
     pub dns_upstream: String,
-    // --- v4 features ---
-    /// Protocol version: "v4", "v3" (default for backward compat)
+    /// Protocol version (v5 only since 0.9.0).
     #[serde(default = "default_protocol_version")]
     pub protocol_version: String,
     /// PrismaTLS configuration (replaces REALITY).
@@ -116,7 +115,7 @@ fn default_shadow_tls_listen_addr() -> String {
 }
 
 fn default_protocol_version() -> String {
-    "v4".into()
+    "v5".into()
 }
 
 fn default_dns_upstream() -> String {
@@ -308,7 +307,7 @@ pub struct ManagementApiConfig {
     pub auth_token: String,
     #[serde(default)]
     pub cors_origins: Vec<String>,
-    #[serde(default, alias = "dashboard_dir")]
+    #[serde(default)]
     pub console_dir: Option<String>,
     /// TLS configuration for the management API.
     /// If omitted and `tls_enabled = true`, inherits from the server's top-level

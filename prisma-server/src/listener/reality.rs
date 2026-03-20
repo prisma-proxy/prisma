@@ -201,47 +201,9 @@ pub fn is_allowed_server_name(sni: &str, config: &PrismaTlsConfig) -> bool {
     })
 }
 
-/// Build the REALITY Session ID for a v4 client.
-///
-/// Packs auth data into a 32-byte TLS Session ID:
-/// `[version:1][short_id:8][timestamp:4][reserved:3][encrypted_auth:16]`
-///
-/// **Deprecated**: This function is kept for backward compatibility.
-/// New code should use the PrismaAuth module instead.
-pub fn build_reality_session_id(
-    short_id: &[u8; 8],
-    timestamp: u32,
-    encrypted_auth: &[u8; 16],
-) -> [u8; 32] {
-    let mut session_id = [0u8; 32];
-    session_id[0] = REALITY_VERSION_BYTE;
-    session_id[1..9].copy_from_slice(short_id);
-    session_id[9..13].copy_from_slice(&timestamp.to_be_bytes());
-    // reserved[13..16] stays zeroed
-    session_id[16..32].copy_from_slice(encrypted_auth);
-    session_id
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_build_reality_session_id() {
-        let short_id = [0xAB; 8];
-        let timestamp = 1700000000u32;
-        let encrypted_auth = [0xCD; 16];
-
-        let sid = build_reality_session_id(&short_id, timestamp, &encrypted_auth);
-
-        assert_eq!(sid[0], REALITY_VERSION_BYTE);
-        assert_eq!(&sid[1..9], &short_id);
-        assert_eq!(
-            u32::from_be_bytes([sid[9], sid[10], sid[11], sid[12]]),
-            timestamp
-        );
-        assert_eq!(&sid[16..32], &encrypted_auth);
-    }
 
     #[test]
     fn test_is_allowed_server_name() {

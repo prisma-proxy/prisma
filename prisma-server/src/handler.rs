@@ -322,14 +322,13 @@ where
 
     if !is_valid_protocol_version(version) {
         return Err(anyhow::anyhow!(
-            "Unsupported protocol version: 0x{:02x}, expected v4-v5 (0x{:02x}-0x{:02x})",
+            "Unsupported protocol version: 0x{:02x}, expected v5 (0x{:02x})",
             version,
-            prisma_core::types::PRISMA_MIN_PROTOCOL_VERSION,
             PRISMA_PROTOCOL_VERSION
         ));
     }
 
-    // v4/v5 handshake: 2-step with bucket sizes
+    // v5 handshake: 2-step with bucket sizes
     // Use the ticket key ring for automatic key rotation
     let ticket_key = ctx.ticket_key_ring.current_key();
     let (bucket_sizes, server_features) = compute_server_features(state).await;

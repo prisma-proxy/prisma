@@ -88,8 +88,7 @@ pub struct ClientConfig {
     // TUN mode
     #[serde(default)]
     pub tun: TunConfig,
-    // --- v4 features ---
-    /// Protocol version: "v4", "v3" (default for backward compat).
+    /// Protocol version (v5 only since 0.9.0).
     #[serde(default = "default_protocol_version")]
     pub protocol_version: String,
     /// uTLS fingerprint: "chrome", "firefox", "safari", "random", or "none" (default).
@@ -364,7 +363,7 @@ fn default_true_val() -> bool {
 }
 
 fn default_protocol_version() -> String {
-    "v4".into()
+    "v5".into()
 }
 
 fn default_fingerprint() -> String {

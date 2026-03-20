@@ -391,14 +391,14 @@ mod tests {
     }
 
     #[test]
-    fn test_v5_frame_encoder_no_header_key_compat() {
-        // Frames sealed without header key should unseal without header key (v4 compat)
+    fn test_frame_encoder_no_header_key() {
+        // Frames sealed without header key should unseal without header key
         let key = [0x42u8; 32];
         let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
         let padding_range = PaddingRange::new(5, 20);
 
         let mut encoder = FrameEncoder::new();
-        let payload = b"v4 compat test";
+        let payload = b"no header key test";
         let nonce = [5u8; NONCE_SIZE];
 
         encoder.payload_mut()[..payload.len()].copy_from_slice(payload);

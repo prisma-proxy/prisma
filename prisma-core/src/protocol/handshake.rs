@@ -3,17 +3,14 @@ use uuid::Uuid;
 use crate::crypto::aead::create_cipher;
 use crate::crypto::ecdh::EphemeralKeyPair;
 use crate::crypto::kdf::{
-    derive_preliminary_key, derive_v3_session_key, derive_v5_header_key, derive_v5_migration_token,
-    derive_v5_preliminary_key, derive_v5_session_key,
+    derive_v5_header_key, derive_v5_migration_token, derive_v5_preliminary_key,
+    derive_v5_session_key,
 };
 use crate::crypto::pq_kem;
 use crate::error::{CryptoError, PrismaError, ProtocolError};
 use crate::protocol::codec::*;
 use crate::protocol::types::*;
-use crate::types::{
-    CipherSuite, ClientId, PaddingRange, NONCE_SIZE, PRISMA_MIN_PROTOCOL_VERSION,
-    PRISMA_PROTOCOL_VERSION,
-};
+use crate::types::{CipherSuite, ClientId, PaddingRange, NONCE_SIZE, PRISMA_PROTOCOL_VERSION};
 use crate::util;
 
 // ===== Prisma Handshake (2-step: PrismaClientInit → PrismaServerInit) =====
@@ -233,8 +230,7 @@ pub struct PrismaHandshakeServer;
 impl PrismaHandshakeServer {
     /// Process a PrismaClientInit and produce an encrypted PrismaServerInit response.
     ///
-    /// Accepts both v4 and v5 clients. The KDF and feature negotiation adapt
-    /// based on the client's declared protocol version.
+    /// Only accepts v5 clients (v4 support removed in 0.9.0).
     ///
     /// Returns: (encrypted_server_init_bytes, PrismaServerCompleted)
     pub fn process_client_init(
@@ -247,10 +243,9 @@ impl PrismaHandshakeServer {
     ) -> Result<(Vec<u8>, PrismaServerCompleted), PrismaError> {
         let client_init = decode_client_init(client_init_bytes)?;
 
-        // Accept v4 and v5 clients
-        let client_version = client_init.version;
-        if !(PRISMA_MIN_PROTOCOL_VERSION..=PRISMA_PROTOCOL_VERSION).contains(&client_version) {
-            return Err(ProtocolError::InvalidVersion(client_version).into());
+        // Only v5 is accepted (v4 backward compat removed in 0.9.0)
+        if client_init.version != PRISMA_PROTOCOL_VERSION {
+            return Err(ProtocolError::InvalidVersion(client_init.version).into());
         }
 
         // Reject TransportOnly cipher if server doesn't advertise support
@@ -285,31 +280,19 @@ impl PrismaHandshakeServer {
 
         let session_id = Uuid::new_v4();
 
-        let is_v5 = client_version >= 0x05;
-
         // Derive preliminary key from X25519 only (client needs this to decrypt
         // the ServerInit, which contains the ML-KEM ciphertext).
-        let prelim_key = if is_v5 {
-            derive_v5_preliminary_key(
-                &x25519_shared,
-                &client_init.client_ephemeral_pub,
-                &server_pub,
-                client_init.timestamp,
-            )
-        } else {
-            derive_preliminary_key(
-                &x25519_shared,
-                &client_init.client_ephemeral_pub,
-                &server_pub,
-                client_init.timestamp,
-            )
-        };
+        let prelim_key = derive_v5_preliminary_key(
+            &x25519_shared,
+            &client_init.client_ephemeral_pub,
+            &server_pub,
+            client_init.timestamp,
+        );
 
         // Hybrid PQ KEM: if both client and server support it, encapsulate with
         // client's ML-KEM key and combine the resulting shared secret with X25519.
         // The combined secret is used for the session key (not the preliminary key).
-        let pq_kem_negotiated = is_v5
-            && client_init.flags & CLIENT_INIT_FLAG_PQ_KEM != 0
+        let pq_kem_negotiated = client_init.flags & CLIENT_INIT_FLAG_PQ_KEM != 0
             && server_features & FEATURE_PQ_KEM != 0
             && client_init.pq_kem_encap_key.is_some();
 
@@ -330,23 +313,13 @@ impl PrismaHandshakeServer {
         };
 
         // Derive final session key (for data transfer) from the (potentially hybrid) shared secret
-        let session_key = if is_v5 {
-            derive_v5_session_key(
-                &shared_secret,
-                &client_init.client_ephemeral_pub,
-                &server_pub,
-                &challenge,
-                client_init.timestamp,
-            )
-        } else {
-            derive_v3_session_key(
-                &shared_secret,
-                &client_init.client_ephemeral_pub,
-                &server_pub,
-                &challenge,
-                client_init.timestamp,
-            )
-        };
+        let session_key = derive_v5_session_key(
+            &shared_secret,
+            &client_init.client_ephemeral_pub,
+            &server_pub,
+            &challenge,
+            client_init.timestamp,
+        );
 
         // Create session ticket
         let ticket_plaintext = encode_session_ticket(&SessionTicket {
@@ -365,25 +338,20 @@ impl PrismaHandshakeServer {
             .encrypt(&ticket_nonce, &ticket_plaintext, &[])
             .map_err(|e| CryptoError::EncryptionFailed(format!("Ticket encrypt: {}", e)))?;
 
-        // v5: negotiate features based on client flags
-        let negotiated_features = if is_v5 {
-            let mut f = server_features;
-            // Always advertise v5 features for v5 clients
-            f |= FEATURE_V5_KDF | FEATURE_EXTENDED_ANTI_REPLAY;
-            if client_init.flags & CLIENT_INIT_FLAG_HEADER_AUTH != 0 {
-                f |= FEATURE_HEADER_AUTH;
-            }
-            if client_init.flags & CLIENT_INIT_FLAG_MIGRATION != 0 {
-                f |= FEATURE_CONNECTION_MIGRATION;
-            }
-            // Only advertise PQ KEM if we actually negotiated it
-            if pq_kem_ciphertext.is_some() {
-                f |= FEATURE_PQ_KEM;
-            }
-            f
-        } else {
-            server_features
-        };
+        // Negotiate features based on client flags
+        let mut negotiated_features = server_features;
+        // Always advertise v5 features
+        negotiated_features |= FEATURE_V5_KDF | FEATURE_EXTENDED_ANTI_REPLAY;
+        if client_init.flags & CLIENT_INIT_FLAG_HEADER_AUTH != 0 {
+            negotiated_features |= FEATURE_HEADER_AUTH;
+        }
+        if client_init.flags & CLIENT_INIT_FLAG_MIGRATION != 0 {
+            negotiated_features |= FEATURE_CONNECTION_MIGRATION;
+        }
+        // Only advertise PQ KEM if we actually negotiated it
+        if pq_kem_ciphertext.is_some() {
+            negotiated_features |= FEATURE_PQ_KEM;
+        }
 
         // Build PrismaServerInit
         let server_init = PrismaServerInit {
@@ -414,14 +382,14 @@ impl PrismaHandshakeServer {
         wire.extend_from_slice(&server_pub);
         wire.extend_from_slice(&encrypted_init);
 
-        // v5: derive additional keys
-        let header_key = if is_v5 && client_init.flags & CLIENT_INIT_FLAG_HEADER_AUTH != 0 {
+        // Derive additional v5 keys
+        let header_key = if client_init.flags & CLIENT_INIT_FLAG_HEADER_AUTH != 0 {
             Some(derive_v5_header_key(&session_key))
         } else {
             None
         };
 
-        let migration_token = if is_v5 && client_init.flags & CLIENT_INIT_FLAG_MIGRATION != 0 {
+        let migration_token = if client_init.flags & CLIENT_INIT_FLAG_MIGRATION != 0 {
             Some(derive_v5_migration_token(
                 &session_key,
                 session_id.as_bytes(),
@@ -437,7 +405,7 @@ impl PrismaHandshakeServer {
             client_id: client_init.client_id,
             cipher_suite: client_init.cipher_suite,
             padding_range,
-            protocol_version: client_version,
+            protocol_version: PRISMA_PROTOCOL_VERSION,
             header_key,
             migration_token,
         };
@@ -455,11 +423,11 @@ pub struct PrismaServerCompleted {
     pub client_id: ClientId,
     pub cipher_suite: CipherSuite,
     pub padding_range: PaddingRange,
-    /// The protocol version negotiated with the client (v4 or v5).
+    /// The protocol version (always v5).
     pub protocol_version: u8,
-    /// v5: header authentication key (None for v4 clients).
+    /// Header authentication key (None if client did not request it).
     pub header_key: Option<[u8; 32]>,
-    /// v5: connection migration token (None for v4 clients).
+    /// Connection migration token (None if client did not request it).
     pub migration_token: Option<[u8; 32]>,
 }
 
@@ -492,10 +460,9 @@ impl PrismaServerCompleted {
 
 // ===== Version detection helper =====
 
-/// Check if a version byte is a supported Prisma protocol version.
-/// Accepts v4 (backward compatibility) and v5 (current).
+/// Check if a version byte is the supported Prisma protocol version (v5 only).
 pub fn is_valid_protocol_version(version: u8) -> bool {
-    (PRISMA_MIN_PROTOCOL_VERSION..=PRISMA_PROTOCOL_VERSION).contains(&version)
+    version == PRISMA_PROTOCOL_VERSION
 }
 
 #[cfg(test)]
@@ -786,8 +753,9 @@ mod tests {
     fn test_prisma_version_detection() {
         assert!(is_valid_protocol_version(PRISMA_PROTOCOL_VERSION));
         assert!(is_valid_protocol_version(0x05)); // v5 current
-        assert!(is_valid_protocol_version(0x04)); // v4 backward compat
-                                                  // Old versions should be invalid
+        // v4 no longer accepted (removed in 0.9.0)
+        assert!(!is_valid_protocol_version(0x04));
+        // Old versions should be invalid
         assert!(!is_valid_protocol_version(0x01));
         assert!(!is_valid_protocol_version(0x02));
         assert!(!is_valid_protocol_version(0x03));

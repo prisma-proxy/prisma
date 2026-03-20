@@ -57,13 +57,13 @@ pub const FEATURE_CONNECTION_MIGRATION: u32 = 0x0400;
 /// v5: Server supports hybrid post-quantum key exchange (X25519 + ML-KEM-768).
 pub const FEATURE_PQ_KEM: u32 = 0x0800;
 
-// --- PrismaVeil handshake types (v4 only) ---
+// --- PrismaVeil handshake types ---
 
 /// PrismaVeil handshake: Client → Server.
 /// 2-step handshake: PrismaClientInit → PrismaServerInit.
 #[derive(Debug, Clone)]
 pub struct PrismaClientInit {
-    pub version: u8, // PRISMA_PROTOCOL_VERSION (0x04)
+    pub version: u8, // PRISMA_PROTOCOL_VERSION (0x05)
     pub flags: u8,
     pub client_ephemeral_pub: [u8; 32],
     pub client_id: ClientId,
@@ -266,18 +266,18 @@ pub struct SessionKeys {
     pub client_id: ClientId,
     pub client_nonce_counter: u64,
     pub server_nonce_counter: u64,
-    /// Protocol version negotiated during handshake.
+    /// Protocol version (always v5).
     pub protocol_version: u8,
-    /// Padding range for per-frame padding (v2+ only).
+    /// Padding range for per-frame padding.
     pub padding_range: PaddingRange,
-    /// v3: challenge from ServerInit that client must respond to.
+    /// Challenge from ServerInit that client must respond to.
     pub challenge: Option<[u8; 32]>,
-    /// v3: session ticket for 0-RTT resumption.
+    /// Session ticket for 0-RTT resumption.
     pub session_ticket: Option<Vec<u8>>,
-    /// v5: separate key for header-authenticated encryption AAD binding.
+    /// Separate key for header-authenticated encryption AAD binding.
     /// When present, frame headers (cmd+flags+stream_id) are bound as AAD.
     pub header_key: Option<[u8; 32]>,
-    /// v5: connection migration token for seamless reconnection.
+    /// Connection migration token for seamless reconnection.
     pub migration_token: Option<[u8; 32]>,
 }
 

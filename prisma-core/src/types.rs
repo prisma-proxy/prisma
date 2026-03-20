@@ -4,10 +4,8 @@ use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-// Protocol constants — v5 current, v4 accepted for backward compatibility
+// Protocol constants — v5 only (v4 backward compatibility removed in 0.9.0)
 pub const PRISMA_PROTOCOL_VERSION: u8 = 0x05;
-/// Minimum protocol version accepted by this build.
-pub const PRISMA_MIN_PROTOCOL_VERSION: u8 = 0x04;
 pub const MAX_FRAME_SIZE: usize = 32768;
 pub const NONCE_SIZE: usize = 12;
 pub const MAX_PADDING_SIZE: usize = 256;

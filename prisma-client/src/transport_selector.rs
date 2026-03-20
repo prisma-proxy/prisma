@@ -26,9 +26,7 @@ pub enum TransportType {
     XPorta,
     ShadowTls,
     WireGuard,
-    // Legacy transports
     Quic,
-    TcpTls,
     Tcp,
 }
 
@@ -44,7 +42,6 @@ impl TransportType {
             "shadow-tls" | "shadowtls" | "shadow_tls" => Some(TransportType::ShadowTls),
             "wireguard" | "wg" => Some(TransportType::WireGuard),
             "quic" => Some(TransportType::Quic),
-            "tls" | "tcp-tls" | "tls-on-tcp" => Some(TransportType::TcpTls),
             "tcp" => Some(TransportType::Tcp),
             _ => None,
         }
@@ -60,13 +57,12 @@ impl TransportType {
             TransportType::ShadowTls => "shadow-tls",
             TransportType::WireGuard => "wireguard",
             TransportType::Quic => "quic",
-            TransportType::TcpTls => "tls-on-tcp",
             TransportType::Tcp => "tcp",
         }
     }
 }
 
-/// Default v4 fallback order.
+/// Default transport fallback order.
 pub const DEFAULT_FALLBACK_ORDER: &[TransportType] = &[
     TransportType::QuicV2Salamander,
     TransportType::QuicV2,

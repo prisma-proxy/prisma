@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
 use prisma_core::crypto::aead::create_cipher;
-use prisma_core::crypto::kdf::derive_session_key;
+use prisma_core::crypto::kdf::derive_v5_session_key;
 use prisma_core::protocol::codec::*;
 use prisma_core::protocol::types::*;
 use prisma_core::types::*;
@@ -130,15 +130,16 @@ proptest! {
     }
 
     #[test]
-    fn test_kdf_different_timestamps(
+    fn test_v5_kdf_different_timestamps(
         secret in proptest::array::uniform32(any::<u8>()),
         client_pub in proptest::array::uniform32(any::<u8>()),
         server_pub in proptest::array::uniform32(any::<u8>()),
+        challenge in proptest::array::uniform32(any::<u8>()),
         ts1 in any::<u64>(),
         ts2 in any::<u64>(),
     ) {
-        let key1 = derive_session_key(&secret, &client_pub, &server_pub, ts1);
-        let key2 = derive_session_key(&secret, &client_pub, &server_pub, ts2);
+        let key1 = derive_v5_session_key(&secret, &client_pub, &server_pub, &challenge, ts1);
+        let key2 = derive_v5_session_key(&secret, &client_pub, &server_pub, &challenge, ts2);
         if ts1 != ts2 {
             prop_assert_ne!(key1, key2);
         } else {

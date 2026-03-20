@@ -6,8 +6,8 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 
 use prisma_core::crypto::aead::create_cipher;
 use prisma_core::crypto::kdf::{
-    derive_preliminary_key, derive_v3_session_key, derive_v5_header_key, derive_v5_migration_token,
-    derive_v5_preliminary_key, derive_v5_session_key,
+    derive_v5_header_key, derive_v5_migration_token, derive_v5_preliminary_key,
+    derive_v5_session_key,
 };
 use prisma_core::crypto::padding::{generate_frame_padding, generate_padding};
 use prisma_core::protocol::anti_replay::AntiReplayWindow;
@@ -152,27 +152,6 @@ fn bench_kdf(c: &mut Criterion) {
     let session_key = [0xAAu8; 32];
     let session_id = [0x01u8; 16];
 
-    group.bench_function("derive_preliminary_key", |b| {
-        b.iter(|| {
-            black_box(derive_preliminary_key(
-                &secret,
-                &client_pub,
-                &server_pub,
-                1000,
-            ))
-        });
-    });
-    group.bench_function("derive_v3_session_key", |b| {
-        b.iter(|| {
-            black_box(derive_v3_session_key(
-                &secret,
-                &client_pub,
-                &server_pub,
-                &challenge,
-                1000,
-            ))
-        });
-    });
     group.bench_function("derive_v5_preliminary_key", |b| {
         b.iter(|| {
             black_box(derive_v5_preliminary_key(

@@ -96,3 +96,33 @@ fn test_mgmt_listen_addr_default_when_omitted() {
     assert_eq!(config.management_api.listen_addr, "127.0.0.1:9090");
     assert_eq!(config.management_api.enabled, false);
 }
+
+#[test]
+fn test_mgmt_tls_defaults_to_disabled() {
+    // When [management_api] exists but tls_enabled is not set, it should default to false.
+    // This is critical: if tls_enabled defaults to true, the mgmt API silently serves
+    // HTTPS (inheriting the server cert), making HTTP access from the public network fail.
+    let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
+    assert_eq!(
+        config.management_api.tls_enabled, false,
+        "tls_enabled must default to false so the API serves HTTP out of the box"
+    );
+    assert!(
+        config.management_api.tls.is_none(),
+        "tls must be None when tls_enabled is false and no [management_api.tls] is set"
+    );
+}
+
+#[test]
+fn test_mgmt_addr_survives_clone() {
+    // Verify that cloning ManagementApiConfig preserves listen_addr.
+    // The server clones the config before passing to prisma_mgmt::serve.
+    let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
+    let cloned = config.management_api.clone();
+    assert_eq!(
+        cloned.listen_addr, "0.0.0.0:9090",
+        "listen_addr must survive clone"
+    );
+    assert_eq!(cloned.enabled, true);
+    assert_eq!(cloned.tls_enabled, false);
+}

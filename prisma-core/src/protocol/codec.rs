@@ -6,7 +6,7 @@ use crate::types::{CipherSuite, ClientId, ProxyAddress, ProxyDestination, NONCE_
 
 use super::types::*;
 
-// --- Handshake message encoding/decoding (v4 only) ---
+// --- Handshake message encoding/decoding ---
 
 /// Encode PrismaClientInit to bytes.
 /// Wire format:
@@ -988,16 +988,16 @@ pub fn decrypt_frame_aad(
     Ok((plaintext, nonce))
 }
 
-/// Build AAD (additional authenticated data) from a v5 header key and nonce.
+/// Build AAD (additional authenticated data) from a header key and nonce.
 ///
-/// v5 header-authenticated encryption binds the session identity into each
+/// Header-authenticated encryption binds the session identity into each
 /// frame's AEAD tag. The AAD is BLAKE3(header_key, nonce), truncated to 16 bytes.
 /// This prevents cross-session frame injection: an attacker who captures
 /// encrypted frames from session A cannot replay them into session B,
 /// even if both sessions happen to use the same cipher key (which shouldn't
 /// happen, but defense-in-depth).
 ///
-/// Returns an empty Vec for v4 sessions (no header_key).
+/// Returns an empty Vec when no header_key is provided.
 #[inline]
 pub fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Vec<u8> {
     match header_key {
@@ -1363,7 +1363,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v5_aad_empty_for_v4_sessions() {
+    fn test_v5_aad_empty_without_header_key() {
         let aad = build_v5_aad(None, &[0u8; NONCE_SIZE]);
         assert!(aad.is_empty());
     }
@@ -1389,14 +1389,14 @@ mod tests {
     }
 
     #[test]
-    fn test_v5_backward_compat_no_aad() {
+    fn test_frame_no_aad_round_trip() {
         use crate::crypto::aead::create_cipher;
 
-        // Frames encrypted without AAD (v4) should still decrypt with no AAD
+        // Frames encrypted without AAD should still decrypt without AAD
         let key = [0x42u8; 32];
         let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
         let nonce = [0u8; NONCE_SIZE];
-        let plaintext = b"v4 compatible frame";
+        let plaintext = b"no aad frame";
 
         let wire = encrypt_frame(cipher.as_ref(), &nonce, plaintext).unwrap();
         let (decrypted, _) = decrypt_frame(cipher.as_ref(), &wire).unwrap();
