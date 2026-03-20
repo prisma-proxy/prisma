@@ -207,7 +207,7 @@ export function registerEvolutionTools(
 
       const lines = [
         `# Competitive Matrix: Prisma vs xray-core vs sing-box\n`,
-        `> Version: Prisma 0.9.0 | xray-core 1.8.x | sing-box 1.9.x\n`,
+        `> Version: Prisma 1.3.0 | xray-core 1.8.x | sing-box 1.9.x\n`,
       ];
 
       for (const cat of categories) {
@@ -243,6 +243,7 @@ type ComparisonCategory = "protocol" | "transport" | "security" | "performance" 
 const COMPETITIVE_DATA: Record<ComparisonCategory, ComparisonRow[]> = {
   protocol: [
     { feature: "Custom protocol", prisma: "PrismaVeil v5", xray: "VMess/VLESS", singbox: "Relies on xray/hysteria protocols" },
+    { feature: "Multi-protocol inbounds", prisma: "VMess, VLESS, Shadowsocks, Trojan", xray: "VMess, VLESS, Shadowsocks, Trojan", singbox: "VMess, VLESS, Shadowsocks, Trojan, Hysteria" },
     { feature: "Post-quantum key exchange", prisma: "ML-KEM 768 hybrid", xray: "No", singbox: "No" },
     { feature: "Protocol obfuscation", prisma: "PrismaTLS (REALITY-like)", xray: "REALITY", singbox: "Via REALITY (xray compat)" },
     { feature: "Multiplexing", prisma: "XMUX (built-in)", xray: "Mux.cool", singbox: "Multiplex" },

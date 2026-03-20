@@ -50,7 +50,7 @@ sudo cp target/release/prisma /usr/local/bin/
 
 ```bash
 prisma --version
-# 预期：prisma 0.9.0
+# 预期：prisma 1.3.0
 ```
 
 ## Systemd 服务

@@ -7,7 +7,7 @@ sidebar_position: 2
 The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v0.9.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v1.3.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -24,7 +24,7 @@ This page reflects Prisma **v0.9.0**. Protocol v4 support has been removed; only
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
 | `tls_server_name` | string? | -- | TLS SNI server name override (defaults to `server_addr` hostname) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
-| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 0.9.0) |
+| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 1.3.0) |
 | `fingerprint` | string | `"chrome"` | uTLS fingerprint: `"chrome"` / `"firefox"` / `"safari"` / `"random"` / `"none"` |
 | `quic_version` | string | `"auto"` | QUIC version: `"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | Transport mode: `"auto"` or explicit name |

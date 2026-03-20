@@ -331,6 +331,7 @@ const SERVER_OPTIONAL_FIELDS = [
   "config_watch",
   "ssh",
   "ticket_rotation_hours",
+  "inbounds",
 ];
 
 /** Known top-level fields for ClientConfig. */

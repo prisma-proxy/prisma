@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Port Forwarding
 
-Prisma supports frp-style port forwarding (reverse proxy), allowing you to expose local services behind NAT or firewalls through the Prisma server. All traffic flows through the encrypted PrismaVeil tunnel. As of v0.9.0, port forwarding supports granular per-forward configuration, UDP forwarding, runtime management via the Management API, and dynamic add/remove via FFI.
+Prisma supports frp-style port forwarding (reverse proxy), allowing you to expose local services behind NAT or firewalls through the Prisma server. All traffic flows through the encrypted PrismaVeil tunnel. As of v1.3.0, port forwarding supports granular per-forward configuration, UDP forwarding, runtime management via the Management API, and dynamic add/remove via FFI.
 
 ## How it works
 

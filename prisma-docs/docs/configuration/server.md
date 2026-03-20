@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v0.9.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v1.3.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -17,7 +17,7 @@ This page reflects Prisma **v0.9.0**. Protocol v4 support has been removed; only
 | `listen_addr` | string | `"0.0.0.0:8443"` | TCP listen address for direct and TLS-wrapped connections |
 | `quic_listen_addr` | string | `"0.0.0.0:8443"` | QUIC/UDP listen address |
 | `dns_upstream` | string | `"8.8.8.8:53"` | Upstream DNS server for `CMD_DNS_QUERY` forwarding |
-| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 0.9.0) |
+| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 1.3.0) |
 | `allow_transport_only_cipher` | bool | `false` | Allow clients to use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). |
 | `config_watch` | bool | `false` | Watch the config file for changes and auto-reload at runtime |
 | `shutdown_drain_timeout_secs` | u64 | `30` | Seconds to wait for in-flight connections during graceful shutdown |
@@ -233,6 +233,47 @@ description = "Block private networks"
 [acls.client-uuid-1.rules.matcher]
 type = "ip-cidr"
 value = "10.0.0.0/8"
+```
+
+## `[[inbounds]]` -- Multi-protocol inbound listeners
+
+Each entry defines a protocol-specific inbound listener. Prisma can accept connections from VMess, VLESS, Shadowsocks, and Trojan clients in addition to native PrismaVeil clients.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `protocol` | string | -- | Inbound protocol: `"vmess"` / `"vless"` / `"shadowsocks"` / `"trojan"` |
+| `listen_addr` | string | -- | Listen address for this inbound (e.g., `"0.0.0.0:8444"`) |
+| `enabled` | bool | `true` | Enable/disable this inbound |
+| `settings` | table | -- | Protocol-specific settings (users, passwords, cipher methods, etc.) |
+
+Example:
+
+```toml
+[[inbounds]]
+protocol = "vmess"
+listen_addr = "0.0.0.0:10086"
+enabled = true
+
+[[inbounds.settings.clients]]
+id = "b831381d-6324-4d53-ad4f-8cda48b30811"
+alter_id = 0
+
+[[inbounds]]
+protocol = "shadowsocks"
+listen_addr = "0.0.0.0:8388"
+enabled = true
+
+[inbounds.settings]
+method = "aes-256-gcm"
+password = "your-password"
+
+[[inbounds]]
+protocol = "trojan"
+listen_addr = "0.0.0.0:443"
+enabled = true
+
+[inbounds.settings]
+password = "your-trojan-password"
 ```
 
 ## `[logging]` -- Log output

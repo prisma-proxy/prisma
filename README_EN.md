@@ -7,7 +7,8 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 ## Highlights
 
 - **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT resumption, X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only, header-authenticated encryption (AAD), connection migration, enhanced KDF
-- **6 transports** — QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta (CDN-compatible)
+- **Multi-protocol inbounds** — VMess, VLESS, Shadowsocks, Trojan compatibility via `[[inbounds]]` config
+- **9 transports** — QUIC v2, PrismaTLS, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard
 - **TUN mode** — system-wide proxy via virtual network interface (Windows/Linux/macOS)
 - **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server
 - **PrismaTLS** — active probing resistance replacing REALITY, with browser fingerprint mimicry + dynamic mask server pool

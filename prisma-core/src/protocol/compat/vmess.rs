@@ -109,7 +109,11 @@ pub fn compute_auth_id(cmd_key: &[u8; 16], timestamp: u64) -> [u8; 16] {
 
 /// Verify a VMess auth_id against a set of authorized clients.
 ///
-/// Checks the timestamp window (120 seconds) and matches against known UUIDs.
+/// Checks the timestamp window and matches against known UUIDs.
+/// Always iterates all clients and all timestamps to prevent timing
+/// side-channel leaks that could reveal which client matched or how
+/// many clients are configured.
+///
 /// Returns the matched UUID on success.
 pub fn verify_auth_id(
     auth_id: &[u8; 16],
@@ -121,6 +125,8 @@ pub fn verify_auth_id(
         .unwrap_or_default()
         .as_secs();
 
+    let mut matched: Option<Uuid> = None;
+
     for client in clients {
         let cmd_key = derive_cmd_key(&client.uuid);
         // Check timestamps within tolerance window
@@ -129,11 +135,13 @@ pub fn verify_auth_id(
         for ts in start..=end {
             let expected = compute_auth_id(&cmd_key, ts);
             if crate::util::ct_eq_slice(auth_id, &expected) {
-                return Some(client.uuid);
+                // Don't early-return: always iterate all clients/timestamps
+                // to prevent timing leaks
+                matched = Some(client.uuid);
             }
         }
     }
-    None
+    matched
 }
 
 /// Parse a VMess AEAD header (after decryption).

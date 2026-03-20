@@ -230,7 +230,7 @@ Random padding added to every data frame within the negotiated range, preventing
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `PRISMA_PROTOCOL_VERSION` | `0x05` | Current protocol version |
-| `MAX_FRAME_SIZE` | 16384 | Maximum frame size in bytes |
+| `MAX_FRAME_SIZE` | 32768 | Maximum frame size in bytes |
 | `NONCE_SIZE` | 12 | Nonce size in bytes |
 | `MAX_PADDING_SIZE` | 256 | Maximum padding size in bytes |
 | `PRISMA_QUIC_ALPN` | `"h3"` | QUIC ALPN protocol string |

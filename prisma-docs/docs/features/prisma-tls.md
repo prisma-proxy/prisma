@@ -4,7 +4,7 @@ sidebar_position: 9
 
 # PrismaTLS
 
-PrismaTLS is PrismaVeil's active probing resistance system (v0.9.0), replacing the REALITY protocol. It makes the server indistinguishable from a real website to active probers while authenticating legitimate PrismaVeil clients through a hidden beacon in the TLS handshake.
+PrismaTLS is PrismaVeil's active probing resistance system (v1.3.0), replacing the REALITY protocol. It makes the server indistinguishable from a real website to active probers while authenticating legitimate PrismaVeil clients through a hidden beacon in the TLS handshake.
 
 ## Why PrismaTLS replaces REALITY
 

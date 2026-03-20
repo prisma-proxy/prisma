@@ -104,21 +104,21 @@ impl ShadowsocksConfig {
     }
 }
 
-/// Derive PSK from password using the EVP_BytesToKey method.
+/// Derive PSK from password using the EVP_BytesToKey method (MD5).
 ///
-/// This is the standard key derivation used by Shadowsocks:
+/// This is the standard key derivation used by Shadowsocks (OpenSSL-compatible):
 /// ```text
 /// D_i = MD5(D_{i-1} || password)
 /// key = D_1 || D_2 || ... (truncated to key_size)
 /// ```
 fn derive_psk(password: &str, key_size: usize) -> Vec<u8> {
-    use sha2::Digest;
+    use md5::Digest;
 
     let mut result = Vec::with_capacity(key_size);
     let mut prev_hash = Vec::new();
 
     while result.len() < key_size {
-        let mut hasher = sha2::Sha256::new();
+        let mut hasher = md5::Md5::new();
         if !prev_hash.is_empty() {
             hasher.update(&prev_hash);
         }
@@ -135,27 +135,28 @@ fn derive_psk(password: &str, key_size: usize) -> Vec<u8> {
 /// Derive the AEAD subkey from the PSK and salt using HKDF-SHA1.
 ///
 /// `subkey = HKDF-SHA1(psk, salt, "ss-subkey", key_len)`
+///
+/// Per the Shadowsocks AEAD spec, this uses HMAC-SHA1 for both the extract
+/// and expand phases of HKDF (RFC 5869).
 pub fn derive_subkey(psk: &[u8], salt: &[u8], key_len: usize) -> Vec<u8> {
-    // HKDF-SHA1 implementation using HMAC-SHA256 (simplified, compatible with
-    // the Shadowsocks spec's HKDF step)
     use hmac::{Hmac, Mac};
-    use sha2::Sha256;
+    use sha1::Sha1;
 
-    type HmacSha256 = Hmac<Sha256>;
+    type HmacSha1 = Hmac<Sha1>;
 
-    // HKDF Extract
-    let mut extract_mac = HmacSha256::new_from_slice(salt).expect("HMAC key length valid");
+    // HKDF Extract: PRK = HMAC-SHA1(salt, IKM)
+    let mut extract_mac = HmacSha1::new_from_slice(salt).expect("HMAC key length valid");
     extract_mac.update(psk);
     let prk = extract_mac.finalize().into_bytes();
 
-    // HKDF Expand
+    // HKDF Expand: OKM = T(1) || T(2) || ...
     let info = b"ss-subkey";
     let mut okm = Vec::with_capacity(key_len);
     let mut t = Vec::new();
     let mut counter = 1u8;
 
     while okm.len() < key_len {
-        let mut expand_mac = HmacSha256::new_from_slice(&prk).expect("HMAC key length valid");
+        let mut expand_mac = HmacSha1::new_from_slice(&prk).expect("HMAC key length valid");
         expand_mac.update(&t);
         expand_mac.update(info);
         expand_mac.update(&[counter]);

@@ -2733,6 +2733,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
+name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "md5"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3446,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-cli"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3482,7 +3492,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -3520,7 +3530,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3541,6 +3551,7 @@ dependencies = [
  "http-body-util",
  "insta",
  "kem",
+ "md-5",
  "ml-kem",
  "moka",
  "proptest",
@@ -3553,6 +3564,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha1 0.10.6",
  "sha2 0.10.9",
  "subtle",
  "thiserror 2.0.18",
@@ -3570,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-ffi"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3601,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-mgmt"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3627,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-server"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "axum",

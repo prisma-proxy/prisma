@@ -198,7 +198,7 @@ int   prisma_apply_update(const char* url, const char* sha256);
 {"type":"log","level":"INFO","target":"prisma_client","msg":"Connected to server"}
 
 // Update available
-{"type":"update_available","version":"0.9.0","changelog":"..."}
+{"type":"update_available","version":"1.3.0","changelog":"..."}
 ```
 
 ### 构建 prisma-ffi

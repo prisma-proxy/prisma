@@ -5,13 +5,14 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, and advanced anti-censorship features. Version **0.9.0** removes legacy protocol v4 support and ships with daemon mode, subscription management, hot config reload, buffer pooling, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, multi-protocol inbound support (VMess/VLESS/Shadowsocks/Trojan), and advanced anti-censorship features. Version **1.3.0** ships with multi-protocol compatibility, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
 
 ## Features
 
 ### Protocol and Cryptography
 
-- **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT session resumption, X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only cipher modes, header-authenticated encryption (AAD), connection migration, enhanced KDF. Protocol v4 has been removed as of 0.9.0.
+- **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT session resumption, X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only cipher modes, header-authenticated encryption (AAD), connection migration, enhanced KDF
+- **Multi-protocol inbounds** — VMess, VLESS, Shadowsocks (AEAD), and Trojan compatibility via `[[inbounds]]` config, allowing Prisma servers to accept connections from third-party clients
 - **Post-quantum hybrid key exchange** — ML-KEM-768 (Kyber) combined with X25519 for forward-secure key agreement resistant to quantum computers. Negotiated automatically when both sides support it.
 - **Modern cryptography** — X25519 ECDH, BLAKE3 KDF, ChaCha20-Poly1305 / AES-256-GCM AEAD
 - **Anti-replay protection** via 1024-bit sliding-window nonce bitmap
@@ -142,9 +143,11 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 0.9.0
+## What's New in 1.3.0
 
-- **Protocol v4 removed** — only PrismaVeil v5 is supported
+- **Multi-protocol inbounds** — VMess/VLESS/Shadowsocks/Trojan compatibility via `[[inbounds]]` config
+- **Client permissions** — fine-grained per-client access control and permissions
+- **Transport fallback** — ordered transport fallback with automatic failover
 - **Post-quantum hybrid key exchange** — ML-KEM-768 + X25519
 - **Daemon mode** for server, client, and console (`-d` flag with `stop`/`status` subcommands)
 - **Subscription management** CLI commands (`add`, `update`, `list`, `test`)
@@ -157,3 +160,4 @@ graph LR
 - **Per-client metrics** tracking
 - **Config file watcher** — automatic reload on file change
 - **`--verbose/-v` global flag** for debug output
+- **Management API additions** — `/api/inbounds`, `/api/clients/:id/permissions`, `/api/clients/:id/kick`, `/api/clients/:id/block`

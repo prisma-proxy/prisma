@@ -24,7 +24,7 @@ export default function DevPage(): ReactNode {
           <p className={styles.heroSubtitle}>
             Prisma 代理系统内部参考 — 架构设计、模块 API、线路协议、配置字段、CLI 命令、管理接口、FFI 函数与扩展指南。
           </p>
-          <span className={styles.heroVersion}>workspace v0.9.0 &middot; PrismaVeil 协议 v5 &middot; Rust 2021</span>
+          <span className={styles.heroVersion}>workspace v1.3.0 &middot; PrismaVeil 协议 v5 &middot; Rust 2021</span>
         </div>
 
         {/* ── 目录 ────────────────────────────────────────────────── */}

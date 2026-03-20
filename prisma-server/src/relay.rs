@@ -13,10 +13,15 @@ use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
 use prisma_core::protocol::types::*;
 use prisma_core::types::{CipherSuite, MAX_FRAME_SIZE};
 
+use prisma_core::buffer_pool::BufferPool;
 use prisma_core::state::ServerMetrics;
 
 use crate::bandwidth::limiter::BandwidthLimiterStore;
 use crate::bandwidth::quota::QuotaStore;
+
+/// Shared buffer pool for server relay sessions.
+static SERVER_BUFFER_POOL: std::sync::LazyLock<BufferPool> =
+    std::sync::LazyLock::new(|| BufferPool::for_relay(64));
 
 /// Whether to enable splice(2) zero-copy relay on Linux when conditions allow.
 /// Set to `false` to force the standard userspace relay path even on Linux.
@@ -169,11 +174,15 @@ where
         .map(|l| (l.client_id.clone(), l.bandwidth.clone(), l.quotas.clone()));
     let download_limits = limits.map(|l| (l.client_id, l.bandwidth, l.quotas));
 
+    // Extract v5 header key for AAD binding (None for v4 backward compat)
+    let header_key = session_keys.header_key;
+
     // tunnel -> destination (upload direction)
+    let header_key_up = header_key;
     let mut tunnel_read = tunnel_read;
     let tunnel_to_dest = tokio::spawn(async move {
         let mut anti_replay = AntiReplayWindow::new();
-        let mut frame_buf = vec![0u8; MAX_FRAME_SIZE];
+        let mut frame_buf = SERVER_BUFFER_POOL.acquire();
 
         loop {
             let mut len_buf = [0u8; 2];
@@ -211,10 +220,11 @@ where
                 .total_bytes_up
                 .fetch_add(frame_bytes, Ordering::Relaxed);
 
-            match FrameDecoder::unseal_data_frame(
+            match FrameDecoder::unseal_data_frame_v5(
                 &mut frame_buf[..frame_len],
                 frame_len,
                 cipher_t2d.as_ref(),
+                header_key_up.as_ref(),
             ) {
                 Ok((cmd, payload, nonce)) => {
                     let counter = nonce_to_counter(&nonce);
@@ -253,6 +263,7 @@ where
     });
 
     // destination -> tunnel (download direction)
+    let header_key_down = header_key;
     let dest_to_tunnel = tokio::spawn(async move {
         let mut tunnel_write = tunnel_write;
         let mut encoder = FrameEncoder::new();
@@ -269,12 +280,13 @@ where
 
                             let nonce = server_nonce.next_nonce();
 
-                            match encoder.seal_data_frame(
+                            match encoder.seal_data_frame_v5(
                                 cipher.as_ref(),
                                 &nonce,
                                 n,
                                 0,
                                 &padding_range,
+                                header_key_down.as_ref(),
                             ) {
                                 Ok(wire) => {
                                     let enc_len = wire.len() as u64;

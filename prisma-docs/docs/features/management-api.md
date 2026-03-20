@@ -42,7 +42,7 @@ If `auth_token` is empty, authentication is disabled (development mode only).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"0.9.0"}
+# {"status":"ok","uptime_secs":3600,"version":"1.3.0"}
 ```
 
 ### Connections
@@ -177,6 +177,40 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
 # [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
 ```
 
+### Inbounds (Multi-Protocol)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/inbounds` | List all configured inbounds (PrismaVeil, VMess, VLESS, Shadowsocks, Trojan) |
+
+Returns the list of `[[inbounds]]` entries from the server configuration, including protocol type, listen address, and status.
+
+### Client Permissions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/clients/:id/permissions` | Get permissions for a specific client |
+| `PUT` | `/api/clients/:id/permissions` | Update client permissions |
+| `POST` | `/api/clients/:id/kick` | Force-disconnect a client (terminates all active sessions) |
+| `POST` | `/api/clients/:id/block` | Block a client (disconnect + prevent reconnection) |
+
+**Example: Kick a client**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:9090/api/clients/uuid-here/kick
+# {"status":"ok","sessions_terminated":3}
+```
+
+**Example: Update permissions**
+
+```bash
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"can_forward": true, "can_udp": true, "max_connections": 50}' \
+  http://127.0.0.1:9090/api/clients/uuid-here/permissions
+```
+
 ### Routing Rules
 
 | Method | Path | Description |
@@ -272,15 +306,17 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v0.9.0):
+All endpoints at a glance (v1.3.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
 | Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
 | Connections | 2 REST + 1 WS | List, disconnect, real-time events |
 | Clients | 4 REST | CRUD for authorized clients |
+| Client Permissions | 4 REST | Permissions, kick, block |
 | Client Metrics | 1 REST | Per-client metrics snapshot |
 | System | 1 REST | Platform and resource info |
+| Inbounds | 1 REST | Multi-protocol inbound listing |
 | Configuration | 4 REST + 1 WS | Config read/write, hot-reload, reload stream |
 | Config Backups | 5 REST | Backup, restore, diff |
 | Bandwidth & Quotas | 5 REST | Per-client limits and usage |

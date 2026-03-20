@@ -7,7 +7,8 @@
 ## 特性亮点
 
 - **PrismaVeil v5 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only，头部认证加密（AAD）、连接迁移、增强型 KDF
-- **6 种传输方式** — QUIC v2、TCP、WebSocket、gRPC、XHTTP、XPorta（CDN 兼容）
+- **多协议兼容** — VMess、VLESS、Shadowsocks、Trojan 入站协议支持，通过 `[[inbounds]]` 配置
+- **9 种传输方式** — QUIC v2、PrismaTLS、WebSocket、gRPC、XHTTP、XPorta、ShadowTLS v3、SSH、WireGuard
 - **TUN 模式** — 通过虚拟网络接口实现系统级代理（Windows/Linux/macOS）
 - **GeoIP 路由** — 基于 v2fly geoip.dat 的国家级智能分流，客户端和服务端均支持
 - **PrismaTLS** — 替代 REALITY 的主动探测防御，浏览器指纹模拟 + 动态掩护服务器池

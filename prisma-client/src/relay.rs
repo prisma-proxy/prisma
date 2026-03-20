@@ -38,6 +38,7 @@ pub async fn relay(
     // SOCKS5 → tunnel: read raw data, encrypt into frames
     let mut client_keys = tunnel.session_keys.clone();
     let padding_range = client_keys.padding_range;
+    let header_key = client_keys.header_key;
     let cipher_s2t = cipher.clone();
     let metrics_up = metrics.clone();
     let socks_to_tunnel = async move {
@@ -49,8 +50,14 @@ pub async fn relay(
                     metrics_up.add_up(n as u64);
                     let nonce = client_keys.next_client_nonce();
 
-                    match encoder.seal_data_frame(cipher_s2t.as_ref(), &nonce, n, 0, &padding_range)
-                    {
+                    match encoder.seal_data_frame_v5(
+                        cipher_s2t.as_ref(),
+                        &nonce,
+                        n,
+                        0,
+                        &padding_range,
+                        header_key.as_ref(),
+                    ) {
                         Ok(wire) => {
                             // Single write_all call (coalesced: outer_len + nonce + data + tag)
                             if tunnel_write.write_all(wire).await.is_err() {
@@ -69,6 +76,7 @@ pub async fn relay(
     };
 
     // tunnel → SOCKS5: decrypt frames, send raw data
+    let header_key_down = header_key;
     let tunnel_to_socks = async move {
         let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
         loop {
@@ -89,11 +97,12 @@ pub async fn relay(
                 break;
             }
 
-            // Decrypt in-place using FrameDecoder
-            match FrameDecoder::unseal_data_frame(
+            // Decrypt in-place using FrameDecoder (v5 with AAD)
+            match FrameDecoder::unseal_data_frame_v5(
                 &mut frame_buf[..frame_len],
                 frame_len,
                 cipher.as_ref(),
+                header_key_down.as_ref(),
             ) {
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
