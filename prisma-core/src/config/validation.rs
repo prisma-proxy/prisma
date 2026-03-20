@@ -246,6 +246,9 @@ pub fn validate_server_config(config: &ServerConfig) -> Result<(), ConfigError> 
     // Congestion control validation
     validate_congestion_config(&config.congestion)?;
 
+    // Multi-protocol inbound validation
+    validate_inbounds(&config.inbounds)?;
+
     // ShadowTLS server validation
     if config.shadow_tls.enabled {
         if config.shadow_tls.password.is_empty() {
@@ -683,6 +686,172 @@ pub fn validate_logging_format(format: &str) -> Result<(), ConfigError> {
             valid
         )));
     }
+    Ok(())
+}
+
+fn validate_inbounds(inbounds: &[super::server::InboundConfig]) -> Result<(), ConfigError> {
+    let mut tags = std::collections::HashSet::new();
+
+    for (i, inbound) in inbounds.iter().enumerate() {
+        // Tag must be unique and non-empty
+        if inbound.tag.is_empty() {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}].tag must not be empty",
+                i
+            )));
+        }
+        if !tags.insert(&inbound.tag) {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}].tag \"{}\" is a duplicate",
+                i, inbound.tag
+            )));
+        }
+
+        // Listen address must not be empty
+        if inbound.listen.is_empty() {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}] ({}): listen must not be empty",
+                i, inbound.tag
+            )));
+        }
+
+        // Validate protocol
+        let valid_protocols = ["vmess", "vless", "shadowsocks", "trojan"];
+        if !valid_protocols.contains(&inbound.protocol.as_str()) {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}] ({}): protocol must be one of: {:?}",
+                i, inbound.tag, valid_protocols
+            )));
+        }
+
+        // Validate transport
+        let valid_transports = ["tcp", "ws", "grpc", "quic"];
+        if !valid_transports.contains(&inbound.transport.as_str()) {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}] ({}): transport must be one of: {:?}",
+                i, inbound.tag, valid_transports
+            )));
+        }
+
+        // Protocol-specific validation
+        match inbound.protocol.as_str() {
+            "vmess" => {
+                if inbound.settings.clients.is_empty() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "inbounds[{}] ({}): vmess requires at least one client",
+                        i, inbound.tag
+                    )));
+                }
+                for (j, client) in inbound.settings.clients.iter().enumerate() {
+                    if client.id.is_none() || client.id.as_deref() == Some("") {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}).clients[{}]: id (UUID) is required for vmess",
+                            i, inbound.tag, j
+                        )));
+                    }
+                    // Verify UUID format
+                    if let Some(ref id) = client.id {
+                        if uuid::Uuid::parse_str(id).is_err() {
+                            return Err(ConfigError::ValidationFailed(format!(
+                                "inbounds[{}] ({}).clients[{}]: invalid UUID \"{}\"",
+                                i, inbound.tag, j, id
+                            )));
+                        }
+                    }
+                }
+            }
+            "vless" => {
+                if inbound.settings.clients.is_empty() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "inbounds[{}] ({}): vless requires at least one client",
+                        i, inbound.tag
+                    )));
+                }
+                for (j, client) in inbound.settings.clients.iter().enumerate() {
+                    if client.id.is_none() || client.id.as_deref() == Some("") {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}).clients[{}]: id (UUID) is required for vless",
+                            i, inbound.tag, j
+                        )));
+                    }
+                    if let Some(ref id) = client.id {
+                        if uuid::Uuid::parse_str(id).is_err() {
+                            return Err(ConfigError::ValidationFailed(format!(
+                                "inbounds[{}] ({}).clients[{}]: invalid UUID \"{}\"",
+                                i, inbound.tag, j, id
+                            )));
+                        }
+                    }
+                    // Validate flow if specified
+                    if let Some(ref flow) = client.flow {
+                        let valid_flows = ["", "xtls-rprx-vision"];
+                        if !valid_flows.contains(&flow.as_str()) {
+                            return Err(ConfigError::ValidationFailed(format!(
+                                "inbounds[{}] ({}).clients[{}]: flow must be one of: {:?}",
+                                i, inbound.tag, j, valid_flows
+                            )));
+                        }
+                    }
+                }
+            }
+            "shadowsocks" => {
+                if inbound.settings.method.is_none() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "inbounds[{}] ({}): shadowsocks requires settings.method",
+                        i, inbound.tag
+                    )));
+                }
+                if let Some(ref method) = inbound.settings.method {
+                    let valid_methods = [
+                        "aes-128-gcm",
+                        "aes-256-gcm",
+                        "chacha20-ietf-poly1305",
+                        "chacha20-poly1305",
+                    ];
+                    if !valid_methods.contains(&method.as_str()) {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}): shadowsocks method must be one of: {:?}",
+                            i, inbound.tag, valid_methods
+                        )));
+                    }
+                }
+                if inbound.settings.password.is_none()
+                    || inbound.settings.password.as_deref() == Some("")
+                {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "inbounds[{}] ({}): shadowsocks requires settings.password",
+                        i, inbound.tag
+                    )));
+                }
+            }
+            "trojan" => {
+                if inbound.settings.clients.is_empty() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "inbounds[{}] ({}): trojan requires at least one client",
+                        i, inbound.tag
+                    )));
+                }
+                for (j, client) in inbound.settings.clients.iter().enumerate() {
+                    if client.password.is_none() || client.password.as_deref() == Some("") {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}).clients[{}]: password is required for trojan",
+                            i, inbound.tag, j
+                        )));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        // Transport-specific validation
+        if inbound.transport == "ws" && inbound.transport_settings.path.is_none() {
+            return Err(ConfigError::ValidationFailed(format!(
+                "inbounds[{}] ({}): transport \"ws\" requires transport_settings.path",
+                i, inbound.tag
+            )));
+        }
+    }
+
     Ok(())
 }
 

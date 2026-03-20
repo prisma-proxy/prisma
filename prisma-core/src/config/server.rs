@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -75,6 +77,9 @@ pub struct ServerConfig {
     /// Session ticket key rotation interval in hours (default: 6).
     #[serde(default = "default_ticket_rotation_hours")]
     pub ticket_rotation_hours: u64,
+    /// Multi-protocol inbounds (VMess, VLESS, Shadowsocks, Trojan).
+    #[serde(default)]
+    pub inbounds: Vec<InboundConfig>,
 }
 
 /// ShadowTLS v3 server configuration.
@@ -829,4 +834,107 @@ fn default_max_connections() -> u32 {
 }
 fn default_timeout() -> u64 {
     300
+}
+
+// ---------------------------------------------------------------------------
+// Multi-protocol inbound configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for a multi-protocol inbound listener.
+///
+/// Supports VMess, VLESS, Shadowsocks, and Trojan protocols alongside the
+/// native PrismaVeil protocol. Each inbound has a unique tag, a listen address,
+/// and protocol-specific settings.
+///
+/// # Example (TOML)
+///
+/// ```toml
+/// [[inbounds]]
+/// tag = "vmess-in"
+/// protocol = "vmess"
+/// listen = "0.0.0.0:443"
+/// transport = "tcp"
+///
+/// [inbounds.settings]
+/// clients = [{ id = "uuid-here", alter_id = 0 }]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InboundConfig {
+    /// Unique identifier for this inbound.
+    pub tag: String,
+    /// Protocol type: "vmess", "vless", "shadowsocks", "trojan".
+    pub protocol: String,
+    /// Listen address (e.g., "0.0.0.0:443").
+    pub listen: String,
+    /// Transport layer: "tcp", "ws", "grpc", "quic" (default: "tcp").
+    #[serde(default = "default_inbound_transport")]
+    pub transport: String,
+    /// Transport-specific settings (e.g., WebSocket path).
+    #[serde(default)]
+    pub transport_settings: InboundTransportSettings,
+    /// Protocol-specific settings.
+    #[serde(default)]
+    pub settings: InboundSettings,
+    /// TLS configuration for this inbound (optional, inherits from server TLS if not set).
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
+    /// Whether this inbound is enabled (default: true).
+    #[serde(default = "default_true_inbound")]
+    pub enabled: bool,
+}
+
+fn default_inbound_transport() -> String {
+    "tcp".into()
+}
+
+fn default_true_inbound() -> bool {
+    true
+}
+
+/// Transport-specific settings for inbounds.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InboundTransportSettings {
+    /// WebSocket path (for transport = "ws").
+    #[serde(default)]
+    pub path: Option<String>,
+    /// gRPC service name (for transport = "grpc").
+    #[serde(default)]
+    pub service_name: Option<String>,
+    /// Additional HTTP headers.
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+}
+
+/// Protocol-specific settings for an inbound.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InboundSettings {
+    /// Client list (VMess/VLESS/Trojan).
+    #[serde(default)]
+    pub clients: Vec<InboundClient>,
+    /// Encryption method (Shadowsocks).
+    #[serde(default)]
+    pub method: Option<String>,
+    /// Password (Shadowsocks/Trojan single-user mode).
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
+/// A client entry for VMess/VLESS/Trojan inbounds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InboundClient {
+    /// UUID (VMess/VLESS) or password (Trojan).
+    #[serde(default)]
+    pub id: Option<String>,
+    /// VMess alter ID (default: 0, must be 0 for AEAD).
+    #[serde(default)]
+    pub alter_id: Option<u16>,
+    /// VLESS flow control (e.g., "xtls-rprx-vision").
+    #[serde(default)]
+    pub flow: Option<String>,
+    /// Trojan password.
+    #[serde(default)]
+    pub password: Option<String>,
+    /// User email/name for identification in logs.
+    #[serde(default)]
+    pub email: Option<String>,
 }

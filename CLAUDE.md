@@ -1,13 +1,13 @@
 # Prisma
 
-Encrypted proxy system built in Rust. Workspace version 1.2.0, edition 2021.
+Encrypted proxy system built in Rust. Workspace version 1.3.0, edition 2021.
 
 ## Workspace Layout
 
 | Crate | Role |
 |-------|------|
-| `prisma-core` | Shared library: crypto, protocol (PrismaVeil v5), config, types, bandwidth, DNS, routing |
-| `prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta), relay, auth, camouflage |
+| `prisma-core` | Shared library: crypto, protocol (PrismaVeil v5 + VMess/VLESS/Shadowsocks/Trojan compat), config, types, bandwidth, DNS, routing |
+| `prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta + multi-protocol inbounds), relay, auth, camouflage |
 | `prisma-client` | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool |
 | `prisma-cli` | CLI binary (clap 4): server/client runners, management commands, web console |
 | `prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |

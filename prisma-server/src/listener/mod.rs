@@ -1,4 +1,5 @@
 pub mod cdn;
+pub mod compat_inbound;
 pub mod fallback;
 pub mod grpc_tunnel;
 pub mod h3_masquerade;

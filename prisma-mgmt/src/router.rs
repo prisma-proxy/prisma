@@ -12,8 +12,8 @@ use prisma_core::config::server::ManagementApiConfig;
 
 use crate::auth::{auth_middleware, AuthToken};
 use crate::handlers::{
-    acls, alerts, backup, bandwidth, clients, config, connections, forwards, health, permissions,
-    prometheus_export, reload, routes, system,
+    acls, alerts, backup, bandwidth, clients, config, connections, forwards, health, inbounds,
+    permissions, prometheus_export, reload, routes, system,
 };
 use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
@@ -113,6 +113,13 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route(
             "/api/acls/{client_id}",
             get(acls::get).put(acls::set).delete(acls::remove),
+        )
+        // Inbounds (multi-protocol)
+        .route("/api/inbounds", get(inbounds::list_inbounds))
+        .route("/api/inbounds/{tag}", get(inbounds::get_inbound))
+        .route(
+            "/api/inbounds/{tag}/clients",
+            put(inbounds::update_inbound_clients),
         )
         // Alerts
         .route(
