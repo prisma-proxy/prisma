@@ -16,7 +16,7 @@ sidebar_position: 2
 | `identity.client_id` | string | — | 客户端 UUID（须与服务端配置匹配） |
 | `identity.auth_secret` | string | — | 64 个十六进制字符的共享密钥（须与服务端配置匹配） |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
-| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` |
+| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` / `shadowtls` / `ssh` / `wireguard` |
 | `skip_cert_verify` | bool | `false` | 跳过 TLS 证书验证 |
 | `tls_on_tcp` | bool | `false` | 通过 TLS 包裹的 TCP 连接（须与服务端伪装设置匹配） |
 | `tls_server_name` | string? | — | TLS SNI 服务器名称覆盖（默认使用 server_addr 的主机名） |
@@ -104,7 +104,7 @@ socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"  # 可选，删除此行以禁用 HTTP 代理
 server_addr = "127.0.0.1:8443"
 cipher_suite = "chacha20-poly1305"   # 或 "aes-256-gcm"
-transport = "quic"                   # 或 "tcp" / "ws" / "grpc" / "xhttp" / "xporta" / "prisma-tls"
+transport = "quic"                   # 或 "tcp" / "ws" / "grpc" / "xhttp" / "xporta" / "prisma-tls" / "shadowtls" / "ssh" / "wireguard"
 skip_cert_verify = true              # 开发环境中使用自签名证书时设为 true
 
 # v5 功能（向后兼容 v4）
@@ -143,7 +143,7 @@ format = "pretty"
 - `identity.client_id` 不能为空
 - `identity.auth_secret` 必须是有效的十六进制字符串
 - `cipher_suite` 必须是以下之一：`chacha20-poly1305`、`aes-256-gcm`
-- `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`
+- `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`、`shadowtls`、`ssh`、`wireguard`
 - `xhttp_mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
 - `xhttp_mode = "stream-one"` 需要设置 `xhttp_stream_url`
 - `xhttp_mode = "packet-up"` 或 `"stream-up"` 需要设置 `xhttp_upload_url` 和 `xhttp_download_url`

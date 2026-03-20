@@ -132,7 +132,7 @@ async fn run_inner(
     let use_grpc = config.transport == "grpc";
     let use_xhttp = config.transport == "xhttp";
     let use_xporta = config.transport == "xporta";
-    let use_prisma_tls = config.transport == "prisma-tls" || config.transport == "reality";
+    let use_prisma_tls = config.transport == "prisma-tls";
     let use_shadow_tls = config.transport == "shadow-tls";
     let use_wireguard = config.transport == "wireguard";
 
@@ -215,7 +215,6 @@ async fn run_inner(
             let geoip = load_geoip_matcher(config.routing.geoip_path.as_deref(), has_geoip_rules);
             Router::with_geoip(config.routing.rules.clone(), geoip)
         }),
-        // v4 fields
         protocol_version: config.protocol_version.clone(),
         fingerprint: config.fingerprint.clone(),
         quic_version: config.quic_version.clone(),

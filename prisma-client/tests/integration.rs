@@ -378,7 +378,6 @@ fn test_nonce_counter_monotonicity() {
         client_id: ClientId::new(),
         client_nonce_counter: 0,
         server_nonce_counter: 0,
-        protocol_version: PRISMA_PROTOCOL_VERSION,
         padding_range: PaddingRange::new(0, 256),
         challenge: None,
         session_ticket: None,

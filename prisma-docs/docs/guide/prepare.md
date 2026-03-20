@@ -52,14 +52,17 @@ You don't need a powerful server. Prisma is built in Rust and is extremely effic
 ### Operating system recommendations
 
 For your **server (VPS)**:
-- **Ubuntu 22.04 LTS** -- Most beginner-friendly, most guides assume Ubuntu
+- **Ubuntu 24.04 LTS** or **Ubuntu 22.04 LTS** -- Most beginner-friendly, most guides assume Ubuntu
 - **Debian 12** -- Very stable, similar to Ubuntu
 - **Other Linux** -- Any modern Linux distribution works
 
 For your **local computer** (where the client runs):
-- **Windows 10/11** -- Fully supported
-- **macOS** -- Fully supported
-- **Linux** -- Fully supported
+- **Windows 10/11** -- Fully supported (GUI and CLI)
+- **macOS** -- Fully supported (GUI and CLI)
+- **Linux** -- Fully supported (GUI and CLI)
+- **Android** -- Fully supported (native app via Kotlin + JNI)
+- **iOS** -- Fully supported (native app via Swift + xcframework)
+- **FreeBSD** -- CLI supported
 
 ## Connecting to Your Server (SSH)
 

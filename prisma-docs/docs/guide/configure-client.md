@@ -176,9 +176,128 @@ Here is a quick reference for when to use each transport:
 | Normal network, best speed | QUIC | `transport = "quic"` |
 | UDP is blocked | TCP | `transport = "tcp"` |
 | Need to hide server IP (with CDN) | WebSocket | `transport = "ws"` |
+| Enterprise traffic disguise (CDN) | gRPC | `transport = "grpc"` |
+| HTTP/2 stealth (CDN) | XHTTP | `transport = "xhttp"` |
 | Heavy censorship (with CDN) | XPorta | `transport = "xporta"` |
+| TLS-level camouflage | ShadowTLS v3 | `transport = "shadow-tls"` |
+| Almost never blocked | SSH | `transport = "ssh"` |
+| Kernel-level VPN performance | WireGuard | `transport = "wireguard"` |
 
 For beginners, **start with QUIC**. It is the fastest and works on most networks. If it does not work, switch to TCP.
+
+## Subscription Import (v0.9.0)
+
+Instead of manually writing a config file, you can import server configurations from subscription URLs. Prisma supports multi-protocol subscription import:
+
+### Supported formats
+
+- **Prisma native** subscription URLs
+- **Shadowsocks (SS)** `ss://` links
+- **VMess** `vmess://` links
+- **Trojan** `trojan://` links
+- **VLESS** `vless://` links
+- **Clash YAML** subscription format
+- **Base64-encoded** URI lists
+
+### Importing via prisma-gui
+
+1. Open prisma-gui
+2. Click **Import** or the import icon
+3. Paste a subscription URL or scan a **QR code**
+4. Click **Import** -- profiles are created automatically
+5. Enable **Auto-update** to refresh subscriptions periodically
+
+### Importing via CLI
+
+```bash
+# Import from a subscription URL
+prisma subscription add --url "https://example.com/sub/your-token" --name "My Provider"
+
+# List subscriptions
+prisma subscription list
+
+# Manually update all subscriptions
+prisma subscription update
+
+# Test imported servers
+prisma subscription test
+```
+
+### Import URI in config
+
+You can also reference a subscription in your `client.toml`:
+
+```toml
+[[subscriptions]]
+url = "https://example.com/sub/your-token"
+name = "My Provider"
+auto_update = true
+update_interval_hours = 24
+```
+
+## Proxy Groups (v0.9.0)
+
+Proxy groups let you use multiple servers with automatic selection, fallback, or load balancing:
+
+```toml
+# Define your servers
+[[servers]]
+name = "tokyo-1"
+server_addr = "tokyo.example.com:8443"
+transport = "quic"
+
+[[servers]]
+name = "singapore-1"
+server_addr = "sg.example.com:8443"
+transport = "quic"
+
+# Proxy group: auto-select the lowest-latency server
+[[proxy_groups]]
+name = "auto-best"
+type = "auto-url"               # Test URL latency and pick best
+servers = ["tokyo-1", "singapore-1"]
+test_url = "https://www.google.com/generate_204"
+test_interval_secs = 300
+
+# Fallback group: use first available server
+[[proxy_groups]]
+name = "fallback"
+type = "fallback"
+servers = ["tokyo-1", "singapore-1"]
+
+# Load balance group: round-robin across servers
+[[proxy_groups]]
+name = "load-balance"
+type = "load-balance"
+servers = ["tokyo-1", "singapore-1"]
+strategy = "round-robin"         # or "random"
+```
+
+Group types:
+- **select** -- Manual selection (GUI shows a dropdown)
+- **auto-url** -- Automatic latency-based selection
+- **fallback** -- Use first available, fall back to next on failure
+- **load-balance** -- Distribute traffic across servers (round-robin or random)
+
+## Enhanced Port Forwarding (v0.9.0)
+
+Port forwarding lets you expose local services through the encrypted tunnel:
+
+```toml
+# Forward remote port 3000 to local service
+[[port_forwards]]
+name = "web-app"
+local_addr = "127.0.0.1:3000"    # Local service address
+remote_port = 3000                # Port on the server
+
+# Forward remote port 5432 to local database
+[[port_forwards]]
+name = "database"
+local_addr = "127.0.0.1:5432"
+remote_port = 15432               # Different remote port
+```
+
+When the client connects, it registers these forwards with the server. Any connection to the server's forwarded port is tunneled back to your local service.
 
 ## Setting Up System Proxy
 
@@ -253,7 +372,10 @@ In this chapter, you learned:
 
 - How to configure **prisma-gui** with a visual profile
 - How to write a **CLI client configuration** with every line explained
-- How to **choose a transport** based on your network situation
+- How to **choose a transport** based on your network situation (all 9 transports)
+- How to **import server configurations** via subscription URLs and QR codes
+- How to use **proxy groups** for automatic server selection, fallback, and load balancing
+- How to set up **port forwarding** through the encrypted tunnel
 - How to set up **browser proxy** and **system-wide proxy**
 - How to **test** the proxy connection with curl
 

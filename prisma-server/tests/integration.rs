@@ -481,7 +481,6 @@ async fn test_session_key_agreement() {
     );
     assert_eq!(client_keys.session_id, server_keys.session_id);
     assert_eq!(client_keys.cipher_suite, server_keys.cipher_suite);
-    assert_eq!(client_keys.protocol_version, PRISMA_PROTOCOL_VERSION);
 }
 
 /// Test that the handshake correctly negotiates v5 features

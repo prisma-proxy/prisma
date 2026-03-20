@@ -169,6 +169,26 @@ Options:
   -h, --help     Print help
 ```
 
+## Daemon Mode
+
+Prisma v0.9.0 supports running the server in daemon mode, which automatically backgrounds the process and writes a PID file:
+
+```bash
+prisma server -c /etc/prisma/server.toml --daemon
+```
+
+This is equivalent to running with `nohup` or creating a systemd service, but built into Prisma itself. The PID file is written to `/var/run/prisma-server.pid` by default.
+
+To stop a daemonized server:
+
+```bash
+prisma server --stop
+```
+
+:::tip Systemd vs Daemon Mode
+For production servers, we recommend using **systemd** (covered in [Going Further](./advanced-setup.md)) for more control over logging and restarts. Daemon mode is convenient for quick testing or environments without systemd.
+:::
+
 ## Directory Structure
 
 After installation, here is where everything lives:

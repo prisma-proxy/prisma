@@ -46,15 +46,74 @@ console_dir = "/opt/prisma/console"  # or "./prisma-console/out"
 
 Start the server and access the console at `https://your-server:9090/`.
 
-### Using the CLI (auto-download)
+### Using the CLI (`prisma console`)
 
-The `prisma console` command automatically downloads and serves the console without manual setup:
+The `prisma console` command automatically downloads and serves the console without manual setup.
+
+#### Basic usage
 
 ```bash
 prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
 ```
 
 This downloads the latest console from GitHub Releases, caches it locally, and starts a local server that proxies API requests to your management API. The browser opens automatically on desktop systems.
+
+#### All flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--mgmt-url` | auto-detect | Management API URL (auto-detected from `server.toml` if omitted) |
+| `--token` | — | Bearer token for authentication (reads `management_api.auth_token` from `server.toml` if omitted) |
+| `--config` / `-c` | `./server.toml` | Path to `server.toml` for auto-detection of `--mgmt-url` and `--token` |
+| `--listen` / `-l` | `127.0.0.1:9091` | Local address for the console server |
+| `--no-open` | `false` | Do not automatically open the browser |
+| `--daemon` / `-d` | `false` | Run in the background as a daemon process |
+| `--console-dir` | `~/.prisma/console` | Path to cached console static files |
+
+#### Auto-detect from server.toml
+
+When `--mgmt-url` and `--token` are omitted, the CLI reads `server.toml` (from the current directory or the path given by `--config`) and extracts `management_api.listen_addr` and `management_api.auth_token` automatically:
+
+```bash
+# Auto-detect everything from server.toml in the current directory
+prisma console
+
+# Auto-detect from a specific config file
+prisma console -c /etc/prisma/server.toml
+```
+
+#### Daemon mode
+
+Run the console server in the background:
+
+```bash
+# Start as daemon
+prisma console -d
+
+# Check status of the daemon
+prisma console status
+
+# Stop the daemon
+prisma console stop
+```
+
+The daemon writes its PID to `~/.prisma/console.pid` and logs to `~/.prisma/console.log`.
+
+#### Architecture: static file serving + reverse proxy
+
+When launched via `prisma console`, the CLI starts a lightweight HTTP server that:
+
+1. **Serves static files** — the pre-built console SPA from the cache directory
+2. **Reverse-proxies API requests** — all `/api/*` and `/api/ws/*` requests are forwarded to the management API URL
+3. **Injects authentication** — the `--token` is automatically added to proxied requests
+
+```
+Browser → prisma console (local :9091) → static files (console SPA)
+                                        → /api/* → proxy → prisma-server:9090
+                                        → /api/ws/* → WebSocket proxy → prisma-server:9090
+```
+
+This allows accessing the console without CORS configuration and without exposing the management API directly.
 
 ## Authentication
 

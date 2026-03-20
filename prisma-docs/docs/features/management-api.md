@@ -87,9 +87,19 @@ The `auth_secret_hex` is only returned once at creation time. Store it securely.
 |--------|------|-------------|
 | `GET` | `/api/config` | Current server config (all sections, secrets redacted) |
 | `PATCH` | `/api/config` | Hot-reload supported fields (auto-backs up config before changes) |
+| `POST` | `/api/reload` | Hot-reload the entire server configuration from disk |
 | `GET` | `/api/config/tls` | TLS certificate info |
 
-**Hot-reloadable fields:** `logging_level`, `logging_format`, `max_connections`, `port_forwarding_enabled`, and all traffic shaping, congestion, and camouflage settings.
+**Hot-reloadable fields:** `logging_level`, `logging_format`, `max_connections`, `port_forwarding_enabled`, and all traffic shaping, congestion, camouflage, routing, and ACL settings.
+
+**Hot reload via POST /api/reload:**
+
+Triggers a full re-read of `server.toml` from disk and applies all hot-reloadable fields without restarting the server. Existing connections are not interrupted.
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/reload
+# {"status":"ok","reloaded_fields":["logging_level","traffic_shaping","routing"]}
+```
 
 ### Config Backups
 
@@ -123,7 +133,49 @@ The `auth_secret_hex` is only returned once at creation time. Store it securely.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/forwards` | List active port forward sessions |
+| `GET` | `/api/forwards` | List all active port forward sessions |
+| `DELETE` | `/api/forwards/:port` | Close a forward by remote port |
+| `GET` | `/api/forwards/:port/connections` | List active connections for a specific forward |
+
+See [Port Forwarding](/docs/features/port-forwarding) for full configuration and API response formats.
+
+### Access Control Lists (ACLs)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/acls` | List all ACL rules (per-client access control) |
+| `POST` | `/api/acls` | Create a new ACL rule |
+| `PUT` | `/api/acls/:id` | Update an existing ACL rule |
+| `DELETE` | `/api/acls/:id` | Remove an ACL rule |
+
+ACL rules restrict which destinations specific clients can access. Rules are evaluated per-client and take precedence over global routing rules.
+
+**Example: Create an ACL rule**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "uuid",
+    "condition": {"type": "DomainMatch", "value": "*.internal.corp"},
+    "action": "Block",
+    "enabled": true
+  }' \
+  http://127.0.0.1:9090/api/acls
+```
+
+### Client Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/metrics/clients` | Per-client metrics snapshot (bytes, connections, latency) |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
+# [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
+```
 
 ### Routing Rules
 
@@ -182,3 +234,58 @@ Log entries:
 ```
 
 Send `{"level": "", "target": ""}` to clear filters.
+
+### Connection events stream
+
+```
+WS /api/ws/connections
+```
+
+Pushes real-time connection lifecycle events (connect, disconnect, migration):
+
+```json
+{
+  "event": "connected",
+  "session_id": "abc123",
+  "peer_addr": "203.0.113.5:54321",
+  "transport": "quic",
+  "client_id": "uuid",
+  "timestamp": "2026-03-20T12:00:00Z"
+}
+```
+
+### Configuration reload stream
+
+```
+WS /api/ws/reload
+```
+
+Pushes notifications when the server configuration is reloaded (via `POST /api/reload` or `PATCH /api/config`):
+
+```json
+{
+  "event": "config_reloaded",
+  "changed_fields": ["logging_level", "traffic_shaping"],
+  "timestamp": "2026-03-20T12:05:00Z"
+}
+```
+
+## Endpoint Summary
+
+All endpoints at a glance (v0.9.0):
+
+| Category | Endpoints | Description |
+|----------|-----------|-------------|
+| Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
+| Connections | 2 REST + 1 WS | List, disconnect, real-time events |
+| Clients | 4 REST | CRUD for authorized clients |
+| Client Metrics | 1 REST | Per-client metrics snapshot |
+| System | 1 REST | Platform and resource info |
+| Configuration | 4 REST + 1 WS | Config read/write, hot-reload, reload stream |
+| Config Backups | 5 REST | Backup, restore, diff |
+| Bandwidth & Quotas | 5 REST | Per-client limits and usage |
+| Alerts | 2 REST | Alert threshold management |
+| Port Forwards | 3 REST | List, close, per-forward connections |
+| ACLs | 4 REST | Per-client access control rules |
+| Routing Rules | 4 REST | Server-side routing rule management |
+| Logs | 1 WS | Real-time log streaming |

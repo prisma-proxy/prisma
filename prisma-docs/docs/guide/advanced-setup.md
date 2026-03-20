@@ -207,6 +207,27 @@ For detailed CDN configuration examples, see the [Configuration Examples](/docs/
 | Mobile/ARM | `chacha20-poly1305` | Faster without AES hardware |
 | Not sure | `chacha20-poly1305` | Good performance everywhere |
 
+### XMUX Connection Pooling
+
+XMUX multiplexes multiple proxy streams over a single transport connection, reducing handshake overhead -- especially useful for CDN transports:
+
+```toml
+# Client config
+mux_enabled = true              # Enable XMUX multiplexing
+mux_max_streams = 128           # Max concurrent streams per connection
+mux_max_connections = 4         # Number of pooled transport connections
+```
+
+### io_uring (Linux)
+
+On Linux kernels 5.11+, Prisma automatically uses io_uring for zero-copy I/O when available. This provides significant throughput improvements for high-bandwidth scenarios. No configuration is needed -- it is enabled automatically when the kernel supports it.
+
+To verify io_uring is active, check the server logs at debug level:
+
+```bash
+prisma server -c /etc/prisma/server.toml  # Look for: "io_uring: enabled"
+```
+
 ### Server-side optimization
 
 ```toml
@@ -216,6 +237,103 @@ connection_timeout_secs = 600   # Longer timeout for stable connections
 
 [congestion]
 mode = "bbr"    # BBR congestion control (best for most networks)
+```
+
+## Proxy Groups
+
+Proxy groups let you use multiple servers with automatic selection strategies. Add these to your `client.toml`:
+
+```toml
+# Auto-select the lowest-latency server
+[[proxy_groups]]
+name = "auto-best"
+type = "auto-url"
+servers = ["tokyo-1", "singapore-1", "us-west-1"]
+test_url = "https://www.google.com/generate_204"
+test_interval_secs = 300
+
+# Fallback chain
+[[proxy_groups]]
+name = "fallback"
+type = "fallback"
+servers = ["tokyo-1", "singapore-1"]
+
+# Load balance (round-robin)
+[[proxy_groups]]
+name = "balanced"
+type = "load-balance"
+servers = ["tokyo-1", "singapore-1"]
+strategy = "round-robin"
+```
+
+Use a proxy group in routing rules:
+
+```toml
+[[routing.rules]]
+type = "domain-suffix"
+value = "netflix.com"
+action = "proxy"
+proxy_group = "auto-best"       # Use the auto-select group
+```
+
+## Rule Providers
+
+Rule providers let you load routing rules from remote URLs, keeping your config clean and rules up-to-date:
+
+```toml
+[[rule_providers]]
+name = "ad-block"
+type = "domain"
+url = "https://example.com/rules/ad-domains.txt"
+interval_hours = 24              # Refresh every 24 hours
+action = "block"
+
+[[rule_providers]]
+name = "direct-domains"
+type = "domain"
+url = "https://example.com/rules/direct-domains.txt"
+interval_hours = 24
+action = "direct"
+```
+
+Rule providers are fetched on startup and refreshed at the configured interval.
+
+## Per-Client ACLs (Server-Side)
+
+Access Control Lists restrict which destinations each client can reach. Configure them in `server.toml`:
+
+```toml
+[[authorized_clients]]
+id = "kid-device-uuid"
+auth_secret = "kid-device-secret"
+name = "kid-tablet"
+
+[[authorized_clients.acl]]
+type = "domain-suffix"
+value = "educational-site.com"
+policy = "allow"
+
+[[authorized_clients.acl]]
+type = "domain-keyword"
+value = "learning"
+policy = "allow"
+
+[[authorized_clients.acl]]
+type = "all"
+policy = "deny"       # Block everything else
+```
+
+ACLs can also be managed dynamically via the management API:
+
+```bash
+# View ACLs for a client
+curl http://127.0.0.1:9090/api/acls/CLIENT-UUID -H "Authorization: Bearer TOKEN"
+
+# Set ACLs for a client
+curl -X PUT http://127.0.0.1:9090/api/acls/CLIENT-UUID \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"rules": [{"type": "domain-suffix", "value": "example.com", "policy": "allow"}, {"type": "all", "policy": "deny"}]}'
 ```
 
 ## Multiple Users / Clients
@@ -344,7 +462,12 @@ In this chapter, you learned:
 - How to run Prisma as a **system service** with systemd
 - How to set up **routing rules** for split tunneling
 - How to use Prisma with **Cloudflare CDN** for extra stealth
+- How to use **XMUX connection pooling** for CDN transports
+- How **io_uring** provides zero-copy I/O on Linux
 - How to **optimize speed** with transport and cipher choices
+- How to set up **proxy groups** for auto-selection, fallback, and load balancing
+- How to use **rule providers** for remote routing rule lists
+- How to configure **per-client ACLs** for access control
 - How to add **multiple users** with bandwidth limits
 - How to **update** Prisma
 - How to set up the **web console** for monitoring

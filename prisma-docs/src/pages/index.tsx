@@ -49,19 +49,41 @@ function getFeatures() {
       icon: '⚡',
       description: translate({id: 'homepage.features.builtInRust.description', message: 'Zero-copy I/O with io_uring support, async runtime, memory safety. Handles thousands of concurrent connections with minimal resources.'}),
     },
+    {
+      title: translate({id: 'homepage.features.portForwarding.title', message: 'Port Forwarding'}),
+      icon: '🔌',
+      description: translate({id: 'homepage.features.portForwarding.description', message: 'Expose local services through the encrypted tunnel. Register remote ports and relay inbound connections back to your machine.'}),
+    },
+    {
+      title: translate({id: 'homepage.features.ruleProviders.title', message: 'Rule Providers & ACLs'}),
+      icon: '📋',
+      description: translate({id: 'homepage.features.ruleProviders.description', message: 'Remote rule lists with auto-refresh. Per-client ACLs for fine-grained access control. GeoIP, domain, and IP-based routing.'}),
+    },
+    {
+      title: translate({id: 'homepage.features.hotReload.title', message: 'Hot Reload & Daemon'}),
+      icon: '🔄',
+      description: translate({id: 'homepage.features.hotReload.description', message: 'Config file watching with auto-reload. Built-in daemon mode. Session ticket key rotation for forward secrecy.'}),
+    },
+    {
+      title: translate({id: 'homepage.features.postQuantum.title', message: 'Post-Quantum Ready'}),
+      icon: '🔐',
+      description: translate({id: 'homepage.features.postQuantum.description', message: 'Hybrid X25519 + ML-KEM-768 (FIPS 203) key exchange. Future-proof against quantum computing threats.'}),
+    },
   ];
 }
 
 function getHighlights() {
   return [
     { label: translate({id: 'homepage.highlights.encryption', message: 'Encryption'}), value: 'ChaCha20-Poly1305 / AES-256-GCM / Transport-Only' },
-    { label: translate({id: 'homepage.highlights.keyExchange', message: 'Key Exchange'}), value: 'X25519 ECDH + BLAKE3 KDF' },
-    { label: translate({id: 'homepage.highlights.handshake', message: 'Handshake'}), value: '1 RTT (0-RTT with tickets)' },
+    { label: translate({id: 'homepage.highlights.keyExchange', message: 'Key Exchange'}), value: 'X25519 + ML-KEM-768 Hybrid PQ / BLAKE3 KDF' },
+    { label: translate({id: 'homepage.highlights.handshake', message: 'Handshake'}), value: '1 RTT (0-RTT with ticket resumption)' },
     { label: translate({id: 'homepage.highlights.transports', message: 'Transports'}), value: '9 (QUIC, TCP, WS, gRPC, XHTTP, XPorta, ShadowTLS, SSH, WG)' },
     { label: translate({id: 'homepage.highlights.udpRelay', message: 'UDP Relay'}), value: 'PrismaUDP + FEC Reed-Solomon' },
     { label: translate({id: 'homepage.highlights.congestion', message: 'Congestion'}), value: 'BBR / Brutal / Adaptive' },
     { label: translate({id: 'homepage.highlights.obfuscation', message: 'Obfuscation'}), value: 'Salamander v2 (nonce-based)' },
     { label: translate({id: 'homepage.highlights.platforms', message: 'Platforms'}), value: 'Windows, macOS, Linux, Android, iOS, FreeBSD' },
+    { label: translate({id: 'homepage.highlights.proxyGroups', message: 'Proxy Groups'}), value: 'Select / AutoUrl / Fallback / LoadBalance' },
+    { label: translate({id: 'homepage.highlights.subscriptions', message: 'Subscriptions'}), value: 'SS / VMess / Trojan / VLESS / Clash YAML' },
   ];
 }
 

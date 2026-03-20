@@ -55,7 +55,7 @@ pub fn derive_v5_preliminary_key(
 
 /// v5: Derive final session key with challenge binding.
 ///
-/// Enhanced over v4: includes protocol version byte in the KDF context
+/// Includes protocol version byte in the KDF context
 /// to prevent cross-version key confusion.
 pub fn derive_v5_session_key(
     shared_secret: &[u8; 32],

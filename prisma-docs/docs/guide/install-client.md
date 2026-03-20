@@ -8,16 +8,17 @@ In this chapter, you will install the Prisma client on your local computer -- th
 
 ## Choose Your Client
 
-Prisma has three ways to connect:
+Prisma has four ways to connect:
 
 | Client | Best for | Platforms |
 |--------|----------|-----------|
-| **prisma-gui** (GUI app) | Most users -- point-and-click interface | Windows, macOS, Linux |
+| **prisma-gui** (Desktop App) | Most users -- point-and-click interface | Windows, macOS, Linux |
 | **prisma CLI** | Power users, servers, automation | Windows, macOS, Linux, FreeBSD |
-| **Mobile** | Phones and tablets | Android, iOS (via compatible apps) |
+| **Android App** | Android phones and tablets | Android 7.0+ |
+| **iOS App** | iPhones and iPads | iOS 15.0+ |
 
 :::tip Recommendation for beginners
-Use **prisma-gui** if you want a visual interface. Use the **CLI** if you are comfortable with the terminal or want to run Prisma on a headless machine.
+Use **prisma-gui** if you want a desktop visual interface. Use the native **mobile apps** on Android/iOS for the best experience on phones and tablets. Use the **CLI** if you are comfortable with the terminal or want to run Prisma on a headless machine.
 :::
 
 ## Option 1: prisma-gui (Desktop App)
@@ -98,19 +99,40 @@ Expected output:
 prisma 0.9.0
 ```
 
-## Option 3: Mobile
+## Option 3: Android App
 
-Prisma's mobile support is provided through compatible proxy apps that support SOCKS5 connections. You can run the Prisma CLI client on your home network and connect your phone to it.
+Prisma has a native Android app built with Kotlin and JNI, powered by the same Rust core library.
 
-### Option A: Run Prisma client on your router/home server
+1. Download `prisma-android.apk` from the [GitHub Releases](https://github.com/Yamimega/prisma/releases/latest) page
+2. Install the APK on your device (you may need to enable "Install from unknown sources")
+3. Open the app and add a profile with your server details, or import via **QR code** or **subscription URL**
+4. Tap **Connect**
+
+The Android app supports:
+- All 9 transport types
+- Per-app proxy (choose which apps go through Prisma)
+- TUN mode (system-wide VPN)
+- Subscription import and auto-update
+- QR code sharing and scanning
+- Background operation with network change handling
+
+## Option 4: iOS App
+
+Prisma has a native iOS app built with Swift and xcframework, powered by the same Rust core library.
+
+1. Download from the [GitHub Releases](https://github.com/Yamimega/prisma/releases/latest) page or TestFlight
+2. Open the app and add a profile, or import via **QR code** or **subscription URL**
+3. Tap **Connect**
+
+The iOS app supports the same features as Android, including TUN mode via the Network Extension framework.
+
+## Option 5: CLI on Local Network (Alternative Mobile Setup)
+
+If you prefer not to install a mobile app, you can run the Prisma CLI client on your home network and connect your phone to it:
 
 1. Install Prisma CLI on a device on your home network (a Raspberry Pi, NAS, or always-on computer)
 2. Configure it to listen on `0.0.0.0:1080` instead of `127.0.0.1:1080`
 3. Configure your phone's proxy settings to point to the device's local IP
-
-### Option B: Use a SOCKS5-compatible app on your phone
-
-Many proxy apps on Android and iOS support SOCKS5 connections. Configure them to connect to a Prisma CLI client running on your network.
 
 ## Verify the Client Installation
 
@@ -136,10 +158,10 @@ You should see the command list including `client`, `server`, `gen-key`, etc.
 
 In this chapter, you learned:
 
-- The three client options: **prisma-gui** (desktop app), **CLI**, and **mobile**
+- The four client options: **prisma-gui** (desktop app), **CLI**, **Android app**, and **iOS app**
 - How to install **prisma-gui** on Windows, macOS, and Linux
+- How to install the **native mobile apps** on Android and iOS
 - How to install the **CLI client** on any platform
-- How to set up **mobile** access
 - How to **verify** the client installation
 
 ## Next step

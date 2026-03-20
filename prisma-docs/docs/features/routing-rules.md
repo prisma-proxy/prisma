@@ -179,6 +179,170 @@ flowchart TD
 3. **Server** evaluates its routing rules on the incoming proxy request
 4. If the server allows it, the outbound connection to the destination is established
 
+## Proxy Groups (v0.9.0)
+
+Proxy groups allow routing rules to target a **group of servers** instead of a single action. This enables advanced load balancing, automatic failover, and latency-based server selection — similar to Clash/Surge proxy group functionality.
+
+### Group types
+
+| Type | Behavior |
+|------|----------|
+| `Select` | Manual server selection (user picks in GUI or via API) |
+| `AutoUrl` | Automatic selection based on URL test latency (tests a URL periodically and picks the fastest server) |
+| `Fallback` | Uses the first available server; falls back to the next if the current one fails health checks |
+| `LoadBalance` | Distributes connections across servers using consistent hashing (same domain goes to same server) |
+
+### Configuration
+
+```toml
+[[proxy_groups]]
+name = "auto-best"
+type = "auto-url"
+servers = ["hk-server", "jp-server", "us-server"]
+url = "https://www.gstatic.com/generate_204"
+interval_secs = 300
+tolerance_ms = 50
+
+[[proxy_groups]]
+name = "fallback-group"
+type = "fallback"
+servers = ["hk-server", "jp-server"]
+url = "https://www.gstatic.com/generate_204"
+interval_secs = 300
+
+[[proxy_groups]]
+name = "load-balance"
+type = "load-balance"
+servers = ["us-server-1", "us-server-2", "us-server-3"]
+strategy = "consistent-hashing"
+
+[[proxy_groups]]
+name = "manual-select"
+type = "select"
+servers = ["auto-best", "fallback-group", "hk-server", "direct"]
+```
+
+### Using groups in routing rules
+
+Reference a proxy group by name in the `action` field:
+
+```toml
+[[routing.rules]]
+type = "domain-suffix"
+value = "google.com"
+action = "auto-best"
+
+[[routing.rules]]
+type = "geoip"
+value = "us"
+action = "load-balance"
+
+[[routing.rules]]
+type = "all"
+action = "manual-select"
+```
+
+---
+
+## Rule Providers (Remote Rule Sets)
+
+Rule providers allow loading routing rules from remote URLs. Rules are fetched periodically and cached locally. This is useful for subscribing to community-maintained rule sets (ad blocking, GeoIP bypass lists, streaming service rules, etc.).
+
+### Configuration
+
+```toml
+[[routing.rule_providers]]
+name = "ad-block"
+type = "domain"
+behavior = "domain"
+url = "https://example.com/rules/ad-domains.txt"
+interval_secs = 86400        # Refresh every 24 hours
+path = "/etc/prisma/rules/ad-block.txt"  # Local cache path
+
+[[routing.rule_providers]]
+name = "cn-cidr"
+type = "ipcidr"
+behavior = "ipcidr"
+url = "https://example.com/rules/cn-cidr.txt"
+interval_secs = 604800       # Refresh weekly
+path = "/etc/prisma/rules/cn-cidr.txt"
+```
+
+### Using rule providers in rules
+
+```toml
+[[routing.rules]]
+type = "rule-set"
+value = "ad-block"
+action = "block"
+
+[[routing.rules]]
+type = "rule-set"
+value = "cn-cidr"
+action = "direct"
+```
+
+### Supported formats
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| Domain list | `.txt` | One domain per line (supports `full:`, `domain:`, `keyword:` prefixes) |
+| IP-CIDR list | `.txt` | One CIDR per line |
+| Clash-compatible YAML | `.yaml` | Clash rule-provider format (`payload:` array) |
+
+---
+
+## ACL — Per-Client Access Control (v0.9.0)
+
+ACL rules restrict which destinations specific clients can access. They are evaluated **per-client** and take precedence over global routing rules. ACLs are managed via the [Management API](/docs/features/management-api) (`/api/acls` endpoints) or the Console.
+
+### How ACL works
+
+```mermaid
+flowchart TD
+    A[Client Request] --> B{ACL Rules for this Client}
+    B -->|block| C[Reject]
+    B -->|no match| D{Global Server Rules}
+    D -->|block| E[Reject]
+    D -->|allow| F[Connect to Destination]
+```
+
+### ACL rule structure
+
+```json
+{
+  "client_id": "uuid",
+  "condition": {"type": "DomainMatch", "value": "*.torrent.*"},
+  "action": "Block",
+  "enabled": true,
+  "priority": 10
+}
+```
+
+### Management API
+
+```bash
+# List all ACLs
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/acls
+
+# Create an ACL: block torrents for a specific client
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "client-uuid",
+    "condition": {"type": "DomainMatch", "value": "*.torrent.*"},
+    "action": "Block",
+    "enabled": true
+  }' \
+  http://127.0.0.1:9090/api/acls
+
+# Delete an ACL
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:9090/api/acls/<acl-id>
+```
+
+---
+
 ## Behavior Notes
 
 - Domain matching only applies to connections with domain-type addresses. IP addresses are not reverse-resolved.
@@ -186,3 +350,6 @@ flowchart TD
 - `IpCidr` currently supports IPv4 only.
 - GeoIP rules require a v2fly-format `.dat` file. The database is loaded once at startup.
 - Static server rules (from config) persist across restarts. Dynamic rules (from Management API) are cleared on restart.
+- Proxy groups require at least one server to be defined. Groups can reference other groups (nesting is supported).
+- Rule providers are fetched on startup and refreshed at the configured interval. If a fetch fails, the cached version is used.
+- ACL rules are persisted by the management API and survive server restarts.

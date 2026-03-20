@@ -220,7 +220,7 @@ pub struct PatchConfigRequest {
     // Top-level
     pub listen_addr: Option<String>,
     pub quic_listen_addr: Option<String>,
-    pub protocol_version: Option<String>,
+    // protocol_version removed (always "v5" since 0.9.0)
     pub dns_upstream: Option<String>,
     pub allow_transport_only_cipher: Option<bool>,
     // Logging
@@ -295,9 +295,7 @@ pub async fn patch_config(
     if let Some(addr) = req.quic_listen_addr {
         cfg.quic_listen_addr = addr;
     }
-    if let Some(v) = req.protocol_version {
-        cfg.protocol_version = v;
-    }
+    // protocol_version is always "v5" (read-only since 0.9.0); ignore attempts to change it
     if let Some(upstream) = req.dns_upstream {
         cfg.dns_upstream = upstream;
     }

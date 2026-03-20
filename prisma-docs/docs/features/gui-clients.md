@@ -35,13 +35,17 @@ The frontend uses **Zustand** for state management, **Recharts** for graphs, **R
 
 ### Pages
 
-The app has **6 pages** accessible via sidebar navigation (collapsible) or bottom navigation on narrow viewports:
+The app has **10 pages** accessible via sidebar navigation (collapsible) or bottom navigation on narrow viewports:
 
 | Page | Description |
 |------|-------------|
 | **Home** | Connection toggle, real-time speed graph, session stats (upload/download speed, data transferred, uptime), proxy mode selector (SOCKS5/System Proxy/TUN/Per-App), connection quality indicator, daily data usage, connection history |
-| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate and bulk export/import |
-| **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT. Import/export rules as JSON |
+| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate and bulk export/import. **Latency testing** — tap a server to run a real-time latency test; results are displayed inline and persisted for sorting |
+| **Subscriptions** | Manage subscription URLs that auto-update server profiles. Add/edit/delete subscriptions with custom update intervals (1h-7d). Manual refresh, auto-refresh on launch, import from clipboard or QR. Subscription status indicators (last updated, server count, expiry date). Supports Prisma, Clash, and base64 subscription formats |
+| **Proxy Groups** | Visual proxy group manager matching the [Routing Rules](/docs/features/routing-rules#proxy-groups-v090) configuration. Create Select/AutoUrl/Fallback/LoadBalance groups. Drag-and-drop server ordering. Real-time latency indicators per server. Manual server selection for Select groups. URL test configuration for AutoUrl/Fallback groups |
+| **Import** | Unified import page for adding servers and profiles from multiple sources: QR code scan (camera on mobile, paste on desktop), `prisma://` URI, clipboard detection, TOML file, JSON file, subscription URL, and Clash YAML. Batch import with preview and selective add |
+| **Connections** | Real-time active connections list showing destination, rule matched, proxy chain, upload/download speed, and total data per connection. Close individual connections. Filter by domain, IP, or rule. Sort by speed, data, or duration. Connection metadata (start time, transport, matched routing rule) |
+| **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT, or proxy group name. Import/export rules as JSON. Rule provider management (add remote rule set URLs) |
 | **Logs** | Real-time log viewer with virtualized scrolling, search with text highlighting, level filter (ALL/ERROR/WARN/INFO/DEBUG), level statistics badges, pause/resume auto-scroll, export to text file |
 | **Speed Test** | Run speed tests through the proxy with configurable server (Cloudflare/Google) and duration (5-60s). Measures download, upload, and latency. Persistent test history with list and chart views, summary statistics (average/best) |
 | **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install |
@@ -118,20 +122,26 @@ Download the appropriate installer for your platform from the [releases page](ht
 | TUN mode | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) |
 | Per-app proxy | ✓ | ✓ | ✓ (NEAppProxy) |
 | QR code import | ✓ (paste URI) | ✓ (camera) | ✓ (camera) |
-| Profile sharing (TOML/URI/QR) | ✓ | — | — |
+| Profile sharing (TOML/URI/QR) | ✓ | ✓ | ✓ |
+| Subscriptions | ✓ | ✓ | ✓ |
+| Proxy groups | ✓ | ✓ | ✓ |
+| Unified import page | ✓ | ✓ | ✓ |
+| Active connections view | ✓ | ✓ | ✓ |
+| Latency testing (server list) | ✓ | ✓ | ✓ |
 | Speed graph | ✓ | ✓ | ✓ |
-| Speed test with history | ✓ | — | — |
+| Speed test with history | ✓ | ✓ | ✓ |
 | Routing rules editor | ✓ | ✓ | ✓ |
+| Rule providers (remote sets) | ✓ | ✓ | ✓ |
 | Auto-update | ✓ | ✓ | App Store |
 | System tray / menu bar | ✓ | — | — |
 | Keyboard shortcuts | ✓ | — | — |
-| Clipboard import | ✓ | — | — |
-| Auto-reconnect | ✓ | — | — |
-| Notification history | ✓ | — | — |
-| i18n (English + Chinese) | ✓ | — | — |
-| Full backup/restore | ✓ | — | — |
-| Connection history | ✓ | — | — |
-| Daily data usage tracking | ✓ | — | — |
+| Clipboard import | ✓ | ✓ | ✓ |
+| Auto-reconnect | ✓ | ✓ | ✓ |
+| Notification history | ✓ | ✓ | ✓ |
+| i18n (English + Chinese) | ✓ | ✓ | ✓ |
+| Full backup/restore | ✓ | ✓ | ✓ |
+| Connection history | ✓ | ✓ | ✓ |
+| Daily data usage tracking | ✓ | ✓ | ✓ |
 
 ---
 
@@ -219,6 +229,12 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
+## Mobile Support (v0.9.0)
+
+As of v0.9.0, the Android and iOS clients have reached feature parity with the desktop client for core proxy functionality. Both mobile platforms now support subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n.
+
+---
+
 ## Android
 
 A Jetpack Compose application targeting Android 7.0+ (API 24). The Kotlin code calls `prisma-ffi` through a JNI bridge (`libprisma_client.so`).
@@ -259,6 +275,21 @@ cd prisma-gui-android
 
 The Gradle build expects the cross-compiled `.so` files under `app/src/main/jniLibs/`. A helper script at `scripts/build-android-ffi.sh` cross-compiles `prisma-ffi` for all four ABIs and copies them into place.
 
+### Pages (Android)
+
+The Android app mirrors the desktop page structure:
+
+| Page | Description |
+|------|-------------|
+| **Home** | Connection toggle, speed graph, proxy mode selector (SOCKS5/TUN/Per-App), stats |
+| **Profiles** | Server list with latency indicators, tap to test latency, create/edit/share profiles |
+| **Subscriptions** | Add/manage subscription URLs, auto-refresh, import from clipboard or QR |
+| **Proxy Groups** | Visual group management (Select/AutoUrl/Fallback/LoadBalance) |
+| **Import** | QR scan via camera, clipboard detection, file import, subscription URL |
+| **Connections** | Active connections list with speed, destination, and close button |
+| **Rules** | Routing rules editor with rule provider support |
+| **Settings** | Language, theme, proxy ports, DNS mode, auto-reconnect, backup/restore |
+
 ### QR code import
 
 Tap the QR icon on the Profiles screen to open the camera scanner (ML Kit barcode API). Scan a Prisma share QR code — the app decodes it via `prisma_profile_from_qr` and saves the profile automatically.
@@ -295,6 +326,21 @@ scripts/build-ios-xcframework.sh
 ```
 
 The Xcode project links this xcframework as a dependency.
+
+### Pages (iOS)
+
+The iOS app mirrors the desktop page structure:
+
+| Page | Description |
+|------|-------------|
+| **Home** | Connection toggle, speed graph, proxy mode selector (SOCKS5/TUN/Per-App), stats |
+| **Profiles** | Server list with latency indicators, tap to test latency, create/edit/share profiles |
+| **Subscriptions** | Add/manage subscription URLs, auto-refresh, import from clipboard or QR |
+| **Proxy Groups** | Visual group management (Select/AutoUrl/Fallback/LoadBalance) |
+| **Import** | QR scan via camera, clipboard detection, file import, subscription URL |
+| **Connections** | Active connections list with speed, destination, and close button |
+| **Rules** | Routing rules editor with rule provider support |
+| **Settings** | Language, theme, DNS mode, auto-reconnect, backup/restore |
 
 ### QR code import
 

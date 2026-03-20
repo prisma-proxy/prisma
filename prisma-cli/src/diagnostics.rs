@@ -79,7 +79,7 @@ fn build_proxy_context(
         fingerprint: config.fingerprint.clone(),
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
-        use_prisma_tls: config.transport == "prisma-tls" || config.transport == "reality",
+        use_prisma_tls: config.transport == "prisma-tls",
         use_shadow_tls: config.transport == "shadow-tls",
         shadow_tls_config: config.shadow_tls.clone(),
         use_wireguard: config.transport == "wireguard",
@@ -100,7 +100,7 @@ fn build_proxy_context_for_transport(
     ctx.use_grpc = transport == "grpc";
     ctx.use_xhttp = transport == "xhttp";
     ctx.use_xporta = transport == "xporta";
-    ctx.use_prisma_tls = transport == "prisma-tls" || transport == "reality";
+    ctx.use_prisma_tls = transport == "prisma-tls";
     Ok(ctx)
 }
 

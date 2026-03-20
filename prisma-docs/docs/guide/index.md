@@ -11,7 +11,7 @@ We will walk you through everything **from scratch**, step by step, with plenty 
 
 ## What is Prisma?
 
-Prisma is a tool that creates an **encrypted tunnel** between your computer and a server somewhere on the internet. All your internet traffic travels through this tunnel, so nobody in between -- not your ISP, not your school or office network, not anyone -- can see what you are doing online.
+Prisma (v0.9.0) is a next-generation encrypted proxy built in Rust that creates an **encrypted tunnel** between your computer and a server somewhere on the internet. All your internet traffic travels through this tunnel, so nobody in between -- not your ISP, not your school or office network, not anyone -- can see what you are doing online.
 
 Think of it like this:
 
@@ -22,9 +22,10 @@ Think of it like this:
 There are many reasons people use tools like Prisma:
 
 - **Privacy** -- Keep your browsing activity private from your internet provider
-- **Security** -- Protect your data on public Wi-Fi (coffee shops, airports, hotels)
+- **Security** -- Protect your data on public Wi-Fi (coffee shops, airports, hotels) with post-quantum cryptography
 - **Access** -- Reach websites and services that might be blocked on your network
-- **Freedom** -- Bypass internet censorship and filtering
+- **Freedom** -- Bypass internet censorship and filtering with 9 transport types and advanced anti-detection
+- **Performance** -- Built in Rust with zero-copy I/O, io_uring support, and minimal resource usage
 
 ## What you will learn
 
@@ -46,7 +47,7 @@ This guide covers everything from the very basics to a fully working setup:
 
 You only need two things:
 
-1. **A computer** -- Windows, macOS, or Linux
+1. **A computer or phone** -- Windows, macOS, Linux, Android, or iOS
 2. **An internet connection**
 
 That is it. We will explain everything else as we go.

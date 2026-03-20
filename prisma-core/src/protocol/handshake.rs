@@ -208,7 +208,7 @@ impl PrismaClientAwaitingServerInit {
                 client_id: self.client_id,
                 client_nonce_counter: 0,
                 server_nonce_counter: 0,
-                protocol_version: PRISMA_PROTOCOL_VERSION,
+
                 padding_range,
                 challenge: Some(server_init.challenge),
                 session_ticket: if server_init.session_ticket.is_empty() {
@@ -230,8 +230,6 @@ pub struct PrismaHandshakeServer;
 impl PrismaHandshakeServer {
     /// Process a PrismaClientInit and produce an encrypted PrismaServerInit response.
     ///
-    /// Only accepts v5 clients (v4 support removed in 0.9.0).
-    ///
     /// Returns: (encrypted_server_init_bytes, PrismaServerCompleted)
     pub fn process_client_init(
         client_init_bytes: &[u8],
@@ -243,7 +241,6 @@ impl PrismaHandshakeServer {
     ) -> Result<(Vec<u8>, PrismaServerCompleted), PrismaError> {
         let client_init = decode_client_init(client_init_bytes)?;
 
-        // Only v5 is accepted (v4 backward compat removed in 0.9.0)
         if client_init.version != PRISMA_PROTOCOL_VERSION {
             return Err(ProtocolError::InvalidVersion(client_init.version).into());
         }
@@ -405,7 +402,6 @@ impl PrismaHandshakeServer {
             client_id: client_init.client_id,
             cipher_suite: client_init.cipher_suite,
             padding_range,
-            protocol_version: PRISMA_PROTOCOL_VERSION,
             header_key,
             migration_token,
         };
@@ -423,8 +419,6 @@ pub struct PrismaServerCompleted {
     pub client_id: ClientId,
     pub cipher_suite: CipherSuite,
     pub padding_range: PaddingRange,
-    /// The protocol version (always v5).
-    pub protocol_version: u8,
     /// Header authentication key (None if client did not request it).
     pub header_key: Option<[u8; 32]>,
     /// Connection migration token (None if client did not request it).
@@ -442,7 +436,6 @@ impl PrismaServerCompleted {
             client_id: self.client_id,
             client_nonce_counter: 0,
             server_nonce_counter: 0,
-            protocol_version: self.protocol_version,
             padding_range: self.padding_range,
             challenge: Some(self.challenge),
             session_ticket: None,
@@ -530,8 +523,6 @@ mod tests {
         assert_eq!(client_session.session_key, server_session.session_key);
         assert_eq!(client_session.session_id, server_session.session_id);
         assert_eq!(client_session.cipher_suite, server_session.cipher_suite);
-        assert_eq!(client_session.protocol_version, PRISMA_PROTOCOL_VERSION);
-
         // Client should have a challenge to respond to
         assert!(client_session.challenge.is_some());
         assert!(client_session.session_ticket.is_some());
@@ -753,7 +744,6 @@ mod tests {
     fn test_prisma_version_detection() {
         assert!(is_valid_protocol_version(PRISMA_PROTOCOL_VERSION));
         assert!(is_valid_protocol_version(0x05)); // v5 current
-        // v4 no longer accepted (removed in 0.9.0)
         assert!(!is_valid_protocol_version(0x04));
         // Old versions should be invalid
         assert!(!is_valid_protocol_version(0x01));
@@ -838,7 +828,6 @@ mod tests {
             client_id,
             cipher_suite: CipherSuite::ChaCha20Poly1305,
             padding_range,
-            protocol_version: PRISMA_PROTOCOL_VERSION,
             header_key: Some([0xCCu8; 32]),
             migration_token: Some([0xDDu8; 32]),
         };
@@ -848,7 +837,6 @@ mod tests {
         assert_eq!(keys.session_id, session_id);
         assert_eq!(keys.client_id, client_id);
         assert_eq!(keys.cipher_suite, CipherSuite::ChaCha20Poly1305);
-        assert_eq!(keys.protocol_version, PRISMA_PROTOCOL_VERSION);
         assert_eq!(keys.padding_range, padding_range);
         assert_eq!(keys.challenge, Some(challenge));
         assert_eq!(keys.session_ticket, None);
@@ -1018,7 +1006,6 @@ mod tests {
         assert_eq!(client_session.session_key, server_session.session_key);
         assert_eq!(client_session.session_id, server_session.session_id);
         assert_eq!(client_session.cipher_suite, server_session.cipher_suite);
-        assert_eq!(client_session.protocol_version, PRISMA_PROTOCOL_VERSION);
         assert!(client_session.challenge.is_some());
         assert!(client_session.session_ticket.is_some());
         assert_eq!(client_buckets, bucket_sizes);
@@ -1033,7 +1020,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prisma_handshake_pq_kem_backward_compat() {
+    fn test_prisma_handshake_pq_kem_fallback_to_x25519() {
         // Client enables PQ KEM but server does NOT support it.
         // Handshake should succeed using plain X25519.
         let client_id = ClientId::new();

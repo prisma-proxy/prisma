@@ -7,9 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # Installation
 
+Prisma v0.9.0 supports Linux, macOS, Windows, FreeBSD, Docker, and mobile platforms (Android/iOS via prisma-gui). Choose the installation method that best fits your environment.
+
 ## One-Line Install
 
-The fastest way to get Prisma running. Automatically detects your OS and architecture.
+The fastest way to get Prisma running. Automatically detects your OS and architecture, downloads the v0.9.0 binary, and places it on your `PATH`.
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
@@ -56,20 +58,20 @@ This creates:
 
 ### Install a specific version
 
-Pin to a release tag instead of the latest version:
+Pin to v0.9.0 explicitly (or any other release tag):
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v0.2.1
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v0.9.0
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v0.2.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v0.9.0
 ```
 
   </TabItem>
@@ -123,7 +125,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | Option | Description |
 |--------|-------------|
 | `--setup` | Generate credentials, TLS certificate, and example configs |
-| `--version VER` | Install a specific version (e.g., `v0.2.1`). Default: latest |
+| `--version VER` | Install a specific version (e.g., `v0.9.0`). Default: latest |
 | `--dir DIR` | Install directory. Default: `/usr/local/bin` |
 | `--config-dir DIR` | Config output directory for `--setup`. Default: current dir |
 | `--uninstall` | Remove the prisma binary |
@@ -137,7 +139,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | Option | Description |
 |--------|-------------|
 | `-Setup` | Generate credentials, TLS certificate, and example configs |
-| `-Version VER` | Install a specific version (e.g., `v0.2.1`). Default: latest |
+| `-Version VER` | Install a specific version (e.g., `v0.9.0`). Default: latest |
 | `-Dir DIR` | Install directory. Default: `%LOCALAPPDATA%\prisma` |
 | `-ConfigDir DIR` | Config output directory for `-Setup`. Default: current dir |
 | `-Uninstall` | Remove the prisma binary and clean PATH |
@@ -150,59 +152,117 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 
 ## Platform-Specific Downloads
 
-If you prefer to download the binary directly:
+If you prefer to download the v0.9.0 binary directly:
 
 <Tabs>
   <TabItem value="linux-x64" label="Linux x86_64" default>
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="linux-arm64" label="Linux aarch64">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="linux-armv7" label="Linux ARMv7">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-linux-armv7 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-linux-armv7 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="macos" label="macOS">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/latest/download/prisma-darwin-$(uname -m | sed s/x86_64/amd64/) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-darwin-$(uname -m | sed s/x86_64/amd64/) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="windows-x64" label="Windows x64">
 
 ```powershell
-New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/latest/download/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
+New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
 ```
 
   </TabItem>
   <TabItem value="windows-arm64" label="Windows ARM64">
 
 ```powershell
-New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/latest/download/prisma-windows-arm64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
+New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-windows-arm64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
 ```
 
   </TabItem>
   <TabItem value="freebsd" label="FreeBSD">
 
 ```bash
-fetch -o /usr/local/bin/prisma https://github.com/Yamimega/prisma/releases/latest/download/prisma-freebsd-amd64 && chmod +x /usr/local/bin/prisma
+fetch -o /usr/local/bin/prisma https://github.com/Yamimega/prisma/releases/download/v0.9.0/prisma-freebsd-amd64 && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
 </Tabs>
+
+## Docker
+
+Run the v0.9.0 server directly with Docker:
+
+```bash
+docker run --rm -v $(pwd):/config ghcr.io/yamimega/prisma:0.9.0 server -c /config/server.toml
+```
+
+Run the client:
+
+```bash
+docker run --rm -v $(pwd):/config -p 1080:1080 -p 8080:8080 ghcr.io/yamimega/prisma:0.9.0 client -c /config/client.toml
+```
+
+Run with Docker Compose:
+
+```yaml title="docker-compose.yml"
+version: "3.8"
+services:
+  prisma-server:
+    image: ghcr.io/yamimega/prisma:0.9.0
+    command: server -c /config/server.toml
+    volumes:
+      - ./server.toml:/config/server.toml:ro
+      - ./prisma-cert.pem:/config/prisma-cert.pem:ro
+      - ./prisma-key.pem:/config/prisma-key.pem:ro
+    ports:
+      - "8443:8443"
+      - "8443:8443/udp"   # QUIC
+      - "9090:9090"       # Management API
+    restart: unless-stopped
+```
+
+Build locally:
+
+```bash
+git clone https://github.com/Yamimega/prisma.git && cd prisma
+docker build -t prisma .
+docker run --rm -v $(pwd):/config prisma server -c /config/server.toml
+```
+
+## Mobile: Android and iOS
+
+Mobile support is provided through **prisma-gui**, a Tauri + React application that uses the `prisma-ffi` C shared library. The GUI app is available for:
+
+- **Android** — APK download from GitHub Releases or Google Play (when available)
+- **iOS** — TestFlight or App Store (when available)
+
+The mobile app supports:
+- Profile management with QR code import/export
+- Subscription URLs with auto-update
+- Multi-protocol import (SS/VMess/Trojan/VLESS)
+- System proxy and TUN (VPN) modes
+- Per-app proxy routing
+- GeoIP lookups and latency testing
+
+Download the latest prisma-gui release from the [GitHub Releases](https://github.com/Yamimega/prisma/releases) page.
 
 ## Install via Cargo
 
@@ -218,20 +278,6 @@ Or from a local clone:
 cargo install --path prisma-cli
 ```
 
-## Docker
-
-```bash
-docker run --rm -v $(pwd):/config ghcr.io/yamimega/prisma server -c /config/server.toml
-```
-
-Or build locally:
-
-```bash
-git clone https://github.com/Yamimega/prisma.git && cd prisma
-docker build -t prisma .
-docker run --rm -v $(pwd):/config prisma server -c /config/server.toml
-```
-
 ## Build from Source
 
 ```bash
@@ -245,9 +291,17 @@ Binaries are placed in `target/release/`. Copy the `prisma` binary to a location
 sudo cp target/release/prisma /usr/local/bin/
 ```
 
+### Build requirements
+
+- Rust stable (1.75+)
+- A C compiler (for native dependencies)
+- On Linux: `libssl-dev` (or `openssl-devel`) for TLS, optionally `linux-headers` for io_uring
+- On macOS: Xcode command-line tools
+- On Windows: MSVC build tools
+
 ## Pre-built Binaries
 
-Pre-built binaries are available for the following targets via GitHub Releases:
+Pre-built binaries for v0.9.0 are available for the following targets via GitHub Releases:
 
 | Platform | Architectures |
 |----------|--------------|
@@ -261,11 +315,22 @@ Check the [GitHub Releases](https://github.com/Yamimega/prisma/releases) page fo
 ## Verify Installation
 
 ```bash
-prisma --version
+prisma version
 prisma --help
 ```
+
+## Configuration Paths
+
+Prisma searches for configuration files in the following order:
+
+| Platform | Paths |
+|----------|-------|
+| Linux / macOS | Current directory, `/etc/prisma/`, `$XDG_CONFIG_HOME/prisma/`, `~/.config/prisma/` |
+| Windows | Current directory, `%PROGRAMDATA%\prisma\` |
 
 ## Next Steps
 
 - [Getting Started](./getting-started.md) — run your first proxy session
+- [CLI Reference](./cli-reference.md) — complete command documentation
 - [Linux systemd deployment](./deployment/linux-systemd.md) — deploy as a system service
+- [Docker deployment](./deployment/docker.md) — container deployment guide

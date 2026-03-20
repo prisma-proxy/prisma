@@ -266,8 +266,6 @@ pub struct SessionKeys {
     pub client_id: ClientId,
     pub client_nonce_counter: u64,
     pub server_nonce_counter: u64,
-    /// Protocol version (always v5).
-    pub protocol_version: u8,
     /// Padding range for per-frame padding.
     pub padding_range: PaddingRange,
     /// Challenge from ServerInit that client must respond to.

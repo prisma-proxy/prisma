@@ -478,7 +478,8 @@ prisma server -c /etc/prisma/server.toml`}</code></pre>
               <tbody>
                 <tr><td><strong>prisma-gui</strong></td><td>{translate({id: 'guide.s7.gui.for', message: 'Most users — point-and-click interface'})}</td><td>Windows, macOS, Linux</td></tr>
                 <tr><td><strong>prisma CLI</strong></td><td>{translate({id: 'guide.s7.cli.for', message: 'Power users, servers, automation'})}</td><td>Windows, macOS, Linux, FreeBSD</td></tr>
-                <tr><td><strong>Mobile</strong></td><td>{translate({id: 'guide.s7.mobile.for', message: 'Phones and tablets (via FFI or SOCKS5 apps)'})}</td><td>Android, iOS</td></tr>
+                <tr><td><strong>Android App</strong></td><td>{translate({id: 'guide.s7.android.for', message: 'Native app (Kotlin + JNI) with TUN, per-app proxy, subscriptions'})}</td><td>Android 7.0+</td></tr>
+                <tr><td><strong>iOS App</strong></td><td>{translate({id: 'guide.s7.ios.for', message: 'Native app (Swift + xcframework) with Network Extension'})}</td><td>iOS 15.0+</td></tr>
               </tbody>
             </table>
           </div>
@@ -690,6 +691,56 @@ action = "proxy"`}</code></pre>
           </p>
 
           <Heading as="h3">
+            {translate({id: 'guide.s10.proxyGroups.title', message: 'Proxy Groups'})}
+          </Heading>
+          <p>
+            {translate({
+              id: 'guide.s10.proxyGroups.p',
+              message: 'Use multiple servers with automatic selection strategies. Proxy group types: Select (manual), AutoUrl (latency-based auto-pick), Fallback (first available), and LoadBalance (round-robin or random). Configure in client.toml with [[proxy_groups]] sections.',
+            })}
+          </p>
+
+          <Heading as="h3">
+            {translate({id: 'guide.s10.ruleProviders.title', message: 'Rule Providers'})}
+          </Heading>
+          <p>
+            {translate({
+              id: 'guide.s10.ruleProviders.p',
+              message: 'Load routing rules from remote URLs with auto-refresh. Rule providers keep your config clean and rules up-to-date. Support domain lists, IP CIDR lists, and mixed formats.',
+            })}
+          </p>
+
+          <Heading as="h3">
+            {translate({id: 'guide.s10.acl.title', message: 'Per-Client ACLs'})}
+          </Heading>
+          <p>
+            {translate({
+              id: 'guide.s10.acl.p',
+              message: 'Access Control Lists let you restrict which destinations each client can access on the server side. Use domain, IP, and port matchers with allow/deny policies. Manage via config or the REST API.',
+            })}
+          </p>
+
+          <Heading as="h3">
+            {translate({id: 'guide.s10.portForward.title', message: 'Port Forwarding'})}
+          </Heading>
+          <p>
+            {translate({
+              id: 'guide.s10.portForward.p',
+              message: 'Expose local services through the encrypted tunnel. The client registers port forwards with the server, and inbound connections to the server port are relayed back to your local machine.',
+            })}
+          </p>
+
+          <Heading as="h3">
+            {translate({id: 'guide.s10.hotReload.title', message: 'Hot Reload & Daemon Mode'})}
+          </Heading>
+          <p>
+            {translate({
+              id: 'guide.s10.hotReload.p',
+              message: 'Enable config_watch = true for automatic config reloading when the file changes. Use --daemon flag for built-in daemon mode. Session ticket keys rotate automatically (configurable via ticket_rotation_hours) for forward secrecy.',
+            })}
+          </p>
+
+          <Heading as="h3">
             {translate({id: 'guide.s10.cdn.title', message: 'Cloudflare CDN Setup'})}
           </Heading>
           <p>
@@ -707,6 +758,7 @@ action = "proxy"`}</code></pre>
             <li>{translate({id: 'guide.s10.perf.bbr', message: 'Set congestion mode to "bbr" for optimal throughput'})}</li>
             <li>{translate({id: 'guide.s10.perf.xmux', message: 'Use XMUX connection pooling for CDN transports to reduce handshake overhead'})}</li>
             <li>{translate({id: 'guide.s10.perf.iouring', message: 'On Linux, Prisma supports io_uring for high-throughput zero-copy I/O'})}</li>
+            <li>{translate({id: 'guide.s10.perf.daemon', message: 'Use --daemon flag for built-in daemon mode without systemd'})}</li>
           </ul>
 
           <Heading as="h3">
@@ -718,6 +770,8 @@ action = "proxy"`}</code></pre>
             <li>{translate({id: 'guide.s10.sec.unique', message: 'Use unique credentials per client device for easy revocation'})}</li>
             <li>{translate({id: 'guide.s10.sec.mgmt', message: 'Bind the management API to 127.0.0.1 and use SSH tunneling to access it'})}</li>
             <li>{translate({id: 'guide.s10.sec.update', message: 'Keep Prisma updated — updates include security fixes'})}</li>
+            <li>{translate({id: 'guide.s10.sec.acl', message: 'Use per-client ACLs to restrict access for shared or untrusted devices'})}</li>
+            <li>{translate({id: 'guide.s10.sec.ticketRotation', message: 'Configure ticket_rotation_hours for session ticket key rotation (default: 6 hours)'})}</li>
           </ul>
 
           <Heading as="h3">

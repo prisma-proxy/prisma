@@ -88,7 +88,7 @@ pub struct ClientConfig {
     // TUN mode
     #[serde(default)]
     pub tun: TunConfig,
-    /// Protocol version (v5 only since 0.9.0).
+    /// Protocol version (always "v5"; read-only, kept for config file compatibility).
     #[serde(default = "default_protocol_version")]
     pub protocol_version: String,
     /// uTLS fingerprint: "chrome", "firefox", "safari", "random", or "none" (default).
@@ -112,7 +112,7 @@ pub struct ClientConfig {
     /// Entropy camouflage for Salamander/raw UDP.
     #[serde(default)]
     pub entropy_camouflage: bool,
-    /// PrismaTLS auth secret for v4 authentication (hex-encoded, 32 bytes).
+    /// PrismaTLS auth secret (hex-encoded, 32 bytes).
     #[serde(default)]
     pub prisma_auth_secret: Option<String>,
     /// Use transport-only cipher mode (BLAKE3 MAC only, no application-layer encryption).

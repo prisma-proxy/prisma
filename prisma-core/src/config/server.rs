@@ -32,7 +32,7 @@ pub struct ServerConfig {
     /// Upstream DNS server for CMD_DNS_QUERY forwarding.
     #[serde(default = "default_dns_upstream")]
     pub dns_upstream: String,
-    /// Protocol version (v5 only since 0.9.0).
+    /// Protocol version (always "v5"; read-only, kept for config file compatibility).
     #[serde(default = "default_protocol_version")]
     pub protocol_version: String,
     /// PrismaTLS configuration (replaces REALITY).
@@ -683,7 +683,7 @@ impl Default for PrismaTlsConfig {
     }
 }
 
-/// Cross-layer RTT normalization (v4).
+/// Cross-layer RTT normalization.
 /// Delays transport-layer ACKs to mask the proxy hop.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AntiRttConfig {

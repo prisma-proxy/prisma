@@ -327,7 +327,7 @@ fn build_tls_config(config: &ServerConfig) -> Result<rustls::ServerConfig> {
             .map(|s| s.as_bytes().to_vec())
             .collect();
     } else {
-        // Standard ALPN — "h3" only, no legacy "prisma-v3"/"prisma-v2"
+        // Standard ALPN — "h3" only
         tls_config.alpn_protocols = vec![prisma_core::types::PRISMA_QUIC_ALPN.as_bytes().to_vec()];
     }
 

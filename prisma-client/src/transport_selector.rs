@@ -36,7 +36,7 @@ impl TransportType {
         match s.to_lowercase().as_str() {
             "quic-v2-salamander" | "quic_v2_salamander" => Some(TransportType::QuicV2Salamander),
             "quic-v2" | "quic_v2" => Some(TransportType::QuicV2),
-            "reality" | "prisma-tls" => Some(TransportType::PrismaTls),
+            "prisma-tls" => Some(TransportType::PrismaTls),
             "ws" | "websocket" | "ws-cdn" => Some(TransportType::WebSocket),
             "xporta" => Some(TransportType::XPorta),
             "shadow-tls" | "shadowtls" | "shadow_tls" => Some(TransportType::ShadowTls),
@@ -301,13 +301,11 @@ mod tests {
     fn test_transport_type_parse() {
         assert_eq!(TransportType::parse("quic-v2"), Some(TransportType::QuicV2));
         assert_eq!(
-            TransportType::parse("reality"),
-            Some(TransportType::PrismaTls)
-        );
-        assert_eq!(
             TransportType::parse("prisma-tls"),
             Some(TransportType::PrismaTls)
         );
+        // "reality" alias removed in 0.9.0
+        assert_eq!(TransportType::parse("reality"), None);
         assert_eq!(
             TransportType::parse("websocket"),
             Some(TransportType::WebSocket)

@@ -569,7 +569,7 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
                 .map_err(|_| ProtocolError::InvalidFrame("Invalid forward name".into()))?;
             cursor += name_len;
 
-            // protocol: [len:1][bytes] — optional for backward compat
+            // protocol: [len:1][bytes] — optional (defaults to "tcp" if absent)
             let protocol = if cursor < payload.len() {
                 let proto_len = payload[cursor] as usize;
                 cursor += 1;
@@ -682,7 +682,7 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             let success = payload[2] != 0;
             let mut cursor = 3;
 
-            // error_reason: [has:1] then [len:2][bytes] if present — optional for backward compat
+            // error_reason: [has:1] then [len:2][bytes] if present — optional
             let error_reason = if cursor < payload.len() {
                 let has = payload[cursor];
                 cursor += 1;

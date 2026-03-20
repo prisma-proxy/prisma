@@ -239,7 +239,7 @@ impl AsyncUdpSocket for SalamanderSocket {
     }
 
     fn try_send(&self, transmit: &Transmit) -> io::Result<()> {
-        // v4: Single-buffer nonce-based obfuscation with ASCII prefix
+        // Single-buffer nonce-based obfuscation with ASCII prefix
         let payload = transmit.contents;
         let total_len = ASCII_PREFIX_LEN + 8 + payload.len();
         let mut buf = Vec::with_capacity(total_len);
@@ -277,33 +277,27 @@ impl AsyncUdpSocket for SalamanderSocket {
         // Receive from the inner socket
         let result = self.inner.poll_recv(cx, bufs, meta);
 
-        // If we got data, strip ASCII prefix (if present) and deobfuscate with nonce
+        // If we got data, strip ASCII prefix and deobfuscate with nonce.
+        // All v0.9+ senders always include the ASCII prefix.
         if let Poll::Ready(Ok(count)) = &result {
             for i in 0..*count {
                 let data_len = meta[i].len;
                 let buf = &mut bufs[i];
 
-                // Always expect ASCII prefix + nonce (v4 always sends prefix).
-                // Fall back to nonce-at-offset-0 for backward compat with older senders.
-                let (nonce_start, has_prefix) = if data_len >= ASCII_PREFIX_LEN + 8
-                    && crate::entropy::has_ascii_prefix(&buf[..data_len], ASCII_PREFIX_LEN)
+                // Require ASCII prefix + nonce (minimum frame size)
+                if data_len < ASCII_PREFIX_LEN + 8
+                    || !crate::entropy::has_ascii_prefix(&buf[..data_len], ASCII_PREFIX_LEN)
                 {
-                    (ASCII_PREFIX_LEN, true)
-                } else if data_len >= 8 {
-                    (0, false)
-                } else {
                     continue;
-                };
+                }
+
+                let nonce_start = ASCII_PREFIX_LEN;
 
                 // Extract 8-byte nonce
                 let mut nonce = [0u8; 8];
                 nonce.copy_from_slice(&buf[nonce_start..nonce_start + 8]);
                 let payload_start = nonce_start + 8;
-                let payload_len = if has_prefix {
-                    data_len - ASCII_PREFIX_LEN - 8
-                } else {
-                    data_len - 8
-                };
+                let payload_len = data_len - ASCII_PREFIX_LEN - 8;
 
                 // Deobfuscate payload in-place
                 self.cached_key.xor_in_place_with_nonce(
@@ -312,9 +306,7 @@ impl AsyncUdpSocket for SalamanderSocket {
                 );
 
                 // Shift deobfuscated payload to the beginning of the buffer
-                if payload_start > 0 {
-                    buf.copy_within(payload_start..payload_start + payload_len, 0);
-                }
+                buf.copy_within(payload_start..payload_start + payload_len, 0);
                 meta[i].len = payload_len;
                 meta[i].stride = meta[i].stride.min(payload_len);
             }

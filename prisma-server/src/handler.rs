@@ -55,7 +55,7 @@ pub async fn handle_tcp_connection(
             }
         }
     };
-    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (TCP)");
+    info!(session_id = %session_keys.session_id, "Handshake complete (TCP)");
 
     let (read, write) = stream.into_split();
     run_registered_session(
@@ -153,7 +153,7 @@ where
         return Ok(());
     }
 
-    // v4/v5 handshake: 2-step (ticket key from rotating key ring)
+    // v5 handshake: 2-step (ticket key from rotating key ring)
     let ticket_key = ctx.ticket_key_ring.current_key();
 
     let (bucket_sizes, server_features) = compute_server_features(state).await;
@@ -185,7 +185,7 @@ where
 
     util::write_framed(&mut stream, &server_init_bytes).await?;
 
-    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (TCP camouflaged)");
+    info!(session_id = %session_keys.session_id, "Handshake complete (TCP camouflaged)");
 
     let (read, write) = tokio::io::split(stream);
     run_registered_session(
@@ -228,7 +228,7 @@ pub async fn handle_quic_stream(
             }
         };
 
-    info!(session_id = %session_keys.session_id, protocol_version = session_keys.protocol_version, "Handshake complete (QUIC)");
+    info!(session_id = %session_keys.session_id, "Handshake complete (QUIC)");
     run_registered_session(
         session_keys,
         recv,
@@ -278,7 +278,6 @@ where
 
     info!(
         session_id = %session_keys.session_id,
-        protocol_version = session_keys.protocol_version,
         transport = ?transport,
         "Handshake complete"
     );
@@ -297,7 +296,7 @@ where
     .await
 }
 
-/// Unified handshake over any AsyncRead + AsyncWrite pair (v4/v5).
+/// Unified handshake over any AsyncRead + AsyncWrite pair (v5 only).
 ///
 /// Uses the `TicketKeyRing` from the server context for automatic ticket key rotation.
 async fn perform_handshake<R, W>(
@@ -387,7 +386,6 @@ where
         client_name = %display_name,
         peer = %peer_addr,
         transport = ?transport,
-        protocol_version = session_keys.protocol_version,
         "Client connected"
     );
 

@@ -282,6 +282,111 @@ ls -la /etc/prisma/prisma-cert.pem /etc/prisma/prisma-key.pem
 
 Prisma won't receive connections if the firewall blocks port 8443. See the [previous chapter](./install-server.md#opening-firewall-ports) for firewall instructions.
 
+## Advanced Server Options (v0.9.0)
+
+These features are optional but powerful. You can add any of the following sections to your `server.toml` as needed.
+
+### ShadowTLS v3 Transport
+
+ShadowTLS mimics a real TLS handshake to a cover server. To enable ShadowTLS on the server:
+
+```toml
+[shadow_tls]
+enabled = true
+listen_addr = "0.0.0.0:8444"        # Separate port for ShadowTLS
+cover_server = "www.google.com:443"  # Cover server to mimic
+password = "your-shadow-tls-password" # Shared password with client
+```
+
+### SSH Transport
+
+The SSH transport tunnels Prisma traffic through standard SSH connections:
+
+```toml
+[ssh_transport]
+enabled = true
+listen_addr = "0.0.0.0:22222"        # SSH transport port
+host_key_path = "/etc/prisma/ssh_host_key"  # SSH host key
+fake_shell = true                     # Show fake shell to interactive probers
+```
+
+Generate an SSH host key if you don't have one:
+
+```bash
+ssh-keygen -t ed25519 -f /etc/prisma/ssh_host_key -N ""
+```
+
+### WireGuard Transport
+
+WireGuard provides kernel-level forwarding performance:
+
+```toml
+[wireguard_transport]
+enabled = true
+listen_addr = "0.0.0.0:51820"        # WireGuard UDP port
+private_key = "YOUR-WG-PRIVATE-KEY"  # WireGuard private key
+```
+
+### Per-Client Access Control Lists (ACLs)
+
+ACLs let you restrict which destinations each client can access:
+
+```toml
+[[authorized_clients]]
+id = "client-uuid"
+auth_secret = "client-secret"
+name = "restricted-user"
+
+# ACL rules for this client
+[[authorized_clients.acl]]
+type = "domain-suffix"
+value = "example.com"
+policy = "allow"
+
+[[authorized_clients.acl]]
+type = "all"
+policy = "deny"       # Block everything not explicitly allowed
+```
+
+### Port Forwarding (Server-Side)
+
+Allow clients to register port forwards on the server:
+
+```toml
+[port_forwarding]
+enabled = true
+allowed_ports = [3000, 8080, 8443]   # Ports clients can forward
+max_forwards_per_client = 5           # Limit per client
+```
+
+### Config File Watching (Hot Reload)
+
+Automatically reload the configuration when the file changes:
+
+```toml
+config_watch = true    # Watch server.toml for changes and auto-reload
+```
+
+You can also trigger a manual reload by sending SIGHUP to the process or via the management API:
+
+```bash
+# Manual reload via signal
+kill -HUP $(pidof prisma)
+
+# Manual reload via API
+curl -X POST http://127.0.0.1:9090/api/reload -H "Authorization: Bearer YOUR-TOKEN"
+```
+
+### Session Ticket Key Rotation
+
+Control how often session ticket keys are rotated for forward secrecy:
+
+```toml
+ticket_rotation_hours = 6    # Rotate keys every 6 hours (default)
+```
+
+Lower values improve forward secrecy but increase handshake overhead for returning clients.
+
 ## TLS with Let's Encrypt (Production)
 
 For production deployments, use a free certificate from Let's Encrypt instead of a self-signed one. This requires a domain name pointing to your server.
@@ -326,6 +431,7 @@ In this chapter, you learned:
 - How to write a **complete server configuration** with every line explained
 - How to **validate** and **test** your configuration
 - How to add **multiple clients**
+- Advanced v0.9.0 options: **ShadowTLS v3**, **SSH**, **WireGuard** transports, **ACLs**, **port forwarding**, **config_watch**, and **ticket rotation**
 - How to use **Let's Encrypt** for production TLS certificates
 
 ## Next step
