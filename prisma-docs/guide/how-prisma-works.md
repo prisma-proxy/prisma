@@ -266,4 +266,4 @@ graph TD
 
 ## Next step
 
-Now that you understand how Prisma works, let's get ready to set it up. Head to [Preparation](./prepare) to learn what you need and how to prepare your server.
+Now that you understand how Prisma works, let's get ready to set it up. Head to [Preparation](./prepare.md) to learn what you need and how to prepare your server.

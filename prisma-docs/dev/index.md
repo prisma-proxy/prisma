@@ -1,3 +1,7 @@
+---
+title: Developer Documentation
+---
+
 # Developer Documentation
 
 Comprehensive internal reference for the Prisma proxy system -- architecture, module APIs, wire protocol, configuration fields, CLI commands, management endpoints, FFI functions, and extension recipes.

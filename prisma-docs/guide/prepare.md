@@ -179,4 +179,4 @@ sudo apt update && sudo apt upgrade -y
 
 ## Next step
 
-Your server is ready! Let's install Prisma on it. Head to [Installing the Server](./install-server).
+Your server is ready! Let's install Prisma on it. Head to [Installing the Server](./install-server.md).

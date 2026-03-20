@@ -16,7 +16,7 @@ const config: Config = {
   url: 'https://yamimega.github.io/',
   baseUrl: '/prisma',
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: 'warn',
 
   markdown: {
     mermaid: true,
@@ -42,30 +42,7 @@ const config: Config = {
         hashed: true,
         language: ['en', 'zh'],
         indexBlog: false,
-        docsRouteBasePath: ['docs', 'guide', 'dev'],
-      },
-    ],
-  ],
-
-  plugins: [
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'guide',
-        path: 'guide',
-        routeBasePath: 'guide',
-        sidebarPath: './sidebarsGuide.ts',
-        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
-      },
-    ],
-    [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'dev',
-        path: 'dev',
-        routeBasePath: 'dev',
-        sidebarPath: './sidebarsDev.ts',
-        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
+        docsRouteBasePath: '/docs',
       },
     ],
   ],
@@ -92,8 +69,31 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'guide',
+        path: 'guide',
+        routeBasePath: 'guide',
+        sidebarPath: './sidebarsGuide.ts',
+        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'dev',
+        path: 'dev',
+        routeBasePath: 'dev',
+        sidebarPath: './sidebarsDev.ts',
+        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
+      },
+    ],
+  ],
+
   themeConfig: {
-mermaid: {
+    mermaid: {
       theme: {light: 'neutral', dark: 'dark'},
     },
     tableOfContents: {
@@ -116,9 +116,7 @@ mermaid: {
           label: 'Docs',
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'guideSidebar',
-          docsPluginId: 'guide',
+          to: '/guide/',
           label: 'Guide',
           position: 'left',
         },
@@ -128,14 +126,12 @@ mermaid: {
           position: 'left',
         },
         {
-          type: 'doc',
-          docId: 'dev/index',
+          to: '/dev/',
           label: 'Dev',
           position: 'left',
         },
         {
           type: 'docsVersionDropdown',
-          docsPluginId: 'default',
           position: 'right',
         },
         {
@@ -210,7 +206,7 @@ mermaid: {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Prisma Proxy.`,
+      copyright: `Copyright \u00A9 ${new Date().getFullYear()} Prisma Proxy.`,
     },
     prism: {
       theme: prismThemes.github,

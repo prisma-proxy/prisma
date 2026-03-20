@@ -140,4 +140,4 @@ Open ports in **both** the server's local firewall **and** the cloud provider's 
 
 ## Next step
 
-Prisma is installed! Head to [Configuring the Server](./configure-server).
+Prisma is installed! Head to [Configuring the Server](./configure-server.md).
