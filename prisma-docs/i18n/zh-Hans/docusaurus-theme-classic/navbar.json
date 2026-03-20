@@ -11,6 +11,9 @@
   "item.label.Benchmarks": {
     "message": "性能基准测试（Benchmarks）"
   },
+  "item.label.Dev": {
+    "message": "开发者文档"
+  },
   "item.label.GitHub": {
     "message": "GitHub"
   }

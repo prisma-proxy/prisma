@@ -193,80 +193,6 @@ graph TD
     style STLS fill:#8b5cf6,color:#fff
 ```
 
-### Transport details
-
-#### QUIC -- The Fast Highway (Recommended default)
-
-QUIC is a modern protocol built on UDP with built-in TLS 1.3. It supports multiplexed streams and recovers from packet loss faster than TCP.
-
-- **Pros:** Fastest transport, multiplexed streams, 0-RTT resumption, built-in encryption
-- **Cons:** Some networks block UDP traffic; DPI can identify QUIC headers
-- **Config:** `transport = "quic"`
-
-#### TCP -- The Reliable Road
-
-TCP guarantees ordered, reliable delivery. It works on virtually every network.
-
-- **Pros:** Universal compatibility, reliable
-- **Cons:** Slower than QUIC on lossy networks, head-of-line blocking
-- **Config:** `transport = "tcp"`
-
-#### WebSocket -- CDN-Friendly
-
-WebSocket upgrades an HTTP connection into a persistent bidirectional channel. Works behind CDNs like Cloudflare.
-
-- **Pros:** CDN-compatible, hides server IP behind Cloudflare
-- **Cons:** WebSocket upgrade headers can be fingerprinted by advanced DPI
-- **Config:** `transport = "ws"`
-
-#### gRPC -- Enterprise Disguise
-
-gRPC uses HTTP/2 framing, making traffic look like enterprise API calls.
-
-- **Pros:** Looks like business traffic, CDN-compatible
-- **Cons:** Less common, slightly more overhead
-- **Config:** `transport = "grpc"`
-
-#### XHTTP -- Stealthy HTTP/2 Stream
-
-Uses plain HTTP/2 POST requests -- no WebSocket upgrade needed.
-
-- **Pros:** No special headers, harder to fingerprint than WebSocket
-- **Cons:** Long-lived streams can still be fingerprinted
-- **Config:** `transport = "xhttp"`
-
-#### XPorta -- Maximum Stealth
-
-Fragments proxy data into short-lived REST API requests with JSON payloads and cookie-based sessions. Indistinguishable from a normal web application.
-
-- **Pros:** Virtually undetectable, looks like normal API traffic
-- **Cons:** Higher latency and overhead, more complex setup
-- **Config:** `transport = "xporta"`
-
-#### ShadowTLS v3 -- TLS Camouflage
-
-Mimics a real TLS handshake to a cover server (e.g. `www.microsoft.com`). The handshake is indistinguishable from a genuine TLS connection.
-
-- **Pros:** Passes DPI as real TLS, extremely hard to fingerprint
-- **Cons:** Requires specifying a cover server
-- **Config:** `transport = "shadow-tls"`
-
-#### SSH -- Universal Compatibility
-
-Tunnels through standard SSH connections. Almost never blocked because SSH is essential for server administration.
-
-- **Pros:** Almost never blocked, widely available
-- **Cons:** SSH traffic patterns can be fingerprinted
-- **Config:** `transport = "ssh"`
-
-#### WireGuard -- Kernel-Level Performance
-
-Uses the WireGuard protocol for minimal-overhead, kernel-level packet forwarding.
-
-- **Pros:** Very fast, minimal overhead, well-audited
-- **Cons:** Uses UDP (may be blocked), WireGuard is easily detected by DPI
-- **Config:** `transport = "wireguard"`
-
 :::tip Start simple
 Begin with **QUIC**. If it does not work, try **TCP**. If you need CDN protection, use **WebSocket**. Only upgrade to **XPorta** or **ShadowTLS v3** when other transports are being actively blocked.
 :::
@@ -340,4 +266,4 @@ graph TD
 
 ## Next step
 
-Now that you understand how Prisma works, let's get ready to set it up. Head to [Preparation](./prepare.md) to learn what you need and how to prepare your server.
+Now that you understand how Prisma works, let's get ready to set it up. Head to [Preparation](./prepare) to learn what you need and how to prepare your server.

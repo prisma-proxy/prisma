@@ -1,6 +1,6 @@
 ---
 sidebar_position: 1
-slug: /guide
+slug: /
 ---
 
 # 新手指南

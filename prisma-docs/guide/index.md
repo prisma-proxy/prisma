@@ -1,6 +1,6 @@
 ---
 sidebar_position: 1
-slug: /guide
+slug: /
 ---
 
 # Beginner's Guide
@@ -37,15 +37,15 @@ flowchart LR
 
 | # | Chapter | What you will learn | Time |
 |---|---------|-------------------|------|
-| 1 | [Understanding the Basics](./basics.md) | How the internet works, what proxies and encryption are | ~15 min |
-| 2 | [How Prisma Works](./how-prisma-works.md) | Client/server architecture, PrismaVeil v5 protocol, 9 transports, anti-detection | ~20 min |
-| 3 | [Preparation](./prepare.md) | Getting a VPS, SSH access, domain & TLS considerations, firewall planning | ~15 min |
-| 4 | [Installing the Server](./install-server.md) | One-line script, Docker, direct download, build from source, daemon mode | ~10 min |
-| 5 | [Configuring the Server](./configure-server.md) | TOML crash course, credentials, TLS, authorized clients, advanced options | ~20 min |
-| 6 | [Installing the Client](./install-client.md) | Desktop GUI (Tauri), CLI, Android app (Kotlin/JNI), iOS app (Swift/xcframework) | ~10 min |
-| 7 | [Configuring the Client](./configure-client.md) | Transport selection, subscriptions, proxy groups, port forwarding, DNS, TUN mode | ~20 min |
-| 8 | [Your First Connection](./first-connection.md) | Starting both ends, verifying with curl, DNS leak test, troubleshooting | ~10 min |
-| 9 | [Going Further](./advanced-setup.md) | CDN deployment, XMUX pooling, io_uring tuning, rule providers, monitoring | ~25 min |
+| 1 | [Understanding the Basics](./basics) | How the internet works, what proxies and encryption are | ~15 min |
+| 2 | [How Prisma Works](./how-prisma-works) | Client/server architecture, PrismaVeil v5 protocol, 9 transports, anti-detection | ~20 min |
+| 3 | [Preparation](./prepare) | Getting a VPS, SSH access, domain & TLS considerations, firewall planning | ~15 min |
+| 4 | [Installing the Server](./install-server) | One-line script, Docker, direct download, build from source, daemon mode | ~10 min |
+| 5 | [Configuring the Server](./configure-server) | TOML crash course, credentials, TLS, authorized clients, advanced options | ~20 min |
+| 6 | [Installing the Client](./install-client) | Desktop GUI (Tauri), CLI, Android app (Kotlin/JNI), iOS app (Swift/xcframework) | ~10 min |
+| 7 | [Configuring the Client](./configure-client) | Transport selection, subscriptions, proxy groups, port forwarding, DNS, TUN mode | ~20 min |
+| 8 | [Your First Connection](./first-connection) | Starting both ends, verifying with curl, DNS leak test, troubleshooting | ~10 min |
+| 9 | [Going Further](./advanced-setup) | CDN deployment, XMUX pooling, io_uring tuning, rule providers, monitoring | ~25 min |
 
 **Total estimated time: ~2.5 hours** (you can split it across multiple sessions).
 
@@ -65,7 +65,7 @@ This guide assumes **zero** prior knowledge about networking, servers, or the co
 ## How to use this guide
 
 - **Read in order** -- each chapter builds on the previous one
-- **Do not skip the basics** -- even if you are tempted, the [basics chapter](./basics.md) will help you understand everything that follows
+- **Do not skip the basics** -- even if you are tempted, the [basics chapter](./basics) will help you understand everything that follows
 - **Try things out** -- the best way to learn is by doing; follow along with the examples
 - **Do not worry about mistakes** -- nothing in this guide can break your computer; if something goes wrong, you can always start over
 
@@ -107,4 +107,4 @@ Key capabilities:
 - **Cross-platform** -- Windows, macOS, Linux, Android, iOS, FreeBSD
 - **Post-quantum ready** -- hybrid key exchange for forward security
 
-Ready? Let's begin with [Understanding the Basics](./basics.md).
+Ready? Let's begin with [Understanding the Basics](./basics).

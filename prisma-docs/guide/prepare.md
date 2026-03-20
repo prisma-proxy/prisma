@@ -94,28 +94,6 @@ A VPS (Virtual Private Server) is a rented computer in a data center. Prisma's r
 Prisma is written in Rust and extremely efficient. A $3--5/month VPS with 512 MB RAM can comfortably handle dozens of concurrent connections.
 :::
 
-**VPS location considerations:**
-- Choose a location **geographically close** to the services you want to access
-- Ensure the data center has good peering with your ISP
-- Some providers accept cryptocurrency for extra privacy
-
-**Recommended operating systems for the server:**
-- **Ubuntu 24.04 LTS** or **Ubuntu 22.04 LTS** (most beginner-friendly)
-- **Debian 12** (very stable, similar to Ubuntu)
-- **Any modern Linux** with kernel 5.x+
-
-## Domain and TLS considerations
-
-Prisma works with or without a domain name:
-
-| Setup | Domain needed? | TLS certificate | Use case |
-|-------|---------------|----------------|----------|
-| Self-signed cert | No | `prisma gen-cert` | Personal use, testing |
-| Let's Encrypt | Yes | Free, auto-renewing | Production, CDN |
-| Cloudflare Origin | Yes | From Cloudflare dashboard | CDN deployments |
-
-For this guide we start with a **self-signed certificate** (no domain needed). You can upgrade to Let's Encrypt later.
-
 ## Network topology and firewall planning
 
 Before installing, plan your network configuration:
@@ -154,47 +132,31 @@ graph TD
 
 SSH (Secure Shell) lets you control your server remotely through a secure encrypted terminal session.
 
-### On any platform
-
 Open your terminal and run:
 
 ```bash
 ssh root@YOUR-SERVER-IP
 ```
 
-Replace `YOUR-SERVER-IP` with the IP address from your VPS provider (e.g. `203.0.113.45`).
-
-The first time you connect, you will see:
-
-```
-The authenticity of host '203.0.113.45' can't be established.
-ED25519 key fingerprint is SHA256:AbCdEf...
-Are you sure you want to continue connecting (yes/no)?
-```
-
-Type `yes` and press Enter. Then enter the password your VPS provider gave you. You should see:
+The first time you connect, type `yes` to accept the server fingerprint, then enter your password. You should see:
 
 ```
 root@my-server:~#
 ```
 
-You are now logged in to your server.
-
 :::warning Security tip
-After initial setup, consider switching to **SSH key authentication** and disabling password login. This is beyond the scope of this guide, but it significantly improves security.
+After initial setup, consider switching to **SSH key authentication** and disabling password login for improved security.
 :::
 
 ## Terminal basics
 
-If you have never used a terminal, here are the only commands you need:
-
 | Command | What it does | Example |
 |---------|-------------|---------|
-| `ls` | List files in current directory | `ls /etc/prisma/` |
+| `ls` | List files | `ls /etc/prisma/` |
 | `cd` | Change directory | `cd /etc/prisma` |
 | `cat` | Display file contents | `cat server.toml` |
 | `nano` | Edit a file (Ctrl+O save, Ctrl+X exit) | `nano server.toml` |
-| `mkdir -p` | Create a directory (and parents) | `mkdir -p /etc/prisma` |
+| `mkdir -p` | Create a directory | `mkdir -p /etc/prisma` |
 | `sudo` | Run as administrator | `sudo nano /etc/prisma/server.toml` |
 | `systemctl` | Manage system services | `sudo systemctl status prisma-server` |
 | `ufw` | Manage firewall rules | `sudo ufw allow 8443/tcp` |
@@ -209,24 +171,12 @@ If you have never used a terminal, here are the only commands you need:
 └────────────── "etc" folder (system config)
 ```
 
-- `/` at the beginning means the root of the file system
-- Each `/` separates directories
-- `~` is a shortcut for your home directory (`/root` for the root user)
-
 ## Update your server
-
-Before installing anything, update your server's packages:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-This fetches the latest package lists and installs all available updates. It may take a minute or two.
-
-:::info What is apt?
-`apt` is the package manager on Ubuntu and Debian -- like an app store for the terminal. You use it to install, update, and remove software.
-:::
-
 ## Next step
 
-Your server is ready! Let's install Prisma on it. Head to [Installing the Server](./install-server.md).
+Your server is ready! Let's install Prisma on it. Head to [Installing the Server](./install-server).

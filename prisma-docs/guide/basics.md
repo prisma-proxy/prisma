@@ -240,4 +240,4 @@ Now you understand all the building blocks:
 
 ## Next step
 
-Now that you understand the basics, let's learn [How Prisma Works](./how-prisma-works.md) -- the architecture, protocol, transport options, and anti-detection features that make it different from other tools.
+Now that you understand the basics, let's learn [How Prisma Works](./how-prisma-works) -- the architecture, protocol, transport options, and anti-detection features that make it different from other tools.

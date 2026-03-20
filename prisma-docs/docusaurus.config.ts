@@ -42,7 +42,30 @@ const config: Config = {
         hashed: true,
         language: ['en', 'zh'],
         indexBlog: false,
-        docsRouteBasePath: '/docs',
+        docsRouteBasePath: ['docs', 'guide', 'dev'],
+      },
+    ],
+  ],
+
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'guide',
+        path: 'guide',
+        routeBasePath: 'guide',
+        sidebarPath: './sidebarsGuide.ts',
+        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'dev',
+        path: 'dev',
+        routeBasePath: 'dev',
+        sidebarPath: './sidebarsDev.ts',
+        editUrl: `${repoUrl}/edit/master/prisma-docs/`,
       },
     ],
   ],
@@ -93,8 +116,9 @@ mermaid: {
           label: 'Docs',
         },
         {
-          type: 'doc',
-          docId: 'guide/index',
+          type: 'docSidebar',
+          sidebarId: 'guideSidebar',
+          docsPluginId: 'guide',
           label: 'Guide',
           position: 'left',
         },
@@ -111,6 +135,7 @@ mermaid: {
         },
         {
           type: 'docsVersionDropdown',
+          docsPluginId: 'default',
           position: 'right',
         },
         {
