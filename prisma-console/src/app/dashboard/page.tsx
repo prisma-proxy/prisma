@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { UserPlus, Archive, ScrollText, Settings } from "lucide-react";
-import { useMetrics } from "@/hooks/use-metrics";
+import { useMetricsContext } from "@/contexts/metrics-context";
 import { useConnections, useDisconnect } from "@/hooks/use-connections";
 import { MetricsCards } from "@/components/dashboard/metrics-cards";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
@@ -16,7 +16,7 @@ import { useI18n } from "@/lib/i18n";
 
 export default function OverviewPage() {
   const { t } = useI18n();
-  const { current, history } = useMetrics();
+  const { current, history } = useMetricsContext();
   const { data: connections, isLoading: connectionsLoading } = useConnections();
   const disconnect = useDisconnect();
 

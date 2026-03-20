@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n";
 import type { RoutingRule, RuleCondition } from "@/lib/types";
 
 interface RuleEditorProps {
@@ -38,6 +39,7 @@ const conditionTypes = [
 type ConditionType = (typeof conditionTypes)[number];
 
 export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
@@ -89,17 +91,17 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>Add Rule</DialogTrigger>
+      <DialogTrigger render={<Button />}>{t("routing.addRule")}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Routing Rule</DialogTitle>
+          <DialogTitle>{t("routing.createRule")}</DialogTitle>
           <DialogDescription>
-            Define a new routing rule for traffic management.
+            {t("routing.createRuleDescription")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-1.5">
-            <Label htmlFor="rule-name">Name</Label>
+            <Label htmlFor="rule-name">{t("common.name")}</Label>
             <Input
               id="rule-name"
               type="text"
@@ -111,7 +113,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="rule-priority">Priority</Label>
+            <Label htmlFor="rule-priority">{t("routing.priority")}</Label>
             <Input
               id="rule-priority"
               type="number"
@@ -122,7 +124,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
           </div>
 
           <div className="grid gap-1.5">
-            <Label>Condition Type</Label>
+            <Label>{t("routing.conditionType")}</Label>
             <Select
               value={conditionType}
               onValueChange={(val) => {
@@ -131,7 +133,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select condition" />
+                <SelectValue placeholder={t("routing.selectCondition")} />
               </SelectTrigger>
               <SelectContent>
                 {conditionTypes.map((ct) => (
@@ -145,7 +147,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
 
           {conditionType !== "All" && (
             <div className="grid gap-1.5">
-              <Label htmlFor="rule-condition-value">Condition Value</Label>
+              <Label htmlFor="rule-condition-value">{t("routing.conditionValue")}</Label>
               <Input
                 id="rule-condition-value"
                 type="text"
@@ -164,7 +166,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
           )}
 
           <div className="grid gap-1.5">
-            <Label>Action</Label>
+            <Label>{t("routing.action")}</Label>
             <Select
               value={action}
               onValueChange={(val) => setAction(val as "Allow" | "Block")}
@@ -173,15 +175,15 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Allow">Allow</SelectItem>
-                <SelectItem value="Block">Block</SelectItem>
+                <SelectItem value="Allow">{t("routing.allow")}</SelectItem>
+                <SelectItem value="Block">{t("routing.block")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <DialogFooter>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create Rule"}
+              {isLoading ? t("routing.creatingRule") : t("routing.createRule")}
             </Button>
           </DialogFooter>
         </form>

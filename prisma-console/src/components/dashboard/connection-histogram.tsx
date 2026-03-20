@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import type { ConnectionInfo } from "@/lib/types";
 
 interface ConnectionHistogramProps {
@@ -84,13 +85,8 @@ export function ConnectionHistogram({ connections }: ConnectionHistogramProps) {
                 allowDecimals={false}
               />
               <Tooltip
-                formatter={(value) => [Number(value), "Connections"]}
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "var(--radius)",
-                  fontSize: "0.875rem",
-                }}
+                formatter={(value) => [Number(value), t("connections.title")]}
+                contentStyle={CHART_TOOLTIP_STYLE}
               />
               <Bar
                 dataKey="count"

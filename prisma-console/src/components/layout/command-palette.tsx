@@ -137,12 +137,16 @@ export function CommandPalette() {
   const grouped = useMemo(() => {
     const groups: Record<string, SearchResult[]> = {};
     for (const result of results) {
-      const key = result.type === "page" ? "Pages" : result.type === "client" ? "Clients" : "Config";
+      const key = result.type === "page"
+        ? t("search.groupPages")
+        : result.type === "client"
+          ? t("search.groupClients")
+          : t("search.groupConfig");
       if (!groups[key]) groups[key] = [];
       groups[key].push(result);
     }
     return groups;
-  }, [results]);
+  }, [results, t]);
 
   function handleSelect(result: SearchResult) {
     if (result.href) {

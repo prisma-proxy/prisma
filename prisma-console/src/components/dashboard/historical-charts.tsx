@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { CHART_TOOLTIP_STYLE_SM } from "@/lib/chart-utils";
 import { useMetricsHistory, type TimeRange } from "@/hooks/use-metrics";
 
 const TIME_RANGES: { key: TimeRange; i18nKey: string }[] = [
@@ -96,12 +97,7 @@ export function HistoricalCharts() {
                   <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" />
                   <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={50} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      fontSize: "0.75rem",
-                    }}
+                    contentStyle={CHART_TOOLTIP_STYLE_SM}
                   />
                   <Area
                     type="monotone"
@@ -133,12 +129,7 @@ export function HistoricalCharts() {
                   <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" />
                   <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={50} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      fontSize: "0.75rem",
-                    }}
+                    contentStyle={CHART_TOOLTIP_STYLE_SM}
                   />
                   <Bar
                     dataKey="failures"

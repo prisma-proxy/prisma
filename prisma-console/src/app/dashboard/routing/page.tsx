@@ -1,46 +1,21 @@
 "use client";
 
 import { Route as RouteIcon } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { useRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute } from "@/hooks/use-routes";
 import { RuleList } from "@/components/routing/rule-list";
 import { RuleEditor } from "@/components/routing/rule-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SkeletonTable } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/loading-placeholder";
-import type { RoutingRule } from "@/lib/types";
 
 export default function RoutingPage() {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
 
-  const { data: routes, isLoading } = useQuery({
-    queryKey: ["routes"],
-    queryFn: api.getRoutes,
-  });
-
-  const createRoute = useMutation({
-    mutationFn: (data: Omit<RoutingRule, "id">) => api.createRoute(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["routes"] });
-    },
-  });
-
-  const updateRoute = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Omit<RoutingRule, "id"> }) =>
-      api.updateRoute(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["routes"] });
-    },
-  });
-
-  const deleteRoute = useMutation({
-    mutationFn: (id: string) => api.deleteRoute(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["routes"] });
-    },
-  });
+  const { data: routes, isLoading } = useRoutes();
+  const createRoute = useCreateRoute();
+  const updateRoute = useUpdateRoute();
+  const deleteRoute = useDeleteRoute();
 
   function handleToggle(id: string, enabled: boolean) {
     const rule = routes?.find((r) => r.id === id);

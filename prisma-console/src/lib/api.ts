@@ -29,7 +29,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(init?.headers as Record<string, string>) },
   });
   const text = await res.text();
-  if (!text) return undefined as T;
+  if (!text) return undefined as unknown as T;
   return JSON.parse(text) as T;
 }
 

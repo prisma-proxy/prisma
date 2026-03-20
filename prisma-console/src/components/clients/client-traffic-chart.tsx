@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ConnectionInfo } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 
 interface ClientTrafficChartProps {
   connections: ConnectionInfo[];
@@ -85,12 +86,7 @@ export function ClientTrafficChart({ connections, clientId }: ClientTrafficChart
                     formatBytes(Number(value)),
                     name === "bytes_up" ? t("bandwidth.upload") : t("bandwidth.download"),
                   ]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "var(--radius)",
-                    fontSize: "0.875rem",
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                 />
                 <Area
                   type="monotone"

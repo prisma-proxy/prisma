@@ -13,7 +13,7 @@ import {
 import { useAlertConfig, useActiveAlerts } from "@/hooks/use-alerts";
 import { useSystemInfo } from "@/hooks/use-system-info";
 import { useBandwidthSummary } from "@/hooks/use-bandwidth";
-import { useMetrics } from "@/hooks/use-metrics";
+import { useMetricsContext } from "@/contexts/metrics-context";
 import { useI18n } from "@/lib/i18n";
 import type { Alert } from "@/lib/alerts";
 
@@ -26,7 +26,7 @@ export function AlertBadge({ alerts: externalAlerts }: AlertBadgePropsExternal) 
   const { data: alertConfig } = useAlertConfig();
   const { data: systemInfo } = useSystemInfo();
   const { data: bandwidthSummary } = useBandwidthSummary();
-  const { current: metrics } = useMetrics();
+  const { current: metrics } = useMetricsContext();
 
   const computedAlerts = useActiveAlerts(
     systemInfo,

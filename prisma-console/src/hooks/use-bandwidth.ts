@@ -8,6 +8,7 @@ export function useBandwidthSummary() {
     queryKey: ["bandwidth-summary"],
     queryFn: api.getBandwidthSummary,
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -16,6 +17,7 @@ export function useClientBandwidth(id: string) {
     queryKey: ["client-bandwidth", id],
     queryFn: () => api.getClientBandwidth(id),
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     enabled: !!id,
   });
 }
@@ -37,6 +39,7 @@ export function useClientQuota(id: string) {
     queryKey: ["client-quota", id],
     queryFn: () => api.getClientQuota(id),
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     enabled: !!id,
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 
 export type ToastVariant = "success" | "error" | "warning";
 
@@ -22,8 +22,23 @@ let toastId = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timeoutRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Clear all timeouts on unmount
+  useEffect(() => {
+    const refs = timeoutRefs.current;
+    return () => {
+      refs.forEach((tid) => clearTimeout(tid));
+      refs.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: string) => {
+    const tid = timeoutRefs.current.get(id);
+    if (tid) {
+      clearTimeout(tid);
+      timeoutRefs.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
@@ -31,7 +46,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, variant: ToastVariant = "success") => {
       const id = String(++toastId);
       setToasts((prev) => [...prev, { id, message, variant }]);
-      setTimeout(() => dismiss(id), variant === "error" ? 5000 : 3000);
+      const tid = setTimeout(() => {
+        timeoutRefs.current.delete(id);
+        dismiss(id);
+      }, variant === "error" ? 5000 : 3000);
+      timeoutRefs.current.set(id, tid);
     },
     [dismiss]
   );

@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useI18n } from "@/lib/i18n";
 import type { RoutingRule } from "@/lib/types";
 
 interface RuleListProps {
@@ -28,10 +31,13 @@ function formatCondition(rule: RoutingRule): string {
 }
 
 export function RuleList({ rules, onDelete, onToggle }: RuleListProps) {
+  const { t } = useI18n();
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   if (rules.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        No routing rules configured
+        {t("routing.noRules")}
       </p>
     );
   }
@@ -39,6 +45,7 @@ export function RuleList({ rules, onDelete, onToggle }: RuleListProps) {
   const sorted = [...rules].sort((a, b) => a.priority - b.priority);
 
   return (
+    <>
     <div className="space-y-2">
       {sorted.map((rule) => (
         <div
@@ -56,11 +63,11 @@ export function RuleList({ rules, onDelete, onToggle }: RuleListProps) {
           </div>
           {rule.action === "Allow" ? (
             <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
-              Allow
+              {t("routing.allow")}
             </Badge>
           ) : (
             <Badge className="bg-red-500/15 text-red-700 dark:text-red-400">
-              Block
+              {t("routing.block")}
             </Badge>
           )}
           <Switch
@@ -71,12 +78,26 @@ export function RuleList({ rules, onDelete, onToggle }: RuleListProps) {
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => onDelete(rule.id)}
+            onClick={() => setDeleteId(rule.id)}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </div>
       ))}
     </div>
+    <ConfirmDialog
+      open={deleteId !== null}
+      onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+      title={t("common.delete")}
+      description={t("routing.deleteConfirm")}
+      confirmLabel={t("common.delete")}
+      cancelLabel={t("common.cancel")}
+      variant="destructive"
+      onConfirm={() => {
+        if (deleteId) onDelete(deleteId);
+        setDeleteId(null);
+      }}
+    />
+    </>
   );
 }

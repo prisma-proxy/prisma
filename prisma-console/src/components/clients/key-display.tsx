@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 interface KeyDisplayProps {
   clientId: string;
@@ -9,6 +10,7 @@ interface KeyDisplayProps {
 }
 
 export function KeyDisplay({ clientId, secretHex }: KeyDisplayProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   function signalCopied() {
@@ -37,19 +39,19 @@ export function KeyDisplay({ clientId, secretHex }: KeyDisplayProps) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 px-4 py-3 text-sm font-medium text-yellow-700 dark:text-yellow-400">
-        Save this key now — it won&apos;t be shown again
+        {t("clients.saveKey")}
       </div>
       <div className="rounded-lg border p-4 space-y-3">
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Client ID</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("clients.clientId")}</p>
           <p className="font-mono text-sm break-all">{clientId}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Auth Secret</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("clients.authSecret")}</p>
           <div className="flex items-center gap-2">
             <p className="font-mono text-sm break-all flex-1">{secretHex}</p>
             <Button variant="outline" size="sm" onClick={handleCopy}>
-              {copied ? "Copied!" : "Copy"}
+              {copied ? t("common.copied") : t("common.copy")}
             </Button>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { useBackups, useCreateBackup, useRestoreBackup, useDeleteBackup, useBack
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { BackupTable } from "@/components/backups/backup-table";
 import { BackupCompare } from "@/components/backups/backup-compare";
 import { DiffViewer } from "@/components/backups/diff-viewer";
@@ -38,11 +39,22 @@ export default function BackupsPage() {
     }
   };
 
+  const [confirmDeleteName, setConfirmDeleteName] = useState<string | null>(null);
+
   const handleDelete = (name: string) => {
-    setDeletingName(name);
-    deleteBackup.mutate(name, {
-      onSettled: () => setDeletingName(null),
-    });
+    setConfirmDeleteName(name);
+  };
+
+  const handleConfirmDelete = () => {
+    if (confirmDeleteName) {
+      setDeletingName(confirmDeleteName);
+      deleteBackup.mutate(confirmDeleteName, {
+        onSettled: () => {
+          setDeletingName(null);
+          setConfirmDeleteName(null);
+        },
+      });
+    }
   };
 
   return (
@@ -118,6 +130,19 @@ export default function BackupsPage() {
         backupName={diffName ?? ""}
         diff={diffData}
         isLoading={diffLoading}
+      />
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={confirmDeleteName !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteName(null); }}
+        title={t("common.delete")}
+        description={t("backups.deleteConfirm")}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        variant="destructive"
+        onConfirm={handleConfirmDelete}
+        isPending={deleteBackup.isPending}
       />
     </div>
   );

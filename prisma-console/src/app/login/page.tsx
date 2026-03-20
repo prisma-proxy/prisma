@@ -3,9 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { t } = useI18n();
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,10 +25,10 @@ export default function LoginPage() {
       if (res.ok) {
         login(token);
       } else {
-        setError("Invalid API token.");
+        setError(t("auth.invalidTokenError"));
       }
     } catch {
-      setError("Could not connect to server. Please try again.");
+      setError(t("auth.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -42,10 +44,10 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Prisma Console
+              {t("auth.title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Enter your management API token
+              {t("auth.subtitle")}
             </p>
           </div>
         </div>
@@ -64,7 +66,7 @@ export default function LoginPage() {
                 htmlFor="token"
                 className="text-sm font-medium text-foreground"
               >
-                API Token
+                {t("auth.apiToken")}
               </label>
               <input
                 id="token"
@@ -74,11 +76,11 @@ export default function LoginPage() {
                 required
                 autoComplete="off"
                 autoFocus
-                placeholder="Enter your API token"
+                placeholder={t("auth.tokenInputPlaceholder")}
                 className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
               />
               <p className="text-xs text-muted-foreground">
-                The token from your server.toml [management_api] section.
+                {t("auth.tokenHint")}
               </p>
             </div>
 
@@ -88,7 +90,7 @@ export default function LoginPage() {
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Verifying..." : "Sign in"}
+              {loading ? t("auth.verifying") : t("auth.signIn")}
             </button>
           </form>
         </div>

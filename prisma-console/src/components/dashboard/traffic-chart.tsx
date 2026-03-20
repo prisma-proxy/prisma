@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import type { MetricsSnapshot } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { useMetricsHistory, computeRateMbps, type TimeRange } from "@/hooks/use-metrics";
 
 interface TrafficChartProps {
@@ -129,7 +130,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
               size="xs"
               onClick={() => setSelectedRange(null)}
             >
-              Live
+              {t("common.live")}
             </Button>
             {TIME_RANGES.map(({ key, i18nKey }) => (
               <Button
@@ -156,7 +157,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
         {showMbps ? (
           mbpsData.length === 0 ? (
             <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-              Waiting for data...
+              {t("common.waitingForData")}
             </p>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
@@ -176,15 +177,10 @@ export function TrafficChart({ history }: TrafficChartProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     `${Number(value).toFixed(2)} Mbps`,
-                    name === "uploadMbps" ? "Upload" : "Download",
+                    name === "uploadMbps" ? t("common.upload") : t("common.download"),
                   ]}
                   labelFormatter={(label) => String(label)}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "var(--radius)",
-                    fontSize: "0.875rem",
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                 />
                 <Area
                   type="monotone"
@@ -229,7 +225,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
               <Tooltip
                 formatter={(value, name) => [
                   formatBytes(Number(value)),
-                  name === "bytes_up" ? "Upload" : "Download",
+                  name === "bytes_up" ? t("common.upload") : t("common.download"),
                 ]}
                 labelFormatter={(label) => String(label)}
                 contentStyle={{

@@ -24,7 +24,7 @@ export function SkeletonCard({ className }: SkeletonProps) {
 /** Grid of metric card skeletons matching MetricsCards layout. */
 export function SkeletonMetrics() {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {Array.from({ length: 6 }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}

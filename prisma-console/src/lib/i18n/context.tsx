@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import en from "./locales/en.json";
@@ -34,6 +35,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLocaleState(l);
     localStorage.setItem("prisma-locale", l);
   }, []);
+
+  // Keep the html lang attribute in sync with the active locale
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const t = useCallback(
     (key: string, params?: Record<string, string | number>) => {

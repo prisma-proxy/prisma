@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import type { ClientBandwidthSummaryEntry } from "@/lib/types";
 
 interface QuotaOverviewChartProps {
@@ -57,12 +58,7 @@ export function QuotaOverviewChart({ clients }: QuotaOverviewChartProps) {
                 formatBytes(Number(value)),
                 name === "used" ? t("quota.used") : t("quota.remaining"),
               ]}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "var(--radius)",
-                fontSize: "0.875rem",
-              }}
+              contentStyle={CHART_TOOLTIP_STYLE}
             />
             <Bar
               dataKey="used"

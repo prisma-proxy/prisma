@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { ToastProvider } from "@/lib/toast-context";
+import { MetricsProvider } from "@/contexts/metrics-context";
 import { useI18n } from "@/lib/i18n";
 import {
   Sheet,
@@ -51,6 +52,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const showBreadcrumb = pathname !== "/dashboard" && pathname !== "/dashboard/";
 
   return (
+    <MetricsProvider>
     <ToastProvider>
       <div className="flex h-screen">
         {/* Desktop sidebar */}
@@ -104,5 +106,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <CommandPalette />
       </div>
     </ToastProvider>
+    </MetricsProvider>
   );
 }

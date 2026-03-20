@@ -8,6 +8,7 @@ export function useConnections() {
     queryKey: ["connections"],
     queryFn: api.getConnections,
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 }
 

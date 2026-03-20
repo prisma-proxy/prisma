@@ -80,7 +80,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
             {themeIcon}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
-            <DropdownMenuLabel>Theme</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("theme.title")}</DropdownMenuLabel>
             <DropdownMenuItem
               onClick={() => setTheme("light")}
               className={theme === "light" ? "bg-accent" : ""}

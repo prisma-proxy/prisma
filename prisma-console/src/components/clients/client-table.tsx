@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -12,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useI18n } from "@/lib/i18n";
 import type { ClientInfo } from "@/lib/types";
 
@@ -23,6 +25,7 @@ interface ClientTableProps {
 
 export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
   const { t } = useI18n();
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   if (clients.length === 0) {
     return (
@@ -33,6 +36,7 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -75,7 +79,7 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => onDelete(client.id)}
+                  onClick={() => setDeleteId(client.id)}
                 >
                   {t("common.delete")}
                 </Button>
@@ -85,5 +89,19 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
         ))}
       </TableBody>
     </Table>
+    <ConfirmDialog
+      open={deleteId !== null}
+      onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+      title={t("common.delete")}
+      description={t("clients.deleteConfirm")}
+      confirmLabel={t("common.delete")}
+      cancelLabel={t("common.cancel")}
+      variant="destructive"
+      onConfirm={() => {
+        if (deleteId) onDelete(deleteId);
+        setDeleteId(null);
+      }}
+    />
+    </>
   );
 }
