@@ -11,10 +11,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 
-use crate::{
-    ffi_catch, PrismaClient, PRISMA_ERR_INTERNAL, PRISMA_ERR_INVALID_CONFIG,
-    PRISMA_ERR_NULL_POINTER, PRISMA_OK,
-};
+use crate::{PrismaClient, PRISMA_ERR_INTERNAL, PRISMA_ERR_INVALID_CONFIG, PRISMA_ERR_NULL_POINTER, PRISMA_OK};
 
 // ── Network Extension helpers ────────────────────────────────────────────────
 

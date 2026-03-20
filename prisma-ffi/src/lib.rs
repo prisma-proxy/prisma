@@ -8,13 +8,9 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::sync::{Arc, Mutex};
 
-#[cfg(feature = "android")]
-mod android;
 mod auto_update;
 mod connection;
 mod geo;
-#[cfg(target_os = "ios")]
-mod ios;
 mod profiles;
 mod qr;
 mod runtime;
@@ -146,6 +142,13 @@ macro_rules! cstr_to_str_opt {
         }
     }};
 }
+
+// Platform-specific modules are declared after the macros above so that
+// `ffi_catch!`, `cstr_to_str!`, and `cstr_to_str_opt!` are in textual scope.
+#[cfg(feature = "android")]
+mod android;
+#[cfg(target_os = "ios")]
+mod ios;
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 

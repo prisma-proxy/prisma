@@ -220,7 +220,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             librsvg2-dev \
             patchelf \
             libgtk-3-dev \
@@ -489,11 +488,15 @@ jobs:
         with:
           ndk-version: r27c
 
-      - name: Configure Android NDK linker
+      - name: Configure Android NDK environment
         if: matrix.android
         run: |
           NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
           TOOLCHAIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+
+          # Export NDK home for build scripts that search for it (e.g. ring)
+          echo "ANDROID_NDK_HOME=${NDK_HOME}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${NDK_HOME}" >> "$GITHUB_ENV"
 
           # Map Rust target triples to NDK compiler prefixes
           case "${{ matrix.target }}" in
@@ -514,10 +517,13 @@ jobs:
               ;;
           esac
 
+          # cc crate looks for CC_<target> with dashes replaced by underscores (preserving case)
+          LOWER_TARGET=$(echo "${{ matrix.target }}" | tr '-' '_')
+          # Cargo looks for CARGO_TARGET_<UPPER_TARGET>_LINKER (all uppercase)
           UPPER_TARGET=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
 
-          echo "CC_${UPPER_TARGET}=${CC}" >> "$GITHUB_ENV"
-          echo "AR_${UPPER_TARGET}=${AR}" >> "$GITHUB_ENV"
+          echo "CC_${LOWER_TARGET}=${CC}" >> "$GITHUB_ENV"
+          echo "AR_${LOWER_TARGET}=${AR}" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_${UPPER_TARGET}_LINKER=${LINKER}" >> "$GITHUB_ENV"
 
       # Build FFI library
