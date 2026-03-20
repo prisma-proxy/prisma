@@ -4,7 +4,7 @@ sidebar_position: 7
 
 # XPorta Transport
 
-XPorta is a next-generation CDN transport that makes proxy traffic indistinguishable from a normal single-page application making REST API calls. Instead of one infinite bidirectional stream (like XHTTP stream-one), proxy data is fragmented into many short-lived HTTP request/response pairs — exactly the pattern real web apps produce when calling backend APIs.
+XPorta is a next-generation CDN transport (v0.9.0) that makes proxy traffic indistinguishable from a normal single-page application making REST API calls. Instead of one infinite bidirectional stream (like XHTTP stream-one), proxy data is fragmented into many short-lived HTTP request/response pairs — exactly the pattern real web apps produce when calling backend APIs.
 
 ## Why XPorta
 

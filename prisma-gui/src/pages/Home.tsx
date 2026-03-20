@@ -34,7 +34,10 @@ export default function Home() {
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
   const { toggle, switchProxyMode } = useConnection();
   const events = useConnectionHistory((s) => s.events);
-  const todayUsage = useDataUsage((s) => s.getToday());
+  const todayUsage = useDataUsage((s) => {
+    const key = new Date().toISOString().slice(0, 10);
+    return s.daily[key];
+  }) ?? { up: 0, down: 0 };
   const recentEvents = events.slice(-10).reverse();
 
   const [busy, setBusy] = useState(false);

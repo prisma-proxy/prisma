@@ -365,7 +365,14 @@ export default function DevPage(): ReactNode {
                 <tr><td>DELETE</td><td><code>/api/config/backups/&#123;name&#125;</code></td><td>Delete a backup</td></tr>
                 <tr><td>POST</td><td><code>/api/config/backups/&#123;name&#125;/restore</code></td><td>Restore config from backup</td></tr>
                 <tr><td>GET</td><td><code>/api/config/backups/&#123;name&#125;/diff</code></td><td>Diff between backup and current config</td></tr>
-                <tr><td>GET</td><td><code>/api/forwards</code></td><td>List active port forwards</td></tr>
+                <tr><td>GET</td><td><code>/api/forwards</code></td><td>List active port forwards with per-forward stats</td></tr>
+                <tr><td>POST</td><td><code>/api/forwards</code></td><td>Create a port forward rule (name, local_addr, remote_port)</td></tr>
+                <tr><td>DELETE</td><td><code>/api/forwards/&#123;id&#125;</code></td><td>Remove a port forward</td></tr>
+                <tr><td>GET</td><td><code>/api/forwards/&#123;id&#125;/stats</code></td><td>Get stats for a specific port forward (bytes, connections)</td></tr>
+                <tr><td>GET</td><td><code>/api/subscriptions</code></td><td>List configured subscription sources</td></tr>
+                <tr><td>POST</td><td><code>/api/subscriptions</code></td><td>Add a subscription URL</td></tr>
+                <tr><td>POST</td><td><code>/api/subscriptions/refresh</code></td><td>Refresh all subscriptions from their URLs</td></tr>
+                <tr><td>DELETE</td><td><code>/api/subscriptions/&#123;id&#125;</code></td><td>Remove a subscription</td></tr>
                 <tr><td>GET</td><td><code>/api/routes</code></td><td>List routing rules</td></tr>
                 <tr><td>POST</td><td><code>/api/routes</code></td><td>Create a routing rule</td></tr>
                 <tr><td>PUT</td><td><code>/api/routes/&#123;id&#125;</code></td><td>Update a routing rule</td></tr>
@@ -694,6 +701,24 @@ When FLAG_BUCKETED is set:
                 <tr><td><code>traffic_shaping.bucket_sizes</code></td><td>[u16]</td><td><code>[128..16384]</code></td><td>Fixed bucket sizes for bucket padding</td></tr>
                 <tr><td><code>traffic_shaping.timing_jitter_ms</code></td><td>u32</td><td><code>0</code></td><td>Random delay on handshake frames</td></tr>
                 <tr><td><code>traffic_shaping.chaff_interval_ms</code></td><td>u32</td><td><code>0</code></td><td>Chaff injection interval (0=disabled)</td></tr>
+                <tr><td colSpan={4}><strong>[shadow_tls]</strong></td></tr>
+                <tr><td><code>shadow_tls.enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable ShadowTLS v3 listener</td></tr>
+                <tr><td><code>shadow_tls.listen_addr</code></td><td>String</td><td><code>"0.0.0.0:8444"</code></td><td>ShadowTLS listen address</td></tr>
+                <tr><td><code>shadow_tls.cover_server</code></td><td>String</td><td>&mdash;</td><td>Cover server for TLS mimicry (e.g., "www.google.com:443")</td></tr>
+                <tr><td><code>shadow_tls.password</code></td><td>String</td><td>&mdash;</td><td>Shared ShadowTLS password</td></tr>
+                <tr><td colSpan={4}><strong>[ssh_transport]</strong></td></tr>
+                <tr><td><code>ssh_transport.enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable SSH transport listener</td></tr>
+                <tr><td><code>ssh_transport.listen_addr</code></td><td>String</td><td><code>"0.0.0.0:22222"</code></td><td>SSH transport listen address</td></tr>
+                <tr><td><code>ssh_transport.host_key_path</code></td><td>String</td><td>&mdash;</td><td>SSH host key file path</td></tr>
+                <tr><td><code>ssh_transport.fake_shell</code></td><td>bool</td><td><code>false</code></td><td>Show fake shell to interactive probers</td></tr>
+                <tr><td colSpan={4}><strong>[wireguard_transport]</strong></td></tr>
+                <tr><td><code>wireguard_transport.enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable WireGuard transport listener</td></tr>
+                <tr><td><code>wireguard_transport.listen_addr</code></td><td>String</td><td><code>"0.0.0.0:51820"</code></td><td>WireGuard UDP listen address</td></tr>
+                <tr><td><code>wireguard_transport.private_key</code></td><td>String</td><td>&mdash;</td><td>WireGuard private key</td></tr>
+                <tr><td colSpan={4}><strong>[port_forwarding]</strong></td></tr>
+                <tr><td><code>port_forwarding.enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable server-side port forwarding</td></tr>
+                <tr><td><code>port_forwarding.allowed_ports</code></td><td>[u16]</td><td><code>[]</code></td><td>Ports clients can forward</td></tr>
+                <tr><td><code>port_forwarding.max_forwards_per_client</code></td><td>u32</td><td><code>5</code></td><td>Max forwards per client</td></tr>
               </tbody>
             </table>
           </div>
@@ -750,6 +775,24 @@ When FLAG_BUCKETED is set:
                 <tr><td><code>mux_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable XMUX stream multiplexing</td></tr>
                 <tr><td><code>mux_max_streams</code></td><td>u32</td><td><code>128</code></td><td>Max concurrent streams per mux connection</td></tr>
                 <tr><td><code>mux_max_connections</code></td><td>u16</td><td><code>4</code></td><td>Max mux transport connections in pool</td></tr>
+                <tr><td colSpan={4}><strong>[[subscriptions]]</strong></td></tr>
+                <tr><td><code>url</code></td><td>String</td><td>&mdash;</td><td>Subscription URL (SS/VMess/Trojan/VLESS/Clash YAML)</td></tr>
+                <tr><td><code>name</code></td><td>String</td><td>&mdash;</td><td>Subscription name</td></tr>
+                <tr><td><code>auto_update</code></td><td>bool</td><td><code>true</code></td><td>Auto-refresh subscription</td></tr>
+                <tr><td><code>update_interval_hours</code></td><td>u64</td><td><code>24</code></td><td>Refresh interval in hours</td></tr>
+                <tr><td colSpan={4}><strong>[[proxy_groups]]</strong></td></tr>
+                <tr><td><code>name</code></td><td>String</td><td>&mdash;</td><td>Group name</td></tr>
+                <tr><td><code>type</code></td><td>String</td><td>&mdash;</td><td>Type: select, auto-url, fallback, load-balance</td></tr>
+                <tr><td><code>servers</code></td><td>[String]</td><td>&mdash;</td><td>Server names in this group</td></tr>
+                <tr><td><code>test_url</code></td><td>String?</td><td>&mdash;</td><td>URL for latency testing (auto-url type)</td></tr>
+                <tr><td><code>test_interval_secs</code></td><td>u64?</td><td><code>300</code></td><td>Test interval in seconds</td></tr>
+                <tr><td><code>strategy</code></td><td>String?</td><td><code>"round-robin"</code></td><td>Load balance strategy: round-robin, random</td></tr>
+                <tr><td colSpan={4}><strong>[[rule_providers]]</strong></td></tr>
+                <tr><td><code>name</code></td><td>String</td><td>&mdash;</td><td>Rule provider name</td></tr>
+                <tr><td><code>type</code></td><td>String</td><td>&mdash;</td><td>Type: domain, ipcidr, mixed</td></tr>
+                <tr><td><code>url</code></td><td>String</td><td>&mdash;</td><td>URL to fetch rules from</td></tr>
+                <tr><td><code>interval_hours</code></td><td>u64</td><td><code>24</code></td><td>Refresh interval in hours</td></tr>
+                <tr><td><code>action</code></td><td>String</td><td>&mdash;</td><td>Action for matched rules: proxy, direct, block</td></tr>
               </tbody>
             </table>
           </div>

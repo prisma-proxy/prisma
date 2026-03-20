@@ -59,7 +59,6 @@ const config: Config = {
           versions: {
             current: {label: 'v0.9.0', path: ''},
             '0.8.0': {label: 'v0.8.0', path: '0.8.0'},
-            legacy: {label: 'Legacy', path: 'legacy'},
           },
           async sidebarItemsGenerator({defaultSidebarItemsGenerator, ...args}) {
             const items = await defaultSidebarItemsGenerator(args);

@@ -66,6 +66,19 @@ padding_mode = "bucket"
 bucket_sizes = [512, 1024, 4096, 16384]
 ```
 
+## Runtime Configuration (v0.9.0)
+
+All traffic shaping parameters are hot-reloadable via the [Management API](/docs/features/management-api). Changes take effect immediately without restarting the server or disconnecting clients.
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"traffic_shaping": {"timing_jitter_ms": 50, "chaff_interval_ms": 250}}' \
+  http://127.0.0.1:9090/api/config
+```
+
+The [Console](/docs/features/console) provides a visual traffic shaping dashboard (Settings > Traffic & Performance) showing the current bucket size distribution chart and configuration cards.
+
 ## Performance Impact
 
 - Bucket padding: under 5% bandwidth overhead

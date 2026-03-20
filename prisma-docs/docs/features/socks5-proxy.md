@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # SOCKS5 Proxy
 
-Prisma implements a full RFC 1928 SOCKS5 proxy interface on the client side. Applications connect to the local SOCKS5 port, and traffic is transparently tunneled through the encrypted PrismaVeil connection to the server.
+Prisma implements a full RFC 1928 SOCKS5 proxy interface on the client side (v0.9.0). Applications connect to the local SOCKS5 port, and traffic is transparently tunneled through the encrypted PrismaVeil connection to the server.
 
 ## Supported features
 
@@ -12,6 +12,7 @@ Prisma implements a full RFC 1928 SOCKS5 proxy interface on the client side. App
 - **IPv6** address connections
 - **Domain name** resolution (resolved at the server side)
 - **CONNECT** command (TCP proxying)
+- **UDP ASSOCIATE** command (UDP proxying via [PrismaUDP](/docs/features/prismaudp)) — supports games, VoIP, and DNS relay
 - No authentication required on the local SOCKS5 interface (secured by local binding)
 
 ## Configuration

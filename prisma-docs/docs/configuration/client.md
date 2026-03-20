@@ -4,98 +4,259 @@ sidebar_position: 2
 
 # Client Configuration
 
-The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers — compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
+The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
-## Configuration reference
+:::info Version
+This page reflects Prisma **v0.9.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+:::
+
+## Top-level fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| `server_addr` | string | -- | Remote Prisma server address (e.g. `"1.2.3.4:8443"`) |
 | `socks5_listen_addr` | string | `"127.0.0.1:1080"` | Local SOCKS5 proxy bind address |
-| `http_listen_addr` | string? | — | Local HTTP CONNECT proxy bind address (optional) |
-| `server_addr` | string | — | Remote Prisma server address (e.g. `1.2.3.4:8443`) |
-| `identity.client_id` | string | — | Client UUID (must match server config) |
-| `identity.auth_secret` | string | — | 64 hex character shared secret (must match server config) |
-| `cipher_suite` | string | `"chacha20-poly1305"` | `chacha20-poly1305` / `aes-256-gcm` |
-| `transport` | string | `"quic"` | `quic` / `tcp` / `ws` / `grpc` / `xhttp` / `xporta` / `prisma-tls` / `shadowtls` / `ssh` / `wireguard` |
-| `skip_cert_verify` | bool | `false` | Skip TLS certificate verification |
+| `http_listen_addr` | string? | -- | Local HTTP CONNECT proxy bind address (optional, omit to disable) |
+| `pac_port` | u16? | `8070` | PAC (Proxy Auto-Configuration) server port |
+| `cipher_suite` | string | `"chacha20-poly1305"` | `"chacha20-poly1305"` / `"aes-256-gcm"` |
+| `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"shadowtls"` / `"ssh"` / `"wireguard"` |
+| `skip_cert_verify` | bool | `false` | Skip TLS certificate verification (dev only) |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
-| `tls_server_name` | string? | — | TLS SNI server name override (defaults to server_addr hostname) |
+| `tls_server_name` | string? | -- | TLS SNI server name override (defaults to `server_addr` hostname) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
-| `port_forwards[].name` | string | — | Human-readable label for this port forward |
-| `port_forwards[].local_addr` | string | — | Local service address (e.g. `127.0.0.1:3000`) |
-| `port_forwards[].remote_port` | u16 | — | Port to listen on at the server |
-| `logging.level` | string | `"info"` | `trace` / `debug` / `info` / `warn` / `error` |
-| `logging.format` | string | `"pretty"` | `pretty` / `json` |
-| `ws_url` | string? | — | WebSocket server URL (e.g. `wss://domain.com/ws-tunnel`) |
-| `ws_host` | string? | — | Override WebSocket `Host` header |
-| `ws_extra_headers` | \[\[k,v\]\] | `[]` | Extra WebSocket request headers |
-| `grpc_url` | string? | — | gRPC server URL |
-| `xhttp_mode` | string? | — | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
-| `xhttp_upload_url` | string? | — | XHTTP upload URL for packet-up/stream-up |
-| `xhttp_download_url` | string? | — | XHTTP download URL for packet-up |
-| `xhttp_stream_url` | string? | — | XHTTP stream URL for stream-one |
-| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | Extra XHTTP request headers |
-| `xporta.base_url` | string? | — | XPorta server base URL (e.g. `https://your-domain.com`) |
-| `xporta.session_path` | string | `"/api/auth"` | XPorta session initialization endpoint |
-| `xporta.data_paths` | string[] | `["/api/v1/data", ...]` | XPorta upload endpoint paths |
-| `xporta.poll_paths` | string[] | `["/api/v1/notifications", ...]` | XPorta long-poll download paths |
-| `xporta.encoding` | string | `"json"` | XPorta encoding: `"json"` / `"binary"` / `"auto"` |
-| `xporta.poll_concurrency` | u8 | `3` | Concurrent pending poll requests (1-8) |
-| `xporta.upload_concurrency` | u8 | `4` | Concurrent upload requests (1-8) |
-| `xporta.max_payload_size` | u32 | `65536` | Max payload bytes per request |
-| `xporta.poll_timeout_secs` | u16 | `55` | Long-poll timeout in seconds (10-90) |
-| `xporta.extra_headers` | \[\[k,v\]\] | `[]` | Extra XPorta request headers |
-| `xporta.cookie_name` | string | `"_sess"` | Session cookie name (must match server config) |
-| `xmux.max_connections_min` | u16 | `1` | Min connections in pool |
-| `xmux.max_connections_max` | u16 | `4` | Max connections in pool |
-| `xmux.max_concurrency_min` | u16 | `8` | Min concurrency per connection |
-| `xmux.max_concurrency_max` | u16 | `16` | Max concurrency per connection |
-| `xmux.max_lifetime_secs_min` | u64 | `300` | Min connection lifetime (seconds) |
-| `xmux.max_lifetime_secs_max` | u64 | `600` | Max connection lifetime (seconds) |
-| `xmux.max_requests_min` | u32 | `100` | Min requests before rotation |
-| `xmux.max_requests_max` | u32 | `200` | Max requests before rotation |
-| `user_agent` | string? | — | Override User-Agent header |
-| `referer` | string? | — | Override Referer header |
-| `congestion.mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` |
-| `congestion.target_bandwidth` | string? | — | Target bandwidth for brutal/adaptive (e.g., `"100mbps"`) |
-| `port_hopping.enabled` | bool | `false` | Enable QUIC port hopping |
-| `port_hopping.base_port` | u16 | `10000` | Start of port range |
-| `port_hopping.port_range` | u16 | `50000` | Number of ports in range |
-| `port_hopping.interval_secs` | u64 | `60` | Seconds between port hops |
-| `port_hopping.grace_period_secs` | u64 | `10` | Dual-port acceptance window |
-| `salamander_password` | string? | — | Salamander UDP obfuscation password (QUIC only) |
-| `udp_fec.enabled` | bool | `false` | Enable Forward Error Correction for UDP relay |
-| `udp_fec.data_shards` | usize | `10` | Original packets per FEC group |
-| `udp_fec.parity_shards` | usize | `3` | Parity packets per FEC group |
-| `dns.mode` | string | `"direct"` | DNS mode: `"smart"` / `"fake"` / `"tunnel"` / `"direct"` |
-| `dns.fake_ip_range` | string | `"198.18.0.0/15"` | CIDR range for fake DNS IPs |
-| `dns.upstream` | string | `"8.8.8.8:53"` | Upstream DNS server |
-| `dns.geosite_path` | string? | — | GeoSite database path for smart DNS mode |
-| `dns.dns_listen_addr` | string | `"127.0.0.1:53"` | Local DNS server listen address |
-| `routing.rules[].type` | string | — | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
-| `routing.rules[].value` | string | — | Match value (country code for `geoip`, e.g. `"cn"`, `"private"`) |
-| `routing.rules[].action` | string | `"proxy"` | Action: `"proxy"` / `"direct"` / `"block"` |
-| `routing.geoip_path` | string? | — | Path to v2fly geoip.dat file for GeoIP-based routing |
-| `tun.enabled` | bool | `false` | Enable TUN mode (system-wide proxy) |
-| `tun.device_name` | string | `"prisma-tun0"` | TUN device name |
-| `tun.mtu` | u16 | `1500` | TUN device MTU |
-| `tun.include_routes` | string[] | `["0.0.0.0/0"]` | Routes to capture in TUN mode |
-| `tun.exclude_routes` | string[] | `[]` | Routes to exclude (server IP auto-excluded) |
-| `tun.dns` | string | `"fake"` | TUN DNS mode: `"fake"` / `"tunnel"` |
-| `protocol_version` | string | `"v5"` | Protocol version (`v5` default, `v4` for backward compatibility) |
-| `fingerprint` | string | `"chrome"` | uTLS fingerprint: `chrome` / `firefox` / `safari` / `random` / `none` |
-| `quic_version` | string | `"auto"` | QUIC version: `v2` / `v1` / `auto` |
-| `transport_mode` | string | `"auto"` | Transport mode: `auto` or explicit name |
-| `fallback_order` | string[] | `["quic-v2", ...]` | Transport fallback order for auto mode |
-| `prisma_auth_secret` | string? | — | PrismaTLS auth secret (hex-encoded, must match server) |
-| `traffic_shaping.padding_mode` | string | `"none"` | `none` / `random` / `bucket` |
-| `traffic_shaping.bucket_sizes` | u16[] | `[128,256,...]` | Bucket sizes for bucket padding mode |
-| `traffic_shaping.timing_jitter_ms` | u32 | `0` | Max timing jitter (ms) on handshake frames |
-| `traffic_shaping.chaff_interval_ms` | u32 | `0` | Chaff injection interval (ms), 0=disabled |
-| `traffic_shaping.coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms) |
+| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 0.9.0) |
+| `fingerprint` | string | `"chrome"` | uTLS fingerprint: `"chrome"` / `"firefox"` / `"safari"` / `"random"` / `"none"` |
+| `quic_version` | string | `"auto"` | QUIC version: `"v2"` / `"v1"` / `"auto"` |
+| `transport_mode` | string | `"auto"` | Transport mode: `"auto"` or explicit name |
+| `fallback_order` | string[] | `["quic-v2", "prisma-tls", "ws-cdn", "xporta"]` | Transport fallback order for auto mode |
 | `sni_slicing` | bool | `false` | SNI slicing for QUIC (fragment ClientHello across CRYPTO frames) |
 | `entropy_camouflage` | bool | `false` | Entropy camouflage for Salamander/raw UDP |
 | `transport_only_cipher` | bool | `false` | Use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). Server must also allow it. |
+| `server_key_pin` | string? | -- | SHA-256 hash of server's ephemeral public key (hex). Provides end-to-end server authentication independent of TLS. |
+| `salamander_password` | string? | -- | Salamander UDP obfuscation password (QUIC only) |
+| `prisma_auth_secret` | string? | -- | PrismaTLS auth secret (hex-encoded, must match server) |
+| `user_agent` | string? | -- | Override User-Agent header |
+| `referer` | string? | -- | Override Referer header |
+| `mux_enabled` | bool | `false` | Enable XMUX stream multiplexing over transport connections |
+| `mux_max_streams` | u32 | `128` | Max concurrent streams per mux connection |
+| `mux_max_connections` | u16 | `4` | Max mux transport connections in pool |
+
+## `[identity]` -- Client credentials
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `client_id` | string | -- | Client UUID (must match server `authorized_clients[].id`) |
+| `auth_secret` | string | -- | 64 hex character shared secret (must match server) |
+
+## Transport-specific fields
+
+### WebSocket
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ws_url` | string? | -- | WebSocket server URL (e.g. `"wss://domain.com/ws-tunnel"`) |
+| `ws_host` | string? | -- | Override WebSocket `Host` header |
+| `ws_extra_headers` | \[\[k,v\]\] | `[]` | Extra WebSocket request headers |
+
+### gRPC
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `grpc_url` | string? | -- | gRPC server URL |
+
+### XHTTP
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `xhttp_mode` | string? | -- | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `xhttp_upload_url` | string? | -- | XHTTP upload URL for packet-up/stream-up |
+| `xhttp_download_url` | string? | -- | XHTTP download URL for packet-up |
+| `xhttp_stream_url` | string? | -- | XHTTP stream URL for stream-one |
+| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | Extra XHTTP request headers |
+
+### `[xporta]` -- XPorta transport
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `base_url` | string | -- | XPorta server base URL (e.g. `"https://your-domain.com"`) |
+| `session_path` | string | `"/api/auth"` | Session initialization endpoint |
+| `data_paths` | string[] | `["/api/v1/data", "/api/v1/sync", "/api/v1/update"]` | Upload endpoint paths |
+| `poll_paths` | string[] | `["/api/v1/notifications", "/api/v1/feed", "/api/v1/events"]` | Long-poll download paths |
+| `encoding` | string | `"json"` | Encoding: `"json"` / `"binary"` / `"auto"` |
+| `poll_concurrency` | u8 | `3` | Concurrent pending poll requests (1-8) |
+| `upload_concurrency` | u8 | `4` | Concurrent upload requests (1-8) |
+| `max_payload_size` | u32 | `65536` | Max payload bytes per request |
+| `poll_timeout_secs` | u16 | `55` | Long-poll timeout in seconds (10-90) |
+| `extra_headers` | \[\[k,v\]\] | `[]` | Extra XPorta request headers |
+| `cookie_name` | string | `"_sess"` | Session cookie name (must match server config) |
+
+### `[shadow_tls]` -- ShadowTLS v3 transport
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `server_addr` | string | -- | ShadowTLS server address (e.g., `"proxy.example.com:8444"`) |
+| `password` | string | -- | Pre-shared password (must match server) |
+| `sni` | string | -- | SNI for the cover server TLS handshake (e.g., `"www.microsoft.com"`) |
+
+### `[wireguard]` -- WireGuard transport
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `endpoint` | string | -- | Server WireGuard endpoint (e.g., `"1.2.3.4:51820"`) |
+| `keepalive_secs` | u64 | `25` | Keepalive interval in seconds |
+
+## `[xmux]` -- Connection pool
+
+Randomizes connection lifecycles to avoid fingerprinting. Used with XHTTP and WebSocket transports.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_connections_min` | u16 | `1` | Min connections in pool |
+| `max_connections_max` | u16 | `4` | Max connections in pool |
+| `max_concurrency_min` | u16 | `8` | Min concurrency per connection |
+| `max_concurrency_max` | u16 | `16` | Max concurrency per connection |
+| `max_lifetime_secs_min` | u64 | `300` | Min connection lifetime (seconds) |
+| `max_lifetime_secs_max` | u64 | `600` | Max connection lifetime (seconds) |
+| `max_requests_min` | u32 | `100` | Min requests before rotation |
+| `max_requests_max` | u32 | `200` | Max requests before rotation |
+
+## `[[port_forwards]]` -- Port forwarding
+
+Expose local services through the server's public port. Each entry is a `[[port_forwards]]` array item.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | -- | Human-readable label for this port forward |
+| `local_addr` | string | -- | Local service address (e.g. `"127.0.0.1:3000"`) |
+| `remote_port` | u16 | -- | Port to listen on at the server |
+| `protocol` | string | `"tcp"` | Protocol: `"tcp"` / `"udp"` |
+| `bind_addr` | string? | -- | Server bind address override (default: `0.0.0.0`) |
+| `max_connections` | u32? | -- | Max concurrent connections for this forward (0 = unlimited) |
+| `idle_timeout_secs` | u64? | `300` | Close idle connections after N seconds |
+| `connect_timeout_secs` | u64? | `10` | Timeout for connecting to local service |
+| `bandwidth_up` | string? | -- | Per-forward upload limit (e.g., `"10mbps"`) |
+| `bandwidth_down` | string? | -- | Per-forward download limit (e.g., `"10mbps"`) |
+| `allowed_ips` | string[] | `[]` | IP whitelist for server-side listener (empty = allow all) |
+| `enabled` | bool | `true` | Enable/disable individual forwards |
+| `retry_on_failure` | bool | `false` | Auto-retry if local connection fails |
+| `buffer_size` | usize? | `8192` | Custom buffer size in bytes |
+
+Example:
+
+```toml
+[[port_forwards]]
+name = "my-web-app"
+local_addr = "127.0.0.1:3000"
+remote_port = 10080
+protocol = "tcp"
+max_connections = 50
+idle_timeout_secs = 600
+connect_timeout_secs = 5
+bandwidth_up = "10mbps"
+bandwidth_down = "50mbps"
+allowed_ips = ["0.0.0.0/0"]
+enabled = true
+retry_on_failure = true
+buffer_size = 16384
+
+[[port_forwards]]
+name = "my-api"
+local_addr = "127.0.0.1:8000"
+remote_port = 10081
+```
+
+## `[dns]` -- DNS handling
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | string | `"direct"` | DNS mode: `"smart"` / `"fake"` / `"tunnel"` / `"direct"` |
+| `protocol` | string | `"udp"` | DNS protocol: `"udp"` / `"doh"` / `"dot"` |
+| `fake_ip_range` | string | `"198.18.0.0/15"` | CIDR range for fake DNS IPs |
+| `upstream` | string | `"8.8.8.8:53"` | Upstream DNS server (used with UDP protocol) |
+| `doh_url` | string | `"https://1.1.1.1/dns-query"` | DoH server URL (used when protocol is `"doh"`) |
+| `dns_listen_addr` | string | `"127.0.0.1:53"` | Local DNS server listen address |
+| `geosite_path` | string? | -- | GeoSite database path for smart DNS mode |
+
+## `[tun]` -- TUN mode (system-wide proxy)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable TUN mode |
+| `device_name` | string | `"prisma-tun0"` | TUN device name |
+| `mtu` | u16 | `1500` | TUN device MTU |
+| `include_routes` | string[] | `["0.0.0.0/0"]` | Routes to capture in TUN mode |
+| `exclude_routes` | string[] | `[]` | Routes to exclude (server IP auto-excluded) |
+| `dns` | string | `"fake"` | TUN DNS mode: `"fake"` / `"tunnel"` |
+
+:::warning
+TUN mode requires root/administrator privileges. On Linux, run with `sudo` or grant `CAP_NET_ADMIN` capability.
+:::
+
+## `[routing]` -- Rule-based routing
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `geoip_path` | string? | -- | Path to v2fly `geoip.dat` file for GeoIP-based routing |
+| `rules` | array | `[]` | Ordered list of routing rules |
+
+Each `[[routing.rules]]`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `type` | string | -- | Rule type: `"domain"` / `"domain-suffix"` / `"domain-keyword"` / `"ip-cidr"` / `"geoip"` / `"port"` / `"all"` |
+| `value` | string | -- | Match value (country code for `geoip`, e.g. `"cn"`, `"private"`) |
+| `action` | string | `"proxy"` | Action: `"proxy"` / `"direct"` / `"block"` |
+
+## `[traffic_shaping]` -- Anti-fingerprinting
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `padding_mode` | string | `"none"` | `"none"` / `"random"` / `"bucket"` |
+| `bucket_sizes` | u16[] | `[128,256,512,1024,2048,4096,8192,16384]` | Bucket sizes for bucket padding mode |
+| `timing_jitter_ms` | u32 | `0` | Max timing jitter (ms) on handshake frames |
+| `chaff_interval_ms` | u32 | `0` | Chaff injection interval (ms), 0 = disabled |
+| `coalesce_window_ms` | u32 | `0` | Frame coalescing window (ms), 0 = disabled |
+
+## `[congestion]` -- QUIC congestion control
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` |
+| `target_bandwidth` | string? | -- | Target bandwidth for brutal/adaptive (e.g., `"100mbps"`) |
+
+## `[port_hopping]` -- QUIC port hopping
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable QUIC port hopping |
+| `base_port` | u16 | `10000` | Start of port range |
+| `port_range` | u16 | `50000` | Number of ports in range |
+| `interval_secs` | u64 | `60` | Seconds between port hops |
+| `grace_period_secs` | u64 | `10` | Dual-port acceptance window |
+
+## `[udp_fec]` -- Forward Error Correction
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable FEC for UDP relay |
+| `data_shards` | usize | `10` | Original packets per FEC group |
+| `parity_shards` | usize | `3` | Parity packets per FEC group |
+
+## `[[subscriptions]]` -- Server list subscriptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `url` | string | -- | HTTP(S) URL to fetch the server list from |
+| `name` | string | -- | Human-readable name for this subscription |
+| `update_interval_secs` | u64 | `3600` | Auto-update interval in seconds (0 = disabled) |
+| `last_updated` | string? | -- | ISO 8601 timestamp of last successful update (auto-managed) |
+
+## `[logging]` -- Log output
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `level` | string | `"info"` | Log level: `trace` / `debug` / `info` / `warn` / `error` |
+| `format` | string | `"pretty"` | Log format: `pretty` / `json` |
 
 ## Full example
 
@@ -104,13 +265,11 @@ socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"  # optional, remove to disable HTTP proxy
 server_addr = "127.0.0.1:8443"
 cipher_suite = "chacha20-poly1305"   # or "aes-256-gcm"
-transport = "quic"                   # or "tcp"
+transport = "quic"                   # quic | tcp | ws | grpc | xhttp | xporta | ...
 skip_cert_verify = true              # set true for self-signed certs in dev
-
-# v5 features (v4 backward compatible)
-protocol_version = "v5"
-fingerprint = "chrome"        # uTLS fingerprint for ClientHello mimicry
-quic_version = "auto"         # "v2", "v1", or "auto"
+fingerprint = "chrome"               # uTLS fingerprint for ClientHello mimicry
+quic_version = "auto"                # "v2", "v1", or "auto"
+# server_key_pin = "hex-sha256"      # Pin server public key for CDN scenarios
 # prisma_auth_secret = "hex-encoded-32-bytes"   # For PrismaTLS transport
 
 # Must match a key generated with: prisma gen-key
@@ -118,16 +277,25 @@ quic_version = "auto"         # "v2", "v1", or "auto"
 client_id = "00000000-0000-0000-0000-000000000001"
 auth_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-# Port forwarding (reverse proxy) — expose local services through the server
+# Port forwarding (reverse proxy) -- expose local services through the server
 [[port_forwards]]
 name = "my-web-app"
 local_addr = "127.0.0.1:3000"
 remote_port = 10080
+protocol = "tcp"
+enabled = true
+retry_on_failure = true
 
 [[port_forwards]]
 name = "my-api"
 local_addr = "127.0.0.1:8000"
 remote_port = 10081
+
+# Server list subscriptions
+# [[subscriptions]]
+# url = "https://example.com/prisma-servers.json"
+# name = "my-provider"
+# update_interval_secs = 3600
 
 [logging]
 level = "info"
@@ -154,6 +322,8 @@ The client config is validated at startup. The following rules are enforced:
 - XPorta: `encoding` must be one of: `json`, `binary`, `auto`
 - XPorta: `poll_concurrency` must be 1-8, `upload_concurrency` must be 1-8
 - XPorta: `poll_timeout_secs` must be 10-90
+- `transport = "shadowtls"` requires `shadow_tls.server_addr`, `shadow_tls.password`, and `shadow_tls.sni`
+- `transport = "wireguard"` requires `wireguard.endpoint`
 - `logging.level` must be one of: `trace`, `debug`, `info`, `warn`, `error`
 - `logging.format` must be one of: `pretty`, `json`
 
@@ -188,7 +358,41 @@ prisma_auth_secret = "hex-encoded-32-bytes"
 
 See [PrismaTLS](/docs/features/prisma-tls) for detailed configuration.
 
-### XPorta (maximum stealth — CDN)
+### ShadowTLS v3
+
+Uses a real TLS handshake with a legitimate cover server. After handshake, proxy data is sent as authenticated TLS application data frames.
+
+```toml
+transport = "shadowtls"
+
+[shadow_tls]
+server_addr = "proxy.example.com:8444"
+password = "your-shared-password"
+sni = "www.microsoft.com"
+```
+
+### SSH transport
+
+Disguises traffic as SSH sessions.
+
+```toml
+transport = "ssh"
+server_addr = "proxy.example.com:2222"
+```
+
+### WireGuard transport
+
+Uses WireGuard-compatible UDP framing.
+
+```toml
+transport = "wireguard"
+
+[wireguard]
+endpoint = "proxy.example.com:51820"
+keepalive_secs = 25
+```
+
+### XPorta (maximum stealth -- CDN)
 
 Next-generation CDN transport that fragments proxy data into many short-lived REST API-style requests. Traffic is indistinguishable from a normal SPA making API calls.
 
@@ -211,7 +415,7 @@ The HTTP CONNECT proxy is optional. To disable it, simply omit the `http_listen_
 
 ```toml
 socks5_listen_addr = "127.0.0.1:1080"
-# http_listen_addr is not set — HTTP proxy disabled
+# http_listen_addr is not set -- HTTP proxy disabled
 server_addr = "1.2.3.4:8443"
 ```
 

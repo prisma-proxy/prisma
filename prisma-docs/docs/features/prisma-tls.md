@@ -4,7 +4,7 @@ sidebar_position: 9
 
 # PrismaTLS
 
-PrismaTLS is PrismaVeil's active probing resistance system, replacing the REALITY protocol. It makes the server indistinguishable from a real website to active probers while authenticating legitimate PrismaVeil clients through a hidden beacon in the TLS handshake.
+PrismaTLS is PrismaVeil's active probing resistance system (v0.9.0), replacing the REALITY protocol. It makes the server indistinguishable from a real website to active probers while authenticating legitimate PrismaVeil clients through a hidden beacon in the TLS handshake.
 
 ## Why PrismaTLS replaces REALITY
 
@@ -113,3 +113,11 @@ PrismaTLS and CDN transports serve different threat models:
 | **XPorta over CDN** | Max stealth, server IP hidden | Yes |
 
 CDN modes don't use PrismaTLS because Cloudflare terminates TLS at the edge — the padding extension is invisible to the server.
+
+## Monitoring
+
+PrismaTLS status and mask server health are visible in the [Console](/docs/features/console) under Settings > TLS & Security, and via the Management API:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/config/tls
+# {"prisma_tls_enabled":true,"mask_servers":[{"addr":"www.microsoft.com:443","healthy":true,"rtt_ms":12}],"auth_rotation_hours":1}
