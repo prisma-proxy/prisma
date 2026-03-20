@@ -431,7 +431,7 @@ pub async fn relay_transport_only(
 
 #[cfg(target_os = "linux")]
 mod splice_relay {
-    use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+    use std::os::fd::{BorrowedFd, OwnedFd};
     use std::os::unix::io::AsRawFd;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
@@ -462,7 +462,7 @@ mod splice_relay {
 
         loop {
             // Move data from source socket into the pipe
-            let n = match splice(&src, None, pipe_write, None, PIPE_SIZE, src_flags) {
+            let n = match splice(src, None, pipe_write, None, PIPE_SIZE, src_flags) {
                 Ok(0) => {
                     debug!("splice: source EOF");
                     return Ok(());
@@ -487,7 +487,7 @@ mod splice_relay {
                 match splice(
                     pipe_read,
                     None,
-                    &dst,
+                    dst,
                     None,
                     remaining,
                     SpliceFFlags::SPLICE_F_MOVE,
