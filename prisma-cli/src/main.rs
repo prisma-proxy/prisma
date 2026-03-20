@@ -110,9 +110,9 @@ enum Commands {
         #[command(subcommand)]
         action: Option<ConsoleAction>,
 
-        /// Management API URL to proxy requests to
-        #[arg(long, default_value = "http://127.0.0.1:9090")]
-        mgmt_url: String,
+        /// Management API URL to proxy requests to (auto-detected from server.toml if omitted)
+        #[arg(long)]
+        mgmt_url: Option<String>,
         /// Auth token for management API
         #[arg(long)]
         token: Option<String>,
@@ -701,6 +701,13 @@ async fn main() -> anyhow::Result<()> {
                                         }
                                     })
                             });
+                        // Auto-detect mgmt URL from server.toml if not provided
+                        let mgmt_url = mgmt_url.unwrap_or_else(|| {
+                            api_client::ApiClient::resolve(None, None, false)
+                                .ok()
+                                .map(|c| c.base_url().to_string())
+                                .unwrap_or_else(|| "http://127.0.0.1:9090".to_string())
+                        });
                         if global_verbose {
                             eprintln!(
                                 "[verbose] Starting console on {}:{}, proxying to {}",

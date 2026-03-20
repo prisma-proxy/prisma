@@ -173,6 +173,18 @@ pub async fn run(config_path: &str) -> Result<()> {
         info!("SIGHUP config reload handler registered");
     }
 
+    // Start config file watcher for automatic hot-reload
+    if config.config_watch {
+        let watch_ctx = ctx.clone();
+        let watch_path = config_path.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = run_config_watcher(&watch_path, &watch_ctx).await {
+                tracing::error!(error = %e, "Config file watcher stopped");
+            }
+        });
+        info!(path = %config_path, "Config file watcher started");
+    }
+
     // Start management API if enabled
     if config.management_api.enabled {
         let mut mgmt_config = config.management_api.clone();
@@ -380,4 +392,84 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
     };
     eprintln!("  TLS: {}  Camouflage: {}", tls_status, camo_status);
     eprintln!();
+}
+
+/// Watch the config file for changes and trigger hot-reload automatically.
+///
+/// Uses `notify` crate for cross-platform filesystem events. Debounces rapid
+/// changes (e.g., editor save) with a 2-second cooldown.
+async fn run_config_watcher(
+    config_path: &str,
+    ctx: &crate::state::ServerContext,
+) -> anyhow::Result<()> {
+    use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+    use std::time::Duration;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
+
+    let path = std::path::PathBuf::from(config_path);
+    let watch_path = path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .to_path_buf();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |result: Result<Event, notify::Error>| {
+            if let Ok(event) = result {
+                match event.kind {
+                    EventKind::Modify(_) | EventKind::Create(_) => {
+                        // Only trigger for our specific config file
+                        let is_our_file = event.paths.iter().any(|p| {
+                            p.file_name()
+                                .map(|n| n == file_name)
+                                .unwrap_or(false)
+                        });
+                        if is_our_file {
+                            let _ = tx.try_send(());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        },
+        notify::Config::default().with_poll_interval(Duration::from_secs(2)),
+    )?;
+
+    watcher.watch(&watch_path, RecursiveMode::NonRecursive)?;
+
+    info!(
+        path = %config_path,
+        "Watching config file for changes (2s debounce)"
+    );
+
+    // Keep watcher alive and process events with debouncing
+    let mut last_reload = tokio::time::Instant::now();
+    let debounce = Duration::from_secs(2);
+
+    loop {
+        rx.recv().await;
+
+        // Debounce: skip if we reloaded recently
+        if last_reload.elapsed() < debounce {
+            // Drain any queued events
+            while rx.try_recv().is_ok() {}
+            continue;
+        }
+
+        // Small delay to let the editor finish writing
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Drain any events that arrived during the delay
+        while rx.try_recv().is_ok() {}
+
+        info!("Config file changed, triggering hot-reload");
+        match reload::reload_config(config_path, ctx).await {
+            Ok(summary) => info!(summary = %summary, "Auto-reload complete"),
+            Err(e) => tracing::error!(error = %e, "Auto-reload failed"),
+        }
+        last_reload = tokio::time::Instant::now();
+    }
 }

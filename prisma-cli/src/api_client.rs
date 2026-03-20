@@ -130,6 +130,10 @@ impl ApiClient {
         &self.token
     }
 
+    pub fn base_url(&self) -> &str {
+        &self.url
+    }
+
     pub fn ws_url(&self, path: &str) -> String {
         let base = self
             .url

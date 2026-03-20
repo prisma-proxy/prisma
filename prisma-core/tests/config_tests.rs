@@ -76,3 +76,23 @@ fn test_server_config_defaults() {
     // connection_timeout is explicitly set to 60 in the fixture
     assert_eq!(config.performance.connection_timeout_secs, 60);
 }
+
+#[test]
+fn test_mgmt_listen_addr_from_toml() {
+    let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
+    assert_eq!(config.management_api.enabled, true);
+    assert_eq!(
+        config.management_api.listen_addr, "0.0.0.0:9090",
+        "listen_addr should preserve 0.0.0.0:9090 from TOML, got: {}",
+        config.management_api.listen_addr
+    );
+    assert_eq!(config.management_api.auth_token, "test-mgmt-token");
+}
+
+#[test]
+fn test_mgmt_listen_addr_default_when_omitted() {
+    // When [management_api] is not in the TOML, default should be 127.0.0.1:9090
+    let config = load_server_config(&fixture("valid_server")).unwrap();
+    assert_eq!(config.management_api.listen_addr, "127.0.0.1:9090");
+    assert_eq!(config.management_api.enabled, false);
+}
