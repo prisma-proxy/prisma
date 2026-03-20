@@ -207,7 +207,7 @@ export function registerEvolutionTools(
 
       const lines = [
         `# Competitive Matrix: Prisma vs xray-core vs sing-box\n`,
-        `> Version: Prisma 1.4.0 | xray-core 1.8.x | sing-box 1.9.x\n`,
+        `> Version: Prisma 1.5.0 | xray-core 1.8.x | sing-box 1.9.x\n`,
       ];
 
       for (const cat of categories) {

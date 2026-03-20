@@ -34,6 +34,7 @@ fn build_kdf_context(
 /// Derive a key for encrypting/decrypting session tickets.
 ///
 /// The ticket key is derived from a server-side secret using BLAKE3 KDF.
+#[allow(dead_code)]
 pub fn derive_ticket_key(server_secret: &[u8; 32]) -> [u8; 32] {
     blake3_derive("prisma-v3-session-ticket", server_secret)
 }
@@ -85,7 +86,7 @@ pub fn derive_v5_header_key(session_key: &[u8; 32]) -> [u8; 32] {
 /// This token allows a client to resume a session on a new transport
 /// connection without repeating the full handshake, provided the session
 /// is still valid.
-pub fn derive_v5_migration_token(session_key: &[u8; 32], session_id: &[u8; 16]) -> [u8; 32] {
+pub(crate) fn derive_v5_migration_token(session_key: &[u8; 32], session_id: &[u8; 16]) -> [u8; 32] {
     let mut context = Vec::with_capacity(48);
     context.extend_from_slice(session_key);
     context.extend_from_slice(session_id);

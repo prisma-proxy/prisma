@@ -388,6 +388,8 @@ const CLIENT_OPTIONAL_FIELDS = [
   "subscriptions",
   "shadow_tls",
   "wireguard",
+  "connection_pool",
+  "fallback",
 ];
 
 function validateServerConfig(

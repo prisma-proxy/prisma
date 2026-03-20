@@ -5,7 +5,7 @@ use crate::types::{PaddingRange, MAX_PADDING_SIZE};
 /// Generate random padding of random length up to `max_size`.
 /// Format: [padding_len:2][random_bytes:padding_len]
 /// The first 2 bytes encode the length so the receiver can strip it.
-pub(crate) fn generate_padding(max_size: usize) -> Vec<u8> {
+pub fn generate_padding(max_size: usize) -> Vec<u8> {
     let max = max_size.min(MAX_PADDING_SIZE);
     if max < 3 {
         return vec![0, 0]; // No room for padding data
@@ -22,7 +22,7 @@ pub(crate) fn generate_padding(max_size: usize) -> Vec<u8> {
 /// Returns zero bytes of the specified length (no length header).
 /// Zero-fill is used instead of random bytes because the padding is encrypted
 /// anyway, so random provides no extra security benefit.
-pub(crate) fn generate_frame_padding(range: &PaddingRange) -> Vec<u8> {
+pub fn generate_frame_padding(range: &PaddingRange) -> Vec<u8> {
     let len = range.random_in_range();
     if len == 0 {
         return Vec::new();

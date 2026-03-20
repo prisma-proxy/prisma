@@ -139,6 +139,21 @@ pub struct ClientConfig {
     /// Client-side fallback configuration.
     #[serde(default)]
     pub fallback: ClientFallbackConfig,
+    /// Connection pool configuration. When enabled, transport connections
+    /// are reused across SOCKS5/HTTP requests with randomized lifecycles.
+    #[serde(default)]
+    pub connection_pool: ConnectionPoolClientConfig,
+}
+
+/// Connection pool configuration for the client.
+///
+/// When `enabled = true`, transport connections are pooled and reused.
+/// Default is `false` for backward compatibility.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConnectionPoolClientConfig {
+    /// Whether to enable connection pooling.
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Client-side fallback configuration.

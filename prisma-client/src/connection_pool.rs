@@ -15,19 +15,10 @@ use prisma_core::types::ProxyDestination;
 
 /// Whether the connection pool feature is enabled via config.
 /// Default is `false` for backward compatibility.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ConnectionPoolConfig {
     pub enabled: bool,
     pub xmux: XmuxConfig,
-}
-
-impl Default for ConnectionPoolConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            xmux: XmuxConfig::default(),
-        }
-    }
 }
 
 /// Pool-level statistics for monitoring.

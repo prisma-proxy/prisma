@@ -194,7 +194,9 @@ fn base64_encode(data: &[u8]) -> String {
     let mut buf = Vec::with_capacity(data.len() * 4 / 3 + 4);
     {
         let mut encoder = Base64Encoder::new(&mut buf);
-        encoder.write_all(data).unwrap();
+        encoder
+            .write_all(data)
+            .expect("writing to Vec<u8> cannot fail");
         encoder.finish();
     }
     // Safety: base64 produces ASCII

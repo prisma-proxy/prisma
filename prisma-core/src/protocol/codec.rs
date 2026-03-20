@@ -225,7 +225,8 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
 }
 
 /// Encode PrismaClientResume to bytes (0-RTT).
-pub fn encode_client_resume(msg: &PrismaClientResume) -> Vec<u8> {
+#[allow(dead_code)]
+pub(crate) fn encode_client_resume(msg: &PrismaClientResume) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         1 + 1 + 32 + 2 + msg.session_ticket.len() + msg.encrypted_0rtt_data.len(),
     );
@@ -239,7 +240,8 @@ pub fn encode_client_resume(msg: &PrismaClientResume) -> Vec<u8> {
 }
 
 /// Decode PrismaClientResume from bytes (0-RTT).
-pub fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolError> {
+#[allow(dead_code)]
+pub(crate) fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolError> {
     // Minimum: 1+1+32+2 = 36
     if data.len() < 36 {
         return Err(ProtocolError::InvalidFrame(
@@ -269,7 +271,7 @@ pub fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolE
 }
 
 /// Encode SessionTicket to plaintext bytes (server encrypts before sending).
-pub fn encode_session_ticket(ticket: &SessionTicket) -> Vec<u8> {
+pub(crate) fn encode_session_ticket(ticket: &SessionTicket) -> Vec<u8> {
     let mut buf = Vec::with_capacity(16 + 32 + 1 + 8 + 2 + 2);
     buf.extend_from_slice(ticket.client_id.0.as_bytes());
     buf.extend_from_slice(&ticket.session_key);
@@ -281,7 +283,8 @@ pub fn encode_session_ticket(ticket: &SessionTicket) -> Vec<u8> {
 }
 
 /// Decode SessionTicket from plaintext bytes.
-pub fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError> {
+#[allow(dead_code)]
+pub(crate) fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError> {
     // 16+32+1+8+2+2 = 61
     if data.len() < 61 {
         return Err(ProtocolError::InvalidFrame(
@@ -359,7 +362,11 @@ pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
     }
     let cmd = data[0];
     let flags = u16::from_le_bytes([data[1], data[2]]);
-    let stream_id = u32::from_be_bytes(data[3..7].try_into().unwrap());
+    let stream_id = u32::from_be_bytes(
+        data[3..7]
+            .try_into()
+            .expect("slice is exactly 4 bytes after length check"),
+    );
 
     let payload = if flags & FLAG_PADDED != 0 {
         // Padded format: [payload_len:2][payload:var][padding:var]
@@ -556,7 +563,9 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
                 return Err(ProtocolError::InvalidFrame("Ping payload too short".into()));
             }
             Ok(Command::Ping(u32::from_be_bytes(
-                payload[..4].try_into().unwrap(),
+                payload[..4]
+                    .try_into()
+                    .expect("slice is exactly 4 bytes after length check"),
             )))
         }
         CMD_PONG => {
@@ -564,7 +573,9 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
                 return Err(ProtocolError::InvalidFrame("Pong payload too short".into()));
             }
             Ok(Command::Pong(u32::from_be_bytes(
-                payload[..4].try_into().unwrap(),
+                payload[..4]
+                    .try_into()
+                    .expect("slice is exactly 4 bytes after length check"),
             )))
         }
         CMD_REGISTER_FORWARD => {
@@ -644,7 +655,11 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
                             "RegisterForward max_connections truncated".into(),
                         ));
                     }
-                    let mc = u32::from_be_bytes(payload[cursor..cursor + 4].try_into().unwrap());
+                    let mc = u32::from_be_bytes(
+                        payload[cursor..cursor + 4]
+                            .try_into()
+                            .expect("4 bytes after len check"),
+                    );
                     cursor += 4;
                     Some(mc)
                 } else {
@@ -766,7 +781,8 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             if payload.len() < 8 {
                 return Err(ProtocolError::InvalidFrame("UdpData too short".into()));
             }
-            let assoc_id = u32::from_be_bytes(payload[..4].try_into().unwrap());
+            let assoc_id =
+                u32::from_be_bytes(payload[..4].try_into().expect("4 bytes after len check"));
             let frag = payload[4];
             let addr_type = payload[5];
             // Parse variable-length address based on type
@@ -959,7 +975,7 @@ fn decode_proxy_destination(data: &[u8]) -> Result<ProxyDestination, ProtocolErr
                 // 1 + 16 + 2
                 return Err(ProtocolError::InvalidFrame("IPv6 dest too short".into()));
             }
-            let octets: [u8; 16] = data[1..17].try_into().unwrap();
+            let octets: [u8; 16] = data[1..17].try_into().expect("16 bytes after len check");
             let addr = Ipv6Addr::from(octets);
             let port = u16::from_be_bytes([data[17], data[18]]);
             Ok(ProxyDestination {
@@ -1047,7 +1063,7 @@ pub(crate) fn decrypt_frame_aad(
 ///
 /// Returns an empty Vec when no header_key is provided.
 #[inline]
-pub fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Vec<u8> {
+pub(crate) fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Vec<u8> {
     match header_key {
         Some(key) => {
             let hash = blake3::keyed_hash(key, nonce);

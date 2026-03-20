@@ -5,7 +5,7 @@ slug: /introduction
 
 # 简介
 
-Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、九种传输方式、多协议入站支持（VMess/VLESS/Shadowsocks/Trojan）和高级抗审查特性。**1.4.0** 版本新增了 v5 AAD 中继激活、Shadowsocks 加密规范合规、VMess 时序加固、多协议兼容、客户端权限、传输回退、守护进程模式、订阅管理、热重载配置、缓冲池等生产级特性。
+Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、九种传输方式、多协议入站支持（VMess/VLESS/Shadowsocks/Trojan）和高级抗审查特性。**1.5.0** 版本新增了连接池、密码套件自动选择、API 表面缩减、v5 AAD 中继激活、多协议兼容、客户端权限、传输回退、守护进程模式、订阅管理、热重载配置、缓冲池等生产级特性。
 
 ## 功能特性
 
@@ -142,7 +142,14 @@ graph LR
     C --> D[ServerState]
 ```
 
-## 1.4.0 新特性
+## 1.5.0 新特性
+
+- **连接池** — 通过 `connection_pool.enabled = true` 启用传输连接复用
+- **密码套件自动选择** — `cipher_suite = "auto"` 在 AES-NI/NEON 硬件上选择 AES-256-GCM，否则选择 ChaCha20-Poly1305
+- **API 表面缩减** — 通过 `pub(crate)` 隐藏 prisma-core 内部函数
+- **消除 unwrap** — 将 codec、handshake、xporta 热路径中的所有 `unwrap()` 替换为 `expect()` + 原因说明
+
+### 1.4.0
 
 - **v5 AAD 中继激活** — 头部认证加密已在所有中继热路径中激活（1.3.0 中为死代码）
 - **Shadowsocks 加密规范合规** — EVP_BytesToKey 使用 MD5，子密钥派生使用 HKDF-SHA1，符合标准规范

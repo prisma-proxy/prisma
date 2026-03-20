@@ -179,7 +179,7 @@ flowchart TD
 3. **Server** evaluates its routing rules on the incoming proxy request
 4. If the server allows it, the outbound connection to the destination is established
 
-## Proxy Groups (v1.4.0)
+## Proxy Groups (v1.5.0)
 
 Proxy groups allow routing rules to target a **group of servers** instead of a single action. This enables advanced load balancing, automatic failover, and latency-based server selection — similar to Clash/Surge proxy group functionality.
 
@@ -292,7 +292,7 @@ action = "direct"
 
 ---
 
-## ACL — Per-Client Access Control (v1.4.0)
+## ACL — Per-Client Access Control (v1.5.0)
 
 ACL rules restrict which destinations specific clients can access. They are evaluated **per-client** and take precedence over global routing rules. ACLs are managed via the [Management API](/docs/features/management-api) (`/api/acls` endpoints) or the Console.
 

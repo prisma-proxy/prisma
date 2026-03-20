@@ -71,7 +71,7 @@ This guide assumes **zero** prior knowledge about networking, servers, or the co
 
 ## Prisma at a glance
 
-Prisma (v1.4.0) is a next-generation encrypted proxy built in Rust. It creates an encrypted tunnel between your device and a server you control, making your internet traffic private and resistant to detection.
+Prisma (v1.5.0) is a next-generation encrypted proxy built in Rust. It creates an encrypted tunnel between your device and a server you control, making your internet traffic private and resistant to detection.
 
 ```mermaid
 graph LR

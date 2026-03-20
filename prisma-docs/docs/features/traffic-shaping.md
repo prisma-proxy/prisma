@@ -66,7 +66,7 @@ padding_mode = "bucket"
 bucket_sizes = [512, 1024, 4096, 16384]
 ```
 
-## Runtime Configuration (v1.4.0)
+## Runtime Configuration (v1.5.0)
 
 All traffic shaping parameters are hot-reloadable via the [Management API](/docs/features/management-api). Changes take effect immediately without restarting the server or disconnecting clients.
 

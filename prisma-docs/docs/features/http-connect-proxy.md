@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # HTTP CONNECT Proxy
 
-Prisma supports an optional HTTP CONNECT proxy interface on the client side (v1.4.0). This allows HTTP-aware applications and browsers to tunnel HTTPS traffic through the encrypted PrismaVeil connection.
+Prisma supports an optional HTTP CONNECT proxy interface on the client side (v1.5.0). This allows HTTP-aware applications and browsers to tunnel HTTPS traffic through the encrypted PrismaVeil connection.
 
 ## How it works
 

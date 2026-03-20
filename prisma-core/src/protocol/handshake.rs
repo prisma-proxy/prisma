@@ -294,7 +294,10 @@ impl PrismaHandshakeServer {
             && client_init.pq_kem_encap_key.is_some();
 
         let (shared_secret, pq_kem_ciphertext) = if pq_kem_negotiated {
-            let ek_bytes = client_init.pq_kem_encap_key.as_ref().unwrap();
+            let ek_bytes = client_init
+                .pq_kem_encap_key
+                .as_ref()
+                .expect("PQ KEM key present: checked is_some() in pq_kem_negotiated");
             match pq_kem::mlkem_encapsulate(ek_bytes) {
                 Some((ct, mlkem_shared)) => {
                     let combined = pq_kem::hybrid_combine(&x25519_shared, &mlkem_shared);

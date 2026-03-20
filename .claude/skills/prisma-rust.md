@@ -15,7 +15,7 @@ globs:
 
 ## Architecture Overview
 
-Prisma is a high-performance encrypted proxy built in Rust. The workspace (v1.4.0, edition 2021) contains 6 crates:
+Prisma is a high-performance encrypted proxy built in Rust. The workspace (v1.5.0, edition 2021) contains 6 crates:
 
 ```
 prisma-cli ──► prisma-server ──► prisma-core

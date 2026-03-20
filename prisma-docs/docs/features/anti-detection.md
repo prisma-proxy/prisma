@@ -209,7 +209,7 @@ Supported on all major platforms:
 
 ## Multi-Transport
 
-As of v1.4.0, Prisma supports **9 distinct transport families** (12 configurations including variants). Different transports have different detectability profiles:
+As of v1.5.0, Prisma supports **9 distinct transport families** (12 configurations including variants). Different transports have different detectability profiles:
 
 | Transport | DPI Resistance | CDN Compatible | UDP Support |
 |-----------|---------------|----------------|-------------|
