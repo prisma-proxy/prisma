@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # XHTTP Transport
 
-XHTTP is an HTTP-native transport mode inspired by Xray-core's XHTTP protocol (v1.3.0). It tunnels PrismaVeil frames inside normal-looking HTTP traffic, making connections indistinguishable from regular web browsing to network observers and CDN infrastructure.
+XHTTP is an HTTP-native transport mode inspired by Xray-core's XHTTP protocol (v1.4.0). It tunnels PrismaVeil frames inside normal-looking HTTP traffic, making connections indistinguishable from regular web browsing to network observers and CDN infrastructure.
 
 ## Transport modes
 

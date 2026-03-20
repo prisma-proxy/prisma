@@ -81,17 +81,18 @@ pub struct VMessClient {
 
 /// Derive the VMess command key from a UUID.
 ///
+/// Per the VMess/v2fly spec:
 /// `cmd_key = MD5(uuid_bytes + b"c48619fe-8f02-49e0-b9e9-edf763e17e21")`
 pub fn derive_cmd_key(uuid: &Uuid) -> [u8; 16] {
-    use sha2::Digest;
+    use md5::Digest;
 
     let magic = b"c48619fe-8f02-49e0-b9e9-edf763e17e21";
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = md5::Md5::new();
     hasher.update(uuid.as_bytes());
     hasher.update(magic);
     let result = hasher.finalize();
     let mut key = [0u8; 16];
-    key.copy_from_slice(&result[..16]);
+    key.copy_from_slice(&result);
     key
 }
 

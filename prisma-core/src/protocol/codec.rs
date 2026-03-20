@@ -43,8 +43,10 @@ pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError
     let flags = data[1];
     let mut client_ephemeral_pub = [0u8; 32];
     client_ephemeral_pub.copy_from_slice(&data[2..34]);
-    let client_id = ClientId(uuid::Uuid::from_bytes(data[34..50].try_into().unwrap()));
-    let timestamp = u64::from_be_bytes(data[50..58].try_into().unwrap());
+    let client_id = ClientId(uuid::Uuid::from_bytes(
+        data[34..50].try_into().expect("slice is exactly 16 bytes"),
+    ));
+    let timestamp = u64::from_be_bytes(data[50..58].try_into().expect("slice is exactly 8 bytes"));
     let cipher_suite =
         CipherSuite::from_u8(data[58]).ok_or(ProtocolError::InvalidCommand(data[58]))?;
     let mut auth_token = [0u8; 32];
@@ -140,7 +142,8 @@ pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError
     let status = AcceptStatus::from_u8(data[0]).ok_or(ProtocolError::InvalidFrame(
         "Invalid PrismaServerInit status".into(),
     ))?;
-    let session_id = uuid::Uuid::from_bytes(data[1..17].try_into().unwrap());
+    let session_id =
+        uuid::Uuid::from_bytes(data[1..17].try_into().expect("slice is exactly 16 bytes"));
     let mut server_ephemeral_pub = [0u8; 32];
     server_ephemeral_pub.copy_from_slice(&data[17..49]);
     let mut challenge = [0u8; 32];
@@ -285,12 +288,14 @@ pub fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError
             "SessionTicket too short".into(),
         ));
     }
-    let client_id = ClientId(uuid::Uuid::from_bytes(data[..16].try_into().unwrap()));
+    let client_id = ClientId(uuid::Uuid::from_bytes(
+        data[..16].try_into().expect("slice is exactly 16 bytes"),
+    ));
     let mut session_key = [0u8; 32];
     session_key.copy_from_slice(&data[16..48]);
     let cipher_suite =
         CipherSuite::from_u8(data[48]).ok_or(ProtocolError::InvalidCommand(data[48]))?;
-    let issued_at = u64::from_be_bytes(data[49..57].try_into().unwrap());
+    let issued_at = u64::from_be_bytes(data[49..57].try_into().expect("slice is exactly 8 bytes"));
     let padding_min = u16::from_be_bytes([data[57], data[58]]);
     let padding_max = u16::from_be_bytes([data[59], data[60]]);
 
@@ -983,7 +988,7 @@ pub fn encrypt_frame(
 }
 
 /// Encrypt a plaintext data frame with explicit AAD (v5 header authentication).
-pub fn encrypt_frame_aad(
+pub(crate) fn encrypt_frame_aad(
     cipher: &dyn AeadCipher,
     nonce: &[u8; NONCE_SIZE],
     plaintext: &[u8],
@@ -1007,7 +1012,7 @@ pub fn decrypt_frame(
 }
 
 /// Decrypt a wire-format encrypted frame with explicit AAD (v5 header authentication).
-pub fn decrypt_frame_aad(
+pub(crate) fn decrypt_frame_aad(
     cipher: &dyn AeadCipher,
     wire: &[u8],
     aad: &[u8],

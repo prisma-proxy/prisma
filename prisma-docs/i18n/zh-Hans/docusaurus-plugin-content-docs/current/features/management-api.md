@@ -42,7 +42,7 @@ curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"1.3.0"}
+# {"status":"ok","uptime_secs":3600,"version":"1.4.0"}
 ```
 
 ### 连接

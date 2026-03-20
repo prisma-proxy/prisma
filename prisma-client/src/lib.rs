@@ -52,6 +52,44 @@ impl Drop for TaskGuard {
     }
 }
 
+/// Auto-select the best cipher suite based on hardware capabilities.
+///
+/// - On x86_64 with AES-NI: selects AES-256-GCM (hardware-accelerated)
+/// - On aarch64 with NEON (always available): selects AES-256-GCM
+/// - Otherwise: selects ChaCha20-Poly1305 (fast in software)
+///
+/// This is only used when `cipher_suite = "auto"` is set in config.
+fn auto_select_cipher() -> CipherSuite {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("aes") {
+            info!("Auto-selected AES-256-GCM (AES-NI detected)");
+            return CipherSuite::Aes256Gcm;
+        }
+    }
+
+    #[cfg(target_arch = "x86")]
+    {
+        if std::arch::is_x86_feature_detected!("aes") {
+            info!("Auto-selected AES-256-GCM (AES-NI detected)");
+            return CipherSuite::Aes256Gcm;
+        }
+    }
+
+    // On aarch64, NEON is always available and aes-gcm uses hardware AES
+    #[cfg(target_arch = "aarch64")]
+    {
+        info!("Auto-selected AES-256-GCM (AArch64 hardware AES)");
+        return CipherSuite::Aes256Gcm;
+    }
+
+    #[allow(unreachable_code)]
+    {
+        info!("Auto-selected ChaCha20-Poly1305 (no hardware AES)");
+        CipherSuite::ChaCha20Poly1305
+    }
+}
+
 /// Run client in standalone mode (CLI). Sets up its own logging.
 pub async fn run(config_path: &str) -> Result<()> {
     let config = load_client_config(config_path)
@@ -124,6 +162,7 @@ async fn run_inner(
 
     let cipher_suite = match config.cipher_suite.as_str() {
         "aes-256-gcm" => CipherSuite::Aes256Gcm,
+        "auto" => auto_select_cipher(),
         _ => CipherSuite::ChaCha20Poly1305,
     };
 

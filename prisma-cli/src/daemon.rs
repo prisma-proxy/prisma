@@ -164,6 +164,20 @@ pub fn daemonize(
     cmd.stdout(log);
     cmd.stderr(log_err);
 
+    // Redirect stdin from /dev/null so the child never blocks on terminal input
+    #[cfg(unix)]
+    {
+        let devnull = fs::OpenOptions::new()
+            .read(true)
+            .open("/dev/null")
+            .context("Failed to open /dev/null for stdin redirect")?;
+        cmd.stdin(devnull);
+    }
+    #[cfg(not(unix))]
+    {
+        cmd.stdin(std::process::Stdio::null());
+    }
+
     // Detach from terminal
     #[cfg(unix)]
     {
@@ -171,20 +185,33 @@ pub fn daemonize(
         unsafe {
             cmd.pre_exec(|| {
                 // Create new session (detach from terminal)
-                libc::setsid();
+                if libc::setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
                 Ok(())
             });
         }
     }
+
+    // Preserve the working directory so config-relative paths resolve correctly
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    cmd.current_dir(&cwd);
 
     let child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn daemon process for {}", service))?;
 
     let pid = child.id();
+
+    // Brief wait for the child to start and write PID file; avoids race
+    // where the user immediately runs `prisma <service> status` and finds
+    // no PID file.
+    std::thread::sleep(std::time::Duration::from_millis(150));
+
     println!("Prisma {} started (PID: {})", service, pid);
     println!("  PID file: {}", pid_path.display());
     println!("  Log file: {}", log_path.display());
+    println!("  Work dir: {}", cwd.display());
 
     Ok(())
 }

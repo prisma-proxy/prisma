@@ -152,11 +152,21 @@ export interface TlsInfoResponse {
 }
 
 export interface ForwardInfo {
-  session_id: string;
-  peer_addr: string;
-  connected_at: string;
+  remote_port: number;
+  name: string;
+  client_id: string | null;
+  bind_addr: string;
+  active_connections: number;
+  total_connections: number;
   bytes_up: number;
   bytes_down: number;
+  registered_at: string;
+  protocol: string;
+  allowed_ips: string[];
+}
+
+export interface ForwardListResponse {
+  forwards: ForwardInfo[];
 }
 
 export interface RoutingRule {

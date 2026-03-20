@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CopyButton } from "@/components/ui/copy-button";
+import { Badge } from "@/components/ui/badge";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { ForwardInfo } from "@/lib/types";
@@ -43,24 +43,33 @@ export function ForwardsTable({ forwards }: ForwardsTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("connections.peer")}</TableHead>
-                <TableHead>{t("connections.connected")}</TableHead>
+                <TableHead>{t("server.fwdPort")}</TableHead>
+                <TableHead>{t("common.name")}</TableHead>
+                <TableHead>{t("server.fwdProtocol")}</TableHead>
+                <TableHead>{t("server.fwdBindAddr")}</TableHead>
+                <TableHead>{t("server.fwdActiveConns")}</TableHead>
                 <TableHead>{t("connections.bytesUp")}</TableHead>
                 <TableHead>{t("connections.bytesDown")}</TableHead>
+                <TableHead>{t("server.fwdRegistered")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {forwards.map((fwd) => (
-                <TableRow key={fwd.session_id}>
+                <TableRow key={fwd.remote_port}>
                   <TableCell className="font-mono text-xs">
-                    <span className="flex items-center gap-1">
-                      {fwd.peer_addr}
-                      <CopyButton value={fwd.peer_addr} />
-                    </span>
+                    {fwd.remote_port}
                   </TableCell>
-                  <TableCell>{formatTimestamp(fwd.connected_at)}</TableCell>
+                  <TableCell>{fwd.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{fwd.protocol}</Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {fwd.bind_addr}
+                  </TableCell>
+                  <TableCell>{fwd.active_connections}</TableCell>
                   <TableCell>{formatBytes(fwd.bytes_up)}</TableCell>
                   <TableCell>{formatBytes(fwd.bytes_down)}</TableCell>
+                  <TableCell>{formatTimestamp(fwd.registered_at)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

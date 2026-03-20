@@ -583,9 +583,33 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // If we are a daemon child, write the PID file before doing anything else
+    // and install a cleanup handler so we remove it on normal exit or SIGTERM.
     if is_daemon_child {
         if let Some(ref pf) = daemon_pid_file {
             daemon::write_pid_file(Path::new(pf))?;
+
+            // Register cleanup on Ctrl-C / SIGTERM so PID file is removed on exit
+            let pid_file_cleanup = PathBuf::from(pf.as_str());
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Failed to listen for ctrl_c");
+                daemon::remove_pid_file(&pid_file_cleanup);
+                std::process::exit(0);
+            });
+
+            #[cfg(unix)]
+            {
+                let pid_file_sigterm = PathBuf::from(pf.as_str());
+                tokio::spawn(async move {
+                    let mut sigterm =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                            .expect("Failed to listen for SIGTERM");
+                    sigterm.recv().await;
+                    daemon::remove_pid_file(&pid_file_sigterm);
+                    std::process::exit(0);
+                });
+            }
         }
     }
 
@@ -1006,6 +1030,13 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
             }
+        }
+    }
+
+    // If we are a daemon child, clean up PID file on normal exit
+    if is_daemon_child {
+        if let Some(ref pf) = daemon_pid_file {
+            daemon::remove_pid_file(Path::new(pf));
         }
     }
 

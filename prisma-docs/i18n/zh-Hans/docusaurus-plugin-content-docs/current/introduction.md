@@ -5,13 +5,13 @@ slug: /introduction
 
 # 简介
 
-Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、九种传输方式和高级抗审查特性。**1.3.0** 版本移除了旧版协议 v4 支持，并新增了守护进程模式、订阅管理、热重载配置、缓冲池等生产级特性。
+Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、九种传输方式、多协议入站支持（VMess/VLESS/Shadowsocks/Trojan）和高级抗审查特性。**1.4.0** 版本新增了 v5 AAD 中继激活、Shadowsocks 加密规范合规、VMess 时序加固、多协议兼容、客户端权限、传输回退、守护进程模式、订阅管理、热重载配置、缓冲池等生产级特性。
 
 ## 功能特性
 
 ### 协议与密码学
 
-- **PrismaVeil v5 协议** — 1-RTT 握手 (Handshake)、0-RTT 会话恢复，X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only 加密模式，头部认证加密（AAD）、连接迁移、增强型 KDF。协议 v4 已在 1.3.0 中移除。
+- **PrismaVeil v5 协议** — 1-RTT 握手 (Handshake)、0-RTT 会话恢复，X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only 加密模式，头部认证加密（AAD）、连接迁移、增强型 KDF。协议 v4 已在 1.4.0 中移除。
 - **后量子混合密钥交换** — ML-KEM-768 (Kyber) 与 X25519 组合，实现抗量子计算机的前向安全密钥协商。双方均支持时自动协商。
 - **现代密码学** — X25519 ECDH、BLAKE3 KDF、ChaCha20-Poly1305 / AES-256-GCM AEAD
 - **抗重放保护** — 基于 1024 位滑动窗口 nonce 位图
@@ -142,9 +142,15 @@ graph LR
     C --> D[ServerState]
 ```
 
-## 1.3.0 新特性
+## 1.4.0 新特性
 
-- **协议 v4 已移除** — 仅支持 PrismaVeil v5
+- **v5 AAD 中继激活** — 头部认证加密已在所有中继热路径中激活（1.3.0 中为死代码）
+- **Shadowsocks 加密规范合规** — EVP_BytesToKey 使用 MD5，子密钥派生使用 HKDF-SHA1，符合标准规范
+- **VMess 时序加固** — `verify_auth_id` 常量时间完整遍历，防止时序侧信道泄漏
+- **服务端中继缓冲池** — 消除中继热路径上的每会话堆分配
+- **多协议入站** — 通过 `[[inbounds]]` 配置支持 VMess/VLESS/Shadowsocks/Trojan 兼容
+- **客户端权限** — 细粒度的按客户端访问控制和权限
+- **传输回退** — 有序传输回退，自动故障转移
 - **后量子混合密钥交换** — ML-KEM-768 + X25519
 - **守护进程模式** — 用于 server、client 和 console（`-d` 标志，配合 `stop`/`status` 子命令）
 - **订阅管理** CLI 命令（`add`、`update`、`list`、`test`）
@@ -152,8 +158,9 @@ graph LR
 - **延迟测试** — `prisma latency-test`
 - **热重载配置** — SIGHUP 和自动文件监控
 - **会话票据密钥轮换** — 自动密钥环，实现前向保密
-- **缓冲池** — 预分配中继缓冲区
+- **缓冲池** — 服务端和客户端预分配中继缓冲区
 - **优雅关闭** — SIGTERM 时排空连接
 - **按客户端指标**追踪
 - **配置文件监控** — 文件变更时自动重载
 - **`--verbose/-v` 全局标志** — 调试输出
+- **管理 API 新增** — `/api/inbounds`、`/api/clients/:id/permissions`、`/api/clients/:id/kick`、`/api/clients/:id/block`

@@ -13,13 +13,13 @@ import { SkeletonCard } from "@/components/ui/skeleton";
 export default function ServersPage() {
   const { t } = useI18n();
 
-  const { data: health, isLoading: healthLoading } = useQuery({
+  const { data: health, isLoading: healthLoading, error: healthError } = useQuery({
     queryKey: ["health"],
     queryFn: api.getHealth,
     refetchInterval: 10000,
   });
 
-  const { data: config, isLoading: configLoading } = useQuery({
+  const { data: config, isLoading: configLoading, error: configError } = useQuery({
     queryKey: ["config"],
     queryFn: api.getConfig,
   });
@@ -41,6 +41,20 @@ export default function ServersPage() {
         <SkeletonCard />
         <SkeletonCard className="h-48" />
         <SkeletonCard />
+      </div>
+    );
+  }
+
+  if (healthError || configError) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-center text-sm text-destructive">
+              {t("common.error")}: {(healthError ?? configError)?.message ?? t("common.noData")}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -80,6 +94,8 @@ export default function ServersPage() {
             {[
               { label: t("settings.listenAddr"),       value: config.listen_addr },
               { label: t("settings.quicListenAddr"),   value: config.quic_listen_addr },
+              { label: t("settings.protocolVersion"),  value: config.protocol_version },
+              { label: t("settings.dnsUpstream"),      value: config.dns_upstream },
               { label: t("settings.maxConnections"),   value: config.performance.max_connections },
               { label: t("settings.connectionTimeout"), value: `${config.performance.connection_timeout_secs}s` },
             ].map(({ label, value }) => (
@@ -108,6 +124,43 @@ export default function ServersPage() {
                 </p>
               </div>
             )}
+            {/* Camouflage */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{t("settings.camouflage")}:</span>
+              <Badge
+                className={
+                  config.camouflage.enabled
+                    ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                    : "bg-muted text-muted-foreground"
+                }
+              >
+                {config.camouflage.enabled ? t("common.enabled") : t("common.disabled")}
+              </Badge>
+            </div>
+            {config.camouflage.enabled && config.camouflage.fallback_addr && (
+              <div>
+                <p className="text-sm text-muted-foreground">{t("settings.fallbackAddr")}</p>
+                <p className="text-sm font-mono">{config.camouflage.fallback_addr}</p>
+              </div>
+            )}
+            {/* CDN */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{t("settings.cdnEnabled")}:</span>
+              <Badge
+                className={
+                  config.cdn.enabled
+                    ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                    : "bg-muted text-muted-foreground"
+                }
+              >
+                {config.cdn.enabled ? t("common.enabled") : t("common.disabled")}
+              </Badge>
+            </div>
+            {/* Routing rules */}
+            <div>
+              <p className="text-sm text-muted-foreground">{t("server.routingRulesCount")}</p>
+              <p className="text-sm font-mono">{config.routing_rules_count}</p>
+            </div>
             {[
               { label: t("settings.loggingLevel"),  value: config.logging_level },
               { label: t("settings.loggingFormat"), value: config.logging_format },

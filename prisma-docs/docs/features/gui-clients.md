@@ -208,7 +208,7 @@ The callback receives JSON events:
 {"type":"log","level":"INFO","target":"prisma_client","msg":"Connected to server"}
 
 // Update available
-{"type":"update_available","version":"1.3.0","changelog":"..."}
+{"type":"update_available","version":"1.4.0","changelog":"..."}
 ```
 
 ### Building prisma-ffi
@@ -229,9 +229,9 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
-## Mobile Support (v1.3.0)
+## Mobile Support (v1.4.0)
 
-As of v1.3.0, the Android and iOS clients have reached feature parity with the desktop client for core proxy functionality. Both mobile platforms now support subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n.
+As of v1.4.0, the Android and iOS clients have reached feature parity with the desktop client for core proxy functionality. Both mobile platforms now support subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n.
 
 ---
 

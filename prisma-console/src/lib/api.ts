@@ -71,7 +71,10 @@ export const api = {
       body: JSON.stringify(data),
     }),
   getTlsInfo: () => apiFetch<import("./types").TlsInfoResponse>("/api/config/tls"),
-  getForwards: () => apiFetch<import("./types").ForwardInfo[]>("/api/forwards"),
+  getForwards: () =>
+    apiFetch<import("./types").ForwardListResponse>("/api/forwards").then(
+      (res) => res.forwards
+    ),
   getRoutes: () => apiFetch<import("./types").RoutingRule[]>("/api/routes"),
   createRoute: (data: Omit<import("./types").RoutingRule, "id">) =>
     apiFetch<import("./types").RoutingRule>("/api/routes", {

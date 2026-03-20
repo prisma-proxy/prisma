@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, multi-protocol inbound support (VMess/VLESS/Shadowsocks/Trojan), and advanced anti-censorship features. Version **1.3.0** ships with multi-protocol compatibility, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, multi-protocol inbound support (VMess/VLESS/Shadowsocks/Trojan), and advanced anti-censorship features. Version **1.4.0** ships with v5 AAD relay activation, Shadowsocks crypto spec compliance, VMess timing hardening, multi-protocol compatibility, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
 
 ## Features
 
@@ -143,8 +143,12 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 1.3.0
+## What's New in 1.4.0
 
+- **v5 AAD relay activation** — header-authenticated encryption now active in all relay hot paths (was dead code in 1.3.0)
+- **Shadowsocks crypto spec compliance** — MD5 for EVP_BytesToKey, HKDF-SHA1 for subkey derivation per the standard spec
+- **VMess timing hardening** — `verify_auth_id` constant-time full iteration prevents timing side-channel leaks
+- **Server relay buffer pool** — eliminates per-session heap allocation on the relay hot path
 - **Multi-protocol inbounds** — VMess/VLESS/Shadowsocks/Trojan compatibility via `[[inbounds]]` config
 - **Client permissions** — fine-grained per-client access control and permissions
 - **Transport fallback** — ordered transport fallback with automatic failover
@@ -155,7 +159,7 @@ graph LR
 - **Latency testing** — `prisma latency-test`
 - **Hot config reload** — SIGHUP and automatic file watcher
 - **Session ticket key rotation** — automatic key ring with forward secrecy
-- **Buffer pool** — pre-allocated relay buffers
+- **Buffer pool** — pre-allocated relay buffers for both server and client
 - **Graceful shutdown** — drain connections on SIGTERM
 - **Per-client metrics** tracking
 - **Config file watcher** — automatic reload on file change

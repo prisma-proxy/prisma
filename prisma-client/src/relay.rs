@@ -150,6 +150,8 @@ where
 {
     let cipher: Arc<dyn prisma_core::crypto::aead::AeadCipher> = Arc::from(cipher);
     let padding_range = session_keys.padding_range;
+    // Extract v5 header key for AAD binding (None for v4 backward compat)
+    let header_key = session_keys.header_key;
 
     // Poll interval for checking smoltcp socket state
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
@@ -170,12 +172,13 @@ where
                 if n > 0 {
                     metrics.add_up(n as u64);
                     let nonce = session_keys.next_client_nonce();
-                    match encoder.seal_data_frame(
+                    match encoder.seal_data_frame_v5(
                         cipher.as_ref(),
                         &nonce,
                         n,
                         0,
                         &padding_range,
+                        header_key.as_ref(),
                     ) {
                         Ok(wire) => {
                             if tunnel_write.write_all(wire).await.is_err() { break; }
@@ -201,10 +204,11 @@ where
             } => {
                 match result {
                     Ok(frame_len) => {
-                        match FrameDecoder::unseal_data_frame(
+                        match FrameDecoder::unseal_data_frame_v5(
                             &mut frame_buf[..frame_len],
                             frame_len,
                             cipher.as_ref(),
+                            header_key.as_ref(),
                         ) {
                             Ok((cmd, payload, _nonce)) => {
                                 match cmd {
