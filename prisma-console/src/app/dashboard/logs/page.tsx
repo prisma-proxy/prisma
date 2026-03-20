@@ -1,10 +1,12 @@
 "use client";
 
+import { ScrollText } from "lucide-react";
 import { useLogs } from "@/hooks/use-logs";
 import { LogViewer } from "@/components/logs/log-viewer";
 import { LogFilters } from "@/components/logs/log-filters";
 import { Button } from "@/components/ui/button";
 import { ExportDropdown } from "@/components/dashboard/export-dropdown";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 import { useI18n } from "@/lib/i18n";
 import { exportToCSV, exportToJSON } from "@/lib/export";
 
@@ -39,9 +41,14 @@ export default function LogsPage() {
 
   return (
     <div className="flex h-full flex-col space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <LogFilters onFilterChange={setFilter} />
         <div className="flex items-center gap-2">
+          {logs.length > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {logs.length.toLocaleString()} entries
+            </span>
+          )}
           <ExportDropdown onCSV={handleExportCSV} onJSON={handleExportJSON} />
           <Button variant="outline" size="sm" onClick={clearLogs}>
             {t("logs.clear")}
@@ -49,7 +56,15 @@ export default function LogsPage() {
         </div>
       </div>
       <div className="flex-1 min-h-0">
-        <LogViewer logs={logs} />
+        {logs.length === 0 ? (
+          <EmptyState
+            icon={ScrollText}
+            title={t("empty.noLogs")}
+            description={t("empty.noLogsHint")}
+          />
+        ) : (
+          <LogViewer logs={logs} />
+        )}
       </div>
     </div>
   );

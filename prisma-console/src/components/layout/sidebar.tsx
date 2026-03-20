@@ -28,20 +28,34 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
-const navItems = [
-  { labelKey: "sidebar.overview", href: "/dashboard/", icon: LayoutDashboard, exact: true },
-  { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network },
-  { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server },
-  { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users },
-  { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route },
-  { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText },
-  { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings },
-  { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor },
-  { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity },
-  { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge },
-  { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3 },
-  { labelKey: "sidebar.backups", href: "/dashboard/backups/", icon: Archive },
+interface NavItem {
+  labelKey: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  group: "main" | "monitoring" | "config";
+}
+
+const navItems: NavItem[] = [
+  { labelKey: "sidebar.overview", href: "/dashboard/", icon: LayoutDashboard, exact: true, group: "main" },
+  { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network, group: "main" },
+  { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main" },
+  { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main" },
+  { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText, group: "monitoring" },
+  { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3, group: "monitoring" },
+  { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },
+  { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route, group: "config" },
+  { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity, group: "config" },
+  { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor, group: "config" },
+  { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings, group: "config" },
+  { labelKey: "sidebar.backups", href: "/dashboard/backups/", icon: Archive, group: "config" },
 ];
+
+const GROUP_LABELS: Record<string, string> = {
+  main: "sidebar.overview",
+  monitoring: "sidebar.monitoring",
+  config: "sidebar.configuration",
+};
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -70,22 +84,29 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
     localStorage.setItem("prisma-sidebar-collapsed", String(next));
   }, [collapsed, onCollapsedChange]);
 
+  const groups = ["main", "monitoring", "config"] as const;
+
   return (
     <TooltipProvider>
       <aside
-        className={`flex h-screen flex-col bg-zinc-950 text-white transition-all duration-200 ${
-          collapsed ? "w-16" : "w-64"
+        className={`flex h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200 ease-in-out ${
+          collapsed ? "w-16" : "w-60"
         }`}
       >
         {/* Logo / Brand */}
-        <div className="flex h-14 items-center border-b border-zinc-800 px-4">
+        <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           {!collapsed && (
-            <span className="text-lg font-semibold tracking-tight">Prisma</span>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+                <span className="text-xs font-bold text-primary-foreground">P</span>
+              </div>
+              <span className="text-base font-semibold tracking-tight">Prisma</span>
+            </div>
           )}
           <Button
             variant="ghost"
             size="icon-sm"
-            className={`text-zinc-400 hover:text-white hover:bg-zinc-800 ${
+            className={`text-muted-foreground hover:text-foreground ${
               collapsed ? "mx-auto" : "ml-auto"
             }`}
             onClick={toggleCollapsed}
@@ -99,48 +120,71 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
-          {navItems.map(({ labelKey, href, icon: Icon, exact }) => {
-            const base = href.replace(/\/$/, "");
-            const isActive = exact
-              ? pathname === base || pathname === base + "/"
-              : pathname === base || pathname.startsWith(base + "/");
+        <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+          {groups.map((group, gi) => {
+            const items = navItems.filter((n) => n.group === group);
+            return (
+              <div key={group}>
+                {gi > 0 && <div className="my-2 mx-2 h-px bg-sidebar-border" />}
+                {!collapsed && GROUP_LABELS[group] && (
+                  <p className="mb-1 px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group === "main" ? "" : group === "monitoring" ? t("sidebar.monitoring") : t("sidebar.configuration")}
+                  </p>
+                )}
+                {items.map(({ labelKey, href, icon: Icon, exact }) => {
+                  const base = href.replace(/\/$/, "");
+                  const isActive = exact
+                    ? pathname === base || pathname === base + "/"
+                    : pathname === base || pathname.startsWith(base + "/");
 
-            const label = t(labelKey);
+                  const label = t(labelKey);
 
-            const linkContent = (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  collapsed ? "justify-center px-2" : ""
-                } ${
-                  isActive
-                    ? "bg-zinc-800 text-white"
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="truncate">{label}</span>}
-              </Link>
+                  const linkContent = (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`group/nav-item relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+                        collapsed ? "justify-center px-2" : ""
+                      } ${
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                      )}
+                      <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-primary" : ""}`} />
+                      {!collapsed && <span className="truncate">{label}</span>}
+                    </Link>
+                  );
+
+                  if (collapsed) {
+                    return (
+                      <Tooltip key={href}>
+                        <TooltipTrigger render={<div />}>
+                          {linkContent}
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={8}>
+                          {label}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  return <div key={href}>{linkContent}</div>;
+                })}
+              </div>
             );
-
-            if (collapsed) {
-              return (
-                <Tooltip key={href}>
-                  <TooltipTrigger render={<div />}>
-                    {linkContent}
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    {label}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            }
-
-            return <div key={href}>{linkContent}</div>;
           })}
         </nav>
+
+        {/* Footer */}
+        {!collapsed && (
+          <div className="border-t border-sidebar-border px-4 py-3">
+            <p className="text-[10px] text-muted-foreground">Prisma Console v0.9.0</p>
+          </div>
+        )}
       </aside>
     </TooltipProvider>
   );
@@ -164,13 +208,16 @@ export function MobileSidebarContent({ onNavigate }: { onNavigate?: () => void }
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               isActive
-                ? "bg-zinc-800 text-white"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
             }`}
           >
-            <Icon className="h-4 w-4" />
+            {isActive && (
+              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+            )}
+            <Icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
             {t(labelKey)}
           </Link>
         );

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TlsInfo } from "@/components/settings/tls-info";
 import { ForwardsTable } from "@/components/server/forwards-table";
+import { SkeletonCard } from "@/components/ui/skeleton";
 
 export default function ServersPage() {
   const { t } = useI18n();
@@ -36,8 +37,10 @@ export default function ServersPage() {
 
   if (healthLoading || configLoading || tlsLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("server.loadingInfo")}</p>
+      <div className="space-y-6">
+        <SkeletonCard />
+        <SkeletonCard className="h-48" />
+        <SkeletonCard />
       </div>
     );
   }
@@ -101,7 +104,7 @@ export default function ServersPage() {
               <div>
                 <p className="text-sm text-muted-foreground">{t("settings.portForwardingRange")}</p>
                 <p className="text-sm font-mono">
-                  {config.port_forwarding.port_range_start}–{config.port_forwarding.port_range_end}
+                  {config.port_forwarding.port_range_start}--{config.port_forwarding.port_range_end}
                 </p>
               </div>
             )}

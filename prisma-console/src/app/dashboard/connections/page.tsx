@@ -1,8 +1,11 @@
 "use client";
 
+import { Network } from "lucide-react";
 import { useConnections, useDisconnect } from "@/hooks/use-connections";
 import { ConnectionTable } from "@/components/dashboard/connection-table";
 import { ExportDropdown } from "@/components/dashboard/export-dropdown";
+import { SkeletonTable } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 import { useI18n } from "@/lib/i18n";
 import { exportToCSV, exportToJSON } from "@/lib/export";
 import { formatBytes } from "@/lib/utils";
@@ -38,25 +41,29 @@ export default function ConnectionsPage() {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("sidebar.connections")}</h2>
-        <ExportDropdown onCSV={handleExportCSV} onJSON={handleExportJSON} />
+        {(connections?.length ?? 0) > 0 && (
+          <ExportDropdown onCSV={handleExportCSV} onJSON={handleExportJSON} />
+        )}
       </div>
 
-      <ConnectionTable
-        connections={connections ?? []}
-        onDisconnect={(sessionId) => disconnect.mutate(sessionId)}
-      />
+      {isLoading ? (
+        <SkeletonTable rows={8} />
+      ) : (connections?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={Network}
+          title={t("empty.noConnections")}
+          description={t("empty.noConnectionsHint")}
+        />
+      ) : (
+        <ConnectionTable
+          connections={connections ?? []}
+          onDisconnect={(sessionId) => disconnect.mutate(sessionId)}
+        />
+      )}
     </div>
   );
 }

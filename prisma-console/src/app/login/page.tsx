@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
@@ -32,54 +33,65 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 shadow-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-card-foreground">
-            Prisma Console
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter your management API token
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label
-              htmlFor="token"
-              className="text-sm font-medium text-card-foreground"
-            >
-              API Token
-            </label>
-            <input
-              id="token"
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              required
-              autoComplete="off"
-              placeholder="Enter your API token"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <p className="text-xs text-muted-foreground">
-              The token from your server.toml [management_api] section.
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
+            <Shield className="h-7 w-7 text-primary-foreground" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Prisma Console
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enter your management API token
             </p>
           </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-          >
-            {loading ? "Verifying..." : "Sign in"}
-          </button>
-        </form>
+        {/* Form */}
+        <div className="rounded-xl border bg-card p-6 ring-1 ring-foreground/5 shadow-sm">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="token"
+                className="text-sm font-medium text-foreground"
+              >
+                API Token
+              </label>
+              <input
+                id="token"
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                required
+                autoComplete="off"
+                autoFocus
+                placeholder="Enter your API token"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              />
+              <p className="text-xs text-muted-foreground">
+                The token from your server.toml [management_api] section.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !token.trim()}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? "Verifying..." : "Sign in"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

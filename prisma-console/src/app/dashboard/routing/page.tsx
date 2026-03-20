@@ -1,11 +1,14 @@
 "use client";
 
+import { Route as RouteIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { RuleList } from "@/components/routing/rule-list";
 import { RuleEditor } from "@/components/routing/rule-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonTable } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 import type { RoutingRule } from "@/lib/types";
 
 export default function RoutingPage() {
@@ -62,9 +65,13 @@ export default function RoutingPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground">{t("routing.loadingRoutes")}</p>
-            </div>
+            <SkeletonTable rows={4} />
+          ) : (routes?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={RouteIcon}
+              title={t("empty.noRules")}
+              description={t("empty.noRulesHint")}
+            />
           ) : (
             <RuleList
               rules={routes ?? []}

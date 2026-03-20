@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebarContent } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { ToastProvider } from "@/lib/toast-context";
 import { useI18n } from "@/lib/i18n";
@@ -46,6 +47,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const title = t(titleKey);
 
+  // Show breadcrumb on sub-pages (not the overview root)
+  const showBreadcrumb = pathname !== "/dashboard" && pathname !== "/dashboard/";
+
   return (
     <ToastProvider>
       <div className="flex h-screen">
@@ -65,11 +69,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <SheetContent
             side="left"
             showCloseButton
-            className="w-64 bg-zinc-950 p-0"
+            className="w-64 bg-sidebar p-0"
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <div className="flex h-14 items-center border-b border-zinc-800 px-6">
-              <span className="text-lg font-semibold tracking-tight text-white">
+            <div className="flex h-14 items-center border-b border-sidebar-border px-6">
+              <span className="text-lg font-semibold tracking-tight text-sidebar-foreground">
                 Prisma
               </span>
             </div>
@@ -83,8 +87,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             title={title}
             onMobileMenuToggle={() => setMobileOpen(true)}
           />
-          <main className="flex-1 overflow-y-auto p-6 bg-zinc-50 dark:bg-zinc-950">
-            {children}
+          <main className="flex-1 overflow-y-auto bg-background">
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+              {showBreadcrumb && (
+                <div className="mb-4">
+                  <Breadcrumb />
+                </div>
+              )}
+              <div key={pathname} className="animate-in-page">
+                {children}
+              </div>
+            </div>
           </main>
         </div>
 

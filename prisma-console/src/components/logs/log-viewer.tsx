@@ -9,11 +9,11 @@ interface LogViewerProps {
 }
 
 const levelColors: Record<string, string> = {
-  ERROR: "bg-red-500/15 text-red-700 dark:text-red-400",
-  WARN: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
-  INFO: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  DEBUG: "bg-gray-500/15 text-gray-700 dark:text-gray-400",
-  TRACE: "bg-gray-500/10 text-gray-500 dark:text-gray-500",
+  ERROR: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+  WARN: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+  INFO: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  DEBUG: "bg-gray-500/15 text-gray-700 dark:text-gray-400 border-gray-500/30",
+  TRACE: "bg-gray-500/10 text-gray-500 dark:text-gray-500 border-gray-500/20",
 };
 
 function formatTimestamp(ts: string): string {
@@ -25,7 +25,7 @@ function formatTimestamp(ts: string): string {
   return `${h}:${m}:${s}.${ms}`;
 }
 
-const ROW_HEIGHT = 24;
+const ROW_HEIGHT = 26;
 
 export function LogViewer({ logs }: LogViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,7 +35,7 @@ export function LogViewer({ logs }: LogViewerProps) {
     count: logs.length,
     getScrollElement: () => containerRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 20,
+    overscan: 30,
   });
 
   useEffect(() => {
@@ -59,17 +59,13 @@ export function LogViewer({ logs }: LogViewerProps) {
   }, [logs.length, virtualizer]);
 
   if (logs.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        No log entries
-      </p>
-    );
+    return null;
   }
 
   return (
     <div
       ref={containerRef}
-      className="overflow-y-auto max-h-[600px] rounded-lg border bg-muted/30 p-2 font-mono text-xs"
+      className="overflow-y-auto h-[calc(100vh-260px)] min-h-[300px] rounded-lg border bg-card p-1 font-mono text-xs"
     >
       <div
         style={{
@@ -93,20 +89,20 @@ export function LogViewer({ logs }: LogViewerProps) {
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className="flex items-start gap-2 px-1 py-0.5 hover:bg-muted/50"
+              className="flex items-center gap-2 px-2 py-0.5 rounded transition-colors hover:bg-muted/50"
             >
-              <span className="shrink-0 text-muted-foreground">
+              <span className="shrink-0 tabular-nums text-muted-foreground/70 select-none">
                 {formatTimestamp(entry.timestamp)}
               </span>
               <span
-                className={`inline-flex shrink-0 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none ${colorClass}`}
+                className={`inline-flex shrink-0 items-center justify-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none ${colorClass}`}
               >
                 {entry.level}
               </span>
-              <span className="shrink-0 text-muted-foreground/60">
+              <span className="shrink-0 text-muted-foreground/50 max-w-[120px] truncate">
                 {entry.target}
               </span>
-              <span className="min-w-0 break-all">{entry.message}</span>
+              <span className="min-w-0 break-all text-foreground/90">{entry.message}</span>
             </div>
           );
         })}

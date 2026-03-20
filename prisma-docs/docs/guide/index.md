@@ -5,62 +5,106 @@ slug: /guide
 
 # Beginner's Guide
 
-Welcome to the Prisma Beginner's Guide! If you have never used a proxy, never configured a server, or even if the word "encryption" sounds intimidating -- this guide is for you.
-
-We will walk you through everything **from scratch**, step by step, with plenty of explanations, analogies, and diagrams. By the end of this guide, you will have a fully working Prisma setup that keeps your internet traffic private and secure.
-
-## What is Prisma?
-
-Prisma (v0.9.0) is a next-generation encrypted proxy built in Rust that creates an **encrypted tunnel** between your computer and a server somewhere on the internet. All your internet traffic travels through this tunnel, so nobody in between -- not your ISP, not your school or office network, not anyone -- can see what you are doing online.
-
-Think of it like this:
-
-> Imagine you are sending a letter to a friend, but you don't want the mailman to read it. So you put your letter inside a **locked box**, and only your friend has the key. That is essentially what Prisma does with your internet traffic.
-
-## Why would you need Prisma?
-
-There are many reasons people use tools like Prisma:
-
-- **Privacy** -- Keep your browsing activity private from your internet provider
-- **Security** -- Protect your data on public Wi-Fi (coffee shops, airports, hotels) with post-quantum cryptography
-- **Access** -- Reach websites and services that might be blocked on your network
-- **Freedom** -- Bypass internet censorship and filtering with 9 transport types and advanced anti-detection
-- **Performance** -- Built in Rust with zero-copy I/O, io_uring support, and minimal resource usage
+Welcome to the Prisma Beginner's Guide -- a comprehensive, step-by-step walkthrough that takes you from zero to a fully working encrypted proxy setup. No prior experience with networking, servers, or the command line is required.
 
 ## What you will learn
 
-This guide covers everything from the very basics to a fully working setup:
+By the end of this guide you will understand how internet privacy works, how Prisma protects your traffic, and how to deploy and operate your own Prisma infrastructure.
 
-| Chapter | What you will learn |
-|---------|-------------------|
-| [Understanding the Basics](./basics.md) | How the internet works, what proxies and encryption are |
-| [How Prisma Works](./how-prisma-works.md) | Prisma's architecture and what makes it special |
-| [Preparation](./prepare.md) | What you need and how to get ready |
-| [Installing the Server](./install-server.md) | Setting up Prisma on your server |
-| [Configuring the Server](./configure-server.md) | Writing the server configuration file |
-| [Installing the Client](./install-client.md) | Setting up Prisma on your computer or phone |
-| [Configuring the Client](./configure-client.md) | Writing the client configuration file |
-| [Your First Connection](./first-connection.md) | Connecting everything and verifying it works |
-| [Going Further](./advanced-setup.md) | Routing rules, CDN, optimization, and more |
+```mermaid
+flowchart LR
+    A["<b>Basics</b>\nInternet fundamentals\n~15 min"] --> B["<b>How Prisma Works</b>\nArchitecture & protocol\n~20 min"]
+    B --> C["<b>Preparation</b>\nGet a server ready\n~15 min"]
+    C --> D["<b>Install Server</b>\nBinary, Docker, source\n~10 min"]
+    D --> E["<b>Configure Server</b>\nTOML, certs, auth\n~20 min"]
+    E --> F["<b>Install Client</b>\nGUI, CLI, mobile\n~10 min"]
+    F --> G["<b>Configure Client</b>\nTransport, proxy groups\n~20 min"]
+    G --> H["<b>First Connection</b>\nConnect & verify\n~10 min"]
+    H --> I["<b>Advanced Setup</b>\nCDN, routing, perf\n~25 min"]
+
+    style A fill:#4f46e5,color:#fff
+    style B fill:#4f46e5,color:#fff
+    style C fill:#4f46e5,color:#fff
+    style D fill:#4f46e5,color:#fff
+    style E fill:#4f46e5,color:#fff
+    style F fill:#4f46e5,color:#fff
+    style G fill:#4f46e5,color:#fff
+    style H fill:#22c55e,color:#000
+    style I fill:#f59e0b,color:#000
+```
+
+## Chapter overview
+
+| # | Chapter | What you will learn | Time |
+|---|---------|-------------------|------|
+| 1 | [Understanding the Basics](./basics.md) | How the internet works, what proxies and encryption are | ~15 min |
+| 2 | [How Prisma Works](./how-prisma-works.md) | Client/server architecture, PrismaVeil v5 protocol, 9 transports, anti-detection | ~20 min |
+| 3 | [Preparation](./prepare.md) | Getting a VPS, SSH access, domain & TLS considerations, firewall planning | ~15 min |
+| 4 | [Installing the Server](./install-server.md) | One-line script, Docker, direct download, build from source, daemon mode | ~10 min |
+| 5 | [Configuring the Server](./configure-server.md) | TOML crash course, credentials, TLS, authorized clients, advanced options | ~20 min |
+| 6 | [Installing the Client](./install-client.md) | Desktop GUI (Tauri), CLI, Android app (Kotlin/JNI), iOS app (Swift/xcframework) | ~10 min |
+| 7 | [Configuring the Client](./configure-client.md) | Transport selection, subscriptions, proxy groups, port forwarding, DNS, TUN mode | ~20 min |
+| 8 | [Your First Connection](./first-connection.md) | Starting both ends, verifying with curl, DNS leak test, troubleshooting | ~10 min |
+| 9 | [Going Further](./advanced-setup.md) | CDN deployment, XMUX pooling, io_uring tuning, rule providers, monitoring | ~25 min |
+
+**Total estimated time: ~2.5 hours** (you can split it across multiple sessions).
 
 ## Prerequisites
 
-You only need two things:
+You only need two things to get started:
 
 1. **A computer or phone** -- Windows, macOS, Linux, Android, or iOS
 2. **An internet connection**
 
-That is it. We will explain everything else as we go.
+That is it. Everything else -- servers, certificates, credentials -- is explained as we go.
 
 :::tip No experience needed
-This guide assumes **zero** prior knowledge about networking, servers, or the command line. Every concept is explained from the ground up. If something is unclear, it is our fault, not yours.
+This guide assumes **zero** prior knowledge about networking, servers, or the command line. Every concept is explained from the ground up with analogies and diagrams. If something is unclear, it is our fault, not yours.
 :::
 
 ## How to use this guide
 
-- **Read in order** -- Each chapter builds on the previous one
-- **Don't skip the basics** -- Even if you are tempted, the [basics chapter](./basics.md) will help you understand everything that comes after
-- **Try things out** -- The best way to learn is by doing. Follow along with the examples
-- **Don't worry about mistakes** -- Nothing in this guide can break your computer. If something goes wrong, you can always start over
+- **Read in order** -- each chapter builds on the previous one
+- **Do not skip the basics** -- even if you are tempted, the [basics chapter](./basics.md) will help you understand everything that follows
+- **Try things out** -- the best way to learn is by doing; follow along with the examples
+- **Do not worry about mistakes** -- nothing in this guide can break your computer; if something goes wrong, you can always start over
+
+## Prisma at a glance
+
+Prisma (v0.9.0) is a next-generation encrypted proxy built in Rust. It creates an encrypted tunnel between your device and a server you control, making your internet traffic private and resistant to detection.
+
+```mermaid
+graph LR
+    subgraph Your Device
+        B["Browser / Apps"]
+        PC["Prisma Client"]
+    end
+    subgraph Internet
+        FW["Firewalls & DPI"]
+    end
+    subgraph Your Server
+        PS["Prisma Server"]
+    end
+    subgraph Destination
+        W["Websites & Services"]
+    end
+
+    B -->|"local proxy"| PC
+    PC -->|"encrypted tunnel"| FW
+    FW -->|"looks like HTTPS"| PS
+    PS -->|"normal traffic"| W
+
+    style PC fill:#4f46e5,color:#fff
+    style PS fill:#4f46e5,color:#fff
+    style FW fill:#ef4444,color:#fff
+```
+
+Key capabilities:
+
+- **9 transport types** -- QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard
+- **PrismaVeil v5 protocol** -- 1-RTT handshake, 0-RTT resumption, ChaCha20-Poly1305 / AES-256-GCM, 1024-bit anti-replay
+- **Anti-detection** -- padding, timing jitter, chaff injection, entropy camouflage, active probe resistance
+- **Cross-platform** -- Windows, macOS, Linux, Android, iOS, FreeBSD
+- **Post-quantum ready** -- hybrid key exchange for forward security
 
 Ready? Let's begin with [Understanding the Basics](./basics.md).

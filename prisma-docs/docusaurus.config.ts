@@ -60,17 +60,6 @@ const config: Config = {
             current: {label: 'v0.9.0', path: ''},
             '0.8.0': {label: 'v0.8.0', path: '0.8.0'},
           },
-          async sidebarItemsGenerator({defaultSidebarItemsGenerator, ...args}) {
-            const items = await defaultSidebarItemsGenerator(args);
-            // Remove the "guide" category — guide is now a standalone page at /guide
-            return items.filter(item => {
-              if (item.type === 'category' && item.label) {
-                const lower = item.label.toLowerCase();
-                return !lower.includes('guide');
-              }
-              return true;
-            });
-          },
         },
         blog: false,
         theme: {
@@ -104,7 +93,8 @@ mermaid: {
           label: 'Docs',
         },
         {
-          to: '/guide',
+          type: 'doc',
+          docId: 'guide/index',
           label: 'Guide',
           position: 'left',
         },
@@ -114,7 +104,8 @@ mermaid: {
           position: 'left',
         },
         {
-          to: '/dev',
+          type: 'doc',
+          docId: 'dev/index',
           label: 'Dev',
           position: 'left',
         },

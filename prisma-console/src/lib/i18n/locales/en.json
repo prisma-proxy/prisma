@@ -11,6 +11,8 @@
   "sidebar.speedTest": "Speed Test",
   "sidebar.connections": "Connections",
   "sidebar.bandwidth": "Bandwidth",
+  "sidebar.monitoring": "Monitoring",
+  "sidebar.configuration": "Configuration",
   "metrics.activeConnections": "Active Connections",
   "metrics.trafficUp": "Traffic Up",
   "metrics.trafficDown": "Traffic Down",
@@ -331,5 +333,15 @@
   "toast.downloadError": "Failed to download backup",
   "logs.exportTitle": "Export Logs",
   "connections.title": "Active Connections",
-  "connections.exportTitle": "Export Connections"
+  "connections.exportTitle": "Export Connections",
+  "empty.noConnections": "No active connections right now",
+  "empty.noConnectionsHint": "Connections will appear here when clients connect to the server.",
+  "empty.noClients": "No clients registered yet",
+  "empty.noClientsHint": "Create a client to start managing access to your proxy server.",
+  "empty.noLogs": "Waiting for log entries",
+  "empty.noLogsHint": "Log entries from the server will appear here in real-time.",
+  "empty.noRules": "No routing rules configured",
+  "empty.noRulesHint": "Add rules to control how traffic is routed through the proxy.",
+  "empty.noBackups": "No configuration backups",
+  "empty.noBackupsHint": "Create a backup to save a snapshot of your current configuration."
 }

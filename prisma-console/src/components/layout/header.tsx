@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
-import { Sun, Moon, Monitor, Globe, Menu } from "lucide-react";
+import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { AlertBadge } from "@/components/alerts/alert-badge";
 
 interface HeaderProps {
   title: string;
@@ -33,7 +34,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
     );
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-6">
+    <header className="flex h-14 items-center justify-between border-b bg-card/50 backdrop-blur-sm px-4 sm:px-6">
       <div className="flex items-center gap-3">
         {onMobileMenuToggle && (
           <Button
@@ -45,10 +46,30 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
             <Menu className="h-4 w-4" />
           </Button>
         )}
-        <h1 className="text-lg font-semibold">{title}</h1>
+        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
+        {/* Command palette hint */}
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "k", metaKey: true })
+            );
+          }}
+          className="hidden sm:flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>{t("common.search")}</span>
+          <kbd className="ml-2 inline-flex h-5 items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            <span className="text-xs">&#8984;</span>K
+          </kbd>
+        </button>
+
+        {/* Alerts indicator */}
+        <AlertBadge />
+
         {/* Theme Toggle */}
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -112,12 +133,9 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
         <div className="h-5 w-px bg-border" />
 
         {/* Sign Out */}
-        <button
-          onClick={logout}
-          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {t("auth.logout")}
-        </button>
+        <Button variant="ghost" size="icon-sm" onClick={logout} title={t("auth.logout")}>
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </header>
   );

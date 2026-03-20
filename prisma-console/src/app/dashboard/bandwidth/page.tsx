@@ -5,18 +5,11 @@ import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BandwidthSummaryTable } from "@/components/bandwidth/bandwidth-summary-table";
 import { QuotaOverviewChart } from "@/components/bandwidth/quota-overview-chart";
+import { SkeletonTable, SkeletonChart } from "@/components/ui/skeleton";
 
 export default function BandwidthPage() {
   const { t } = useI18n();
   const { data: summary, isLoading } = useBandwidthSummary();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      </div>
-    );
-  }
 
   const clients = summary?.clients ?? [];
 
@@ -29,11 +22,19 @@ export default function BandwidthPage() {
           <CardTitle>{t("bandwidth.summary")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <BandwidthSummaryTable clients={clients} />
+          {isLoading ? (
+            <SkeletonTable rows={4} />
+          ) : (
+            <BandwidthSummaryTable clients={clients} />
+          )}
         </CardContent>
       </Card>
 
-      <QuotaOverviewChart clients={clients} />
+      {isLoading ? (
+        <SkeletonChart height={200} />
+      ) : (
+        <QuotaOverviewChart clients={clients} />
+      )}
     </div>
   );
 }

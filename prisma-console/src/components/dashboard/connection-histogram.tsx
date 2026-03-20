@@ -62,7 +62,7 @@ export function ConnectionHistogram({ connections }: ConnectionHistogramProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connection Duration</CardTitle>
+        <CardTitle>{t("chart.connectionDuration")}</CardTitle>
       </CardHeader>
       <CardContent>
         {connections.length === 0 ? (

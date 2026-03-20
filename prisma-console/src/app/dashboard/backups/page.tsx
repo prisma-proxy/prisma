@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Archive, Plus } from "lucide-react";
 import { useBackups, useCreateBackup, useRestoreBackup, useDeleteBackup, useBackupDiff } from "@/hooks/use-backups";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,8 @@ import { BackupTable } from "@/components/backups/backup-table";
 import { BackupCompare } from "@/components/backups/backup-compare";
 import { DiffViewer } from "@/components/backups/diff-viewer";
 import { RestoreDialog } from "@/components/backups/restore-dialog";
-import { Plus } from "lucide-react";
+import { SkeletonTable } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 
 export default function BackupsPage() {
   const { t } = useI18n();
@@ -62,9 +64,23 @@ export default function BackupsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-            </div>
+            <SkeletonTable rows={3} />
+          ) : (backups?.length ?? 0) === 0 ? (
+            <EmptyState
+              icon={Archive}
+              title={t("empty.noBackups")}
+              description={t("empty.noBackupsHint")}
+              action={
+                <Button
+                  size="sm"
+                  onClick={() => createBackup.mutate()}
+                  disabled={createBackup.isPending}
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  {t("backups.create")}
+                </Button>
+              }
+            />
           ) : (
             <BackupTable
               backups={backups ?? []}

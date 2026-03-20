@@ -10,13 +10,32 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAlertConfig, useActiveAlerts } from "@/hooks/use-alerts";
+import { useSystemInfo } from "@/hooks/use-system-info";
+import { useBandwidthSummary } from "@/hooks/use-bandwidth";
+import { useMetrics } from "@/hooks/use-metrics";
+import { useI18n } from "@/lib/i18n";
 import type { Alert } from "@/lib/alerts";
 
-interface AlertBadgeProps {
-  alerts: Alert[];
+interface AlertBadgePropsExternal {
+  alerts?: Alert[];
 }
 
-export function AlertBadge({ alerts }: AlertBadgeProps) {
+export function AlertBadge({ alerts: externalAlerts }: AlertBadgePropsExternal) {
+  const { t } = useI18n();
+  const { data: alertConfig } = useAlertConfig();
+  const { data: systemInfo } = useSystemInfo();
+  const { data: bandwidthSummary } = useBandwidthSummary();
+  const { current: metrics } = useMetrics();
+
+  const computedAlerts = useActiveAlerts(
+    systemInfo,
+    bandwidthSummary,
+    metrics,
+    alertConfig
+  );
+
+  const alerts = externalAlerts ?? computedAlerts;
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const warningCount = alerts.filter((a) => a.severity === "warning").length;
 
@@ -40,18 +59,18 @@ export function AlertBadge({ alerts }: AlertBadgeProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} className="w-80">
         <DropdownMenuLabel>
-          Alerts ({alerts.length})
+          {t("alerts.title")} ({alerts.length})
           {criticalCount > 0 && (
-            <span className="ml-1 text-red-500">{criticalCount} critical</span>
+            <span className="ml-1 text-red-500">{criticalCount} {t("alerts.critical")}</span>
           )}
           {warningCount > 0 && (
-            <span className="ml-1 text-yellow-600 dark:text-yellow-400">{warningCount} warning</span>
+            <span className="ml-1 text-yellow-600 dark:text-yellow-400">{warningCount} {t("alerts.warning")}</span>
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {alerts.length === 0 ? (
           <div className="px-1.5 py-3 text-center text-sm text-muted-foreground">
-            No active alerts
+            {t("alerts.noAlerts")}
           </div>
         ) : (
           alerts.map((alert) => (

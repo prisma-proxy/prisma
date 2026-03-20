@@ -11,6 +11,8 @@
   "sidebar.speedTest": "速度测试",
   "sidebar.connections": "连接",
   "sidebar.bandwidth": "带宽",
+  "sidebar.monitoring": "监控",
+  "sidebar.configuration": "配置",
   "metrics.activeConnections": "活跃连接",
   "metrics.trafficUp": "上行流量",
   "metrics.trafficDown": "下行流量",
@@ -331,5 +333,15 @@
   "toast.downloadError": "下载备份失败",
   "logs.exportTitle": "导出日志",
   "connections.title": "活跃连接",
-  "connections.exportTitle": "导出连接"
+  "connections.exportTitle": "导出连接",
+  "empty.noConnections": "当前无活跃连接",
+  "empty.noConnectionsHint": "客户端连接到服务器时，连接将显示在此处。",
+  "empty.noClients": "尚无注册客户端",
+  "empty.noClientsHint": "创建客户端以开始管理代理服务器的访问。",
+  "empty.noLogs": "等待日志条目",
+  "empty.noLogsHint": "来自服务器的日志条目将实时显示在此处。",
+  "empty.noRules": "未配置路由规则",
+  "empty.noRulesHint": "添加规则以控制流量如何通过代理路由。",
+  "empty.noBackups": "无配置备份",
+  "empty.noBackupsHint": "创建备份以保存当前配置的快照。"
 }
