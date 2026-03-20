@@ -19,38 +19,44 @@ pub async fn prometheus_metrics(State(state): State<MgmtState>) -> impl IntoResp
         "prisma_active_connections",
         "Current number of active connections",
     )
-    .unwrap();
+    .expect("static metric name");
     active_connections.set(state.metrics.active_connections.load(Ordering::Relaxed) as f64);
-    registry.register(Box::new(active_connections)).unwrap();
+    registry
+        .register(Box::new(active_connections))
+        .expect("static metric registration");
 
     let bytes_uploaded = prometheus::Counter::with_opts(prometheus::Opts::new(
         "prisma_bytes_uploaded_total",
         "Total bytes uploaded through the proxy",
     ))
-    .unwrap();
+    .expect("static metric name");
     let up = state.metrics.total_bytes_up.load(Ordering::Relaxed) as f64;
     if up > 0.0 {
         bytes_uploaded.inc_by(up);
     }
-    registry.register(Box::new(bytes_uploaded)).unwrap();
+    registry
+        .register(Box::new(bytes_uploaded))
+        .expect("static metric registration");
 
     let bytes_downloaded = prometheus::Counter::with_opts(prometheus::Opts::new(
         "prisma_bytes_downloaded_total",
         "Total bytes downloaded through the proxy",
     ))
-    .unwrap();
+    .expect("static metric name");
     let down = state.metrics.total_bytes_down.load(Ordering::Relaxed) as f64;
     if down > 0.0 {
         bytes_downloaded.inc_by(down);
     }
-    registry.register(Box::new(bytes_downloaded)).unwrap();
+    registry
+        .register(Box::new(bytes_downloaded))
+        .expect("static metric registration");
 
     // Handshakes: success = total_connections, failed = handshake_failures
     let handshakes = prometheus::CounterVec::new(
         prometheus::Opts::new("prisma_handshakes_total", "Total handshakes by status"),
         &["status"],
     )
-    .unwrap();
+    .expect("static metric name");
     let success = state.metrics.total_connections.load(Ordering::Relaxed) as f64;
     let failed = state.metrics.handshake_failures.load(Ordering::Relaxed) as f64;
     // Always initialize both label values so they appear in output even at 0
@@ -62,25 +68,31 @@ pub async fn prometheus_metrics(State(state): State<MgmtState>) -> impl IntoResp
     if failed > 0.0 {
         failed_counter.inc_by(failed);
     }
-    registry.register(Box::new(handshakes)).unwrap();
+    registry
+        .register(Box::new(handshakes))
+        .expect("static metric registration");
 
-    let uptime =
-        prometheus::Gauge::new("prisma_uptime_seconds", "Server uptime in seconds").unwrap();
+    let uptime = prometheus::Gauge::new("prisma_uptime_seconds", "Server uptime in seconds")
+        .expect("static metric name");
     uptime.set(state.metrics.started_at.elapsed().as_secs_f64());
-    registry.register(Box::new(uptime)).unwrap();
+    registry
+        .register(Box::new(uptime))
+        .expect("static metric registration");
 
     // Bandwidth utilization ratio: active / total (0..1, or 0 when no connections yet)
     let utilization = prometheus::Gauge::new(
         "prisma_bandwidth_utilization_ratio",
         "Ratio of active connections to total connections seen",
     )
-    .unwrap();
+    .expect("static metric name");
     let total_conns = state.metrics.total_connections.load(Ordering::Relaxed);
     let active = state.metrics.active_connections.load(Ordering::Relaxed) as u64;
     if total_conns > 0 {
         utilization.set(active as f64 / total_conns as f64);
     }
-    registry.register(Box::new(utilization)).unwrap();
+    registry
+        .register(Box::new(utilization))
+        .expect("static metric registration");
 
     // --- Per-client byte counters from active connections ---
 
@@ -91,8 +103,10 @@ pub async fn prometheus_metrics(State(state): State<MgmtState>) -> impl IntoResp
         ),
         &["client_id", "direction"],
     )
-    .unwrap();
-    registry.register(Box::new(client_bytes.clone())).unwrap();
+    .expect("static metric name");
+    registry
+        .register(Box::new(client_bytes.clone()))
+        .expect("static metric registration");
 
     {
         let conns = state.connections.read().await;
@@ -126,7 +140,9 @@ pub async fn prometheus_metrics(State(state): State<MgmtState>) -> impl IntoResp
     let encoder = TextEncoder::new();
     let metric_families = registry.gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
+    encoder
+        .encode(&metric_families, &mut buffer)
+        .expect("prometheus text encoding");
     let content_type = encoder.format_type().to_string();
 
     ([(header::CONTENT_TYPE, content_type)], buffer)

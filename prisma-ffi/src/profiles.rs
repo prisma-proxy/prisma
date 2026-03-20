@@ -102,8 +102,8 @@ impl ProfileManager {
             .body_mut()
             .read_json()
             .map_err(|e| anyhow::anyhow!("invalid JSON: {e}"))?;
-        let arr = if raw.is_array() {
-            raw.as_array().unwrap().clone()
+        let arr = if let Some(a) = raw.as_array() {
+            a.clone()
         } else if let Some(a) = raw.get("profiles").and_then(|v| v.as_array()) {
             a.clone()
         } else {
@@ -160,8 +160,8 @@ impl ProfileManager {
                 Some(v) => v,
                 None => continue,
             };
-            let arr = if raw.is_array() {
-                raw.as_array().unwrap().clone()
+            let arr = if let Some(a) = raw.as_array() {
+                a.clone()
             } else if let Some(a) = raw.get("profiles").and_then(|v| v.as_array()) {
                 a.clone()
             } else {

@@ -58,7 +58,7 @@ Before any security-sensitive change, verify:
 
 ---
 
-## 1. PrismaVeil Protocol (v4)
+## 1. PrismaVeil Protocol (v5)
 
 ### Current Protocol Summary
 ```
@@ -152,7 +152,7 @@ Pool of real-world mask servers (Microsoft, Apple, Google, etc.):
 **Location:** `prisma-server/src/camouflage.rs`
 
 Detection logic peeks at initial bytes:
-- PrismaVeil: `[frame_len:2 BE (≥41)][version:0x04]`
+- PrismaVeil: `[frame_len:2 BE (≥41)][version:0x05]`
 - Rejects TLS ClientHello (0x16 0x03 pattern) and HTTP (0x47='G')
 - Non-Prisma traffic relayed to fallback/decoy server
 

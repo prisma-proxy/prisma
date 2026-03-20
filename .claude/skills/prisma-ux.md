@@ -1,5 +1,5 @@
 ---
-description: "UI/UX engineering for prisma-gui (Tauri) and prisma-dashboard (Next.js): component patterns, state management, IPC, i18n, competitive UX with Clash/v2rayN"
+description: "UI/UX engineering for prisma-gui (Tauri) and prisma-console (Next.js): component patterns, state management, IPC, i18n, competitive UX with Clash/v2rayN"
 globs:
   - "prisma-gui/src/**/*.ts"
   - "prisma-gui/src/**/*.tsx"
@@ -7,15 +7,15 @@ globs:
   - "prisma-gui/package.json"
   - "prisma-gui/src-tauri/**/*.rs"
   - "prisma-gui/src-tauri/tauri.conf.json"
-  - "prisma-dashboard/src/**/*.ts"
-  - "prisma-dashboard/src/**/*.tsx"
-  - "prisma-dashboard/src/**/*.css"
-  - "prisma-dashboard/package.json"
+  - "prisma-console/src/**/*.ts"
+  - "prisma-console/src/**/*.tsx"
+  - "prisma-console/src/**/*.css"
+  - "prisma-console/package.json"
 ---
 
 # Prisma UI/UX Engineering Skill
 
-You are the UI/UX engineering agent for Prisma. You handle both the desktop GUI (prisma-gui, Tauri 2 + React 19) and the web dashboard (prisma-dashboard, Next.js 16). Your goal is to make Prisma's user experience competitive with or superior to Clash Verge Rev, v2rayN, and Hiddify.
+You are the UI/UX engineering agent for Prisma. You handle both the desktop GUI (prisma-gui, Tauri 2 + React 19) and the web dashboard (prisma-console, Next.js 16). Your goal is to make Prisma's user experience competitive with or superior to Clash Verge Rev, v2rayN, and Hiddify.
 
 ## Tech Stack Reference
 
@@ -35,7 +35,7 @@ You are the UI/UX engineering agent for Prisma. You handle both the desktop GUI 
 | Virtualization | @tanstack/react-virtual | 3.x |
 | IPC | @tauri-apps/api | 2.x |
 
-### prisma-dashboard (Web Admin Panel)
+### prisma-console (Web Admin Panel)
 | Layer | Tech | Version |
 |-------|------|---------|
 | Framework | Next.js | 16 |
@@ -265,11 +265,11 @@ function MyComponent() {
 
 ---
 
-## 2. prisma-dashboard Development Patterns
+## 2. prisma-console Development Patterns
 
 ### Project Structure
 ```
-prisma-dashboard/
+prisma-console/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx                # Root layout
@@ -403,7 +403,7 @@ function useWebSocketMetrics() {
 6. Follow existing settings page patterns for form layout
 
 ### Recipe: Add a Dashboard Widget
-1. Create component in `prisma-dashboard/src/components/MyWidget.tsx`
+1. Create component in `prisma-console/src/components/MyWidget.tsx`
 2. Create TanStack Query hook in `src/hooks/useMyData.ts`
 3. Add to relevant page layout
 4. Style with Tailwind, use shadcn/ui patterns for cards/tables
@@ -444,10 +444,10 @@ function useWebSocketMetrics() {
 cd prisma-gui && npm run build   # Type-check + build validation
 ```
 
-### prisma-dashboard
+### prisma-console
 ```bash
-cd prisma-dashboard && npm run lint   # ESLint
-cd prisma-dashboard && npm run build  # Full build
+cd prisma-console && npm run lint   # ESLint
+cd prisma-console && npm run build  # Full build
 ```
 
 ### Manual Testing Checklist

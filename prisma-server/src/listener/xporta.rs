@@ -134,7 +134,7 @@ pub async fn session_init_handler(
                 .status(StatusCode::BAD_REQUEST)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("invalid request", 400)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -161,7 +161,7 @@ pub async fn session_init_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -180,7 +180,7 @@ pub async fn session_init_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -275,7 +275,7 @@ pub async fn session_init_handler(
         .header("content-type", "application/json")
         .header("set-cookie", cookie_val)
         .body(Body::from(b"{\"ok\":true}".to_vec()))
-        .unwrap()
+        .expect("static response")
         .into_response()
 }
 
@@ -294,7 +294,7 @@ pub async fn upload_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -327,7 +327,7 @@ pub async fn upload_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -370,7 +370,7 @@ pub async fn upload_handler(
         .header("content-type", state.encoding.content_type())
         .header("cache-control", "no-cache, no-store")
         .body(Body::from(response_body))
-        .unwrap()
+        .expect("static response")
         .into_response()
 }
 
@@ -398,7 +398,7 @@ pub async fn poll_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -411,7 +411,7 @@ pub async fn poll_handler(
                 .status(StatusCode::UNAUTHORIZED)
                 .header("content-type", "application/json")
                 .body(Body::from(encode_error("unauthorized", 401)))
-                .unwrap()
+                .expect("static response")
                 .into_response();
         }
     };
@@ -471,7 +471,7 @@ pub async fn poll_handler(
         .header("content-type", "application/json")
         .header("cache-control", "no-cache, no-store")
         .body(Body::from(response_body))
-        .unwrap()
+        .expect("static response")
         .into_response()
 }
 

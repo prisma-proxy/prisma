@@ -1,6 +1,6 @@
 # Prisma
 
-Encrypted proxy system built in Rust. Workspace version 1.0.0, edition 2021.
+Encrypted proxy system built in Rust. Workspace version 1.1.0, edition 2021.
 
 ## Workspace Layout
 
@@ -12,6 +12,9 @@ Encrypted proxy system built in Rust. Workspace version 1.0.0, edition 2021.
 | `prisma-cli` | CLI binary (clap 4): server/client runners, management commands, web console |
 | `prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |
 | `prisma-ffi` | C FFI shared library for GUI/mobile: lifecycle, profiles, QR, system proxy, auto-update |
+| `prisma-mcp` | MCP development server: workspace intelligence tools for AI agents |
+| `prisma-ios` | iOS app (Swift/SwiftUI, uses prisma-ffi via C bridge) |
+| `prisma-android` | Android app (Kotlin, uses prisma-ffi via JNI) |
 
 ## Key Commands
 

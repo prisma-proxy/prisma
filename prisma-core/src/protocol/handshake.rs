@@ -50,7 +50,7 @@ impl PrismaHandshakeClient {
         let client_pub = keypair.public_key_bytes();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_secs();
 
         let auth_token = util::compute_auth_token(&self.auth_secret, &self.client_id, timestamp);
@@ -325,7 +325,7 @@ impl PrismaHandshakeServer {
             cipher_suite: client_init.cipher_suite,
             issued_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or(std::time::Duration::ZERO)
                 .as_secs(),
             padding_range,
         });
@@ -531,10 +531,10 @@ mod tests {
         assert_eq!(client_buckets, bucket_sizes);
 
         // Verify challenge response
-        let challenge = client_session.challenge.unwrap();
-        let response_hash: [u8; 32] = blake3::hash(&challenge).into();
+        let challenge = client_session.challenge.as_ref().unwrap();
+        let response_hash: [u8; 32] = blake3::hash(challenge).into();
         assert!(server_state_verify_challenge(
-            &server_session.challenge.unwrap(),
+            server_session.challenge.as_ref().unwrap(),
             &response_hash
         ));
     }
@@ -696,8 +696,8 @@ mod tests {
             .unwrap();
 
         // Correct challenge response should verify
-        let challenge = client_session.challenge.unwrap();
-        let correct_hash: [u8; 32] = blake3::hash(&challenge).into();
+        let challenge = client_session.challenge.as_ref().unwrap();
+        let correct_hash: [u8; 32] = blake3::hash(challenge).into();
         assert!(server_state.verify_challenge(&correct_hash));
 
         // Wrong challenge response should fail
@@ -736,7 +736,7 @@ mod tests {
 
         // Session ticket should be present (server always generates one)
         assert!(client_session.session_ticket.is_some());
-        let ticket_bytes = client_session.session_ticket.unwrap();
+        let ticket_bytes = client_session.session_ticket.as_ref().unwrap();
         assert!(!ticket_bytes.is_empty());
     }
 
@@ -1011,10 +1011,10 @@ mod tests {
         assert_eq!(client_buckets, bucket_sizes);
 
         // Verify challenge response still works
-        let challenge = client_session.challenge.unwrap();
-        let response_hash: [u8; 32] = blake3::hash(&challenge).into();
+        let challenge = client_session.challenge.as_ref().unwrap();
+        let response_hash: [u8; 32] = blake3::hash(challenge).into();
         assert!(server_state_verify_challenge(
-            &server_session.challenge.unwrap(),
+            server_session.challenge.as_ref().unwrap(),
             &response_hash
         ));
     }

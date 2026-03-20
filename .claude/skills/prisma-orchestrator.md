@@ -45,6 +45,7 @@ Parse the user's request:
    - `prisma-mobile/ios` — Swift iOS app
    - `prisma-mobile/android` — Kotlin Android app
    - `prisma-docs` — Docusaurus documentation
+   - `prisma-mcp` — MCP development server (workspace intelligence tools)
 3. **Complexity**: simple (direct execute) | medium (sequential) | complex (parallel agents)
 4. **Version impact**: patch (fix) | minor (feature) | major (breaking, user-requested only)
 5. **Cross-cutting concerns**:
@@ -74,9 +75,10 @@ Parse the user's request:
 9. GUI integration         (prisma-gui)       — Tauri frontend
 10. Dashboard integration  (prisma-console)   — Next.js admin panel
 11. Mobile updates         (prisma-mobile)    — iOS/Android if affected
-12. Tests                  (all crates)       — unit, integration, property-based
-13. Documentation          (prisma-docs)      — EN + CN docs
-14. Quality gates          (workspace)        — fmt, clippy, test, build
+12. MCP server updates     (prisma-mcp)       — workspace intelligence tools
+13. Tests                  (all crates)       — unit, integration, property-based
+14. Documentation          (prisma-docs)      — EN + CN docs
+15. Quality gates          (workspace)        — fmt, clippy, test, build
 ```
 
 ### Agent Spawning Decision

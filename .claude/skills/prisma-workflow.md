@@ -60,7 +60,7 @@ Review changed code for reuse, quality, and efficiency, then fix any issues foun
 - Trivial wrapper functions adding indirection — pass callbacks directly
 - Check all hooks in `src/hooks/` and stores in `src/store/` before writing new state logic
 
-#### Dashboard checks (prisma-dashboard)
+#### Dashboard checks (prisma-console)
 - Shared UI components in `src/components/ui/` — don't recreate existing ones
 
 ---
@@ -82,11 +82,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-### Frontend (if changes touch prisma-dashboard or prisma-gui)
+### Frontend (if changes touch prisma-console or prisma-gui)
 
 ```bash
 # Dashboard (Next.js)
-cd prisma-dashboard && npm run lint && cd ..
+cd prisma-console && npm run lint && cd ..
 
 # GUI (Vite + Tauri)
 cd prisma-gui && npm run build && cd ..
@@ -118,7 +118,7 @@ If the user provides a shorthand, calculate the new version from the current one
 | `Cargo.toml` (workspace root) | `workspace.package.version` | `version = "X.Y.Z"` |
 | `prisma-gui/src-tauri/tauri.conf.json` | `version` | `"version": "X.Y.Z"` |
 | `prisma-gui/package.json` | `version` | `"version": "X.Y.Z"` |
-| `prisma-dashboard/package.json` | `version` | `"version": "X.Y.Z"` |
+| `prisma-console/package.json` | `version` | `"version": "X.Y.Z"` |
 | `prisma-gui/src-tauri/Cargo.toml` | `package.version` | `version = "X.Y.Z"` |
 
 > Note: The 6 crate Cargo.toml files (`prisma-core`, `prisma-server`, `prisma-client`, `prisma-cli`, `prisma-mgmt`, `prisma-ffi`) inherit `version.workspace = true` from the root — no individual updates needed.

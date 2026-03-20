@@ -574,9 +574,12 @@ async fn main() -> anyhow::Result<()> {
     let is_daemon_child = cli._daemon_child;
     let daemon_pid_file = cli._pid_file;
 
-    // If verbose mode, set RUST_LOG if not already set
+    // If verbose mode, set RUST_LOG if not already set.
+    // SAFETY: This runs before the tokio runtime starts (single-threaded),
+    // so env::set_var is safe here. We set it early so tracing_subscriber
+    // picks it up via EnvFilter.
     if global_verbose && std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "debug");
+        unsafe { std::env::set_var("RUST_LOG", "debug") };
     }
 
     // If we are a daemon child, write the PID file before doing anything else

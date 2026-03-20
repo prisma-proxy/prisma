@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use bytes::Bytes;
 use uuid::Uuid;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::types::{CipherSuite, ClientId, PaddingRange, ProxyDestination};
 
@@ -258,6 +259,9 @@ pub struct DataFrame {
 }
 
 /// Session keys produced after successful handshake.
+///
+/// Implements `ZeroizeOnDrop` to securely erase key material from memory
+/// when the struct is dropped, preventing key leakage via memory dumps.
 #[derive(Debug, Clone)]
 pub struct SessionKeys {
     pub session_key: [u8; 32],
@@ -277,6 +281,32 @@ pub struct SessionKeys {
     pub header_key: Option<[u8; 32]>,
     /// Connection migration token for seamless reconnection.
     pub migration_token: Option<[u8; 32]>,
+}
+
+impl Drop for SessionKeys {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl ZeroizeOnDrop for SessionKeys {}
+
+impl Zeroize for SessionKeys {
+    fn zeroize(&mut self) {
+        self.session_key.zeroize();
+        if let Some(ref mut key) = self.header_key {
+            key.zeroize();
+        }
+        if let Some(ref mut token) = self.migration_token {
+            token.zeroize();
+        }
+        if let Some(ref mut challenge) = self.challenge {
+            challenge.zeroize();
+        }
+        if let Some(ref mut ticket) = self.session_ticket {
+            ticket.zeroize();
+        }
+    }
 }
 
 impl SessionKeys {

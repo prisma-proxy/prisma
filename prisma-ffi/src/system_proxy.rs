@@ -150,20 +150,14 @@ mod platform {
     }
 
     pub fn set(host: &str, port: u16) -> Result<()> {
-        let proxy = format!("socks5://{}:{}", host, port);
-
         match detect_desktop() {
             Desktop::Gnome => set_gnome(host, port)?,
             Desktop::Kde => set_kde(host, port)?,
             Desktop::Unknown => {}
         }
 
-        // Always set environment variables as fallback (best-effort)
-        std::env::set_var("all_proxy", &proxy);
-        std::env::set_var("ALL_PROXY", &proxy);
-        std::env::set_var("socks_proxy", &proxy);
-        std::env::set_var("SOCKS_PROXY", &proxy);
-
+        // Note: env vars only affect the current process, not the system.
+        // Desktop environment settings (gsettings/kwriteconfig) handle the real proxy.
         tracing::info!("Linux system proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -174,11 +168,6 @@ mod platform {
             Desktop::Kde => clear_kde()?,
             Desktop::Unknown => {}
         }
-
-        std::env::remove_var("all_proxy");
-        std::env::remove_var("ALL_PROXY");
-        std::env::remove_var("socks_proxy");
-        std::env::remove_var("SOCKS_PROXY");
 
         tracing::info!("Linux system proxy cleared");
         Ok(())

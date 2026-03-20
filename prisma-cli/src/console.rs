@@ -251,9 +251,19 @@ async fn proxy_request(
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    // Accept self-signed certs since the mgmt API typically uses self-signed TLS
+    // Only accept self-signed certs when proxying to localhost (typical dev setup).
+    // Remote mgmt endpoints must use valid certificates.
+    let is_localhost = {
+        let host = mgmt_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .split(':')
+            .next()
+            .unwrap_or("");
+        host == "localhost" || host == "127.0.0.1" || host == "::1"
+    };
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(is_localhost)
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
     let path = req.uri().path();

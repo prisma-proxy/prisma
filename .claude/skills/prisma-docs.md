@@ -7,13 +7,13 @@ globs:
   - "prisma-docs/docs/**/*.md"
   - "prisma-docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**/*.md"
   - "prisma-gui/README.md"
-  - "prisma-dashboard/README.md"
+  - "prisma-console/README.md"
   - "Cargo.toml"
   - "*/Cargo.toml"
   - "prisma-gui/package.json"
   - "prisma-gui/src-tauri/tauri.conf.json"
   - "prisma-gui/src-tauri/Cargo.toml"
-  - "prisma-dashboard/package.json"
+  - "prisma-console/package.json"
   - "prisma-docs/package.json"
 ---
 
@@ -26,7 +26,7 @@ You are a documentation synchronization subagent for the Prisma project. You aud
 > - `Cargo.toml` (workspace root) `workspace.package.version` = **source of truth**
 > - `prisma-gui/package.json`, `prisma-gui/src-tauri/tauri.conf.json`, `prisma-gui/src-tauri/Cargo.toml` — must match workspace version
 > - `CLAUDE.md`, `.claude/skills/prisma-rust.md` — must mention current version
-> - `prisma-dashboard/package.json` (`2.0.0`) — **SEPARATE version, do NOT sync** with workspace
+> - `prisma-console/package.json` (`2.0.0`) — **SEPARATE version, do NOT sync** with workspace
 > - `prisma-docs/package.json` (`0.0.0`) — **FROZEN, NEVER change**
 
 ## Available Commands
@@ -49,7 +49,7 @@ Scan all documentation and report what is out of sync **without modifying anythi
    - `prisma-gui/src-tauri/Cargo.toml`
    - `CLAUDE.md` opening line
    - `.claude/skills/prisma-rust.md` architecture overview
-   - `prisma-dashboard/package.json` (expect `2.0.0`, independent)
+   - `prisma-console/package.json` (expect `2.0.0`, independent)
    - `prisma-docs/package.json` (expect `0.0.0`, frozen)
 3. **Compare README.md ↔ README_EN.md**:
    - Feature list bullet count (`## 特性亮点` vs `## Highlights`)
@@ -65,7 +65,7 @@ Scan all documentation and report what is out of sync **without modifying anythi
    - Line count drift — flag any file pair with >20% difference
 7. **Check CLI reference** — `Commands` enum in `prisma-cli/src/main.rs` vs `prisma-docs/docs/cli-reference.md`
 8. **Check config docs** — `ServerConfig` in `prisma-core/src/config/server.rs` vs `prisma-docs/docs/configuration/server.md`, `ClientConfig` in `prisma-core/src/config/client.rs` vs `prisma-docs/docs/configuration/client.md`
-9. **Check protocol version references** — "PrismaVeil v4" must be consistent across all docs
+9. **Check protocol version references** — "PrismaVeil v5" must be consistent across all docs
 10. **Verify documentation link targets exist** — spot-check that referenced doc paths resolve
 11. **Present findings** as a pass/fail checklist
 
@@ -154,7 +154,7 @@ Verify documentation matches actual code. Key mappings:
 | `features/xhttp-transport.md` | `prisma-server/src/transport/xhttp.rs` |
 | `features/xporta-transport.md` | `prisma-server/src/transport/xporta.rs` |
 | `features/port-forwarding.md` | `prisma-server/src/relay/` |
-| `features/dashboard.md` | `prisma-dashboard/` |
+| `features/dashboard.md` | `prisma-console/` |
 | `features/gui-clients.md` | `prisma-gui/`, `prisma-ffi/` |
 | `features/benchmarks.md` | benchmark results (informational, no direct source) |
 | `security/prismaveil-protocol.md` | `prisma-core/src/protocol/` |
@@ -178,7 +178,7 @@ Verify documentation matches actual code. Key mappings:
 
 ## 4. Subsystem README Sync
 
-Keep `prisma-gui/README.md` and `prisma-dashboard/README.md` accurate.
+Keep `prisma-gui/README.md` and `prisma-console/README.md` accurate.
 
 ### prisma-gui/README.md
 
@@ -188,10 +188,10 @@ Keep `prisma-gui/README.md` and `prisma-dashboard/README.md` accurate.
 4. **Tech stack versions** — compare against `prisma-gui/package.json` dependencies
 5. **Prerequisites** — verify listed tool versions are still accurate
 
-### prisma-dashboard/README.md
+### prisma-console/README.md
 
-1. **Pages table** — compare against actual routes in `prisma-dashboard/src/app/`
-2. **Tech stack** — compare against `prisma-dashboard/package.json` dependencies
+1. **Pages table** — compare against actual routes in `prisma-console/src/app/`
+2. **Tech stack** — compare against `prisma-console/package.json` dependencies
 3. **Build commands** — verify documented commands work
 4. **Server config TOML snippet** — compare against actual `ServerConfig` struct fields for management API
 5. **Version** — must stay at `2.0.0` (independent from workspace)
@@ -211,7 +211,7 @@ Run this after any sync operation to verify everything is consistent.
    - `prisma-gui/src-tauri/Cargo.toml` (matches workspace)
    - `CLAUDE.md` (mentions current version)
    - `.claude/skills/prisma-rust.md` (mentions current version)
-   - `prisma-dashboard/package.json` (independent: `2.0.0`)
+   - `prisma-console/package.json` (independent: `2.0.0`)
    - `prisma-docs/package.json` (frozen: `0.0.0`)
 2. **README parity** — 6 checks: features, transports, structure, install, links, dev commands
 3. **CLAUDE.md accuracy** — 3 checks: version, crate table, skills list

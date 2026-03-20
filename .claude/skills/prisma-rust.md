@@ -15,7 +15,7 @@ globs:
 
 ## Architecture Overview
 
-Prisma is a high-performance encrypted proxy built in Rust. The workspace (v0.6.3, edition 2021) contains 6 crates:
+Prisma is a high-performance encrypted proxy built in Rust. The workspace (v1.1.0, edition 2021) contains 6 crates:
 
 ```
 prisma-cli ──► prisma-server ──► prisma-core
@@ -168,9 +168,9 @@ prisma-cli ──► prisma-server ──► prisma-core
 | `TransportType` | `prisma-client/src/transport_selector.rs` | Enum: QuicV2Salamander, QuicV2, PrismaTls, WebSocket, XPorta (+ legacy Quic, TcpTls, Tcp) |
 | `FrameEncoder` | `prisma-core/src/protocol/frame_encoder.rs` | Zero-copy pre-allocated encoder for hot relay path |
 
-## Protocol Quick Reference (PrismaVeil v4)
+## Protocol Quick Reference (PrismaVeil v5)
 
-**Version:** `PRISMA_PROTOCOL_VERSION = 0x04`
+**Version:** `PRISMA_PROTOCOL_VERSION = 0x05`
 
 ### Handshake (2-step)
 
