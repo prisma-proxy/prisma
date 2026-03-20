@@ -25,9 +25,7 @@ use tracing::debug;
 
 /// Boxed future for an owned channel permit reservation.
 type WriteReserveFuture = Pin<
-    Box<
-        dyn Future<Output = Result<mpsc::OwnedPermit<Vec<u8>>, mpsc::error::SendError<()>>> + Send,
-    >,
+    Box<dyn Future<Output = Result<mpsc::OwnedPermit<Vec<u8>>, mpsc::error::SendError<()>>> + Send>,
 >;
 
 /// A ShadowTLS v3 client stream that wraps proxy data in TLS application data.

@@ -1342,8 +1342,9 @@ pub unsafe extern "C" fn prisma_port_forward_add(
         // Send Add control message (non-blocking try_send to avoid deadlock at FFI boundary)
         match mgr
             .control_tx
-            .try_send(prisma_client::forward::ForwardControl::Add(Box::new(config)))
-        {
+            .try_send(prisma_client::forward::ForwardControl::Add(Box::new(
+                config,
+            ))) {
             Ok(_) => PRISMA_OK,
             Err(e) => {
                 tracing::error!("Failed to send add-forward control: {}", e);
