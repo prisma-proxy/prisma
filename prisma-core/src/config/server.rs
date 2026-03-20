@@ -60,6 +60,9 @@ pub struct ServerConfig {
     /// Per-client access control lists.
     #[serde(default)]
     pub acls: std::collections::HashMap<String, crate::acl::Acl>,
+    /// Server-side transport fallback configuration.
+    #[serde(default)]
+    pub fallback: FallbackConfig,
     /// Graceful shutdown drain timeout in seconds (default: 30).
     #[serde(default = "default_shutdown_drain_timeout")]
     pub shutdown_drain_timeout_secs: u64,
@@ -145,6 +148,9 @@ pub struct AuthorizedClient {
     /// Quota reset period.
     #[serde(default)]
     pub quota_period: Option<String>,
+    /// Per-client permissions (granular access control).
+    #[serde(default)]
+    pub permissions: Option<crate::permissions::ClientPermissions>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -750,6 +756,66 @@ fn default_ssh_listen_addr() -> String {
 
 fn default_ssh_banner() -> String {
     "SSH-2.0-OpenSSH_9.6".into()
+}
+
+/// Server-side transport fallback configuration.
+///
+/// When the primary transport fails or encounters repeated errors,
+/// the server can automatically start fallback transports.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FallbackConfig {
+    /// Whether fallback is enabled.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Ordered list of transports to try: "tcp", "quic", "websocket", "grpc", "xhttp", "xporta".
+    #[serde(default = "default_fallback_chain")]
+    pub chain: Vec<String>,
+    /// Interval (in seconds) for health checks on each transport listener.
+    #[serde(default = "default_health_check_interval")]
+    pub health_check_interval: u64,
+    /// Automatically switch to the next transport on failure.
+    #[serde(default = "default_true_fallback")]
+    pub auto_switch_on_failure: bool,
+    /// Maximum consecutive failures before triggering fallback.
+    #[serde(default = "default_max_failures")]
+    pub max_consecutive_failures: u32,
+    /// Whether to migrate back to the primary when it recovers.
+    #[serde(default)]
+    pub migrate_back_on_recovery: bool,
+}
+
+impl Default for FallbackConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            chain: default_fallback_chain(),
+            health_check_interval: default_health_check_interval(),
+            auto_switch_on_failure: true,
+            max_consecutive_failures: default_max_failures(),
+            migrate_back_on_recovery: false,
+        }
+    }
+}
+
+fn default_fallback_chain() -> Vec<String> {
+    vec![
+        "tcp".into(),
+        "quic".into(),
+        "websocket".into(),
+        "grpc".into(),
+    ]
+}
+
+fn default_health_check_interval() -> u64 {
+    30
+}
+
+fn default_true_fallback() -> bool {
+    true
+}
+
+fn default_max_failures() -> u32 {
+    5
 }
 
 fn default_level() -> String {

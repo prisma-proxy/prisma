@@ -160,6 +160,34 @@ impl TransportSelector {
         }
     }
 
+    /// Update the fallback order with server-advertised transports.
+    ///
+    /// The server sends a FallbackAdvertisement command listing available transports.
+    /// The client intersects this with its configured transports and reorders
+    /// accordingly, preferring server-supported transports.
+    pub async fn apply_server_fallback_advertisement(&self, server_transports: &[String]) {
+        let server_types: Vec<TransportType> = server_transports
+            .iter()
+            .filter_map(|s| TransportType::parse(s))
+            .collect();
+
+        if server_types.is_empty() {
+            return;
+        }
+
+        let mut health = self.health.write().await;
+
+        // Add any new transports from the server advertisement
+        for &transport in &server_types {
+            health.entry(transport).or_insert_with(TransportHealth::new);
+        }
+
+        info!(
+            server_transports = ?server_transports,
+            "Applied server fallback advertisement"
+        );
+    }
+
     /// Parse fallback order from config strings.
     pub fn from_config(order: &[String]) -> Self {
         let transports: Vec<TransportType> = order

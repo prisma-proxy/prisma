@@ -136,6 +136,44 @@ pub struct ClientConfig {
     /// WireGuard-compatible UDP transport.
     #[serde(default)]
     pub wireguard: Option<crate::wireguard::WireGuardClientConfig>,
+    /// Client-side fallback configuration.
+    #[serde(default)]
+    pub fallback: ClientFallbackConfig,
+}
+
+/// Client-side fallback configuration.
+///
+/// Controls how the client handles transport fallback when the primary
+/// transport fails or the server advertises alternative transports.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientFallbackConfig {
+    /// Whether to use server-advertised fallback transports.
+    #[serde(default = "default_true_val")]
+    pub use_server_fallback: bool,
+    /// Maximum number of fallback attempts before giving up.
+    #[serde(default = "default_max_fallback_attempts")]
+    pub max_fallback_attempts: u32,
+    /// Timeout in seconds for each fallback connection attempt.
+    #[serde(default = "default_fallback_connect_timeout")]
+    pub connect_timeout_secs: u64,
+}
+
+impl Default for ClientFallbackConfig {
+    fn default() -> Self {
+        Self {
+            use_server_fallback: true,
+            max_fallback_attempts: default_max_fallback_attempts(),
+            connect_timeout_secs: default_fallback_connect_timeout(),
+        }
+    }
+}
+
+fn default_max_fallback_attempts() -> u32 {
+    3
+}
+
+fn default_fallback_connect_timeout() -> u64 {
+    10
 }
 
 /// A subscription source for fetching server lists from a URL.

@@ -13,6 +13,7 @@ pub mod geodata;
 pub mod import;
 pub mod logging;
 pub mod mux;
+pub mod permissions;
 pub mod port_hop;
 pub mod prisma_auth;
 pub mod prisma_flow;

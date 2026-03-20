@@ -57,6 +57,11 @@ pub async fn run(config_path: &str) -> Result<()> {
     let auth_inner = AuthStoreInner::from_config(&config.authorized_clients)?;
     let state = ServerState::new(&config, auth_inner, log_tx, metrics_tx);
 
+    // Populate per-client permissions from config
+    state
+        .populate_permissions_from_config(&config.authorized_clients)
+        .await;
+
     // Load static routing rules from config
     if !config.routing.rules.is_empty() {
         let static_rules: Vec<RoutingRule> = config
@@ -152,6 +157,33 @@ pub async fn run(config_path: &str) -> Result<()> {
 
     // Start metrics ticker (1s snapshots)
     tokio::spawn(prisma_core::state::metrics_ticker(state.clone()));
+
+    // Start transport fallback health check loop if enabled
+    if config.fallback.enabled {
+        let fb_config = Arc::new(config.clone());
+        let fb_state = state.clone();
+        let fb_auth = auth_store.clone();
+        let fb_dns = dns_cache.clone();
+        let fb_ctx = ctx.clone();
+        // Initialize fallback transports from what is actually configured
+        {
+            let configured = listener::fallback::configured_transports(&config);
+            let chain = fb_state.fallback_manager.chain.read().await;
+            for entry in chain.iter() {
+                if configured.contains(&entry.name) {
+                    entry.set_status(prisma_core::state::TransportStatus::Active);
+                }
+            }
+        }
+        tokio::spawn(async move {
+            listener::fallback::run_health_check_loop(fb_config, fb_state, fb_auth, fb_dns, fb_ctx)
+                .await;
+        });
+        info!(
+            chain = ?config.fallback.chain,
+            "Transport fallback manager started"
+        );
+    }
 
     // Start SIGHUP signal handler for config hot-reload (Unix only)
     #[cfg(unix)]

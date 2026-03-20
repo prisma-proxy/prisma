@@ -24,6 +24,8 @@ pub const CMD_CHALLENGE_RESP: u8 = 0x0E;
 /// v5: Connection migration request — client sends its migration token to resume
 /// a session on a new transport connection without a full handshake.
 pub const CMD_MIGRATION: u8 = 0x0F;
+/// v5: Server → Client: advertise available fallback transports.
+pub const CMD_FALLBACK_ADVERTISEMENT: u8 = 0x10;
 
 // Flag bits (2-byte little-endian)
 pub const FLAG_PADDED: u16 = 0x0001;
@@ -57,6 +59,9 @@ pub const FEATURE_HEADER_AUTH: u32 = 0x0200;
 pub const FEATURE_CONNECTION_MIGRATION: u32 = 0x0400;
 /// v5: Server supports hybrid post-quantum key exchange (X25519 + ML-KEM-768).
 pub const FEATURE_PQ_KEM: u32 = 0x0800;
+/// v5: Server supports transport fallback advertisement — the server can advertise
+/// available fallback transports to the client during or after handshake.
+pub const FEATURE_FALLBACK_TRANSPORTS: u32 = 0x1000;
 
 // --- PrismaVeil handshake types ---
 
@@ -221,6 +226,12 @@ pub enum Command {
         token: [u8; 32],
         session_id: [u8; 16],
     },
+    /// v5: Server → Client: advertise available fallback transports.
+    /// Sent after handshake to inform the client which transports are available.
+    FallbackAdvertisement {
+        /// List of available transport names (e.g., ["quic", "websocket", "grpc"]).
+        transports: Vec<String>,
+    },
 }
 
 impl Command {
@@ -241,6 +252,7 @@ impl Command {
             Command::DnsResponse { .. } => CMD_DNS_RESPONSE,
             Command::ChallengeResponse { .. } => CMD_CHALLENGE_RESP,
             Command::Migration { .. } => CMD_MIGRATION,
+            Command::FallbackAdvertisement { .. } => CMD_FALLBACK_ADVERTISEMENT,
         }
     }
 }

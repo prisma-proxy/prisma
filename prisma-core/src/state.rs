@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::acl::AclStore;
 use crate::config::server::{AuthorizedClient, RoutingRule, ServerConfig};
+use crate::permissions::PermissionStore;
 use crate::util;
 
 /// Shared client entry data for the auth store.
@@ -207,6 +208,10 @@ pub struct ServerState {
     pub shutdown_tx: broadcast::Sender<()>,
     /// Per-client access control lists.
     pub acl_store: AclStore,
+    /// Per-client permissions store (granular access control).
+    pub permission_store: PermissionStore,
+    /// Transport fallback manager.
+    pub fallback_manager: FallbackManager,
     /// Registry of active port-forward listeners with per-forward metrics.
     pub forward_registry: ForwardRegistry,
 }
@@ -221,6 +226,13 @@ impl ServerState {
         let (reload_tx, _) = broadcast::channel::<ReloadEvent>(64);
         let (reload_notify_tx, reload_notify) = watch::channel(0u64);
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
+
+        // Initialize permission store from config
+        let permission_store = PermissionStore::new();
+        // Pre-populate permissions from authorized_clients config
+        // (done synchronously since we are constructing — no await needed)
+        // Actual population happens via `populate_permissions_from_config` after construction.
+
         Self {
             metrics: Arc::new(ServerMetrics::new()),
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -238,7 +250,21 @@ impl ServerState {
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_tx,
             acl_store: AclStore::from_config(config.acls.clone()),
+            permission_store,
+            fallback_manager: FallbackManager::new(&config.fallback),
             forward_registry: new_forward_registry(),
+        }
+    }
+
+    /// Populate the permission store from authorized_clients config entries.
+    /// Must be called after construction since it is async.
+    pub async fn populate_permissions_from_config(&self, clients: &[AuthorizedClient]) {
+        for client in clients {
+            if let Some(ref perms) = client.permissions {
+                self.permission_store
+                    .set_permissions(client.id.clone(), perms.clone())
+                    .await;
+            }
         }
     }
 
@@ -517,4 +543,205 @@ pub async fn count_client_forwards(registry: &ForwardRegistry, client_id: Uuid) 
     map.values()
         .filter(|e| e.client_id == Some(client_id))
         .count()
+}
+
+// ---------------------------------------------------------------------------
+// Transport fallback state
+// ---------------------------------------------------------------------------
+
+/// Health status of a single server-side transport listener.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum TransportStatus {
+    /// Listener is active and accepting connections.
+    Active,
+    /// Listener failed to bind or encountered repeated errors.
+    Failed,
+    /// Listener is starting up.
+    Starting,
+    /// Listener is stopped (not in use).
+    Stopped,
+    /// Listener is in recovery (primary coming back online).
+    Recovering,
+}
+
+/// State tracking for a single transport in the fallback chain.
+#[derive(Debug)]
+pub struct TransportFallbackEntry {
+    /// Transport name (e.g., "tcp", "quic", "websocket").
+    pub name: String,
+    /// Current status.
+    pub status: Arc<std::sync::RwLock<TransportStatus>>,
+    /// Consecutive failure count.
+    pub consecutive_failures: AtomicU64,
+    /// Total connections handled by this transport.
+    pub total_connections: AtomicU64,
+    /// Time of last successful connection.
+    pub last_success: Arc<std::sync::RwLock<Option<DateTime<Utc>>>>,
+    /// Time of last failure.
+    pub last_failure: Arc<std::sync::RwLock<Option<DateTime<Utc>>>>,
+}
+
+impl TransportFallbackEntry {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            status: Arc::new(std::sync::RwLock::new(TransportStatus::Stopped)),
+            consecutive_failures: AtomicU64::new(0),
+            total_connections: AtomicU64::new(0),
+            last_success: Arc::new(std::sync::RwLock::new(None)),
+            last_failure: Arc::new(std::sync::RwLock::new(None)),
+        }
+    }
+
+    /// Record a successful connection.
+    pub fn record_success(&self) {
+        self.consecutive_failures.store(0, Ordering::Relaxed);
+        self.total_connections.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut last) = self.last_success.write() {
+            *last = Some(Utc::now());
+        }
+    }
+
+    /// Record a failure. Returns the new consecutive failure count.
+    pub fn record_failure(&self) -> u64 {
+        let count = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+        if let Ok(mut last) = self.last_failure.write() {
+            *last = Some(Utc::now());
+        }
+        count
+    }
+
+    /// Get current status.
+    pub fn get_status(&self) -> TransportStatus {
+        *self.status.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Set status.
+    pub fn set_status(&self, status: TransportStatus) {
+        if let Ok(mut s) = self.status.write() {
+            *s = status;
+        }
+    }
+}
+
+/// Serializable snapshot of transport fallback state.
+#[derive(Debug, Clone, Serialize)]
+pub struct TransportFallbackSnapshot {
+    pub name: String,
+    pub status: TransportStatus,
+    pub consecutive_failures: u64,
+    pub total_connections: u64,
+    pub last_success: Option<DateTime<Utc>>,
+    pub last_failure: Option<DateTime<Utc>>,
+}
+
+impl TransportFallbackEntry {
+    /// Create a snapshot for API/monitoring.
+    pub fn snapshot(&self) -> TransportFallbackSnapshot {
+        TransportFallbackSnapshot {
+            name: self.name.clone(),
+            status: self.get_status(),
+            consecutive_failures: self.consecutive_failures.load(Ordering::Relaxed),
+            total_connections: self.total_connections.load(Ordering::Relaxed),
+            last_success: self.last_success.read().ok().and_then(|v| *v),
+            last_failure: self.last_failure.read().ok().and_then(|v| *v),
+        }
+    }
+}
+
+/// Manager for server-side transport fallback chain.
+#[derive(Clone)]
+pub struct FallbackManager {
+    /// Ordered chain of transports.
+    pub chain: Arc<RwLock<Vec<Arc<TransportFallbackEntry>>>>,
+    /// Index of the currently active primary transport.
+    pub active_index: Arc<std::sync::atomic::AtomicUsize>,
+    /// Configuration.
+    pub config: Arc<RwLock<crate::config::server::FallbackConfig>>,
+}
+
+impl FallbackManager {
+    /// Create a new fallback manager from config.
+    pub fn new(config: &crate::config::server::FallbackConfig) -> Self {
+        let chain: Vec<Arc<TransportFallbackEntry>> = config
+            .chain
+            .iter()
+            .map(|name| Arc::new(TransportFallbackEntry::new(name.clone())))
+            .collect();
+
+        Self {
+            chain: Arc::new(RwLock::new(chain)),
+            active_index: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            config: Arc::new(RwLock::new(config.clone())),
+        }
+    }
+
+    /// Get the currently active transport name.
+    pub async fn active_transport(&self) -> Option<String> {
+        let chain = self.chain.read().await;
+        let idx = self.active_index.load(Ordering::Relaxed);
+        chain.get(idx).map(|e| e.name.clone())
+    }
+
+    /// Get all available transport names (those that are Active or Starting).
+    pub async fn available_transports(&self) -> Vec<String> {
+        let chain = self.chain.read().await;
+        chain
+            .iter()
+            .filter(|e| {
+                let status = e.get_status();
+                status == TransportStatus::Active || status == TransportStatus::Starting
+            })
+            .map(|e| e.name.clone())
+            .collect()
+    }
+
+    /// Record a failure for a transport. If max failures exceeded, trigger fallback.
+    /// Returns true if a fallback switch occurred.
+    pub async fn record_transport_failure(&self, transport_name: &str) -> bool {
+        let chain = self.chain.read().await;
+        let config = self.config.read().await;
+
+        if let Some(entry) = chain.iter().find(|e| e.name == transport_name) {
+            let failures = entry.record_failure();
+
+            if config.auto_switch_on_failure && failures >= config.max_consecutive_failures as u64 {
+                // Mark as failed
+                entry.set_status(TransportStatus::Failed);
+
+                // Try to switch to next available transport
+                let current = self.active_index.load(Ordering::Relaxed);
+                for i in 1..chain.len() {
+                    let next = (current + i) % chain.len();
+                    let next_status = chain[next].get_status();
+                    if next_status != TransportStatus::Failed {
+                        self.active_index.store(next, Ordering::Relaxed);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Record a success for a transport.
+    pub async fn record_transport_success(&self, transport_name: &str) {
+        let chain = self.chain.read().await;
+        if let Some(entry) = chain.iter().find(|e| e.name == transport_name) {
+            entry.record_success();
+            entry.set_status(TransportStatus::Active);
+        }
+    }
+
+    /// Get a snapshot of all transports for monitoring.
+    pub async fn snapshot(&self) -> Vec<TransportFallbackSnapshot> {
+        let chain = self.chain.read().await;
+        chain.iter().map(|e| e.snapshot()).collect()
+    }
+
+    /// Get the list of transport names for fallback advertisement.
+    pub async fn advertised_transports(&self) -> Vec<String> {
+        let chain = self.chain.read().await;
+        chain.iter().map(|e| e.name.clone()).collect()
+    }
 }

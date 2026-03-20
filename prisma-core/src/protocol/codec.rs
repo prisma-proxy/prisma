@@ -522,6 +522,19 @@ pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
             buf.extend_from_slice(session_id);
             buf
         }
+        Command::FallbackAdvertisement { transports } => {
+            // Wire format: [count:1][for each: len:1, name:var]
+            let mut buf = Vec::new();
+            let count = transports.len().min(255) as u8;
+            buf.push(count);
+            for name in transports.iter().take(255) {
+                let name_bytes = name.as_bytes();
+                let len = name_bytes.len().min(255) as u8;
+                buf.push(len);
+                buf.extend_from_slice(&name_bytes[..len as usize]);
+            }
+            buf
+        }
     }
 }
 
@@ -844,6 +857,36 @@ fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolEr
             let mut session_id = [0u8; 16];
             session_id.copy_from_slice(&payload[32..48]);
             Ok(Command::Migration { token, session_id })
+        }
+        CMD_FALLBACK_ADVERTISEMENT => {
+            // Wire format: [count:1][for each: len:1, name:var]
+            if payload.is_empty() {
+                return Err(ProtocolError::InvalidFrame(
+                    "FallbackAdvertisement too short".into(),
+                ));
+            }
+            let count = payload[0] as usize;
+            let mut offset = 1;
+            let mut transports = Vec::with_capacity(count);
+            for _ in 0..count {
+                if offset >= payload.len() {
+                    return Err(ProtocolError::InvalidFrame(
+                        "FallbackAdvertisement truncated".into(),
+                    ));
+                }
+                let name_len = payload[offset] as usize;
+                offset += 1;
+                if offset + name_len > payload.len() {
+                    return Err(ProtocolError::InvalidFrame(
+                        "FallbackAdvertisement name truncated".into(),
+                    ));
+                }
+                let name =
+                    String::from_utf8_lossy(&payload[offset..offset + name_len]).into_owned();
+                transports.push(name);
+                offset += name_len;
+            }
+            Ok(Command::FallbackAdvertisement { transports })
         }
         _ => Err(ProtocolError::InvalidCommand(cmd)),
     }
@@ -1422,6 +1465,48 @@ mod tests {
     #[test]
     fn test_migration_command_too_short() {
         let result = decode_command_payload(CMD_MIGRATION, &[0u8; 47]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fallback_advertisement_round_trip() {
+        let frame = DataFrame {
+            command: Command::FallbackAdvertisement {
+                transports: vec![
+                    "tcp".into(),
+                    "quic".into(),
+                    "websocket".into(),
+                    "grpc".into(),
+                ],
+            },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+    }
+
+    #[test]
+    fn test_fallback_advertisement_empty() {
+        let frame = DataFrame {
+            command: Command::FallbackAdvertisement { transports: vec![] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        if let Command::FallbackAdvertisement { transports } = decoded.command {
+            assert!(transports.is_empty());
+        } else {
+            panic!("Expected FallbackAdvertisement");
+        }
+    }
+
+    #[test]
+    fn test_fallback_advertisement_too_short() {
+        let result = decode_command_payload(CMD_FALLBACK_ADVERTISEMENT, &[]);
         assert!(result.is_err());
     }
 }

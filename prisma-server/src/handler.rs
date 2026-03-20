@@ -359,6 +359,9 @@ async fn compute_server_features(state: &ServerState) -> (Vec<u16>, u32) {
     if cfg.allow_transport_only_cipher {
         features |= FEATURE_TRANSPORT_ONLY_CIPHER;
     }
+    if cfg.fallback.enabled {
+        features |= FEATURE_FALLBACK_TRANSPORTS;
+    }
     (buckets, features)
 }
 
@@ -434,6 +437,12 @@ where
     client_acc.add_bytes_up(final_up);
     client_acc.add_bytes_down(final_down);
     client_acc.record_disconnect();
+
+    // Decrement the permission-tracked connection count
+    let client_id_str = client_uuid.to_string();
+    ctx.state
+        .permission_store
+        .decrement_connections(&client_id_str);
 
     ctx.state.connections.write().await.remove(&session_id);
     match &result {
@@ -535,8 +544,26 @@ where
     let (plaintext, _nonce) = decrypt_frame(cipher.as_ref(), &frame_buf)?;
     let frame = decode_data_frame(&plaintext)?;
 
+    // Client ID string used for permission/ACL checks
+    let client_id_str = session_keys.client_id.0.to_string();
+
     match frame.command {
         Command::Connect(ref dest) => {
+            // Check client permissions (blocked, max connections, destination, ports)
+            if let Err(reason) = state
+                .permission_store
+                .check_connect(&client_id_str, dest)
+                .await
+            {
+                warn!(
+                    dest = %dest,
+                    client_id = %client_id_str,
+                    reason = %reason,
+                    "Connection blocked by client permissions"
+                );
+                return Err(anyhow::anyhow!("Permission denied: {}", reason));
+            }
+
             // Check routing rules
             if !check_routing_rules(state, dest).await {
                 warn!(dest = %dest, "Connection blocked by routing rule");
@@ -545,12 +572,14 @@ where
 
             // Check per-client ACL
             {
-                let client_id_str = session_keys.client_id.0.to_string();
                 if !state.acl_store.check(&client_id_str, dest).await {
                     warn!(dest = %dest, client_id = %client_id_str, "Connection blocked by ACL");
                     return Err(anyhow::anyhow!("Blocked by ACL"));
                 }
             }
+
+            // Track connection count for permissions enforcement
+            state.permission_store.increment_connections(&client_id_str);
 
             // Update connection mode and destination
             if let Some(conn) = state
@@ -605,6 +634,20 @@ where
             ref name,
             ..
         } => {
+            // Check port forwarding permission
+            if let Err(reason) = state
+                .permission_store
+                .check_port_forward(&client_id_str)
+                .await
+            {
+                warn!(
+                    client_id = %client_id_str,
+                    reason = %reason,
+                    "Port forwarding blocked by client permissions"
+                );
+                return Err(anyhow::anyhow!("Permission denied: {}", reason));
+            }
+
             if let Some(conn) = state
                 .connections
                 .write()
@@ -720,6 +763,16 @@ where
             Ok(())
         }
         Command::UdpAssociate { .. } => {
+            // Check UDP permission
+            if let Err(reason) = state.permission_store.check_udp(&client_id_str).await {
+                warn!(
+                    client_id = %client_id_str,
+                    reason = %reason,
+                    "UDP relay blocked by client permissions"
+                );
+                return Err(anyhow::anyhow!("Permission denied: {}", reason));
+            }
+
             if let Some(conn) = state
                 .connections
                 .write()
