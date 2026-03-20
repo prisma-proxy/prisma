@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI 参考
 
-`prisma` 二进制文件提供多个子命令，用于运行服务端和客户端、生成凭证、管理配置、启动控制台，以及通过管理 API 控制运行中的服务器。
+`prisma` 二进制文件（v1.5.1）提供多个子命令，用于运行服务端和客户端（支持守护进程模式）、生成凭证、管理配置、启动控制台、导入服务器配置、管理订阅、测试延迟，以及通过管理 API 控制运行中的服务器。
 
 ## 全局参数
 
@@ -12,39 +12,183 @@ sidebar_position: 6
 
 | 参数 | 环境变量 | 描述 |
 |------|----------|------|
-| `--json` | — | 输出原始 JSON 而非格式化表格 |
+| `--json` | -- | 输出原始 JSON 而非格式化表格 |
+| `--verbose`, `-v` | -- | 启用详细（debug）输出。如果 `RUST_LOG` 未设置则设为 `debug` |
 | `--mgmt-url <URL>` | `PRISMA_MGMT_URL` | 管理 API 地址（覆盖自动检测） |
 | `--mgmt-token <TOKEN>` | `PRISMA_MGMT_TOKEN` | 管理 API 认证令牌（覆盖自动检测） |
 
-## `prisma server`
+示例：
+
+```bash
+# 脚本化 JSON 输出
+prisma clients list --json
+
+# Debug 级别日志
+prisma server -v -c server.toml
+
+# 显式管理 API 连接
+prisma status --mgmt-url https://my-server.com:9090 --mgmt-token my-token
+```
+
+---
+
+## 服务端、客户端和控制台（守护进程模式）
+
+`server`、`client` 和 `console` 命令都支持通过 `-d` 参数的**守护进程模式**，以及 `stop`/`status` 子命令来管理后台进程。
+
+### `prisma server`
 
 启动代理服务端。
 
 ```bash
-prisma server -c <PATH>
+prisma server [-d] [-c <PATH>] [--pid-file <PATH>] [--log-file <PATH>]
+prisma server stop [--pid-file <PATH>]
+prisma server status [--pid-file <PATH>]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
 | `-c, --config <PATH>` | `server.toml` | 服务端配置文件路径 |
+| `-d, --daemon` | -- | 作为后台守护进程运行 |
+| `--pid-file <PATH>` | `/tmp/prisma-server.pid` | 守护进程模式的 PID 文件路径 |
+| `--log-file <PATH>` | `/var/log/prisma/prisma-server.log` | 守护进程模式的日志文件路径 |
 
-如果当前目录找不到配置文件，CLI 会自动搜索标准位置（`/etc/prisma/`、`~/.config/prisma/`）。服务端同时启动 TCP 和 QUIC 监听器，等待客户端连接。启动时会验证配置，如果验证失败则退出并报错。
+| 子命令 | 描述 |
+|--------|------|
+| `stop` | 停止运行中的服务端守护进程（发送 SIGTERM） |
+| `status` | 检查服务端守护进程是否正在运行 |
 
-## `prisma client`
+服务端同时启动 TCP 和 QUIC 监听器并等待客户端连接。启动时验证配置，验证失败则退出并报错。如果设置了 `config_watch = true`，服务端会在配置文件更改时自动重载。服务端也会在收到 `SIGHUP` 时重载。
+
+如果当前目录找不到配置文件，CLI 会自动搜索标准位置（`/etc/prisma/`、`~/.config/prisma/`）。
+
+**示例：**
+
+```bash
+# 前台模式
+prisma server -c server.toml
+
+# 守护进程模式
+prisma server -d -c /etc/prisma/server.toml
+
+# 自定义 PID 和日志路径的守护进程
+prisma server -d -c server.toml --pid-file /run/prisma-server.pid --log-file /var/log/prisma/server.log
+
+# 检查守护进程是否运行
+prisma server status
+
+# 停止守护进程
+prisma server stop
+
+# 触发热重载（前台运行时）
+kill -HUP $(cat /tmp/prisma-server.pid)
+```
+
+### `prisma client`
 
 启动代理客户端。
 
 ```bash
-prisma client -c <PATH>
+prisma client [-d] [-c <PATH>] [--pid-file <PATH>] [--log-file <PATH>]
+prisma client stop [--pid-file <PATH>]
+prisma client status [--pid-file <PATH>]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
 | `-c, --config <PATH>` | `client.toml` | 客户端配置文件路径 |
+| `-d, --daemon` | -- | 作为后台守护进程运行 |
+| `--pid-file <PATH>` | `/tmp/prisma-client.pid` | 守护进程模式的 PID 文件路径 |
+| `--log-file <PATH>` | `/var/log/prisma/prisma-client.log` | 守护进程模式的日志文件路径 |
 
-如果当前目录找不到配置文件，CLI 会自动搜索标准位置（`/etc/prisma/`、`~/.config/prisma/`）。客户端启动 SOCKS5 监听器（以及可选的 HTTP CONNECT 监听器），连接到远程服务器，执行 PrismaVeil 握手 (Handshake)，然后开始代理流量。
+| 子命令 | 描述 |
+|--------|------|
+| `stop` | 停止运行中的客户端守护进程 |
+| `status` | 检查客户端守护进程是否正在运行 |
 
-## `prisma gen-key`
+客户端启动 SOCKS5 监听器（以及可选的 HTTP CONNECT 监听器和 TUN 设备），连接到远程服务器，执行 PrismaVeil v5 握手，然后开始代理流量。
+
+**示例：**
+
+```bash
+# 前台模式
+prisma client -c client.toml
+
+# 守护进程模式
+prisma client -d -c client.toml
+
+# 详细前台模式
+prisma client -v -c client.toml
+
+# 检查状态和停止
+prisma client status
+prisma client stop
+```
+
+### `prisma console`
+
+启动 Web 控制台，支持自动下载和反向代理。
+
+```bash
+prisma console [-d] [--mgmt-url <URL>] [--token <TOKEN>] [--port <PORT>] [--bind <ADDR>]
+prisma console stop [--pid-file <PATH>]
+prisma console status [--pid-file <PATH>]
+```
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `--mgmt-url <URL>` | 从 `server.toml` 自动检测 | 代理请求的管理 API 地址 |
+| `--token <TOKEN>` | 自动检测 | 管理 API 认证令牌 |
+| `--port <PORT>` | `9091` | 控制台服务端口 |
+| `--bind <ADDR>` | `0.0.0.0` | 控制台绑定地址 |
+| `--no-open` | -- | 不自动打开浏览器 |
+| `--update` | -- | 强制重新下载控制台资源 |
+| `--dir <PATH>` | -- | 从本地目录提供控制台，而非自动下载 |
+| `-d, --daemon` | -- | 作为后台守护进程运行 |
+| `--pid-file <PATH>` | `/tmp/prisma-console.pid` | 守护进程模式的 PID 文件路径 |
+| `--log-file <PATH>` | `/var/log/prisma/prisma-console.log` | 守护进程模式的日志文件路径 |
+
+| 子命令 | 描述 |
+|--------|------|
+| `stop` | 停止运行中的控制台守护进程 |
+| `status` | 检查控制台守护进程是否正在运行 |
+
+首次运行时从 GitHub Releases 下载最新控制台并缓存到本地（Linux: `~/.cache/prisma/console/`，macOS: `~/Library/Caches/prisma/`，Windows: `%LOCALAPPDATA%\prisma\`）。启动本地服务器提供静态控制台并将 `/api/*` 请求反向代理到管理 API。
+
+令牌自动检测顺序：`--token` 参数 > `PRISMA_MGMT_TOKEN` 环境变量 > `server.toml` 管理部分。管理 URL 自动检测顺序：`--mgmt-url` 参数 > `server.toml` 管理部分 > `http://127.0.0.1:9090`。
+
+桌面系统会自动打开浏览器。无头/VPS 环境（SSH 会话、无 `$DISPLAY`）则打印 URL。
+
+**示例：**
+
+```bash
+# 基本用法（从 server.toml 自动检测令牌）
+prisma console
+
+# 显式令牌
+prisma console --token your-secure-token
+
+# 连接远程服务器的管理 API
+prisma console --mgmt-url https://my-server.com:9090 --token my-token
+
+# 守护进程模式
+prisma console -d --token your-secure-token
+
+# 自定义端口和绑定地址
+prisma console --port 8888 --bind 127.0.0.1 --token my-token
+
+# 强制重新下载最新控制台
+prisma console --update --token your-secure-token
+
+# 从本地开发构建提供
+prisma console --dir ./prisma-console/out --token my-token
+```
+
+---
+
+## 凭证和配置生成
+
+### `prisma gen-key`
 
 生成新的客户端身份标识（UUID + 认证密钥对）。
 
@@ -52,80 +196,41 @@ prisma client -c <PATH>
 prisma gen-key
 ```
 
-无需参数。输出一个新的 UUID 和 64 字符的十六进制密钥，以及可直接粘贴到服务端和客户端配置文件的 TOML 代码片段：
+无需参数。输出一个新的 UUID 和 64 字符的十六进制密钥，以及可直接粘贴到服务端和客户端配置文件的 TOML 代码片段。
 
-```
-Client ID:   a1b2c3d4-e5f6-7890-abcd-ef1234567890
-Auth Secret: 4f8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a
-
-# 添加到 server.toml：
-[[authorized_clients]]
-id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-auth_secret = "4f8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a"
-name = "my-client"
-
-# 添加到 client.toml：
-[identity]
-client_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-auth_secret = "4f8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a"
-```
-
-## `prisma gen-cert`
+### `prisma gen-cert`
 
 生成用于开发环境的自签名 TLS 证书。
 
 ```bash
-prisma gen-cert -o <DIR> --cn <NAME>
+prisma gen-cert [-o <DIR>] [--cn <NAME>]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
 | `-o, --output <DIR>` | `.` | 证书和密钥文件的输出目录 |
-| `--cn <NAME>` | `prisma-server` | 证书的通用名称（Common Name） |
-
-在输出目录生成两个文件：
-
-- `prisma-cert.pem` — 自签名 X.509 证书
-- `prisma-key.pem` — PEM 格式的私钥
-
-示例：
-
-```bash
-prisma gen-cert -o /etc/prisma --cn my-server.example.com
-```
+| `--cn <NAME>` | `prisma-server` | 证书的通用名称 |
 
 :::warning
-自签名证书仅适用于开发环境。生产环境请使用受信任 CA 或 Let's Encrypt 颁发的证书。使用自签名证书时，客户端必须设置 `skip_cert_verify = true`。
+自签名证书仅适用于开发环境。生产环境请使用受信任 CA 或 Let's Encrypt 颁发的证书。
 :::
 
-## `prisma init`
+### `prisma init`
 
 生成带注释的配置文件，并自动生成密钥。
 
 ```bash
-prisma init [OPTIONS]
+prisma init [--cdn] [--server-only] [--client-only] [--force]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `--cdn` | — | 包含预配置的 CDN 部分 |
-| `--server-only` | — | 仅生成服务端配置 |
-| `--client-only` | — | 仅生成客户端配置 |
-| `--force` | — | 覆盖已有文件 |
+| `--cdn` | -- | 包含预配置的 CDN 传输部分（WebSocket、gRPC、XHTTP、XPorta） |
+| `--server-only` | -- | 仅生成服务端配置 |
+| `--client-only` | -- | 仅生成客户端配置 |
+| `--force` | -- | 覆盖已有文件 |
 
-默认同时生成 `server.toml` 和 `client.toml`，包含新生成的 UUID、认证密钥和详细注释。使用 `--cdn` 可包含完整注释的 CDN 传输配置部分。
-
-示例：
-
-```bash
-# 生成包含 CDN 部分的两个配置文件
-prisma init --cdn
-
-# 仅生成客户端配置，覆盖已有文件
-prisma init --client-only --force
-```
-
-## `prisma validate`
+### `prisma validate`
 
 在不启动服务的情况下验证配置文件。
 
@@ -135,95 +240,64 @@ prisma validate -c <PATH> [-t <TYPE>]
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `-c, --config <PATH>` | — | 配置文件路径 |
+| `-c, --config <PATH>` | -- | 配置文件路径 |
 | `-t, --type <TYPE>` | `server` | 配置类型：`server` 或 `client` |
 
-解析 TOML 文件并运行所有验证规则。验证通过则以代码 0 退出，否则输出错误信息并以非零代码退出。
+---
 
-示例：
+## 导入和订阅
 
-```bash
-prisma validate -c server.toml
-prisma validate -c client.toml -t client
-```
+### `prisma import`
 
-## `prisma status`
-
-查询管理 API 获取服务器状态。
+从 URI 导入服务器配置。支持 Prisma (`prisma://`)、Shadowsocks (`ss://`)、VMess (`vmess://`)、VLESS (`vless://`) 和 Trojan (`trojan://`) URI 格式。
 
 ```bash
-prisma status
+prisma import [--uri <URI>] [--file <PATH>] [--url <URL>]
 ```
 
-无命令专属参数。使用全局 `--mgmt-url` 和 `--mgmt-token` 参数（或对应的 `PRISMA_MGMT_URL` / `PRISMA_MGMT_TOKEN` 环境变量）。
+| 参数 | 描述 |
+|------|------|
+| `--uri <URI>` | 导入单个 URI 字符串 |
+| `--file <PATH>` | 从包含 URI 的文件导入（每行一个或 base64 编码） |
+| `--url <URL>` | 从订阅 URL 获取并导入 |
 
-连接到管理 API 并显示服务器健康状态、运行时间、版本和活跃连接数。
+必须且只能提供 `--uri`、`--file` 或 `--url` 之一。
 
-示例：
+### `prisma subscription`
+
+管理服务器订阅，支持自动更新。
 
 ```bash
-prisma status --mgmt-url https://127.0.0.1:9090 --mgmt-token your-auth-token
+prisma subscription <SUBCOMMAND>
 ```
 
-## `prisma speed-test`
+| 子命令 | 描述 |
+|--------|------|
+| `add --url <URL> --name <NAME>` | 添加新订阅并指定显示名称 |
+| `update --url <URL>` | 重新获取并更新订阅中的服务器 |
+| `list --url <URL>` | 列出订阅中的所有服务器 |
+| `test --url <URL>` | 测试订阅中所有服务器的延迟 |
 
-运行针对服务器的带宽 (Bandwidth) 测量测试。
+### `prisma latency-test`
+
+测试到服务器的 TCP 连接延迟。
 
 ```bash
-prisma speed-test -s <SERVER> [OPTIONS]
+prisma latency-test [--url <URL>] [--servers <ADDRS>]
 ```
 
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `-s, --server <HOST:PORT>` | — | 服务器地址 |
-| `-d, --duration <SECS>` | `10` | 测试持续时间（秒） |
-| `--direction <DIR>` | `both` | 方向：`download`、`upload` 或 `both` |
-| `-C, --config <PATH>` | `client.toml` | 客户端配置文件（用于认证凭证） |
+| 参数 | 描述 |
+|------|------|
+| `--url <URL>` | 从此订阅 URL 获取服务器 |
+| `--servers <ADDRS>` | 逗号分隔的服务器地址（`host:port`） |
 
-使用客户端配置进行认证并建立隧道，然后在指定方向上测量吞吐量。
+至少需要提供 `--url` 或 `--servers` 之一。结果按延迟排序，最佳服务器高亮显示。
 
-示例：
+---
 
-```bash
-prisma speed-test -s my-server.example.com:8443 -d 15 --direction download
-```
+## 诊断和测试
 
-## `prisma console`
-
-启动 Web 控制台，支持自动下载和反向代理。
-
-```bash
-prisma console [OPTIONS]
-```
-
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `--mgmt-url <URL>` | `https://127.0.0.1:9090` | 代理请求的管理 API 地址 |
-| `--token <TOKEN>` | — | 管理 API 认证令牌 |
-| `--port <PORT>` | `9091` | 控制台服务端口 |
-| `--bind <ADDR>` | `0.0.0.0` | 控制台绑定地址 |
-| `--no-open` | — | 不自动打开浏览器 |
-| `--update` | — | 强制重新下载控制台资源 |
-| `--dir <PATH>` | — | 从本地目录提供控制台，而非自动下载 |
-
-首次运行时从 GitHub Releases 下载最新控制台并缓存到本地。启动本地服务器提供静态文件并将 `/api/*` 请求反向代理到管理 API。
-
-桌面系统会自动打开浏览器。无头/VPS 环境（SSH 会话、无 `$DISPLAY`）则打印 URL。
-
-示例：
-
-```bash
-# 基本用法（连接本地管理 API）
-prisma console --token your-secure-token
-
-# 连接远程服务器
-prisma console --mgmt-url https://my-server.com:9090 --token my-token
-
-# 强制重新下载最新控制台
-prisma console --update --token your-secure-token
-```
-
-## `prisma version`
+### `prisma version`
 
 显示版本信息、协议版本和支持的功能。
 
@@ -231,9 +305,61 @@ prisma console --update --token your-secure-token
 prisma version
 ```
 
-无需参数。输出 Prisma 版本、PrismaVeil 协议版本、支持的加密算法、支持的传输方式和功能列表。
+### `prisma status`
 
-## `prisma completions`
+查询管理 API 获取服务器状态。
+
+```bash
+prisma status
+```
+
+### `prisma ping`
+
+测量到服务器的握手 RTT。
+
+```bash
+prisma ping [-c <PATH>] [-s <HOST:PORT>] [--count <N>] [--interval <MS>]
+```
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `-c, --config <PATH>` | `client.toml` | 客户端配置文件（用于认证凭证） |
+| `-s, --server <HOST:PORT>` | -- | 覆盖配置中的服务器地址 |
+| `--count <N>` | `5` | 发送 ping 的次数 |
+| `--interval <MS>` | `1000` | 两次 ping 之间的间隔（毫秒） |
+
+### `prisma speed-test`
+
+运行针对服务器的带宽测量测试。
+
+```bash
+prisma speed-test -s <HOST:PORT> [-d <SECS>] [--direction <DIR>] [-C <PATH>]
+```
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `-s, --server <HOST:PORT>` | -- | 服务器地址 |
+| `-d, --duration <SECS>` | `10` | 测试持续时间（秒） |
+| `--direction <DIR>` | `both` | 方向：`download`、`upload` 或 `both` |
+| `-C, --config <PATH>` | `client.toml` | 客户端配置文件（用于认证凭证） |
+
+### `prisma test-transport`
+
+测试所有已配置的传输方式并报告哪些可用。
+
+```bash
+prisma test-transport [-c <PATH>]
+```
+
+### `prisma diagnose`
+
+运行连接性诊断。测试 DNS 解析、TCP 连接、TLS 握手和 PrismaVeil 握手。
+
+```bash
+prisma diagnose [-c <PATH>]
+```
+
+### `prisma completions`
 
 生成 Shell 自动补全脚本。
 
@@ -245,29 +371,19 @@ prisma completions <SHELL>
 |------|------|
 | `<SHELL>` | 目标 Shell：`bash`、`fish`、`zsh`、`elvish`、`powershell` |
 
-示例：
-
-```bash
-# Bash
-prisma completions bash >> ~/.bash_completion
-
-# Zsh
-prisma completions zsh > ~/.zfunc/_prisma
-```
-
 ---
 
 ## 管理 API 命令
 
-以下命令通过管理 API 与运行中的服务器通信。根据需要设置 `--mgmt-url` 和 `--mgmt-token`（或对应的环境变量）。
+以下命令通过管理 API 与运行中的服务器通信。管理 API URL 和令牌按以下顺序解析：
 
-## `prisma clients`
+1. `--mgmt-url` / `--mgmt-token` 命令行参数
+2. `PRISMA_MGMT_URL` / `PRISMA_MGMT_TOKEN` 环境变量
+3. 从当前目录或标准配置位置的 `server.toml` 自动检测
+
+### `prisma clients`
 
 管理授权客户端。
-
-```bash
-prisma clients <SUBCOMMAND>
-```
 
 | 子命令 | 描述 |
 |--------|------|
@@ -278,13 +394,9 @@ prisma clients <SUBCOMMAND>
 | `enable <ID>` | 启用客户端 |
 | `disable <ID>` | 禁用客户端 |
 
-## `prisma connections`
+### `prisma connections`
 
 管理活跃连接。
-
-```bash
-prisma connections <SUBCOMMAND>
-```
 
 | 子命令 | 描述 |
 |--------|------|
@@ -292,29 +404,21 @@ prisma connections <SUBCOMMAND>
 | `disconnect <ID>` | 终止特定会话 |
 | `watch [--interval N]` | 实时监控连接（默认间隔：2 秒） |
 
-## `prisma metrics`
+### `prisma metrics`
 
 查看服务器指标和系统信息。
 
-```bash
-prisma metrics [OPTIONS]
-```
-
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `--watch` | — | 自动刷新指标 |
-| `--history` | — | 显示历史指标 |
+| `--watch` | -- | 自动刷新指标 |
+| `--history` | -- | 显示历史指标 |
 | `--period <PERIOD>` | `1h` | 历史周期：`1h`、`6h`、`24h`、`7d` |
 | `--interval <SECS>` | `2` | 刷新间隔（秒，用于 `--watch`） |
-| `--system` | — | 显示系统信息而非指标 |
+| `--system` | -- | 显示系统信息而非指标 |
 
-## `prisma bandwidth`
+### `prisma bandwidth`
 
-管理每客户端带宽 (Bandwidth) 限制和流量配额。
-
-```bash
-prisma bandwidth <SUBCOMMAND>
-```
+管理每客户端带宽限制和流量配额。
 
 | 子命令 | 描述 |
 |--------|------|
@@ -323,13 +427,9 @@ prisma bandwidth <SUBCOMMAND>
 | `set <ID> [--upload BPS] [--download BPS]` | 设置上传/下载限速（位/秒，0 = 不限速） |
 | `quota <ID> [--limit BYTES]` | 获取或设置流量配额（字节） |
 
-## `prisma config`
+### `prisma config`
 
 管理服务器配置。
-
-```bash
-prisma config <SUBCOMMAND>
-```
 
 | 子命令 | 描述 |
 |--------|------|
@@ -342,13 +442,9 @@ prisma config <SUBCOMMAND>
 | `backup diff <NAME>` | 显示备份与当前配置的差异 |
 | `backup delete <NAME>` | 删除备份 |
 
-## `prisma routes`
+### `prisma routes`
 
-管理服务端路由 (Routing) 规则。
-
-```bash
-prisma routes <SUBCOMMAND>
-```
+管理服务端路由规则。
 
 | 子命令 | 描述 |
 |--------|------|
@@ -360,18 +456,6 @@ prisma routes <SUBCOMMAND>
 
 条件格式：`TYPE:VALUE`，例如 `DomainMatch:*.ads.*`、`IpCidr:10.0.0.0/8`、`PortRange:80-443`、`All`。
 
-### `prisma routes setup`
-
-一键应用命名预设——批量创建一组精选规则。
-
-```bash
-prisma routes setup <PRESET> [--clear]
-```
-
-| 参数 | 描述 |
-|------|------|
-| `--clear` | 应用预设前删除所有已有规则 |
-
 可用预设：
 
 | 预设 | 规则数 | 描述 |
@@ -381,55 +465,52 @@ prisma routes setup <PRESET> [--clear]
 | `allow-all` | 1 | 添加全匹配 Allow 规则（优先级 1000） |
 | `block-all` | 1 | 添加全匹配 Block 规则（优先级 1000） |
 
-示例：
-
-```bash
-# 清空旧规则并应用广告屏蔽预设
-prisma routes setup block-ads --clear
-
-# 在现有规则基础上叠加隐私预设
-prisma routes setup privacy
-
-# 重置为单条 allow-all 规则
-prisma routes setup allow-all --clear
-```
-
-## `prisma logs`
+### `prisma logs`
 
 通过 WebSocket 实时流式传输服务器日志。
 
 ```bash
-prisma logs [OPTIONS]
+prisma logs [--level <LEVEL>] [--lines <N>]
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `--level <LEVEL>` | — | 最低日志级别：`TRACE`、`DEBUG`、`INFO`、`WARN`、`ERROR` |
-| `--lines <N>` | — | 显示的最大日志行数 |
+| `--level <LEVEL>` | -- | 最低日志级别：`TRACE`、`DEBUG`、`INFO`、`WARN`、`ERROR` |
+| `--lines <N>` | -- | 显示的最大日志行数 |
 
-## `prisma ping`
+---
 
-测量到服务器的握手 (Handshake) RTT。
+## 快速参考
 
-```bash
-prisma ping [OPTIONS]
-```
-
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `-c, --config <PATH>` | `client.toml` | 客户端配置文件（用于认证凭证） |
-| `-s, --server <HOST:PORT>` | — | 覆盖配置中的服务器地址 |
-| `--count <N>` | `5` | 发送 ping 的次数 |
-| `--interval <MS>` | `1000` | 两次 ping 之间的间隔（毫秒） |
-
-## `prisma test-transport`
-
-测试所有已配置的传输方式并报告哪些可用。
-
-```bash
-prisma test-transport [OPTIONS]
-```
-
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `-c, --config <PATH>` | `client.toml` | 客户端配置文件 |
+| 命令 | 用途 |
+|------|------|
+| `prisma server [-d] [-c PATH]` | 启动代理服务端（前台或守护进程） |
+| `prisma server stop` | 停止服务端守护进程 |
+| `prisma server status` | 检查服务端守护进程状态 |
+| `prisma client [-d] [-c PATH]` | 启动代理客户端（前台或守护进程） |
+| `prisma client stop` | 停止客户端守护进程 |
+| `prisma client status` | 检查客户端守护进程状态 |
+| `prisma console [-d] [--port PORT] [--token TOKEN]` | 启动 Web 控制台 |
+| `prisma console stop` | 停止控制台守护进程 |
+| `prisma console status` | 检查控制台守护进程状态 |
+| `prisma gen-key` | 生成客户端凭证 |
+| `prisma gen-cert` | 生成自签名 TLS 证书 |
+| `prisma init [--cdn]` | 生成带注释的配置文件 |
+| `prisma validate -c PATH` | 验证配置文件 |
+| `prisma import --uri/--file/--url` | 导入服务器配置（多协议） |
+| `prisma subscription add/update/list/test` | 管理订阅 |
+| `prisma latency-test --url/--servers` | 测试到服务器的延迟 |
+| `prisma version` | 显示版本和功能 |
+| `prisma status` | 通过管理 API 查询服务器状态 |
+| `prisma ping` | 测量握手 RTT |
+| `prisma speed-test` | 带宽测量 |
+| `prisma test-transport` | 测试所有传输方式 |
+| `prisma diagnose` | 运行连接性诊断 |
+| `prisma completions <SHELL>` | 生成 Shell 自动补全 |
+| `prisma clients list/show/create/delete/enable/disable` | 管理授权客户端 |
+| `prisma connections list/disconnect/watch` | 管理活跃连接 |
+| `prisma metrics [--watch/--history/--system]` | 查看服务器指标 |
+| `prisma bandwidth summary/get/set/quota` | 管理带宽限制 |
+| `prisma config get/set/tls/backup` | 管理服务器配置 |
+| `prisma routes list/create/update/delete/setup` | 管理路由规则 |
+| `prisma logs [--level LEVEL]` | 实时流式传输服务器日志 |

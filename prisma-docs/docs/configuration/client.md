@@ -7,7 +7,7 @@ sidebar_position: 2
 The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v1.5.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v1.5.1**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -18,13 +18,13 @@ This page reflects Prisma **v1.5.0**. Protocol v4 support has been removed; only
 | `socks5_listen_addr` | string | `"127.0.0.1:1080"` | Local SOCKS5 proxy bind address |
 | `http_listen_addr` | string? | -- | Local HTTP CONNECT proxy bind address (optional, omit to disable) |
 | `pac_port` | u16? | `8070` | PAC (Proxy Auto-Configuration) server port |
-| `cipher_suite` | string | `"chacha20-poly1305"` | `"chacha20-poly1305"` / `"aes-256-gcm"` |
+| `cipher_suite` | string | `"chacha20-poly1305"` | `"chacha20-poly1305"` / `"aes-256-gcm"` / `"auto"`. When `"auto"`, selects AES-256-GCM on hardware with AES-NI/NEON, ChaCha20-Poly1305 otherwise |
 | `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"shadowtls"` / `"ssh"` / `"wireguard"` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification (dev only) |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
 | `tls_server_name` | string? | -- | TLS SNI server name override (defaults to `server_addr` hostname) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
-| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 1.5.0) |
+| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 1.5.1) |
 | `fingerprint` | string | `"chrome"` | uTLS fingerprint: `"chrome"` / `"firefox"` / `"safari"` / `"random"` / `"none"` |
 | `quic_version` | string | `"auto"` | QUIC version: `"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | Transport mode: `"auto"` or explicit name |
@@ -40,6 +40,29 @@ This page reflects Prisma **v1.5.0**. Protocol v4 support has been removed; only
 | `mux_enabled` | bool | `false` | Enable XMUX stream multiplexing over transport connections |
 | `mux_max_streams` | u32 | `128` | Max concurrent streams per mux connection |
 | `mux_max_connections` | u16 | `4` | Max mux transport connections in pool |
+
+## `[connection_pool]` -- Transport connection reuse
+
+Enables transport-level connection pooling to reuse established transport connections across multiple SOCKS5/HTTP proxy requests. Reduces handshake overhead and improves latency for bursty workloads.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable transport connection pooling |
+| `max_idle` | u16 | `4` | Maximum idle connections kept in the pool |
+| `idle_timeout_secs` | u64 | `300` | Close idle pooled connections after N seconds |
+
+Example:
+
+```toml
+[connection_pool]
+enabled = true
+max_idle = 8
+idle_timeout_secs = 600
+```
+
+:::tip
+Connection pooling is most beneficial when using transports with expensive handshakes (PrismaTLS, WebSocket via CDN). For QUIC, the built-in multiplexing makes pooling less impactful.
+:::
 
 ## `[identity]` -- Client credentials
 
@@ -264,7 +287,7 @@ Each `[[routing.rules]]`:
 socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"  # optional, remove to disable HTTP proxy
 server_addr = "127.0.0.1:8443"
-cipher_suite = "chacha20-poly1305"   # or "aes-256-gcm"
+cipher_suite = "auto"                # "auto" | "chacha20-poly1305" | "aes-256-gcm"
 transport = "quic"                   # quic | tcp | ws | grpc | xhttp | xporta | ...
 skip_cert_verify = true              # set true for self-signed certs in dev
 fingerprint = "chrome"               # uTLS fingerprint for ClientHello mimicry
@@ -291,6 +314,12 @@ name = "my-api"
 local_addr = "127.0.0.1:8000"
 remote_port = 10081
 
+# Connection pooling (reuse transport connections)
+# [connection_pool]
+# enabled = true
+# max_idle = 8
+# idle_timeout_secs = 600
+
 # Server list subscriptions
 # [[subscriptions]]
 # url = "https://example.com/prisma-servers.json"
@@ -310,7 +339,7 @@ The client config is validated at startup. The following rules are enforced:
 - `server_addr` must not be empty
 - `identity.client_id` must not be empty
 - `identity.auth_secret` must be valid hex
-- `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`
+- `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`, `auto`
 - `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`, `shadowtls`, `ssh`, `wireguard`
 - `xhttp_mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
 - `xhttp_mode = "stream-one"` requires `xhttp_stream_url`

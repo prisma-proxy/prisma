@@ -341,7 +341,7 @@ fn test_server_config_snapshot() {
 // API response snapshots
 #[test]
 fn test_health_response_snapshot() {
-    let response = HealthResponse { status: "ok", version: "0.6.3", uptime: 3600 };
+    let response = HealthResponse { status: "ok", version: "1.5.1", uptime: 3600 };
     assert_yaml_snapshot!(response);
 }
 

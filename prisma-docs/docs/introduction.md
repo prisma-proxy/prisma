@@ -143,7 +143,14 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 1.5.0
+## What's New in 1.5.1
+
+- **Full project synchronization** — version references, documentation, and feature awareness aligned across all subprojects
+- **Connection pool documentation** — `connection_pool.enabled` fully documented in client config reference
+- **Cipher auto-select documentation** — `cipher_suite = "auto"` documented with hardware detection behavior
+- **i18n sync** — all console locale keys synchronized between EN and ZH
+
+### Previous (1.5.0)
 
 - **Connection pooling** — opt-in transport connection reuse via `connection_pool.enabled = true`
 - **Cipher auto-selection** — `cipher_suite = "auto"` selects AES-256-GCM on AES-NI/NEON hardware, ChaCha20-Poly1305 otherwise

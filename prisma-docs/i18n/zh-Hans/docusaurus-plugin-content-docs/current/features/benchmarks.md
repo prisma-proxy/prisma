@@ -119,3 +119,20 @@ export SINGBOX_BIN=./sing-box/sing-box
 ```
 
 结果写入 `benchmark-results/` 目录，包括每个场景的独立 JSON 文件和 `summary.md` 报告。
+
+## 微基准测试（Criterion）
+
+除了上述对比宏基准测试外，Prisma 还包含用于热路径性能测量的 Criterion 微基准测试：
+
+```bash
+# 运行所有微基准测试
+cargo bench -p prisma-core
+
+# 运行特定基准测试套件
+cargo bench -p prisma-core -- relay       # 中继加密/解密循环
+cargo bench -p prisma-core -- codec       # 协议编解码 encode/decode
+cargo bench -p prisma-core -- handshake   # 完整握手往返
+cargo bench -p prisma-core -- crypto      # AEAD、KDF、填充、抗重放
+```
+
+有关基准测试、性能分析和性能回归检测的详细开发者文档，请参阅[开发者基准测试指南](/dev/benchmarking)。

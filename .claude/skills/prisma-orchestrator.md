@@ -157,9 +157,9 @@ cd prisma-console && npm run build && cd ..
 
 | Change Type | Bump | Example |
 |------------|------|---------|
-| Bug fix, docs, small improvement | patch | 0.9.0 → 0.9.1 |
-| New feature, non-breaking enhancement | minor | 0.9.0 → 0.10.0 |
-| Breaking change (user-requested only) | major | 0.9.0 → 1.0.0 |
+| Bug fix, docs, small improvement | patch | 1.5.1 → 0.9.1 |
+| New feature, non-breaking enhancement | minor | 1.5.1 → 0.10.0 |
+| Breaking change (user-requested only) | major | 1.5.1 → 1.0.0 |
 
 Files to update (per `prisma-workflow.md`):
 - `Cargo.toml` (root) `workspace.package.version`

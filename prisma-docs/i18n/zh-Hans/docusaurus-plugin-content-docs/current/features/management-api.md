@@ -42,7 +42,7 @@ curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"1.5.0"}
+# {"status":"ok","uptime_secs":3600,"version":"1.5.1"}
 ```
 
 ### 连接
@@ -87,9 +87,19 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 |------|------|------|
 | `GET` | `/api/config` | 当前服务器配置（所有段，敏感信息已脱敏） |
 | `PATCH` | `/api/config` | 热重载支持的字段（更改前自动备份配置） |
+| `POST` | `/api/reload` | 从磁盘热重载整个服务器配置 |
 | `GET` | `/api/config/tls` | TLS 证书信息 |
 
-**支持热重载 (Hot-Reload) 的字段：** `logging_level`、`logging_format`、`max_connections`、`port_forwarding_enabled`，以及所有流量整形 (Traffic Shaping)、拥塞控制 (Congestion Control) 和伪装 (Camouflage) 设置。
+**支持热重载的字段：** `logging_level`、`logging_format`、`max_connections`、`port_forwarding_enabled`，以及所有流量整形、拥塞控制、伪装、路由和 ACL 设置。
+
+**通过 POST /api/reload 热重载：**
+
+触发从磁盘完整重读 `server.toml` 并应用所有可热重载的字段，无需重启服务器。现有连接不会中断。
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/reload
+# {"status":"ok","reloaded_fields":["logging_level","traffic_shaping","routing"]}
+```
 
 ### 配置备份
 
@@ -102,7 +112,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `DELETE` | `/api/config/backups/:name` | 删除备份 |
 | `GET` | `/api/config/backups/:name/diff` | 比较备份与当前配置的差异 |
 
-### 带宽 (Bandwidth) 与配额 (Quota)
+### 带宽与配额
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -119,13 +129,89 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `GET` | `/api/alerts/config` | 告警阈值（证书到期、配额、握手失败峰值） |
 | `PUT` | `/api/alerts/config` | 更新告警阈值（持久化到 `alerts.json`） |
 
-### 端口转发 (Port Forwarding)
+### 端口转发
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/api/forwards` | 列出活跃的端口转发会话 |
+| `GET` | `/api/forwards` | 列出所有活跃的端口转发会话 |
+| `DELETE` | `/api/forwards/:port` | 按远程端口关闭转发 |
+| `GET` | `/api/forwards/:port/connections` | 列出特定转发的活跃连接 |
 
-### 路由规则 (Routing Rules)
+详见[端口转发](/docs/features/port-forwarding)了解完整配置和 API 响应格式。
+
+### 访问控制列表（ACL）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/acls` | 列出所有 ACL 规则（每客户端访问控制） |
+| `POST` | `/api/acls` | 创建新 ACL 规则 |
+| `PUT` | `/api/acls/:id` | 更新现有 ACL 规则 |
+| `DELETE` | `/api/acls/:id` | 删除 ACL 规则 |
+
+ACL 规则限制特定客户端可访问的目标。规则按每客户端评估，优先于全局路由规则。
+
+**示例：创建 ACL 规则**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "uuid",
+    "condition": {"type": "DomainMatch", "value": "*.internal.corp"},
+    "action": "Block",
+    "enabled": true
+  }' \
+  http://127.0.0.1:9090/api/acls
+```
+
+### 客户端指标
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/metrics/clients` | 每客户端指标快照（字节数、连接数、延迟） |
+
+**示例：**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
+# [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
+```
+
+### 入站（多协议）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/inbounds` | 列出所有已配置的入站（PrismaVeil、VMess、VLESS、Shadowsocks、Trojan） |
+
+返回服务器配置中的 `[[inbounds]]` 条目列表，包括协议类型、监听地址和状态。
+
+### 客户端权限
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/clients/:id/permissions` | 获取特定客户端的权限 |
+| `PUT` | `/api/clients/:id/permissions` | 更新客户端权限 |
+| `POST` | `/api/clients/:id/kick` | 强制断开客户端（终止所有活跃会话） |
+| `POST` | `/api/clients/:id/block` | 封禁客户端（断开连接 + 阻止重连） |
+
+**示例：踢出客户端**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:9090/api/clients/uuid-here/kick
+# {"status":"ok","sessions_terminated":3}
+```
+
+**示例：更新权限**
+
+```bash
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"can_forward": true, "can_udp": true, "max_connections": 50}' \
+  http://127.0.0.1:9090/api/clients/uuid-here/permissions
+```
+
+### 路由规则
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -182,3 +268,60 @@ WS /api/ws/logs
 ```
 
 发送 `{"level": "", "target": ""}` 以清除过滤器。
+
+### 连接事件流
+
+```
+WS /api/ws/connections
+```
+
+实时推送连接生命周期事件（连接、断开、迁移）：
+
+```json
+{
+  "event": "connected",
+  "session_id": "abc123",
+  "peer_addr": "203.0.113.5:54321",
+  "transport": "quic",
+  "client_id": "uuid",
+  "timestamp": "2026-03-20T12:00:00Z"
+}
+```
+
+### 配置重载流
+
+```
+WS /api/ws/reload
+```
+
+当服务器配置被重载时推送通知（通过 `POST /api/reload` 或 `PATCH /api/config`）：
+
+```json
+{
+  "event": "config_reloaded",
+  "changed_fields": ["logging_level", "traffic_shaping"],
+  "timestamp": "2026-03-20T12:05:00Z"
+}
+```
+
+## 端点总览
+
+所有端点一览（v1.5.1）：
+
+| 类别 | 端点数 | 描述 |
+|------|--------|------|
+| 健康与指标 | 3 REST + 1 WS | 服务器状态、快照、历史、实时流 |
+| 连接 | 2 REST + 1 WS | 列表、断开、实时事件 |
+| 客户端 | 4 REST | 授权客户端的 CRUD |
+| 客户端权限 | 4 REST | 权限、踢出、封禁 |
+| 客户端指标 | 1 REST | 每客户端指标快照 |
+| 系统 | 1 REST | 平台和资源信息 |
+| 入站 | 1 REST | 多协议入站列表 |
+| 配置 | 4 REST + 1 WS | 配置读写、热重载、重载流 |
+| 配置备份 | 5 REST | 备份、恢复、差异对比 |
+| 带宽与配额 | 5 REST | 每客户端限制和使用情况 |
+| 告警 | 2 REST | 告警阈值管理 |
+| 端口转发 | 3 REST | 列表、关闭、每转发连接 |
+| ACL | 4 REST | 每客户端访问控制规则 |
+| 路由规则 | 4 REST | 服务端路由规则管理 |
+| 日志 | 1 WS | 实时日志流 |

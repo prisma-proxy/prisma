@@ -153,9 +153,7 @@ fn bench_codec_fallback_advertisement(c: &mut Criterion) {
 }
 
 fn bench_codec_challenge_response(c: &mut Criterion) {
-    let frame = make_frame(Command::ChallengeResponse {
-        hash: [0xCCu8; 32],
-    });
+    let frame = make_frame(Command::ChallengeResponse { hash: [0xCCu8; 32] });
     let encoded = encode_data_frame(&frame);
 
     c.bench_function("codec/challenge_response/roundtrip", |b| {

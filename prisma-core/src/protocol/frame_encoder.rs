@@ -116,8 +116,11 @@ impl FrameEncoder {
         let aad = crate::protocol::codec::build_v5_aad(header_key, nonce);
 
         // Encrypt plaintext in-place
-        let tag =
-            cipher.encrypt_in_place(nonce, aad.as_slice(), &mut self.buf[plaintext_start..plaintext_end])?;
+        let tag = cipher.encrypt_in_place(
+            nonce,
+            aad.as_slice(),
+            &mut self.buf[plaintext_start..plaintext_end],
+        )?;
 
         // Write tag after ciphertext
         self.buf[plaintext_end..plaintext_end + TAG_SIZE].copy_from_slice(&tag);

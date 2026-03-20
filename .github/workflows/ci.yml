@@ -6,6 +6,7 @@ on:
     paths:
       - 'prisma-*/src/**'
       - 'prisma-*/Cargo.toml'
+      - 'prisma-*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'prisma-gui/src/**'
@@ -15,11 +16,15 @@ on:
       - 'prisma-console/src/**'
       - 'prisma-console/package.json'
       - 'prisma-console/package-lock.json'
+      - 'prisma-mcp/src/**'
+      - 'prisma-mcp/package.json'
+      - 'prisma-mcp/tsconfig.json'
       - 'prisma-docs/**'
   pull_request:
     paths:
       - 'prisma-*/src/**'
       - 'prisma-*/Cargo.toml'
+      - 'prisma-*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'prisma-gui/src/**'
@@ -29,6 +34,9 @@ on:
       - 'prisma-console/src/**'
       - 'prisma-console/package.json'
       - 'prisma-console/package-lock.json'
+      - 'prisma-mcp/src/**'
+      - 'prisma-mcp/package.json'
+      - 'prisma-mcp/tsconfig.json'
       - 'prisma-docs/**'
 
 concurrency:
@@ -44,10 +52,10 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Rust: format + clippy
+  # Rust: format check (fast, runs first for quick feedback)
   # ---------------------------------------------------------------------------
-  check:
-    name: Check & Lint
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -55,13 +63,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: rustfmt, clippy
-
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
+          components: rustfmt
 
       - name: Format check
         run: cargo fmt --all -- --check
+
+  # ---------------------------------------------------------------------------
+  # Rust: clippy lint (separate job for independent fast feedback)
+  # ---------------------------------------------------------------------------
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
 
       - name: Clippy (workspace)
         run: cargo clippy --workspace --all-targets
@@ -106,6 +128,35 @@ jobs:
 
       - name: Run doctests
         run: cargo test --workspace --doc --target ${{ matrix.target }}
+
+  # ---------------------------------------------------------------------------
+  # Benchmark regression check (PR only — compare against master)
+  # ---------------------------------------------------------------------------
+  bench:
+    name: Benchmark Check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bench
+
+      - name: Run benchmarks (PR)
+        run: cargo bench -p prisma-core -- --output-format bencher | tee bench-pr.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-results
+          path: bench-pr.txt
+          retention-days: 5
 
   # ---------------------------------------------------------------------------
   # GUI: TypeScript check + Tauri Rust check
@@ -181,6 +232,29 @@ jobs:
         working-directory: prisma-console
 
   # ---------------------------------------------------------------------------
+  # MCP Server: TypeScript type check
+  # ---------------------------------------------------------------------------
+  mcp-check:
+    name: MCP Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: prisma-mcp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-mcp
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: prisma-mcp
+
+  # ---------------------------------------------------------------------------
   # Docs: build Docusaurus site
   # ---------------------------------------------------------------------------
   docs-check:
@@ -209,12 +283,20 @@ jobs:
   ci-pass:
     name: CI Pass
     if: always()
-    needs: [check, test, gui-check, console-check, docs-check]
+    needs: [fmt, clippy, test, gui-check, console-check, mcp-check, docs-check]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.check.result }}" "${{ needs.test.result }}" "${{ needs.gui-check.result }}" "${{ needs.console-check.result }}" "${{ needs.docs-check.result }}")
+          results=(
+            "${{ needs.fmt.result }}"
+            "${{ needs.clippy.result }}"
+            "${{ needs.test.result }}"
+            "${{ needs.gui-check.result }}"
+            "${{ needs.console-check.result }}"
+            "${{ needs.mcp-check.result }}"
+            "${{ needs.docs-check.result }}"
+          )
           for r in "${results[@]}"; do
             if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
               echo "::error::CI failed — one or more jobs did not pass: ${results[*]}"

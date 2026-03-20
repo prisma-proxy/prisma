@@ -142,7 +142,14 @@ graph LR
     C --> D[ServerState]
 ```
 
-## 1.5.0 新特性
+## 1.5.1 新特性
+
+- **全项目同步** — 版本引用、文档和功能感知在所有子项目间对齐
+- **连接池文档** — `connection_pool.enabled` 在客户端配置参考中完整记录
+- **密码套件自动选择文档** — `cipher_suite = "auto"` 及硬件检测行为已记录
+- **i18n 同步** — 控制台所有语言环境键在 EN 和 ZH 之间同步
+
+### 1.5.0
 
 - **连接池** — 通过 `connection_pool.enabled = true` 启用传输连接复用
 - **密码套件自动选择** — `cipher_suite = "auto"` 在 AES-NI/NEON 硬件上选择 AES-256-GCM，否则选择 ChaCha20-Poly1305

@@ -24,7 +24,7 @@ The user should never need to tell you *how* — only *what* they want.
 
 ## Project Context
 
-Prisma is an encrypted proxy system built in Rust (workspace v0.9.0, edition 2021):
+Prisma is an encrypted proxy system built in Rust (workspace v1.5.1, edition 2021):
 
 | Crate | Role |
 |-------|------|
@@ -102,9 +102,9 @@ cd prisma-console && npm run build && cd ..
 
 ### Step 5: Version Bump
 Determine version bump based on change type:
-- **patch** (0.9.0 → 0.9.1): bug fixes, small improvements, docs
-- **minor** (0.9.0 → 0.10.0): new features, non-breaking enhancements
-- **major** (0.9.0 → 1.0.0): breaking changes, major milestones (only when user explicitly requests)
+- **patch** (1.5.1 → 1.5.2): bug fixes, small improvements, docs
+- **minor** (1.5.1 → 1.6.0): new features, non-breaking enhancements
+- **major** (1.5.1 → 2.0.0): breaking changes, major milestones (only when user explicitly requests)
 
 Update ALL version-bearing files:
 | File | Field |

@@ -1419,7 +1419,8 @@ mod tests {
         let aad = build_v5_aad(Some(&header_key), &nonce);
 
         let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, aad.as_slice()).unwrap();
-        let (decrypted, dec_nonce) = decrypt_frame_aad(cipher.as_ref(), &wire, aad.as_slice()).unwrap();
+        let (decrypted, dec_nonce) =
+            decrypt_frame_aad(cipher.as_ref(), &wire, aad.as_slice()).unwrap();
         assert_eq!(decrypted, plaintext);
         assert_eq!(dec_nonce, nonce);
     }

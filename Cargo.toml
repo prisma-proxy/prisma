@@ -3,7 +3,7 @@ members = ["prisma-core", "prisma-server", "prisma-client", "prisma-cli", "prism
 resolver = "2"
 
 [workspace.package]
-version = "1.5.0"
+version = "1.5.1"
 edition = "2021"
 license = "GPLv3.0"
 

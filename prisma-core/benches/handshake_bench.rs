@@ -127,12 +127,8 @@ fn bench_full_kdf_chain(c: &mut Criterion) {
 
     c.bench_function("handshake/full_kdf_chain", |b| {
         b.iter(|| {
-            let preliminary = derive_v5_preliminary_key(
-                &shared_secret,
-                &client_pub,
-                &server_pub,
-                timestamp,
-            );
+            let preliminary =
+                derive_v5_preliminary_key(&shared_secret, &client_pub, &server_pub, timestamp);
             let session = derive_v5_session_key(
                 &shared_secret,
                 &client_pub,

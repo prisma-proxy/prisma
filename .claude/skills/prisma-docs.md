@@ -26,7 +26,7 @@ You are a documentation synchronization subagent for the Prisma project. You aud
 > - `Cargo.toml` (workspace root) `workspace.package.version` = **source of truth**
 > - `prisma-gui/package.json`, `prisma-gui/src-tauri/tauri.conf.json`, `prisma-gui/src-tauri/Cargo.toml` — must match workspace version
 > - `CLAUDE.md`, `.claude/skills/prisma-rust.md` — must mention current version
-> - `prisma-console/package.json` (`2.0.0`) — **SEPARATE version, do NOT sync** with workspace
+> - `prisma-console/package.json` (`1.3.0`) — **SEPARATE version, do NOT sync** with workspace
 > - `prisma-docs/package.json` (`0.0.0`) — **FROZEN, NEVER change**
 
 ## Available Commands
@@ -49,7 +49,7 @@ Scan all documentation and report what is out of sync **without modifying anythi
    - `prisma-gui/src-tauri/Cargo.toml`
    - `CLAUDE.md` opening line
    - `.claude/skills/prisma-rust.md` architecture overview
-   - `prisma-console/package.json` (expect `2.0.0`, independent)
+   - `prisma-console/package.json` (expect `1.3.0`, independent)
    - `prisma-docs/package.json` (expect `0.0.0`, frozen)
 3. **Compare README.md ↔ README_EN.md**:
    - Feature list bullet count (`## 特性亮点` vs `## Highlights`)
@@ -194,7 +194,7 @@ Keep `prisma-gui/README.md` and `prisma-console/README.md` accurate.
 2. **Tech stack** — compare against `prisma-console/package.json` dependencies
 3. **Build commands** — verify documented commands work
 4. **Server config TOML snippet** — compare against actual `ServerConfig` struct fields for management API
-5. **Version** — must stay at `2.0.0` (independent from workspace)
+5. **Version** — must stay at `1.3.0` (independent from workspace)
 
 ---
 
@@ -211,7 +211,7 @@ Run this after any sync operation to verify everything is consistent.
    - `prisma-gui/src-tauri/Cargo.toml` (matches workspace)
    - `CLAUDE.md` (mentions current version)
    - `.claude/skills/prisma-rust.md` (mentions current version)
-   - `prisma-console/package.json` (independent: `2.0.0`)
+   - `prisma-console/package.json` (independent: `1.3.0`)
    - `prisma-docs/package.json` (frozen: `0.0.0`)
 2. **README parity** — 6 checks: features, transports, structure, install, links, dev commands
 3. **CLAUDE.md accuracy** — 3 checks: version, crate table, skills list

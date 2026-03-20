@@ -119,3 +119,20 @@ export SINGBOX_BIN=./sing-box/sing-box
 ```
 
 Results are written to `benchmark-results/` as individual JSON files per scenario plus a `summary.md` report.
+
+## Micro-Benchmarks (Criterion)
+
+In addition to the comparative macro-benchmarks above, Prisma includes Criterion micro-benchmarks for hot-path performance measurement:
+
+```bash
+# Run all micro-benchmarks
+cargo bench -p prisma-core
+
+# Run specific benchmark suites
+cargo bench -p prisma-core -- relay       # Relay encrypt/decrypt loop
+cargo bench -p prisma-core -- codec       # Protocol codec encode/decode
+cargo bench -p prisma-core -- handshake   # Full handshake round-trip
+cargo bench -p prisma-core -- crypto      # AEAD, KDF, padding, anti-replay
+```
+
+For detailed developer documentation on benchmarking, profiling, and performance regression detection, see the [Developer Benchmarking Guide](/dev/benchmarking).

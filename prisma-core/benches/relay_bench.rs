@@ -156,19 +156,14 @@ fn bench_relay_decrypt(c: &mut Criterion) {
         let sealed_data = wire[2..].to_vec();
 
         group.throughput(Throughput::Bytes(size as u64));
-        group.bench_with_input(
-            BenchmarkId::new("chacha20_unseal", label),
-            &size,
-            |b, _| {
-                b.iter(|| {
-                    let mut buf = sealed_data.clone();
-                    black_box(
-                        FrameDecoder::unseal_data_frame(&mut buf, outer_len, cipher.as_ref())
-                            .unwrap(),
-                    );
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("chacha20_unseal", label), &size, |b, _| {
+            b.iter(|| {
+                let mut buf = sealed_data.clone();
+                black_box(
+                    FrameDecoder::unseal_data_frame(&mut buf, outer_len, cipher.as_ref()).unwrap(),
+                );
+            });
+        });
     }
     group.finish();
 }
