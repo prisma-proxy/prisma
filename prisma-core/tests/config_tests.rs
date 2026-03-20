@@ -103,8 +103,8 @@ fn test_mgmt_tls_defaults_to_disabled() {
     // This is critical: if tls_enabled defaults to true, the mgmt API silently serves
     // HTTPS (inheriting the server cert), making HTTP access from the public network fail.
     let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
-    assert_eq!(
-        config.management_api.tls_enabled, false,
+    assert!(
+        !config.management_api.tls_enabled,
         "tls_enabled must default to false so the API serves HTTP out of the box"
     );
     assert!(
@@ -123,6 +123,6 @@ fn test_mgmt_addr_survives_clone() {
         cloned.listen_addr, "0.0.0.0:9090",
         "listen_addr must survive clone"
     );
-    assert_eq!(cloned.enabled, true);
-    assert_eq!(cloned.tls_enabled, false);
+    assert!(cloned.enabled);
+    assert!(!cloned.tls_enabled);
 }
