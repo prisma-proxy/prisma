@@ -6,55 +6,49 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.1.0)'
+        description: 'Release tag (e.g. v0.9.0)'
         required: true
+        type: string
+      skip_ffi:
+        description: 'Skip FFI builds (Android/iOS)'
+        required: false
+        default: false
+        type: boolean
+      skip_gui:
+        description: 'Skip GUI builds'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   BINARY_NAME: prisma
   SCCACHE_GHA_ENABLED: true
   RUSTC_WRAPPER: sccache
+  RUST_TOOLCHAIN: stable
+  NODE_VERSION: '22'
 
+# ---------------------------------------------------------------------------
+# Job 1: Build prisma-cli (server/client binary) for all platforms
+# ---------------------------------------------------------------------------
 jobs:
-  console:
-    name: Build Console
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: prisma-console/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: prisma-console
-
-      - name: Build static console
-        run: npm run build
-        working-directory: prisma-console
-
-      - name: Package console
-        run: tar -czf prisma-console.tar.gz -C prisma-console/out .
-
-      - name: Upload console artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: prisma-console
-          path: prisma-console.tar.gz
-
-  build:
-    name: Build ${{ matrix.artifact }}
+  build-server:
+    name: CLI / ${{ matrix.artifact }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux (musl = fully static, no GLIBC dependency)
+          # ---- Linux (musl — fully static, no GLIBC dependency) ----
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             artifact: prisma-linux-amd64
@@ -67,21 +61,21 @@ jobs:
             os: ubuntu-latest
             artifact: prisma-linux-armv7
             cross: true
-          # macOS
+          # ---- macOS ----
           - target: x86_64-apple-darwin
             os: macos-latest
             artifact: prisma-darwin-amd64
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: prisma-darwin-arm64
-          # Windows
+          # ---- Windows ----
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: prisma-windows-amd64.exe
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             artifact: prisma-windows-arm64.exe
-          # FreeBSD
+          # ---- FreeBSD ----
           - target: x86_64-unknown-freebsd
             os: ubuntu-latest
             artifact: prisma-freebsd-amd64
@@ -91,31 +85,36 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@master
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: ${{ matrix.target }}
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
-      # Install musl toolchain for static Linux builds
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+
+      # Static Linux builds with musl
       - name: Install musl-tools
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      # Install cross for targets that need it
+      # Cross-compilation for armv7 and FreeBSD
       - name: Install cross
         if: matrix.cross
         uses: taiki-e/install-action@v2
         with:
           tool: cross
 
-      # Build with cross or cargo
+      # Build step — cross or cargo
       - name: Build (cross)
         if: matrix.cross && !matrix.no-default-features
         run: cross build --release --target ${{ matrix.target }} -p prisma-cli
@@ -128,7 +127,7 @@ jobs:
         if: ${{ !matrix.cross }}
         run: cargo build --release --target ${{ matrix.target }} -p prisma-cli
 
-      # Determine binary path and rename
+      # Package binary
       - name: Package binary (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -142,7 +141,7 @@ jobs:
         run: |
           Copy-Item "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "${{ matrix.artifact }}"
 
-      # Generate checksum
+      # Generate SHA256 checksum
       - name: Checksum (Unix)
         if: runner.os != 'Windows'
         run: sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
@@ -161,9 +160,14 @@ jobs:
           path: |
             ${{ matrix.artifact }}
             ${{ matrix.artifact }}.sha256
+          retention-days: 5
 
-  gui:
-    name: Build GUI (${{ matrix.label }})
+  # ---------------------------------------------------------------------------
+  # Job 2: Build prisma-gui (Tauri 2) for desktop platforms
+  # ---------------------------------------------------------------------------
+  build-gui:
+    name: GUI / ${{ matrix.label }}
+    if: ${{ !inputs.skip_gui }}
     strategy:
       fail-fast: false
       matrix:
@@ -171,30 +175,56 @@ jobs:
           - label: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-          - label: macOS (Universal)
+            rust_targets: x86_64-pc-windows-msvc
+          - label: macOS Universal
             os: macos-latest
             target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - label: Linux x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
+
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@master
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
-          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.rust_targets }}
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
         with:
           key: gui-${{ matrix.target }}
           workspaces: prisma-gui/src-tauri
 
-      - uses: actions/setup-node@v6
+      - name: Install Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: prisma-gui/package-lock.json
+
+      # Linux system dependencies for WebKitGTK and AppIndicator
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
 
       - name: Install frontend dependencies
         run: npm ci
@@ -204,35 +234,93 @@ jobs:
         run: npm install -g @tauri-apps/cli@^2
 
       - name: Build Tauri app
-        run: tauri build --target ${{ matrix.target }}
+        run: tauri build ${{ matrix.target != 'x86_64-unknown-linux-gnu' && format('--target {0}', matrix.target) || '' }}
         working-directory: prisma-gui
+        env:
+          # Disable code signing on macOS in CI (sign separately if needed)
+          APPLE_SIGNING_IDENTITY: '-'
 
-      # Collect portable binary
-      - name: Collect artifact (Windows)
+      # Collect Windows artifacts (.exe portable)
+      - name: Collect artifacts (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path gui-artifacts
-          Copy-Item "prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release/prisma-gui.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
+          $base = "prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release"
+
+          # Portable exe
+          if (Test-Path "$base/prisma-gui.exe") {
+            Copy-Item "$base/prisma-gui.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
+          }
+
+          # MSI installer
+          $msi = Get-ChildItem "$base/bundle/msi/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($msi) {
+            Copy-Item $msi.FullName "gui-artifacts/Prisma-windows-x64.msi"
+          }
+
+          # NSIS installer
+          $nsis = Get-ChildItem "$base/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($nsis) {
+            Copy-Item $nsis.FullName "gui-artifacts/Prisma-windows-x64-setup.exe"
+          }
+
           Get-ChildItem gui-artifacts/
 
-      - name: Collect artifact (macOS)
+      # Collect macOS artifacts (.dmg, portable binary)
+      - name: Collect artifacts (macOS)
         if: runner.os == 'macOS'
         run: |
           mkdir -p gui-artifacts
           BASE="prisma-gui/src-tauri/target/universal-apple-darwin/release"
-          # Prefer the DMG if bundling produced one
+
+          # DMG
           DMG=$(find "${BASE}/bundle/dmg" -name '*.dmg' 2>/dev/null | head -1)
           if [ -n "$DMG" ]; then
             cp "$DMG" gui-artifacts/Prisma-macos-universal.dmg
           fi
-          # Also copy the portable binary from inside the .app bundle
+
+          # Portable binary from inside .app
           APP_BIN="${BASE}/bundle/macos/Prisma.app/Contents/MacOS/Prisma"
           if [ -f "$APP_BIN" ]; then
             cp "$APP_BIN" gui-artifacts/prisma-gui-macos-universal
           elif [ -f "${BASE}/prisma-gui" ]; then
             cp "${BASE}/prisma-gui" gui-artifacts/prisma-gui-macos-universal
           fi
+
+          ls -la gui-artifacts/
+
+      # Collect Linux artifacts (.deb, .AppImage)
+      - name: Collect artifacts (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p gui-artifacts
+          BASE="prisma-gui/src-tauri/target/release"
+
+          # Debian package
+          DEB=$(find "${BASE}/bundle/deb" -name '*.deb' 2>/dev/null | head -1)
+          if [ -n "$DEB" ]; then
+            cp "$DEB" gui-artifacts/prisma-gui-linux-amd64.deb
+          fi
+
+          # AppImage
+          APPIMAGE=$(find "${BASE}/bundle/appimage" -name '*.AppImage' 2>/dev/null | head -1)
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" gui-artifacts/prisma-gui-linux-amd64.AppImage
+          fi
+
+          # RPM
+          RPM=$(find "${BASE}/bundle/rpm" -name '*.rpm' 2>/dev/null | head -1)
+          if [ -n "$RPM" ]; then
+            cp "$RPM" gui-artifacts/prisma-gui-linux-amd64.rpm
+          fi
+
+          # Portable binary
+          if [ -f "${BASE}/prisma-gui" ]; then
+            cp "${BASE}/prisma-gui" gui-artifacts/prisma-gui-linux-amd64
+            chmod +x gui-artifacts/prisma-gui-linux-amd64
+          fi
+
           ls -la gui-artifacts/
 
       - name: Upload GUI artifacts
@@ -240,54 +328,342 @@ jobs:
         with:
           name: gui-${{ matrix.label }}
           path: gui-artifacts/*
+          retention-days: 5
 
-  release:
-    name: Create Release
-    needs: [console, build, gui]
-    if: ${{ !cancelled() }}
+  # ---------------------------------------------------------------------------
+  # Job 3: Build prisma-console (Next.js static export)
+  # ---------------------------------------------------------------------------
+  build-console:
+    name: Console
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: prisma-console/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-console
+
+      - name: Build static console
+        run: npm run build
+        working-directory: prisma-console
+
+      - name: Package console
+        run: tar -czf prisma-console.tar.gz -C prisma-console/out .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: prisma-console
+          path: prisma-console.tar.gz
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Build prisma-docs (Docusaurus)
+  # ---------------------------------------------------------------------------
+  build-docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: prisma-docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-docs
+
+      - name: Build docs
+        run: npm run build
+        working-directory: prisma-docs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: prisma-docs/build
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Build prisma-ffi shared libraries
+  # ---------------------------------------------------------------------------
+  build-ffi:
+    name: FFI / ${{ matrix.label }}
+    if: ${{ !inputs.skip_ffi }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Desktop ----
+          - label: Linux x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: libprisma_ffi.so
+            output_name: libprisma_ffi-linux-amd64.so
+          - label: Linux aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact_name: libprisma_ffi.so
+            output_name: libprisma_ffi-linux-arm64.so
+          - label: macOS x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: libprisma_ffi.dylib
+            output_name: libprisma_ffi-darwin-amd64.dylib
+          - label: macOS aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: libprisma_ffi.dylib
+            output_name: libprisma_ffi-darwin-arm64.dylib
+          - label: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: prisma_ffi.dll
+            output_name: prisma_ffi-windows-amd64.dll
+          # ---- Android (NDK cross-compilation) ----
+          - label: Android aarch64
+            os: ubuntu-latest
+            target: aarch64-linux-android
+            artifact_name: libprisma_ffi.so
+            output_name: libprisma_ffi-android-arm64.so
+            android: true
+            features: android
+          - label: Android armv7
+            os: ubuntu-latest
+            target: armv7-linux-androideabi
+            artifact_name: libprisma_ffi.so
+            output_name: libprisma_ffi-android-armv7.so
+            android: true
+            features: android
+          - label: Android x86_64
+            os: ubuntu-latest
+            target: x86_64-linux-android
+            artifact_name: libprisma_ffi.so
+            output_name: libprisma_ffi-android-amd64.so
+            android: true
+            features: android
+          # ---- iOS (static library) ----
+          - label: iOS aarch64
+            os: macos-latest
+            target: aarch64-apple-ios
+            artifact_name: libprisma_ffi.a
+            output_name: libprisma_ffi-ios-arm64.a
+            ios: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ffi-${{ matrix.target }}
+
+      # Android NDK setup
+      - name: Set up Android NDK
+        if: matrix.android
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+
+      - name: Configure Android NDK linker
+        if: matrix.android
+        run: |
+          NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
+          TOOLCHAIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+
+          # Map Rust target triples to NDK compiler prefixes
+          case "${{ matrix.target }}" in
+            aarch64-linux-android)
+              CC="${TOOLCHAIN}/bin/aarch64-linux-android24-clang"
+              AR="${TOOLCHAIN}/bin/llvm-ar"
+              LINKER="${CC}"
+              ;;
+            armv7-linux-androideabi)
+              CC="${TOOLCHAIN}/bin/armv7a-linux-androideabi24-clang"
+              AR="${TOOLCHAIN}/bin/llvm-ar"
+              LINKER="${CC}"
+              ;;
+            x86_64-linux-android)
+              CC="${TOOLCHAIN}/bin/x86_64-linux-android24-clang"
+              AR="${TOOLCHAIN}/bin/llvm-ar"
+              LINKER="${CC}"
+              ;;
+          esac
+
+          UPPER_TARGET=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
+
+          echo "CC_${UPPER_TARGET}=${CC}" >> "$GITHUB_ENV"
+          echo "AR_${UPPER_TARGET}=${AR}" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_${UPPER_TARGET}_LINKER=${LINKER}" >> "$GITHUB_ENV"
+
+      # Build FFI library
+      - name: Build FFI (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          FEATURES_FLAG=""
+          if [ -n "${{ matrix.features }}" ]; then
+            FEATURES_FLAG="--features ${{ matrix.features }}"
+          fi
+          cargo build --release --target ${{ matrix.target }} -p prisma-ffi $FEATURES_FLAG
+
+      - name: Build FFI (Windows)
+        if: runner.os == 'Windows'
+        run: cargo build --release --target ${{ matrix.target }} -p prisma-ffi
+
+      # Package output
+      - name: Package library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.output_name }}"
+
+      - name: Package library (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.output_name }}"
+          # Also copy the .lib import library
+          $lib = "target/${{ matrix.target }}/release/prisma_ffi.dll.lib"
+          if (Test-Path $lib) {
+            Copy-Item $lib "prisma_ffi-windows-amd64.lib"
+          }
+
+      # Copy C header alongside the library
+      - name: Copy FFI header
+        run: |
+          cp prisma-ffi/include/prisma_ffi.h prisma_ffi.h 2>/dev/null || true
+        shell: bash
+
+      - name: Checksum (Unix)
+        if: runner.os != 'Windows'
+        run: sha256sum "${{ matrix.output_name }}" > "${{ matrix.output_name }}.sha256"
+
+      - name: Checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "${{ matrix.output_name }}" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.output_name }}" | Out-File -Encoding ascii "${{ matrix.output_name }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ffi-${{ matrix.label }}
+          path: |
+            ${{ matrix.output_name }}
+            ${{ matrix.output_name }}.sha256
+            prisma_ffi.h
+            prisma_ffi-windows-amd64.lib
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # Job 6: Create GitHub Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [build-server, build-gui, build-console, build-docs, build-ffi]
+    # Run even if optional jobs (gui, ffi) were skipped or failed
+    if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
 
-      - name: Collect binaries
+      - name: Collect release files
         run: |
           mkdir -p release
-          # CLI binaries + GUI portable binaries (all named prisma-*)
-          find artifacts -type f \( -name 'prisma-*' \) -exec cp {} release/ \;
+
+          # CLI binaries (from build-server)
+          find artifacts -type f -name 'prisma-linux-*' -exec cp {} release/ \;
+          find artifacts -type f -name 'prisma-darwin-*' -exec cp {} release/ \;
+          find artifacts -type f -name 'prisma-windows-*' -exec cp {} release/ \;
+          find artifacts -type f -name 'prisma-freebsd-*' -exec cp {} release/ \;
+
+          # GUI artifacts (from build-gui)
+          find artifacts -type f -name 'prisma-gui-*' -exec cp {} release/ \;
+          find artifacts -type f -name 'Prisma-*' -exec cp {} release/ \;
+
+          # Console archive
+          find artifacts -type f -name 'prisma-console.tar.gz' -exec cp {} release/ \;
+
+          # FFI libraries
+          find artifacts -type f -name 'libprisma_ffi*' -exec cp {} release/ \;
+          find artifacts -type f -name 'prisma_ffi*' -exec cp {} release/ \;
+          find artifacts -type f -name 'prisma_ffi.h' -exec cp {} release/ \; 2>/dev/null || true
+
+          # Remove duplicate .sha256 collection artifacts
+          # Keep only the meaningful ones
+          echo "=== Release contents ==="
           ls -la release/
-          count=$(find release -type f ! -name '*.sha256' ! -name 'checksums-*' | wc -l)
+
+          # Ensure we have at least the CLI binaries
+          count=$(find release -maxdepth 1 -type f ! -name '*.sha256' ! -name 'checksums-*' | wc -l)
           if [ "$count" -eq 0 ]; then
-            echo "::error::No artifacts found — all builds failed. Aborting release."
+            echo "::error::No artifacts found. All builds failed."
             exit 1
           fi
-          echo "Found $count artifact(s)"
+          echo "Found $count release artifact(s)"
 
-      - name: Generate checksums file
+      - name: Generate master checksum file
         run: |
           cd release
-          # Checksums for CLI binaries (from individual .sha256 files)
-          cat *.sha256 2>/dev/null > checksums-sha256.txt || true
-          # Add checksums for GUI portable binaries
-          for f in prisma-gui-*; do
+          # Merge individual .sha256 files + compute missing checksums
+          > checksums-sha256.txt
+          for f in *; do
             [ -f "$f" ] || continue
-            [ -f "${f}.sha256" ] && continue
-            sha256sum "$f" >> checksums-sha256.txt
+            [[ "$f" == *.sha256 ]] && continue
+            [[ "$f" == checksums-* ]] && continue
+            if [ -f "${f}.sha256" ]; then
+              cat "${f}.sha256" >> checksums-sha256.txt
+            else
+              sha256sum "$f" >> checksums-sha256.txt
+            fi
           done
+          # Remove individual .sha256 files — the master file replaces them
+          rm -f *.sha256 2>/dev/null || true
+          # Re-add the master checksum file
+          echo "=== Checksums ==="
           cat checksums-sha256.txt
-
-      - name: Determine tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Generate release notes
         run: |
@@ -296,7 +672,7 @@ jobs:
           BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
           INSTALL_URL="https://raw.githubusercontent.com/${REPO}/master/scripts"
 
-          # Previous tag for the commit range and comparison link
+          # Previous tag for changelog range
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1 2>/dev/null || true)
           if [ -n "$PREV_TAG" ]; then
             RANGE="${PREV_TAG}..HEAD"
@@ -306,7 +682,7 @@ jobs:
             COMPARE_URL="https://github.com/${REPO}/commits/${TAG}"
           fi
 
-          # Categorize commits by conventional-commit prefix; strip the type+scope prefix
+          # Categorize commits by conventional-commit prefix
           strip() { sed -E 's/^- [a-z]+(\([^)]+\))?!?: /- /'; }
           FEATS=$(git log "$RANGE" --pretty=format:"- %s" --no-merges 2>/dev/null \
             | grep -E "^- feat" | strip || true)
@@ -326,35 +702,35 @@ jobs:
             echo ""
 
             if [ -n "$FEATS" ]; then
-              echo "### ✨ New Features"
+              echo "### New Features"
               echo ""
               echo "$FEATS"
               echo ""
             fi
 
             if [ -n "$FIXES" ]; then
-              echo "### 🐛 Bug Fixes"
+              echo "### Bug Fixes"
               echo ""
               echo "$FIXES"
               echo ""
             fi
 
             if [ -n "$PERFS" ]; then
-              echo "### ⚡ Performance"
+              echo "### Performance"
               echo ""
               echo "$PERFS"
               echo ""
             fi
 
             if [ -n "$REFACTORS" ]; then
-              echo "### 🔧 Refactoring"
+              echo "### Refactoring"
               echo ""
               echo "$REFACTORS"
               echo ""
             fi
 
             if [ -n "$OTHERS" ]; then
-              echo "### 📝 Other Changes"
+              echo "### Other Changes"
               echo ""
               echo "$OTHERS"
               echo ""
@@ -362,7 +738,7 @@ jobs:
 
             echo "---"
             echo ""
-            echo "## 📦 Installation"
+            echo "## Installation"
             echo ""
             echo "### Quick Install"
             echo ""
@@ -376,32 +752,50 @@ jobs:
             echo "irm ${INSTALL_URL}/install.ps1 | iex"
             echo '```'
             echo ""
-            echo "### Manual Download"
+            echo "### CLI Binaries"
             echo ""
             echo "| Platform | Architecture | Binary |"
             echo "|----------|-------------|--------|"
-            echo "| 🐧 Linux | x86\_64 | [prisma-linux-amd64](${BASE_URL}/prisma-linux-amd64) |"
-            echo "| 🐧 Linux | ARM64 | [prisma-linux-arm64](${BASE_URL}/prisma-linux-arm64) |"
-            echo "| 🐧 Linux | ARMv7 | [prisma-linux-armv7](${BASE_URL}/prisma-linux-armv7) |"
-            echo "| 🍎 macOS | Intel | [prisma-darwin-amd64](${BASE_URL}/prisma-darwin-amd64) |"
-            echo "| 🍎 macOS | Apple Silicon | [prisma-darwin-arm64](${BASE_URL}/prisma-darwin-arm64) |"
-            echo "| 🪟 Windows | x86\_64 | [prisma-windows-amd64.exe](${BASE_URL}/prisma-windows-amd64.exe) |"
-            echo "| 🪟 Windows | ARM64 | [prisma-windows-arm64.exe](${BASE_URL}/prisma-windows-arm64.exe) |"
-            echo "| 😈 FreeBSD | x86\_64 | [prisma-freebsd-amd64](${BASE_URL}/prisma-freebsd-amd64) |"
+            echo "| Linux | x86\_64 | [prisma-linux-amd64](${BASE_URL}/prisma-linux-amd64) |"
+            echo "| Linux | ARM64 | [prisma-linux-arm64](${BASE_URL}/prisma-linux-arm64) |"
+            echo "| Linux | ARMv7 | [prisma-linux-armv7](${BASE_URL}/prisma-linux-armv7) |"
+            echo "| macOS | Intel | [prisma-darwin-amd64](${BASE_URL}/prisma-darwin-amd64) |"
+            echo "| macOS | Apple Silicon | [prisma-darwin-arm64](${BASE_URL}/prisma-darwin-arm64) |"
+            echo "| Windows | x86\_64 | [prisma-windows-amd64.exe](${BASE_URL}/prisma-windows-amd64.exe) |"
+            echo "| Windows | ARM64 | [prisma-windows-arm64.exe](${BASE_URL}/prisma-windows-arm64.exe) |"
+            echo "| FreeBSD | x86\_64 | [prisma-freebsd-amd64](${BASE_URL}/prisma-freebsd-amd64) |"
             echo ""
-            echo "### Desktop App (GUI) — Portable"
+            echo "### Desktop App (GUI)"
             echo ""
-            echo "| Platform | Binary |"
-            echo "|----------|--------|"
-            echo "| 🪟 Windows | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
-            echo "| 🍎 macOS (Universal) | [Prisma-macos-universal.dmg](${BASE_URL}/Prisma-macos-universal.dmg) |"
-
+            echo "| Platform | Installer | Portable |"
+            echo "|----------|-----------|----------|"
+            echo "| macOS (Universal) | [Prisma-macos-universal.dmg](${BASE_URL}/Prisma-macos-universal.dmg) | — |"
+            echo "| Windows x64 | [Prisma-windows-x64.msi](${BASE_URL}/Prisma-windows-x64.msi) | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
+            echo "| Linux x64 | [prisma-gui-linux-amd64.deb](${BASE_URL}/prisma-gui-linux-amd64.deb) | [prisma-gui-linux-amd64.AppImage](${BASE_URL}/prisma-gui-linux-amd64.AppImage) |"
             echo ""
-            echo "> Verify integrity: \`sha256sum -c checksums-sha256.txt\` (Linux/macOS) · \`Get-FileHash\` (Windows)"
+            echo "### Web Console"
+            echo ""
+            echo "[prisma-console.tar.gz](${BASE_URL}/prisma-console.tar.gz) — static web dashboard (extract and serve)"
+            echo ""
+            echo "### FFI Libraries"
+            echo ""
+            echo "| Platform | Library |"
+            echo "|----------|---------|"
+            echo "| Linux x86\_64 | [libprisma\_ffi-linux-amd64.so](${BASE_URL}/libprisma_ffi-linux-amd64.so) |"
+            echo "| Linux ARM64 | [libprisma\_ffi-linux-arm64.so](${BASE_URL}/libprisma_ffi-linux-arm64.so) |"
+            echo "| macOS x86\_64 | [libprisma\_ffi-darwin-amd64.dylib](${BASE_URL}/libprisma_ffi-darwin-amd64.dylib) |"
+            echo "| macOS ARM64 | [libprisma\_ffi-darwin-arm64.dylib](${BASE_URL}/libprisma_ffi-darwin-arm64.dylib) |"
+            echo "| Windows x86\_64 | [prisma\_ffi-windows-amd64.dll](${BASE_URL}/prisma_ffi-windows-amd64.dll) |"
+            echo "| Android ARM64 | [libprisma\_ffi-android-arm64.so](${BASE_URL}/libprisma_ffi-android-arm64.so) |"
+            echo "| Android ARMv7 | [libprisma\_ffi-android-armv7.so](${BASE_URL}/libprisma_ffi-android-armv7.so) |"
+            echo "| Android x86\_64 | [libprisma\_ffi-android-amd64.so](${BASE_URL}/libprisma_ffi-android-amd64.so) |"
+            echo "| iOS ARM64 | [libprisma\_ffi-ios-arm64.a](${BASE_URL}/libprisma_ffi-ios-arm64.a) |"
+            echo ""
+            echo "> Verify downloads: \`sha256sum -c checksums-sha256.txt\`"
             echo ""
             echo "---"
             echo ""
-            echo "## 🔒 SHA256 Checksums"
+            echo "## SHA256 Checksums"
             echo ""
             echo '```'
             echo "$CHECKSUMS"
@@ -413,7 +807,7 @@ jobs:
           } > release-notes.md
 
           echo "=== Release Notes Preview ==="
-          cat release-notes.md
+          head -60 release-notes.md
 
       - name: Create GitHub Release
         env:
@@ -424,3 +818,19 @@ jobs:
             --title "Prisma $TAG" \
             --notes-file release-notes.md \
             release/*
+
+  # ---------------------------------------------------------------------------
+  # Job 7: Deploy docs to GitHub Pages
+  # ---------------------------------------------------------------------------
+  deploy-docs:
+    name: Deploy Docs
+    needs: [build-docs, release]
+    if: ${{ always() && needs.build-docs.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

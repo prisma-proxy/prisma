@@ -157,6 +157,7 @@ static INBOUND_CHANNELS: std::sync::LazyLock<dashmap::DashMap<u32, mpsc::Sender<
     std::sync::LazyLock::new(dashmap::DashMap::new);
 
 /// Handle a single WireGuard session from handshake through data relay.
+#[allow(clippy::too_many_arguments)]
 async fn handle_wg_session(
     socket: Arc<UdpSocket>,
     session: Arc<WgSession>,

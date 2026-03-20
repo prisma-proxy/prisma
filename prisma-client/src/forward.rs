@@ -99,7 +99,7 @@ pub struct ForwardManager {
 /// Dynamic control messages sent to the running tunnel loop.
 pub enum ForwardControl {
     /// Dynamically add a port forward at runtime.
-    Add(PortForwardConfig),
+    Add(Box<PortForwardConfig>),
     /// Remove a port forward by remote_port at runtime.
     Remove(u16),
 }
@@ -311,8 +311,8 @@ async fn run_tunnel_session(
                         ));
                         manager.metrics.write().await.insert(fwd.remote_port, m);
                         // Add to port_map and configs
-                        port_map.write().await.insert(fwd.remote_port, fwd.clone());
-                        manager.configs.write().await.push(fwd.clone());
+                        port_map.write().await.insert(fwd.remote_port, *fwd.clone());
+                        manager.configs.write().await.push(*fwd.clone());
                         // Register with the server
                         register_forward(&state, &fwd).await?;
                     }
@@ -600,6 +600,7 @@ async fn connect_local_with_retry(cfg: &PortForwardConfig) -> Option<TcpStream> 
 
 /// Relay between a local TCP connection and the tunnel, supporting idle
 /// timeout, configurable buffer size, and per-forward byte counters.
+#[allow(clippy::too_many_arguments)]
 async fn relay_local<W: AsyncWrite + Unpin + Send + 'static>(
     local: TcpStream,
     mut from_tunnel: mpsc::Receiver<bytes::Bytes>,

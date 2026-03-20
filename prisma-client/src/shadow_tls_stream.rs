@@ -23,6 +23,13 @@ use prisma_core::shadow_tls::{
 use anyhow::Result;
 use tracing::debug;
 
+/// Boxed future for an owned channel permit reservation.
+type WriteReserveFuture = Pin<
+    Box<
+        dyn Future<Output = Result<mpsc::OwnedPermit<Vec<u8>>, mpsc::error::SendError<()>>> + Send,
+    >,
+>;
+
 /// A ShadowTLS v3 client stream that wraps proxy data in TLS application data.
 ///
 /// After the handshake is complete, reads/writes go through an internal duplex
@@ -33,14 +40,7 @@ pub struct ShadowTlsClientStream {
     /// Buffered data from a partially consumed receive.
     read_buf: BytesMut,
     /// Pending write reservation future for proper backpressure.
-    write_reserve: Option<
-        Pin<
-            Box<
-                dyn Future<Output = Result<mpsc::OwnedPermit<Vec<u8>>, mpsc::error::SendError<()>>>
-                    + Send,
-            >,
-        >,
-    >,
+    write_reserve: Option<WriteReserveFuture>,
 }
 
 impl ShadowTlsClientStream {

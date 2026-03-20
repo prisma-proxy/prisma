@@ -303,12 +303,10 @@ async fn handle_register_forward<W: AsyncWrite + Unpin + Send + 'static>(
 
     // Merge allowed_ips: server policy + client request
     let mut effective_allowed_ips = forward_config.allowed_ips.clone();
-    if !client_allowed_ips.is_empty() {
-        if effective_allowed_ips.is_empty() {
-            // Server has no restrictions, use client's list
-            effective_allowed_ips = client_allowed_ips;
-        }
-        // If server has restrictions, server policy takes precedence (client list ignored)
+    if !client_allowed_ips.is_empty() && effective_allowed_ips.is_empty() {
+        // Server has no restrictions, use client's list.
+        // If server has restrictions, server policy takes precedence (client list ignored).
+        effective_allowed_ips = client_allowed_ips;
     }
 
     // Register in the forward registry

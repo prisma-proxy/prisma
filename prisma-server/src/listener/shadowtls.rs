@@ -128,6 +128,7 @@ pub async fn listen(
 /// 3. Relay the TLS handshake between client and handshake server
 /// 4. After handshake, demux proxy frames from cover traffic
 /// 5. Feed proxy data into the normal Prisma handler via an in-memory stream
+#[allow(clippy::too_many_arguments)]
 async fn handle_shadow_tls_connection(
     mut client: TcpStream,
     handshake_server: &str,
@@ -256,6 +257,7 @@ async fn handle_shadow_tls_connection(
 /// Proxy frames are collected and fed into the Prisma handler via an
 /// in-memory duplex stream. The handler writes response data which we
 /// wrap in HMAC-tagged TLS records and send back to the client.
+#[allow(clippy::too_many_arguments)]
 async fn handle_data_phase(
     client: TcpStream,
     cover_server: TcpStream,
@@ -283,6 +285,7 @@ async fn handle_data_phase(
 /// Data phase with an optional initial proxy frame payload that was already
 /// extracted during the handshake relay (when the first client Application
 /// Data record happens to be a proxy frame).
+#[allow(clippy::too_many_arguments)]
 async fn handle_data_phase_with_initial(
     client: TcpStream,
     _cover_server: TcpStream,

@@ -12,6 +12,10 @@ on:
       - 'prisma-gui/src-tauri/**'
       - 'prisma-gui/package.json'
       - 'prisma-gui/package-lock.json'
+      - 'prisma-console/src/**'
+      - 'prisma-console/package.json'
+      - 'prisma-console/package-lock.json'
+      - 'prisma-docs/**'
   pull_request:
     paths:
       - 'prisma-*/src/**'
@@ -22,34 +26,51 @@ on:
       - 'prisma-gui/src-tauri/**'
       - 'prisma-gui/package.json'
       - 'prisma-gui/package-lock.json'
+      - 'prisma-console/src/**'
+      - 'prisma-console/package.json'
+      - 'prisma-console/package-lock.json'
+      - 'prisma-docs/**'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
   SCCACHE_GHA_ENABLED: true
   RUSTC_WRAPPER: sccache
+  NODE_VERSION: '22'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Rust: format + clippy
+  # ---------------------------------------------------------------------------
   check:
     name: Check & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
+
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
 
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Clippy
+      - name: Clippy (workspace)
         run: cargo clippy --workspace --all-targets
 
+  # ---------------------------------------------------------------------------
+  # Rust: tests across platforms
+  # ---------------------------------------------------------------------------
   test:
-    name: Test (${{ matrix.os }})
+    name: Test / ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,18 +81,18 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-latest
-            target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
 
@@ -86,22 +107,119 @@ jobs:
       - name: Run doctests
         run: cargo test --workspace --doc --target ${{ matrix.target }}
 
+  # ---------------------------------------------------------------------------
+  # GUI: TypeScript check + Tauri Rust check
+  # ---------------------------------------------------------------------------
   gui-check:
-    name: GUI Type Check
+    name: GUI Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: prisma-gui/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
         working-directory: prisma-gui
 
       - name: TypeScript check
         run: npx tsc --noEmit
         working-directory: prisma-gui
+
+      # Verify the Tauri Rust side compiles (check only, no full build)
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: prisma-gui/src-tauri
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - name: Cargo check (Tauri backend)
+        run: cargo check
+        working-directory: prisma-gui/src-tauri
+
+  # ---------------------------------------------------------------------------
+  # Console: build the Next.js static export
+  # ---------------------------------------------------------------------------
+  console-check:
+    name: Console Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: prisma-console/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-console
+
+      - name: Lint
+        run: npm run lint
+        working-directory: prisma-console
+
+      - name: Build
+        run: npm run build
+        working-directory: prisma-console
+
+  # ---------------------------------------------------------------------------
+  # Docs: build Docusaurus site
+  # ---------------------------------------------------------------------------
+  docs-check:
+    name: Docs Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: prisma-docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: prisma-docs
+
+      - name: Build
+        run: npm run build
+        working-directory: prisma-docs
+
+  # ---------------------------------------------------------------------------
+  # Summary gate — single status check for branch protection
+  # ---------------------------------------------------------------------------
+  ci-pass:
+    name: CI Pass
+    if: always()
+    needs: [check, test, gui-check, console-check, docs-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        run: |
+          results=("${{ needs.check.result }}" "${{ needs.test.result }}" "${{ needs.gui-check.result }}" "${{ needs.console-check.result }}" "${{ needs.docs-check.result }}")
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::CI failed — one or more jobs did not pass: ${results[*]}"
+              exit 1
+            fi
+          done
+          echo "All CI checks passed"

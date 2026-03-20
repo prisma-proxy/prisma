@@ -1,5 +1,6 @@
 ---
 title: Developer Documentation
+slug: /
 ---
 
 # Developer Documentation

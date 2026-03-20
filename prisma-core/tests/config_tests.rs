@@ -80,7 +80,7 @@ fn test_server_config_defaults() {
 #[test]
 fn test_mgmt_listen_addr_from_toml() {
     let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
-    assert_eq!(config.management_api.enabled, true);
+    assert!(config.management_api.enabled);
     assert_eq!(
         config.management_api.listen_addr, "0.0.0.0:9090",
         "listen_addr should preserve 0.0.0.0:9090 from TOML, got: {}",
@@ -94,7 +94,7 @@ fn test_mgmt_listen_addr_default_when_omitted() {
     // When [management_api] is not in the TOML, default should be 127.0.0.1:9090
     let config = load_server_config(&fixture("valid_server")).unwrap();
     assert_eq!(config.management_api.listen_addr, "127.0.0.1:9090");
-    assert_eq!(config.management_api.enabled, false);
+    assert!(!config.management_api.enabled);
 }
 
 #[test]
