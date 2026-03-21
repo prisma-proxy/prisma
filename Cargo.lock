@@ -3456,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-cli"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -3492,7 +3492,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "blake3",
@@ -3530,7 +3530,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3582,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-ffi"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3613,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-mgmt"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -3639,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-server"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "anyhow",
  "axum",

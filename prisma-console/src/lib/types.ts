@@ -24,6 +24,12 @@ export interface ConnectionInfo {
   connected_at: string;
   bytes_up: number;
   bytes_down: number;
+  /** Present when backend populates destination info (skip_serializing_if None) */
+  destination?: string;
+  /** Present when a routing rule matched (skip_serializing_if None) */
+  matched_rule?: string;
+  /** Connection duration in seconds, always present from backend */
+  duration_secs: number;
 }
 
 export interface ClientInfo {
@@ -183,7 +189,7 @@ export type RuleCondition =
   | { type: "DomainExact"; value: string }
   | { type: "IpCidr"; value: string }
   | { type: "PortRange"; value: [number, number] }
-  | { type: "All"; value: null };
+  | { type: "All"; value?: null };
 
 /** Log levels ordered from most verbose to least verbose. */
 export const LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] as const;
