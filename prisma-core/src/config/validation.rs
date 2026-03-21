@@ -758,6 +758,17 @@ fn validate_inbounds(inbounds: &[super::server::InboundConfig]) -> Result<(), Co
                             )));
                         }
                     }
+                    // Validate security if specified
+                    if let Some(ref sec) = client.security {
+                        let valid_security =
+                            ["auto", "aes-128-gcm", "chacha20-poly1305", "none", "zero"];
+                        if !valid_security.contains(&sec.as_str()) {
+                            return Err(ConfigError::ValidationFailed(format!(
+                                "inbounds[{}] ({}).clients[{}]: security must be one of: {:?}",
+                                i, inbound.tag, j, valid_security
+                            )));
+                        }
+                    }
                 }
             }
             "vless" => {
@@ -791,6 +802,15 @@ fn validate_inbounds(inbounds: &[super::server::InboundConfig]) -> Result<(), Co
                                 i, inbound.tag, j, valid_flows
                             )));
                         }
+                    }
+                }
+                // Validate decryption if specified (VLESS uses "none")
+                if let Some(ref dec) = inbound.settings.decryption {
+                    if dec != "none" {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}): vless decryption must be \"none\" (got \"{}\")",
+                            i, inbound.tag, dec
+                        )));
                     }
                 }
             }
@@ -836,6 +856,15 @@ fn validate_inbounds(inbounds: &[super::server::InboundConfig]) -> Result<(), Co
                         return Err(ConfigError::ValidationFailed(format!(
                             "inbounds[{}] ({}).clients[{}]: password is required for trojan",
                             i, inbound.tag, j
+                        )));
+                    }
+                }
+                // Validate fallback_addr format if specified
+                if let Some(ref addr) = inbound.settings.fallback_addr {
+                    if !addr.contains(':') {
+                        return Err(ConfigError::ValidationFailed(format!(
+                            "inbounds[{}] ({}): fallback_addr must be in host:port format",
+                            i, inbound.tag
                         )));
                     }
                 }

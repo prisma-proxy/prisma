@@ -7,12 +7,12 @@
 //! ## Wire Format
 //!
 //! ```text
-//! Client → Server:
+//! Client -> Server:
 //!   [hex_password:56][crlf:2][cmd:1][addr_type:1][addr:var][port:2][crlf:2][payload...]
 //!
 //! Commands:
-//!   0x01 = TCP connect
-//!   0x03 = UDP associate
+//!   0x01 = TCP connect (CONNECT)
+//!   0x03 = UDP associate (UDP_ASSOCIATE)
 //!
 //! Address types (SOCKS5 style):
 //!   0x01 = IPv4 (4 bytes)
@@ -20,11 +20,23 @@
 //!   0x04 = IPv6 (16 bytes)
 //! ```
 //!
+//! ## UDP Relay Format
+//!
+//! When command is UDP_ASSOCIATE (0x03), the payload contains UDP packets:
+//! ```text
+//! [addr_type:1][addr:var][port:2][length:2][crlf:2][payload:length]
+//! ```
+//!
 //! ## Authentication
 //!
 //! The password is hashed with SHA224 and transmitted as 56 lowercase hex characters.
 //! The server computes SHA224 of each authorized password and compares using
 //! constant-time comparison.
+//!
+//! ## Fallback
+//!
+//! On authentication failure, instead of dropping the connection, the server
+//! redirects traffic to a preconfigured fallback address (camouflage).
 
 use sha2::Digest;
 
@@ -61,6 +73,30 @@ impl TrojanClient {
     }
 }
 
+/// Trojan server configuration.
+#[derive(Debug, Clone)]
+pub struct TrojanServerConfig {
+    /// Authorized clients.
+    pub clients: Vec<TrojanClient>,
+    /// Fallback address for authentication failures (e.g., "127.0.0.1:80").
+    pub fallback_addr: Option<String>,
+}
+
+impl TrojanServerConfig {
+    /// Create a new config with clients and optional fallback.
+    pub fn new(passwords: &[&str], fallback_addr: Option<&str>) -> Self {
+        Self {
+            clients: passwords.iter().map(|p| TrojanClient::new(p)).collect(),
+            fallback_addr: fallback_addr.map(String::from),
+        }
+    }
+
+    /// Whether the server has a fallback address configured.
+    pub fn has_fallback(&self) -> bool {
+        self.fallback_addr.is_some()
+    }
+}
+
 /// Compute the SHA224 hex hash of a Trojan password.
 ///
 /// Returns a 56-character lowercase hex string.
@@ -75,12 +111,15 @@ pub fn compute_password_hash(password: &str) -> String {
 /// Returns the index of the matching client on success.
 pub fn verify_password(hex_password: &str, clients: &[TrojanClient]) -> Option<usize> {
     let hex_bytes = hex_password.as_bytes();
+    let mut matched: Option<usize> = None;
+
+    // Always iterate all clients for constant-time behavior
     for (i, client) in clients.iter().enumerate() {
         if crate::util::ct_eq_slice(hex_bytes, client.password_hash.as_bytes()) {
-            return Some(i);
+            matched = Some(i);
         }
     }
-    None
+    matched
 }
 
 /// Parsed Trojan request.
@@ -106,6 +145,15 @@ impl TrojanRequest {
             initial_payload: self.initial_payload,
         }
     }
+}
+
+/// Parsed Trojan UDP packet.
+#[derive(Debug)]
+pub struct TrojanUdpPacket {
+    /// Target destination for this UDP packet.
+    pub destination: ProxyDestination,
+    /// UDP payload data.
+    pub payload: Vec<u8>,
 }
 
 /// Parse a Trojan request from raw bytes.
@@ -178,6 +226,77 @@ pub fn parse_trojan_request(data: &[u8]) -> Result<TrojanRequest, ProtocolError>
     })
 }
 
+/// Parse a Trojan UDP relay packet from the payload stream.
+///
+/// Format:
+/// ```text
+/// [addr_type:1][addr:var][port:2][length:2][crlf:2][payload:length]
+/// ```
+///
+/// Returns the parsed UDP packet and bytes consumed.
+pub fn parse_trojan_udp_packet(data: &[u8]) -> Result<(TrojanUdpPacket, usize), ProtocolError> {
+    if data.is_empty() {
+        return Err(ProtocolError::InvalidFrame(
+            "Trojan UDP packet is empty".into(),
+        ));
+    }
+
+    // Parse address
+    let (destination, addr_consumed) = parse_address(data)?;
+
+    let remaining = &data[addr_consumed..];
+    if remaining.len() < 4 {
+        return Err(ProtocolError::InvalidFrame(
+            "Trojan UDP packet truncated (need length + CRLF)".into(),
+        ));
+    }
+
+    // Length (2 bytes, big-endian)
+    let payload_len = u16::from_be_bytes([remaining[0], remaining[1]]) as usize;
+
+    // CRLF
+    if remaining[2] != CRLF[0] || remaining[3] != CRLF[1] {
+        return Err(ProtocolError::InvalidFrame(
+            "Trojan UDP: expected CRLF after length".into(),
+        ));
+    }
+
+    let payload_offset = 4;
+    if remaining.len() < payload_offset + payload_len {
+        return Err(ProtocolError::InvalidFrame(format!(
+            "Trojan UDP payload truncated: {} < {}",
+            remaining.len() - payload_offset,
+            payload_len
+        )));
+    }
+
+    let payload = remaining[payload_offset..payload_offset + payload_len].to_vec();
+    let total_consumed = addr_consumed + payload_offset + payload_len;
+
+    Ok((
+        TrojanUdpPacket {
+            destination,
+            payload,
+        },
+        total_consumed,
+    ))
+}
+
+/// Build a Trojan UDP relay packet.
+///
+/// Format: [addr_type:1][addr:var][port:2][length:2][crlf:2][payload]
+pub fn build_trojan_udp_packet(dest: &ProxyDestination, payload: &[u8]) -> Vec<u8> {
+    let addr = super::encode_address(dest);
+    let payload_len = payload.len() as u16;
+
+    let mut buf = Vec::with_capacity(addr.len() + 2 + 2 + payload.len());
+    buf.extend_from_slice(&addr);
+    buf.extend_from_slice(&payload_len.to_be_bytes());
+    buf.extend_from_slice(&CRLF);
+    buf.extend_from_slice(payload);
+    buf
+}
+
 /// Build a Trojan request header (for client-side use).
 pub fn build_trojan_request(
     password: &str,
@@ -196,6 +315,56 @@ pub fn build_trojan_request(
     buf
 }
 
+/// Result of Trojan authentication attempt.
+pub enum TrojanAuthResult {
+    /// Authentication succeeded.
+    Authenticated {
+        /// Index of the matched client.
+        client_index: usize,
+        /// The parsed request.
+        request: TrojanRequest,
+    },
+    /// Authentication failed. Contains the raw data for fallback relay.
+    Fallback {
+        /// All the data received (to be forwarded to fallback).
+        raw_data: Vec<u8>,
+    },
+}
+
+/// Attempt to authenticate and parse a Trojan request.
+///
+/// On auth failure, returns `TrojanAuthResult::Fallback` with the raw data
+/// instead of an error, allowing the server to redirect to a fallback endpoint.
+pub fn try_authenticate(
+    data: &[u8],
+    clients: &[TrojanClient],
+) -> Result<TrojanAuthResult, ProtocolError> {
+    // Try to parse the request first
+    let request = match parse_trojan_request(data) {
+        Ok(req) => req,
+        Err(_) => {
+            // Can't even parse -- definitely not a Trojan client
+            return Ok(TrojanAuthResult::Fallback {
+                raw_data: data.to_vec(),
+            });
+        }
+    };
+
+    // Verify password
+    match verify_password(&request.password_hash, clients) {
+        Some(client_index) => Ok(TrojanAuthResult::Authenticated {
+            client_index,
+            request,
+        }),
+        None => {
+            // Valid format but wrong password -- fallback
+            Ok(TrojanAuthResult::Fallback {
+                raw_data: data.to_vec(),
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,9 +375,7 @@ mod tests {
         let hash = compute_password_hash("test-password");
         // SHA224 produces 28 bytes = 56 hex chars
         assert_eq!(hash.len(), 56);
-        // Should be deterministic
         assert_eq!(hash, compute_password_hash("test-password"));
-        // Should be lowercase hex
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
         assert_eq!(hash, hash.to_lowercase());
     }
@@ -229,6 +396,17 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_password_multi_match() {
+        let clients = vec![
+            TrojanClient::new("pass1"),
+            TrojanClient::new("pass2"),
+            TrojanClient::new("pass3"),
+        ];
+        let hash2 = compute_password_hash("pass2");
+        assert_eq!(verify_password(&hash2, &clients), Some(1));
+    }
+
+    #[test]
     fn test_verify_password_no_match() {
         let client = TrojanClient::new("correct-password");
         let wrong_hash = compute_password_hash("wrong-password");
@@ -245,7 +423,6 @@ mod tests {
         };
         let header = build_trojan_request(password, CompatCommand::TcpConnect, &dest);
 
-        // Append some payload
         let mut data = header;
         data.extend_from_slice(b"GET / HTTP/1.1\r\n");
 
@@ -342,5 +519,117 @@ mod tests {
         let compat = req.into_compat_request();
         assert_eq!(compat.protocol, CompatProtocol::Trojan);
         assert_eq!(compat.initial_payload, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_udp_packet_parse_roundtrip() {
+        let dest = ProxyDestination {
+            address: ProxyAddress::Domain("dns.google".into()),
+            port: 53,
+        };
+        let payload = b"DNS query data here";
+
+        let wire = build_trojan_udp_packet(&dest, payload);
+        let (packet, consumed) = parse_trojan_udp_packet(&wire).unwrap();
+
+        assert_eq!(packet.destination, dest);
+        assert_eq!(packet.payload, payload);
+        assert_eq!(consumed, wire.len());
+    }
+
+    #[test]
+    fn test_udp_packet_ipv4() {
+        let dest = ProxyDestination {
+            address: ProxyAddress::Ipv4(std::net::Ipv4Addr::new(8, 8, 4, 4)),
+            port: 53,
+        };
+        let payload = b"\x00\x01query";
+
+        let wire = build_trojan_udp_packet(&dest, payload);
+        let (packet, consumed) = parse_trojan_udp_packet(&wire).unwrap();
+
+        assert_eq!(packet.destination, dest);
+        assert_eq!(packet.payload, payload.as_slice());
+        assert_eq!(consumed, wire.len());
+    }
+
+    #[test]
+    fn test_udp_packet_ipv6() {
+        let dest = ProxyDestination {
+            address: ProxyAddress::Ipv6(std::net::Ipv6Addr::LOCALHOST),
+            port: 5353,
+        };
+        let payload = vec![0xAB; 100];
+
+        let wire = build_trojan_udp_packet(&dest, &payload);
+        let (packet, _) = parse_trojan_udp_packet(&wire).unwrap();
+
+        assert_eq!(packet.destination, dest);
+        assert_eq!(packet.payload, payload);
+    }
+
+    #[test]
+    fn test_try_authenticate_success() {
+        let clients = vec![TrojanClient::new("pass1"), TrojanClient::new("pass2")];
+        let dest = ProxyDestination {
+            address: ProxyAddress::Domain("test.com".into()),
+            port: 80,
+        };
+        let data = build_trojan_request("pass2", CompatCommand::TcpConnect, &dest);
+
+        match try_authenticate(&data, &clients).unwrap() {
+            TrojanAuthResult::Authenticated {
+                client_index,
+                request,
+            } => {
+                assert_eq!(client_index, 1);
+                assert_eq!(request.destination, dest);
+            }
+            TrojanAuthResult::Fallback { .. } => panic!("Expected auth success"),
+        }
+    }
+
+    #[test]
+    fn test_try_authenticate_fallback_wrong_password() {
+        let clients = vec![TrojanClient::new("correct")];
+        let dest = ProxyDestination {
+            address: ProxyAddress::Domain("test.com".into()),
+            port: 80,
+        };
+        let data = build_trojan_request("wrong", CompatCommand::TcpConnect, &dest);
+
+        match try_authenticate(&data, &clients).unwrap() {
+            TrojanAuthResult::Authenticated { .. } => panic!("Expected fallback"),
+            TrojanAuthResult::Fallback { raw_data } => {
+                assert_eq!(raw_data, data);
+            }
+        }
+    }
+
+    #[test]
+    fn test_try_authenticate_fallback_garbage_data() {
+        let clients = vec![TrojanClient::new("pass")];
+        let data = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+
+        match try_authenticate(data, &clients).unwrap() {
+            TrojanAuthResult::Authenticated { .. } => panic!("Expected fallback"),
+            TrojanAuthResult::Fallback { raw_data } => {
+                assert_eq!(raw_data, data);
+            }
+        }
+    }
+
+    #[test]
+    fn test_trojan_server_config() {
+        let config = TrojanServerConfig::new(&["pass1", "pass2"], Some("127.0.0.1:80"));
+        assert_eq!(config.clients.len(), 2);
+        assert!(config.has_fallback());
+        assert_eq!(config.fallback_addr, Some("127.0.0.1:80".into()));
+    }
+
+    #[test]
+    fn test_trojan_server_config_no_fallback() {
+        let config = TrojanServerConfig::new(&["pass1"], None);
+        assert!(!config.has_fallback());
     }
 }

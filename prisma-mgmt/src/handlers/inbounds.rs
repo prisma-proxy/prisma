@@ -196,6 +196,7 @@ pub async fn update_inbound_clients(
                 let new_client = prisma_core::config::server::InboundClient {
                     id: add.id.clone(),
                     alter_id: add.alter_id,
+                    security: None,
                     flow: add.flow.clone(),
                     password: add.password.clone(),
                     email: add.email.clone(),

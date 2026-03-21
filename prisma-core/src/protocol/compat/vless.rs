@@ -6,12 +6,12 @@
 //! ## Wire Format
 //!
 //! ```text
-//! Client → Server (request header):
+//! Client -> Server (request header):
 //!   [version:1][uuid:16][addon_len:1][addon:var]
 //!   [cmd:1][port:2][addr_type:1][addr:var]
 //!   [payload...]
 //!
-//! Server → Client (response header):
+//! Server -> Client (response header):
 //!   [version:1][addon_len:1][addon:var]
 //! ```
 //!
@@ -20,6 +20,12 @@
 //! VLESS supports the `xtls-rprx-vision` flow for TLS-in-TLS detection avoidance.
 //! When flow is enabled, the proxy inspects the inner TLS handshake and switches
 //! between encrypted and direct-copy modes.
+//!
+//! ## Commands
+//!
+//! - 0x01: TCP connect
+//! - 0x02: UDP associate
+//! - 0x03: Mux (multiplexing)
 
 use uuid::Uuid;
 
@@ -30,6 +36,11 @@ use super::{CompatCommand, CompatProtocol, CompatRequest};
 
 /// VLESS protocol version.
 pub const VLESS_VERSION: u8 = 0x00;
+
+/// VLESS command bytes.
+pub const VLESS_CMD_TCP: u8 = 0x01;
+pub const VLESS_CMD_UDP: u8 = 0x02;
+pub const VLESS_CMD_MUX: u8 = 0x03;
 
 /// VLESS flow control types.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +93,67 @@ impl Default for VlessAddon {
     }
 }
 
+impl VlessAddon {
+    /// Encode the addon as protobuf bytes.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        let flow_str = self.flow.as_str();
+        if !flow_str.is_empty() {
+            // Protobuf field 1, wire type 2 (length-delimited)
+            buf.push(0x0A);
+            buf.push(flow_str.len() as u8);
+            buf.extend_from_slice(flow_str.as_bytes());
+        }
+        if let Some(ref seed) = self.seed {
+            if !seed.is_empty() {
+                // Protobuf field 2, wire type 2
+                buf.push(0x12);
+                buf.push(seed.len() as u8);
+                buf.extend_from_slice(seed);
+            }
+        }
+        buf
+    }
+}
+
+/// VLESS command type (extended to support Mux).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VlessCommand {
+    /// TCP connect (0x01).
+    Tcp,
+    /// UDP associate (0x02).
+    Udp,
+    /// Mux multiplexing (0x03).
+    Mux,
+}
+
+impl VlessCommand {
+    pub fn from_byte(b: u8) -> Result<Self, ProtocolError> {
+        match b {
+            VLESS_CMD_TCP => Ok(VlessCommand::Tcp),
+            VLESS_CMD_UDP => Ok(VlessCommand::Udp),
+            VLESS_CMD_MUX => Ok(VlessCommand::Mux),
+            _ => Err(ProtocolError::InvalidCommand(b)),
+        }
+    }
+
+    pub fn to_byte(self) -> u8 {
+        match self {
+            VlessCommand::Tcp => VLESS_CMD_TCP,
+            VlessCommand::Udp => VLESS_CMD_UDP,
+            VlessCommand::Mux => VLESS_CMD_MUX,
+        }
+    }
+
+    /// Convert to the generic CompatCommand (Mux maps to TcpConnect).
+    pub fn to_compat_command(self) -> CompatCommand {
+        match self {
+            VlessCommand::Tcp | VlessCommand::Mux => CompatCommand::TcpConnect,
+            VlessCommand::Udp => CompatCommand::UdpAssociate,
+        }
+    }
+}
+
 /// Parsed VLESS request header.
 #[derive(Debug)]
 pub struct VlessRequest {
@@ -91,10 +163,14 @@ pub struct VlessRequest {
     pub uuid: Uuid,
     /// Addon data (flow control, etc.).
     pub addon: VlessAddon,
-    /// Command (TCP connect or UDP associate).
+    /// Command (TCP connect, UDP associate, or Mux).
+    pub vless_command: VlessCommand,
+    /// Generic command for compat layer.
     pub command: CompatCommand,
     /// Target destination.
     pub destination: ProxyDestination,
+    /// Whether this is a Mux connection.
+    pub is_mux: bool,
     /// Any initial payload data after the header.
     pub initial_payload: Vec<u8>,
 }
@@ -154,7 +230,9 @@ pub fn parse_vless_request(data: &[u8]) -> Result<(VlessRequest, usize), Protoco
 
     // Parse command
     let cmd_offset = addon_end;
-    let command = CompatCommand::from_byte(data[cmd_offset])?;
+    let vless_cmd = VlessCommand::from_byte(data[cmd_offset])?;
+    let compat_cmd = vless_cmd.to_compat_command();
+    let is_mux = vless_cmd == VlessCommand::Mux;
 
     // Parse destination: port(2) + addr_type(1) + addr(var)
     let port_offset = cmd_offset + 1;
@@ -172,8 +250,6 @@ pub fn parse_vless_request(data: &[u8]) -> Result<(VlessRequest, usize), Protoco
         ));
     }
 
-    // Build address data for our standard parser: [addr_type][addr][port]
-    // But we already have port, so we parse address without port appended.
     let addr_type = data[addr_offset];
     let (address, addr_consumed) = parse_vless_address(addr_type, &data[addr_offset + 1..])?;
 
@@ -191,12 +267,58 @@ pub fn parse_vless_request(data: &[u8]) -> Result<(VlessRequest, usize), Protoco
             version,
             uuid,
             addon,
-            command,
+            vless_command: vless_cmd,
+            command: compat_cmd,
             destination,
+            is_mux,
             initial_payload,
         },
         header_end,
     ))
+}
+
+/// Build a VLESS request header (for client-side use).
+pub fn build_vless_request(
+    uuid: &Uuid,
+    addon: &VlessAddon,
+    command: VlessCommand,
+    dest: &ProxyDestination,
+) -> Vec<u8> {
+    let addon_bytes = addon.encode();
+    let addr = encode_vless_address(dest);
+
+    let mut buf = Vec::with_capacity(1 + 16 + 1 + addon_bytes.len() + 1 + 2 + addr.len());
+    buf.push(VLESS_VERSION);
+    buf.extend_from_slice(uuid.as_bytes());
+    buf.push(addon_bytes.len() as u8);
+    buf.extend_from_slice(&addon_bytes);
+    buf.push(command.to_byte());
+    buf.extend_from_slice(&dest.port.to_be_bytes());
+    buf.extend_from_slice(&addr);
+
+    buf
+}
+
+/// Encode VLESS address (addr_type + addr, without port).
+fn encode_vless_address(dest: &ProxyDestination) -> Vec<u8> {
+    use crate::types::ProxyAddress;
+    let mut buf = Vec::new();
+    match &dest.address {
+        ProxyAddress::Ipv4(ip) => {
+            buf.push(0x01);
+            buf.extend_from_slice(&ip.octets());
+        }
+        ProxyAddress::Domain(domain) => {
+            buf.push(0x02);
+            buf.push(domain.len() as u8);
+            buf.extend_from_slice(domain.as_bytes());
+        }
+        ProxyAddress::Ipv6(ip) => {
+            buf.push(0x03);
+            buf.extend_from_slice(&ip.octets());
+        }
+    }
+    buf
 }
 
 /// Parse a VLESS addon field.
@@ -204,9 +326,6 @@ pub fn parse_vless_request(data: &[u8]) -> Result<(VlessRequest, usize), Protoco
 /// The addon is a protobuf-like structure. For simplicity, we parse the
 /// flow control string from it.
 fn parse_vless_addon(data: &[u8]) -> Result<VlessAddon, ProtocolError> {
-    // The addon is encoded as protobuf with field 1 = flow string.
-    // For compatibility, we try to extract the flow string.
-    // Protobuf: field_number=1, wire_type=2 (length-delimited) → tag byte = 0x0A
     let mut addon = VlessAddon::default();
 
     if data.is_empty() {
@@ -323,9 +442,10 @@ pub fn build_vless_response() -> Vec<u8> {
 }
 
 /// Build a VLESS server response header with addon.
-pub fn build_vless_response_with_addon(addon: &[u8]) -> Vec<u8> {
-    let mut resp = vec![VLESS_VERSION, addon.len() as u8];
-    resp.extend_from_slice(addon);
+pub fn build_vless_response_with_addon(addon: &VlessAddon) -> Vec<u8> {
+    let addon_bytes = addon.encode();
+    let mut resp = vec![VLESS_VERSION, addon_bytes.len() as u8];
+    resp.extend_from_slice(&addon_bytes);
     resp
 }
 
@@ -339,6 +459,42 @@ pub fn verify_uuid(uuid: &Uuid, clients: &[VlessClient]) -> Option<VlessFlow> {
         }
     }
     None
+}
+
+/// XTLS-RPRX-Vision state for TLS-in-TLS detection avoidance.
+///
+/// When Vision flow is active, the proxy inspects the inner TLS handshake:
+/// 1. During the TLS handshake phase, data is padded to look like normal TLS records.
+/// 2. After the handshake completes (inner TLS established), the proxy switches to
+///    direct copy mode (no padding/encryption overhead on the inner data).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisionState {
+    /// Initial state: inspecting for TLS ClientHello.
+    Handshake,
+    /// TLS handshake detected, applying padding.
+    TlsPadding,
+    /// Inner TLS established, direct copy mode.
+    DirectCopy,
+}
+
+impl VisionState {
+    /// Check if the data looks like a TLS ClientHello.
+    pub fn is_tls_client_hello(data: &[u8]) -> bool {
+        // TLS record: content_type=0x16 (handshake), version=0x0301/0x0303
+        if data.len() < 5 {
+            return false;
+        }
+        data[0] == 0x16 && data[1] == 0x03 && (data[2] == 0x01 || data[2] == 0x03)
+    }
+
+    /// Check if the data looks like a TLS record.
+    pub fn is_tls_record(data: &[u8]) -> bool {
+        if data.len() < 5 {
+            return false;
+        }
+        // content_type: 0x14=ChangeCipherSpec, 0x15=Alert, 0x16=Handshake, 0x17=ApplicationData
+        matches!(data[0], 0x14..=0x17) && data[1] == 0x03
+    }
 }
 
 #[cfg(test)]
@@ -363,6 +519,8 @@ mod tests {
         assert_eq!(req.version, VLESS_VERSION);
         assert_eq!(req.uuid, uuid);
         assert_eq!(req.command, CompatCommand::TcpConnect);
+        assert_eq!(req.vless_command, VlessCommand::Tcp);
+        assert!(!req.is_mux);
         assert_eq!(req.destination.port, 443);
         assert!(matches!(&req.destination.address, ProxyAddress::Domain(d) if d == "example.com"));
         assert_eq!(consumed, data.len());
@@ -375,17 +533,36 @@ mod tests {
         data.push(VLESS_VERSION);
         data.extend_from_slice(uuid.as_bytes());
         data.push(0); // no addon
-        data.push(0x03); // cmd = UDP associate
+        data.push(0x02); // cmd = UDP associate
         data.extend_from_slice(&53u16.to_be_bytes()); // port
         data.push(0x01); // addr_type = IPv4
         data.extend_from_slice(&[8, 8, 8, 8]); // 8.8.8.8
 
         let (req, _) = parse_vless_request(&data).unwrap();
         assert_eq!(req.command, CompatCommand::UdpAssociate);
+        assert_eq!(req.vless_command, VlessCommand::Udp);
         assert_eq!(req.destination.port, 53);
         assert!(
             matches!(req.destination.address, ProxyAddress::Ipv4(ip) if ip == std::net::Ipv4Addr::new(8, 8, 8, 8))
         );
+    }
+
+    #[test]
+    fn test_parse_vless_request_mux() {
+        let uuid = Uuid::new_v4();
+        let mut data = Vec::new();
+        data.push(VLESS_VERSION);
+        data.extend_from_slice(uuid.as_bytes());
+        data.push(0); // no addon
+        data.push(VLESS_CMD_MUX); // cmd = Mux
+        data.extend_from_slice(&0u16.to_be_bytes()); // port 0
+        data.push(0x01); // addr_type = IPv4
+        data.extend_from_slice(&[0, 0, 0, 0]); // 0.0.0.0
+
+        let (req, _) = parse_vless_request(&data).unwrap();
+        assert!(req.is_mux);
+        assert_eq!(req.vless_command, VlessCommand::Mux);
+        assert_eq!(req.command, CompatCommand::TcpConnect);
     }
 
     #[test]
@@ -433,9 +610,41 @@ mod tests {
     }
 
     #[test]
+    fn test_build_vless_request_roundtrip() {
+        let uuid = Uuid::new_v4();
+        let addon = VlessAddon {
+            flow: VlessFlow::XtlsRprxVision,
+            seed: None,
+        };
+        let dest = ProxyDestination {
+            address: ProxyAddress::Domain("example.com".into()),
+            port: 443,
+        };
+
+        let wire = build_vless_request(&uuid, &addon, VlessCommand::Tcp, &dest);
+        let (req, consumed) = parse_vless_request(&wire).unwrap();
+
+        assert_eq!(req.uuid, uuid);
+        assert_eq!(req.addon.flow, VlessFlow::XtlsRprxVision);
+        assert_eq!(req.destination.port, 443);
+        assert_eq!(consumed, wire.len());
+    }
+
+    #[test]
     fn test_build_vless_response() {
         let resp = build_vless_response();
         assert_eq!(resp, vec![0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_build_vless_response_with_addon() {
+        let addon = VlessAddon {
+            flow: VlessFlow::XtlsRprxVision,
+            seed: None,
+        };
+        let resp = build_vless_response_with_addon(&addon);
+        assert_eq!(resp[0], VLESS_VERSION);
+        assert!(resp.len() > 2);
     }
 
     #[test]
@@ -482,5 +691,47 @@ mod tests {
         data.extend_from_slice(&[0u8; 17]); // uuid + addon_len
         data.extend_from_slice(&[0x01, 0x00, 0x50, 0x01, 1, 2, 3, 4]);
         assert!(parse_vless_request(&data).is_err());
+    }
+
+    #[test]
+    fn test_addon_encode_roundtrip() {
+        let addon = VlessAddon {
+            flow: VlessFlow::XtlsRprxVision,
+            seed: Some(b"test-seed".to_vec()),
+        };
+        let encoded = addon.encode();
+        let decoded = parse_vless_addon(&encoded).unwrap();
+        assert_eq!(decoded.flow, VlessFlow::XtlsRprxVision);
+        assert_eq!(decoded.seed, Some(b"test-seed".to_vec()));
+    }
+
+    #[test]
+    fn test_vision_state_tls_detection() {
+        // TLS ClientHello
+        let client_hello = [0x16, 0x03, 0x01, 0x00, 0x05, 0x01];
+        assert!(VisionState::is_tls_client_hello(&client_hello));
+        assert!(VisionState::is_tls_record(&client_hello));
+
+        // Not TLS
+        let http = b"GET / HTTP/1.1\r\n";
+        assert!(!VisionState::is_tls_client_hello(http));
+        assert!(!VisionState::is_tls_record(http));
+
+        // TLS ApplicationData
+        let app_data = [0x17, 0x03, 0x03, 0x00, 0x20];
+        assert!(!VisionState::is_tls_client_hello(&app_data));
+        assert!(VisionState::is_tls_record(&app_data));
+    }
+
+    #[test]
+    fn test_vless_command_roundtrip() {
+        assert_eq!(VlessCommand::from_byte(0x01).unwrap(), VlessCommand::Tcp);
+        assert_eq!(VlessCommand::from_byte(0x02).unwrap(), VlessCommand::Udp);
+        assert_eq!(VlessCommand::from_byte(0x03).unwrap(), VlessCommand::Mux);
+        assert!(VlessCommand::from_byte(0x04).is_err());
+
+        assert_eq!(VlessCommand::Tcp.to_byte(), 0x01);
+        assert_eq!(VlessCommand::Udp.to_byte(), 0x02);
+        assert_eq!(VlessCommand::Mux.to_byte(), 0x03);
     }
 }

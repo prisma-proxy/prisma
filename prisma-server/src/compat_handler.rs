@@ -9,12 +9,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::Utc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tracing::{debug, info};
+use tokio::net::TcpStream;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::InboundConfig;
-use prisma_core::protocol::compat::trojan::{self, TrojanClient};
+use prisma_core::protocol::compat::trojan::{self, TrojanAuthResult, TrojanClient};
 use prisma_core::protocol::compat::vless::{self, VlessClient};
 use prisma_core::protocol::compat::vmess::{self, VMessClient};
 use prisma_core::protocol::compat::{self, CompatProtocol};
@@ -54,7 +55,25 @@ where
         CompatProtocol::VMess => handle_vmess_header(header_data, config)?,
         CompatProtocol::Vless => handle_vless_header(header_data, config)?,
         CompatProtocol::Shadowsocks => handle_shadowsocks_header(header_data, config)?,
-        CompatProtocol::Trojan => handle_trojan_header(header_data, config)?,
+        CompatProtocol::Trojan => {
+            match handle_trojan_header(header_data, config, &peer_addr) {
+                Ok(result) => result,
+                Err(TrojanHandlerError::Fallback {
+                    raw_data,
+                    fallback_addr,
+                }) => {
+                    // Redirect to fallback
+                    debug!(
+                        tag = %config.tag,
+                        fallback = %fallback_addr,
+                        peer = %peer_addr,
+                        "Trojan auth failed, redirecting to fallback"
+                    );
+                    return relay_to_fallback(stream, &raw_data, &fallback_addr).await;
+                }
+                Err(TrojanHandlerError::Protocol(e)) => return Err(e),
+            }
+        }
     };
 
     let dest = &compat_request.destination;
@@ -186,7 +205,11 @@ where
     Ok(())
 }
 
-/// Parse a VMess header and authenticate.
+// ---------------------------------------------------------------------------
+// VMess handler
+// ---------------------------------------------------------------------------
+
+/// Parse a VMess header and authenticate using full AEAD decryption.
 fn handle_vmess_header(
     data: &[u8],
     config: &InboundConfig,
@@ -205,45 +228,34 @@ fn handle_vmess_header(
         })
         .collect();
 
-    if data.len() < 16 {
-        return Err(anyhow::anyhow!("VMess header too short"));
-    }
+    let disable_insecure = config.settings.disable_insecure_encryption;
 
-    // Extract auth_id (first 16 bytes)
-    let mut auth_id = [0u8; 16];
-    auth_id.copy_from_slice(&data[..16]);
+    // Full AEAD decode: auth_id verification + header length + header payload decryption
+    let (parsed, _cmd_key, _consumed) =
+        vmess::decode_vmess_request(data, &clients, 120, disable_insecure)
+            .map_err(|e| anyhow::anyhow!("VMess: {}", e))?;
 
-    // Verify against known clients (120 second window)
-    let matched_uuid = vmess::verify_auth_id(&auth_id, &clients, 120)
-        .ok_or_else(|| anyhow::anyhow!("VMess authentication failed"))?;
+    info!(
+        security = ?parsed.security,
+        option = parsed.option,
+        dest = %parsed.destination,
+        "VMess client authenticated"
+    );
 
-    info!(client = %matched_uuid, "VMess client authenticated");
+    // Build encrypted response header
+    let resp_key = vmess::derive_response_key(&parsed.data_key);
+    let resp_iv = vmess::derive_response_iv(&parsed.data_iv);
+    let resp_header = vmess::build_response_header(parsed.response_header);
 
-    // The AEAD header follows the auth_id. In a full wire-compatible deployment,
-    // we would decrypt the AEAD-encrypted header using keys derived from the
-    // command key. The auth verification above is functional and correct.
-    //
-    // For AEAD header decryption, we need the encrypted length (2+16 bytes)
-    // followed by the encrypted header payload. The keys are:
-    //   length_key = KDF(cmd_key, "VMess AEAD KDF", auth_id, "length")
-    //   header_key = KDF(cmd_key, "VMess AEAD KDF", auth_id, "header")
-    //
-    // This is a protocol-level limitation note: full VMess AEAD relay requires
-    // implementing the KDF chain specified in v2fly/v2ray-core.
-    if data.len() < 40 {
-        return Err(anyhow::anyhow!(
-            "VMess AEAD header too short for parsing (auth OK for {})",
-            matched_uuid
-        ));
-    }
+    let response = vmess::encrypt_response_header(&resp_key, &resp_iv, &resp_header)
+        .map_err(|e| anyhow::anyhow!("VMess response encrypt: {}", e))?;
 
-    // Return an indication that VMess AEAD decryption was authenticated but
-    // the full header decryption requires the v2fly KDF chain.
-    Err(anyhow::anyhow!(
-        "VMess AEAD header decryption not yet fully wired (auth OK for {})",
-        matched_uuid
-    ))
+    Ok((parsed.into_compat_request(), response))
 }
+
+// ---------------------------------------------------------------------------
+// VLESS handler
+// ---------------------------------------------------------------------------
 
 /// Parse a VLESS header and authenticate.
 fn handle_vless_header(
@@ -267,16 +279,35 @@ fn handle_vless_header(
     let (request, _consumed) = vless::parse_vless_request(data)?;
 
     // Verify UUID
-    let _flow = vless::verify_uuid(&request.uuid, &clients)
+    let flow = vless::verify_uuid(&request.uuid, &clients)
         .ok_or_else(|| anyhow::anyhow!("VLESS UUID not authorized: {}", request.uuid))?;
 
-    info!(client = %request.uuid, "VLESS client authenticated");
+    info!(
+        client = %request.uuid,
+        flow = %flow.as_str(),
+        is_mux = request.is_mux,
+        "VLESS client authenticated"
+    );
 
-    let response = vless::build_vless_response();
+    // Build response with flow addon if vision is active
+    let response = if flow == vless::VlessFlow::XtlsRprxVision {
+        let addon = vless::VlessAddon {
+            flow: vless::VlessFlow::XtlsRprxVision,
+            seed: None,
+        };
+        vless::build_vless_response_with_addon(&addon)
+    } else {
+        vless::build_vless_response()
+    };
+
     Ok((request.into_compat_request(), response))
 }
 
-/// Parse a Shadowsocks header.
+// ---------------------------------------------------------------------------
+// Shadowsocks handler
+// ---------------------------------------------------------------------------
+
+/// Parse a Shadowsocks header with full AEAD decryption.
 fn handle_shadowsocks_header(
     data: &[u8],
     config: &InboundConfig,
@@ -286,38 +317,58 @@ fn handle_shadowsocks_header(
         .method
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("Shadowsocks: method not configured"))?;
-    let _password = config
+    let password = config
         .settings
         .password
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("Shadowsocks: password not configured"))?;
 
-    // Verify the stream has enough data for a valid Shadowsocks AEAD connection.
     let cipher =
         prisma_core::protocol::compat::shadowsocks::ShadowsocksCipher::parse_method(method_str)
             .ok_or_else(|| anyhow::anyhow!("Unknown Shadowsocks cipher: {}", method_str))?;
 
-    let _header = prisma_core::protocol::compat::shadowsocks::parse_stream_header(data, cipher)?;
+    let ss_config = prisma_core::protocol::compat::shadowsocks::ShadowsocksConfig::with_udp(
+        cipher,
+        password,
+        config.settings.udp,
+    );
 
-    // Full AEAD decryption would:
-    // 1. Extract salt from stream header
-    // 2. Derive subkey via HKDF with the PSK
-    // 3. Decrypt length chunk with incrementing nonce
-    // 4. Decrypt payload chunk
-    // 5. Parse destination address from decrypted first payload
-    //
-    // Stream header parsing is validated above.
-    Err(anyhow::anyhow!(
-        "Shadowsocks AEAD decryption not yet fully wired (stream header parsed, cipher={})",
-        cipher.as_str()
-    ))
+    // Full AEAD decryption: extract salt, derive subkey, decrypt first chunk, parse address
+    let (request, _tcp_cipher, _consumed) =
+        prisma_core::protocol::compat::shadowsocks::decode_ss_tcp_request(data, &ss_config)
+            .map_err(|e| anyhow::anyhow!("Shadowsocks: {}", e))?;
+
+    info!(
+        cipher = %cipher.as_str(),
+        dest = %request.destination,
+        "Shadowsocks connection decoded"
+    );
+
+    // No response header for Shadowsocks
+    Ok((request, Vec::new()))
 }
 
-/// Parse a Trojan header and authenticate.
+// ---------------------------------------------------------------------------
+// Trojan handler
+// ---------------------------------------------------------------------------
+
+/// Error type for Trojan handler that can signal fallback.
+enum TrojanHandlerError {
+    /// Authentication failed, redirect to fallback.
+    Fallback {
+        raw_data: Vec<u8>,
+        fallback_addr: String,
+    },
+    /// Protocol-level error.
+    Protocol(anyhow::Error),
+}
+
+/// Parse a Trojan header and authenticate with fallback support.
 fn handle_trojan_header(
     data: &[u8],
     config: &InboundConfig,
-) -> Result<(compat::CompatRequest, Vec<u8>)> {
+    peer_addr: &str,
+) -> Result<(compat::CompatRequest, Vec<u8>), TrojanHandlerError> {
     // Build client list
     let clients: Vec<TrojanClient> = config
         .settings
@@ -329,18 +380,100 @@ fn handle_trojan_header(
         })
         .collect();
 
-    let request = trojan::parse_trojan_request(data)?;
+    // Use try_authenticate for fallback support
+    match trojan::try_authenticate(data, &clients) {
+        Ok(TrojanAuthResult::Authenticated {
+            client_index,
+            request,
+        }) => {
+            let client_email = config.settings.clients[client_index]
+                .email
+                .as_deref()
+                .unwrap_or("unknown");
+            info!(
+                client = %client_email,
+                peer = %peer_addr,
+                "Trojan client authenticated"
+            );
+            Ok((request.into_compat_request(), Vec::new()))
+        }
+        Ok(TrojanAuthResult::Fallback { raw_data }) => {
+            if let Some(ref fallback_addr) = config.settings.fallback_addr {
+                Err(TrojanHandlerError::Fallback {
+                    raw_data,
+                    fallback_addr: fallback_addr.clone(),
+                })
+            } else {
+                warn!(
+                    tag = %config.tag,
+                    peer = %peer_addr,
+                    "Trojan auth failed, no fallback configured"
+                );
+                Err(TrojanHandlerError::Protocol(anyhow::anyhow!(
+                    "Trojan password not authorized"
+                )))
+            }
+        }
+        Err(e) => Err(TrojanHandlerError::Protocol(anyhow::anyhow!(
+            "Trojan parse error: {}",
+            e
+        ))),
+    }
+}
 
-    // Verify password
-    let client_idx = trojan::verify_password(&request.password_hash, &clients)
-        .ok_or_else(|| anyhow::anyhow!("Trojan password not authorized"))?;
+/// Relay data to a fallback endpoint (for Trojan auth failure camouflage).
+async fn relay_to_fallback<S>(
+    client_stream: S,
+    initial_data: &[u8],
+    fallback_addr: &str,
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let mut fallback = TcpStream::connect(fallback_addr)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to connect to fallback {}: {}", fallback_addr, e))?;
 
-    let client_email = config.settings.clients[client_idx]
-        .email
-        .as_deref()
-        .unwrap_or("unknown");
-    info!(client = %client_email, "Trojan client authenticated");
+    // Send the initial data that we already read
+    fallback.write_all(initial_data).await?;
 
-    // No response header for Trojan -- data flows immediately after auth
-    Ok((request.into_compat_request(), Vec::new()))
+    let (mut fb_read, mut fb_write) = fallback.into_split();
+    let (mut cl_read, mut cl_write) = tokio::io::split(client_stream);
+
+    let up = tokio::spawn(async move {
+        let mut buf = [0u8; 32768];
+        loop {
+            match cl_read.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if fb_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+        let _ = fb_write.shutdown().await;
+    });
+
+    let down = tokio::spawn(async move {
+        let mut buf = [0u8; 32768];
+        loop {
+            match fb_read.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if cl_write.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+        let _ = cl_write.shutdown().await;
+    });
+
+    tokio::select! {
+        _ = up => {},
+        _ = down => {},
+    }
+
+    Ok(())
 }

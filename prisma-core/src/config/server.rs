@@ -917,6 +917,27 @@ pub struct InboundSettings {
     /// Password (Shadowsocks/Trojan single-user mode).
     #[serde(default)]
     pub password: Option<String>,
+
+    // --- VMess-specific ---
+    /// Reject insecure encryption methods (AES-128-CFB, None). Default: true.
+    #[serde(default = "default_true_inbound")]
+    pub disable_insecure_encryption: bool,
+
+    // --- Shadowsocks-specific ---
+    /// Enable UDP relay for Shadowsocks. Default: true.
+    #[serde(default = "default_true_inbound")]
+    pub udp: bool,
+
+    // --- Trojan-specific ---
+    /// Fallback address for failed Trojan authentication (e.g., "127.0.0.1:80").
+    /// When set, invalid auth is redirected here instead of dropping.
+    #[serde(default)]
+    pub fallback_addr: Option<String>,
+
+    // --- VLESS-specific ---
+    /// Decryption mode for VLESS. Should be "none" (VLESS relies on TLS).
+    #[serde(default)]
+    pub decryption: Option<String>,
 }
 
 /// A client entry for VMess/VLESS/Trojan inbounds.
@@ -928,6 +949,9 @@ pub struct InboundClient {
     /// VMess alter ID (default: 0, must be 0 for AEAD).
     #[serde(default)]
     pub alter_id: Option<u16>,
+    /// VMess preferred security type (e.g., "auto", "aes-128-gcm", "chacha20-poly1305").
+    #[serde(default)]
+    pub security: Option<String>,
     /// VLESS flow control (e.g., "xtls-rprx-vision").
     #[serde(default)]
     pub flow: Option<String>,
