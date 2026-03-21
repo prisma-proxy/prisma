@@ -10,12 +10,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useAlertConfig, useActiveAlerts } from "@/hooks/use-alerts";
+import { useAlertConfig, useActiveAlerts, type Alert } from "@/hooks/use-alerts";
 import { useSystemInfo } from "@/hooks/use-system-info";
 import { useBandwidthSummary } from "@/hooks/use-bandwidth";
 import { useMetricsContext } from "@/contexts/metrics-context";
 import { useI18n } from "@/lib/i18n";
-import type { Alert } from "@/lib/alerts";
 
 interface AlertBadgePropsExternal {
   alerts?: Alert[];

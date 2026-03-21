@@ -14,10 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSpeedTest, TEST_SERVERS } from "@/hooks/use-speed-test";
+import { TEST_SERVERS, type useSpeedTest } from "@/hooks/use-speed-test";
 import { useI18n } from "@/lib/i18n";
 
-export function SpeedTestRunner() {
+interface SpeedTestRunnerProps {
+  speedTest: ReturnType<typeof useSpeedTest>;
+}
+
+export function SpeedTestRunner({ speedTest }: SpeedTestRunnerProps) {
   const { t } = useI18n();
   const {
     running,
@@ -28,7 +32,7 @@ export function SpeedTestRunner() {
     liveUl,
     run,
     stop,
-  } = useSpeedTest();
+  } = speedTest;
 
   const [duration, setDuration] = useState(10);
   const [serverIdx, setServerIdx] = useState("0");

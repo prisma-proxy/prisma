@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n";
 
 export default function SpeedTestPage() {
   const { t } = useI18n();
-  const { history, clearHistory, running } = useSpeedTest();
+  const speedTest = useSpeedTest();
 
   return (
     <div className="space-y-6">
@@ -19,17 +19,17 @@ export default function SpeedTestPage() {
           <CardTitle>{t("speedTest.title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <SpeedTestRunner />
+          <SpeedTestRunner speedTest={speedTest} />
         </CardContent>
       </Card>
 
-      {!running && history.length > 0 && (
+      {!speedTest.running && speedTest.history.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>{t("speedTest.history")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <SpeedTestHistory history={history} onClear={clearHistory} />
+            <SpeedTestHistory history={speedTest.history} onClear={speedTest.clearHistory} />
           </CardContent>
         </Card>
       )}
