@@ -344,7 +344,7 @@ format = "pretty"
 - `xhttp_mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
 - `xhttp_mode = "stream-one"` 需要设置 `xhttp_stream_url`
 - `xhttp_mode = "packet-up"` 或 `"stream-up"` 需要设置 `xhttp_upload_url` 和 `xhttp_download_url`
-- XMUX 范围须满足 min <= max
+- XMUX 范围须满足 `min <= max`
 - `transport = "xporta"` 时需要设置 `xporta.base_url`
 - XPorta：所有路径必须以 `/` 开头
 - XPorta：`data_paths` 和 `poll_paths` 不能为空且不能重叠
