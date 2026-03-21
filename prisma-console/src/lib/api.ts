@@ -133,4 +133,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  // Inbounds
+  getInbounds: () =>
+    apiFetch<import("./types").InboundSummary[]>("/api/inbounds"),
+  getInbound: (tag: string) =>
+    apiFetch<import("./types").InboundDetail>(`/api/inbounds/${encodeURIComponent(tag)}`),
+  updateInboundClients: (
+    tag: string,
+    data: { add?: { id?: string; email?: string; flow?: string; alter_id?: number; password?: string }[]; remove?: string[] }
+  ) =>
+    apiFetch<{ tag: string; added: number; removed: number; total_clients: number }>(
+      `/api/inbounds/${encodeURIComponent(tag)}/clients`,
+      { method: "PUT", body: JSON.stringify(data) }
+    ),
 };

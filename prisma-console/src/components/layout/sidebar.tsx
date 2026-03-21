@@ -18,6 +18,7 @@ import {
   Gauge,
   BarChart3,
   Network,
+  Layers,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network, group: "main" },
   { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main" },
   { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main" },
+  { labelKey: "sidebar.inbounds", href: "/dashboard/inbounds/", icon: Layers, group: "main" },
   { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText, group: "monitoring" },
   { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3, group: "monitoring" },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },
@@ -182,7 +184,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         {/* Footer */}
         {!collapsed && (
           <div className="border-t border-sidebar-border px-4 py-3">
-            <p className="text-[10px] text-muted-foreground">Prisma Console v{process.env.NEXT_PUBLIC_APP_VERSION || "1.5.2"}</p>
+            <p className="text-[10px] text-muted-foreground">Prisma Console v{process.env.NEXT_PUBLIC_APP_VERSION || "1.7.0"}</p>
           </div>
         )}
       </aside>

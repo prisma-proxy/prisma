@@ -34,7 +34,6 @@ fn build_kdf_context(
 /// Derive a key for encrypting/decrypting session tickets.
 ///
 /// The ticket key is derived from a server-side secret using BLAKE3 KDF.
-#[allow(dead_code)]
 pub fn derive_ticket_key(server_secret: &[u8; 32]) -> [u8; 32] {
     blake3_derive("prisma-v3-session-ticket", server_secret)
 }

@@ -7,6 +7,10 @@
 //!
 //! This module is only compiled on Linux when the `io-uring` feature is enabled.
 
+//! This module is only compiled on Linux when the `io-uring` feature is enabled.
+//!
+//! To enable: `cargo build --features io-uring -p prisma-server`
+
 #![cfg(all(target_os = "linux", feature = "io-uring"))]
 
 use std::os::unix::io::AsRawFd;
@@ -17,8 +21,18 @@ use anyhow::Result;
 use io_uring::{opcode, types, IoUring};
 use tracing::{debug, info, warn};
 
-use prisma_core::config::server::IoUringConfig;
 use prisma_core::state::ServerMetrics;
+
+/// Configuration for the io_uring relay path.
+#[derive(Debug, Clone)]
+pub struct IoUringConfig {
+    /// Whether io_uring relay is enabled.
+    pub enabled: bool,
+    /// Number of SQ entries (default: 256).
+    pub queue_depth: u32,
+    /// Number of fixed buffers to register (reserved for future use).
+    pub fixed_buffers: usize,
+}
 
 /// Size of each registered buffer (matches the relay read buffer size).
 const BUFFER_SIZE: usize = 32768;

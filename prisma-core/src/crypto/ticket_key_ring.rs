@@ -82,7 +82,10 @@ impl TicketKeyRing {
     /// Generates a new key using BLAKE3 KDF from the current key + a counter.
     pub fn maybe_rotate(&self) {
         let needs_rotation = {
-            let inner = self.inner.read().unwrap();
+            let inner = self
+                .inner
+                .read()
+                .expect("ticket key ring read lock poisoned");
             if let Some(current) = inner.keys.first() {
                 current.created_at.elapsed() >= self.rotation_interval
             } else {
@@ -97,7 +100,10 @@ impl TicketKeyRing {
 
     /// Force a key rotation. Derives a new key from the current key using BLAKE3 KDF.
     pub fn rotate(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self
+            .inner
+            .write()
+            .expect("ticket key ring write lock poisoned");
         let new_key = if let Some(current) = inner.keys.first() {
             // Derive new key from current key + rotation counter (key count).
             let counter = inner.keys.len() as u64;
@@ -130,7 +136,10 @@ impl TicketKeyRing {
     /// Get the current (newest) ticket key for encryption.
     pub fn current_key(&self) -> [u8; 32] {
         self.maybe_rotate();
-        let inner = self.inner.read().unwrap();
+        let inner = self
+            .inner
+            .read()
+            .expect("ticket key ring read lock poisoned");
         inner.keys.first().map(|e| e.key).unwrap_or([0u8; 32])
     }
 
@@ -140,7 +149,10 @@ impl TicketKeyRing {
     /// A fresh random nonce is generated per encryption to prevent nonce reuse.
     pub fn encrypt_ticket(&self, plaintext: &[u8]) -> Result<Vec<u8>, crate::error::CryptoError> {
         self.maybe_rotate();
-        let inner = self.inner.read().unwrap();
+        let inner = self
+            .inner
+            .read()
+            .expect("ticket key ring read lock poisoned");
         let current = inner
             .keys
             .first()
@@ -170,7 +182,10 @@ impl TicketKeyRing {
         }
 
         self.maybe_rotate();
-        let inner = self.inner.read().unwrap();
+        let inner = self
+            .inner
+            .read()
+            .expect("ticket key ring read lock poisoned");
         let hint = data[0] as usize;
         let nonce: [u8; NONCE_SIZE] = data[1..1 + NONCE_SIZE]
             .try_into()
@@ -202,7 +217,10 @@ impl TicketKeyRing {
 
     /// Get the number of keys currently in the ring.
     pub fn key_count(&self) -> usize {
-        let inner = self.inner.read().unwrap();
+        let inner = self
+            .inner
+            .read()
+            .expect("ticket key ring read lock poisoned");
         inner.keys.len()
     }
 

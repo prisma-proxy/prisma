@@ -10,6 +10,8 @@ pub mod listener;
 pub mod mux_handler;
 pub mod outbound;
 pub mod relay;
+#[cfg(all(target_os = "linux", feature = "io-uring"))]
+pub mod relay_uring;
 pub mod reload;
 pub mod state;
 pub mod udp_relay;

@@ -57,7 +57,7 @@ const config: Config = {
           showLastUpdateTime: true,
           lastVersion: 'current',
           versions: {
-            current: {label: 'v1.5.1', path: ''},
+            current: {label: 'v1.7.0', path: ''},
             '0.8.0': {label: 'v0.8.0', path: '0.8.0'},
           },
         },

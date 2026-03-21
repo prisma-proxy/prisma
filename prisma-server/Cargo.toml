@@ -45,10 +45,12 @@ h3-quinn = { workspace = true }
 nix = { workspace = true }
 russh = { workspace = true }
 notify = { workspace = true }
+io-uring = { version = "0.7", optional = true }
 
 [features]
 default = ["sysinfo"]
 sysinfo = ["prisma-mgmt/sysinfo"]
+io-uring = ["dep:io-uring"]
 
 [dev-dependencies]
 tokio-test = { workspace = true }

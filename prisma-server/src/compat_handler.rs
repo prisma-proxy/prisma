@@ -16,7 +16,7 @@ use uuid::Uuid;
 use prisma_core::cache::DnsCache;
 use prisma_core::config::server::InboundConfig;
 use prisma_core::protocol::compat::trojan::{self, TrojanAuthResult, TrojanClient};
-use prisma_core::protocol::compat::vless::{self, VlessClient};
+use prisma_core::protocol::compat::vless::{self, VisionState, VlessClient, VlessFlow};
 use prisma_core::protocol::compat::vmess::{self, VMessClient};
 use prisma_core::protocol::compat::{self, CompatProtocol};
 use prisma_core::state::{ConnectionInfo, SessionMode, Transport};
@@ -51,9 +51,16 @@ where
     }
     let header_data = &header_buf[..n];
 
+    // Track VLESS Vision flow state for direct-copy splice optimization
+    let mut vision_flow = VlessFlow::None;
+
     let (compat_request, response_data) = match protocol {
         CompatProtocol::VMess => handle_vmess_header(header_data, config)?,
-        CompatProtocol::Vless => handle_vless_header(header_data, config)?,
+        CompatProtocol::Vless => {
+            let (req, resp, flow) = handle_vless_header(header_data, config)?;
+            vision_flow = flow;
+            (req, resp)
+        }
         CompatProtocol::Shadowsocks => handle_shadowsocks_header(header_data, config)?,
         CompatProtocol::Trojan => {
             match handle_trojan_header(header_data, config, &peer_addr) {
@@ -143,9 +150,21 @@ where
     let metrics_up = metrics.clone();
     let metrics_down = metrics;
 
+    let use_vision = vision_flow == VlessFlow::XtlsRprxVision;
+
     // Upload: client -> destination
+    // When Vision is active, we inspect the first few chunks for TLS handshake
+    // records. Once the inner TLS handshake completes (ApplicationData seen),
+    // we transition to direct copy — no more inspection overhead.
     let upload = tokio::spawn(async move {
         let mut buf = [0u8; 32768];
+        let mut vision_state = if use_vision {
+            VisionState::Handshake
+        } else {
+            VisionState::DirectCopy
+        };
+        let mut chunks_inspected: u32 = 0;
+
         loop {
             match stream_read.read(&mut buf).await {
                 Ok(0) => break,
@@ -154,6 +173,34 @@ where
                     metrics_up
                         .total_bytes_up
                         .fetch_add(n as u64, Ordering::Relaxed);
+
+                    // Vision state machine for upload direction
+                    if vision_state != VisionState::DirectCopy {
+                        chunks_inspected += 1;
+                        if VisionState::is_tls_client_hello(&buf[..n]) {
+                            vision_state = VisionState::TlsPadding;
+                        } else if vision_state == VisionState::TlsPadding
+                            && !VisionState::is_tls_record(&buf[..n])
+                        {
+                            // Non-TLS data after handshake detection means
+                            // inner TLS is established — switch to direct copy
+                            vision_state = VisionState::DirectCopy;
+                            debug!(
+                                "Vision: upload switched to direct copy after {} chunks",
+                                chunks_inspected
+                            );
+                        }
+                        // Safety: if we've inspected many chunks without
+                        // transitioning, force direct copy to avoid overhead
+                        if chunks_inspected > 8 && vision_state != VisionState::DirectCopy {
+                            vision_state = VisionState::DirectCopy;
+                            debug!(
+                                "Vision: upload forced direct copy after {} chunks",
+                                chunks_inspected
+                            );
+                        }
+                    }
+
                     if out_write.write_all(&buf[..n]).await.is_err() {
                         break;
                     }
@@ -165,8 +212,18 @@ where
     });
 
     // Download: destination -> client
+    // For Vision, we also inspect the download direction. Once we see
+    // ApplicationData records from the destination, the inner TLS is
+    // established and we switch to direct copy.
     let download = tokio::spawn(async move {
         let mut buf = [0u8; 32768];
+        let mut vision_state = if use_vision {
+            VisionState::Handshake
+        } else {
+            VisionState::DirectCopy
+        };
+        let mut chunks_inspected: u32 = 0;
+
         loop {
             match out_read.read(&mut buf).await {
                 Ok(0) => break,
@@ -175,6 +232,35 @@ where
                     metrics_down
                         .total_bytes_down
                         .fetch_add(n as u64, Ordering::Relaxed);
+
+                    // Vision state machine for download direction
+                    if vision_state != VisionState::DirectCopy {
+                        chunks_inspected += 1;
+                        if VisionState::is_tls_record(&buf[..n]) {
+                            // TLS handshake records from server — keep inspecting
+                            vision_state = VisionState::TlsPadding;
+                            // Check if this is ApplicationData (0x17) — inner TLS established
+                            if n >= 1 && buf[0] == 0x17 {
+                                vision_state = VisionState::DirectCopy;
+                                debug!("Vision: download switched to direct copy (ApplicationData detected after {} chunks)", chunks_inspected);
+                            }
+                        } else if vision_state == VisionState::TlsPadding {
+                            // Non-TLS record after handshake — direct copy
+                            vision_state = VisionState::DirectCopy;
+                            debug!(
+                                "Vision: download switched to direct copy after {} chunks",
+                                chunks_inspected
+                            );
+                        }
+                        if chunks_inspected > 8 && vision_state != VisionState::DirectCopy {
+                            vision_state = VisionState::DirectCopy;
+                            debug!(
+                                "Vision: download forced direct copy after {} chunks",
+                                chunks_inspected
+                            );
+                        }
+                    }
+
                     if stream_write.write_all(&buf[..n]).await.is_err() {
                         break;
                     }
@@ -258,10 +344,11 @@ fn handle_vmess_header(
 // ---------------------------------------------------------------------------
 
 /// Parse a VLESS header and authenticate.
+/// Returns `(request, response_bytes, detected_flow)`.
 fn handle_vless_header(
     data: &[u8],
     config: &InboundConfig,
-) -> Result<(compat::CompatRequest, Vec<u8>)> {
+) -> Result<(compat::CompatRequest, Vec<u8>, VlessFlow)> {
     // Build client list
     let clients: Vec<VlessClient> = config
         .settings
@@ -300,7 +387,7 @@ fn handle_vless_header(
         vless::build_vless_response()
     };
 
-    Ok((request.into_compat_request(), response))
+    Ok((request.into_compat_request(), response, flow))
 }
 
 // ---------------------------------------------------------------------------
