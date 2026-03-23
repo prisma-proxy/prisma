@@ -269,22 +269,6 @@ pub async fn run(config_path: &str) -> Result<()> {
         });
     }
 
-    // Start ShadowTLS listener if enabled
-    if config.shadow_tls.enabled {
-        let stls_config = config.clone();
-        let stls_auth = auth_store.clone();
-        let stls_dns = dns_cache.clone();
-        let stls_ctx = ctx.clone();
-        tokio::spawn(async move {
-            if let Err(e) =
-                listener::shadowtls::listen(&stls_config, stls_auth, stls_dns, stls_ctx).await
-            {
-                tracing::error!("ShadowTLS listener error: {}", e);
-            }
-        });
-        info!(addr = %config.shadow_tls.listen_addr, "ShadowTLS v3 listener spawned");
-    }
-
     // Start CDN listener if enabled
     if config.cdn.enabled {
         let cdn_config = config.clone();
@@ -420,9 +404,6 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
     if config.cdn.enabled {
         eprintln!("  CDN    listening on  {}", config.cdn.listen_addr);
     }
-    if config.shadow_tls.enabled {
-        eprintln!("  STLS   listening on  {}", config.shadow_tls.listen_addr);
-    }
     if config.ssh.enabled {
         eprintln!("  SSH    listening on  {}", config.ssh.listen_addr);
     }
@@ -443,9 +424,6 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
     }
     if config.prisma_tls.enabled {
         transports.push("PrismaTLS");
-    }
-    if config.shadow_tls.enabled {
-        transports.push("ShadowTLS");
     }
     if config.ssh.enabled {
         transports.push("SSH");

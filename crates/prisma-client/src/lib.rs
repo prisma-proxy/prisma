@@ -10,7 +10,6 @@ pub mod metrics;
 pub mod pac;
 pub mod proxy;
 pub mod relay;
-pub mod shadow_tls_stream;
 pub mod socks5;
 pub mod ssh_stream;
 pub mod transport_selector;
@@ -172,12 +171,8 @@ async fn run_inner(
     let use_xhttp = config.transport == "xhttp";
     let use_xporta = config.transport == "xporta";
     let use_prisma_tls = config.transport == "prisma-tls";
-    let use_shadow_tls = config.transport == "shadow-tls";
     let use_wireguard = config.transport == "wireguard";
 
-    if use_shadow_tls {
-        info!(shadow_tls_sni = ?config.shadow_tls.as_ref().map(|s| &s.sni), "ShadowTLS v3 transport enabled");
-    }
     if use_wireguard {
         info!(endpoint = ?config.wireguard.as_ref().map(|w| &w.endpoint), "WireGuard transport enabled");
     }
@@ -253,8 +248,6 @@ async fn run_inner(
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),
         use_prisma_tls,
-        use_shadow_tls,
-        shadow_tls_config: config.shadow_tls.clone(),
         metrics,
         server_key_pin: config.server_key_pin.clone(),
         use_wireguard,

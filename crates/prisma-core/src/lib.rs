@@ -24,7 +24,6 @@ pub mod proxy_group;
 pub mod router;
 pub mod rule_provider;
 pub mod salamander;
-pub mod shadow_tls;
 pub mod state;
 pub mod subscription;
 pub mod traffic_shaping;

@@ -381,7 +381,6 @@ pub enum Transport {
     Grpc,
     Xhttp,
     XPorta,
-    ShadowTls,
     Ssh,
     WireGuard,
 }

@@ -15,8 +15,7 @@ use crate::dns_resolver::DnsResolver;
 use crate::metrics::ClientMetrics;
 use crate::xporta_stream;
 use prisma_core::config::client::{
-    GrpcTransportConfig, ShadowTlsClientConfig, WsTransportConfig, XPortaClientConfig,
-    XhttpTransportConfig,
+    GrpcTransportConfig, WsTransportConfig, XPortaClientConfig, XhttpTransportConfig,
 };
 use prisma_core::xporta::types::XPortaEncoding;
 
@@ -57,10 +56,6 @@ pub struct ProxyContext {
     pub traffic_shaping: TrafficShapingConfig,
     /// Whether to use PrismaTLS transport mode.
     pub use_prisma_tls: bool,
-    /// Whether to use ShadowTLS v3 transport mode.
-    pub use_shadow_tls: bool,
-    /// ShadowTLS v3 client configuration.
-    pub shadow_tls_config: Option<ShadowTlsClientConfig>,
     /// Shared traffic counters for GUI/FFI stats.
     pub metrics: ClientMetrics,
     /// Server public key pin (hex-encoded SHA-256) for server authentication
@@ -77,9 +72,7 @@ impl ProxyContext {
     pub async fn connect(&self) -> Result<TransportStream> {
         let prefer_quic_v2 = self.quic_version == "v2" || self.quic_version == "auto";
 
-        let transport = if self.use_shadow_tls {
-            "ShadowTLS"
-        } else if self.use_wireguard {
+        let transport = if self.use_wireguard {
             "WireGuard"
         } else if self.use_xporta {
             "XPorta"
@@ -111,14 +104,7 @@ impl ProxyContext {
             &self.alpn_protocols
         };
 
-        let result = if self.use_shadow_tls {
-            let stls_cfg = self
-                .shadow_tls_config
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("ShadowTLS transport requires shadow_tls config"))?;
-            connector::connect_shadow_tls(&stls_cfg.server_addr, &stls_cfg.password, &stls_cfg.sni)
-                .await
-        } else if self.use_wireguard {
+        let result = if self.use_wireguard {
             let wg_cfg = self
                 .wireguard_config
                 .as_ref()

@@ -108,9 +108,6 @@ pub struct ClientConfig {
     /// Server list subscriptions for automatic server discovery and updates.
     #[serde(default)]
     pub subscriptions: Vec<SubscriptionConfig>,
-    /// ShadowTLS v3 transport configuration.
-    #[serde(default)]
-    pub shadow_tls: Option<ShadowTlsClientConfig>,
     /// WireGuard-compatible UDP transport.
     #[serde(default)]
     pub wireguard: Option<crate::wireguard::WireGuardClientConfig>,
@@ -186,22 +183,6 @@ pub struct SubscriptionConfig {
 
 fn default_subscription_interval() -> u64 {
     3600
-}
-
-/// ShadowTLS v3 client configuration.
-///
-/// ShadowTLS wraps the proxy connection in a real TLS handshake with a legitimate
-/// cover server. After handshake, proxy data is sent as authenticated TLS application
-/// data frames, indistinguishable from real TLS traffic to DPI.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShadowTlsClientConfig {
-    /// Address of the ShadowTLS server (e.g., "proxy.example.com:8444").
-    pub server_addr: String,
-    /// Pre-shared password (must match server). Used to derive HMAC key.
-    pub password: String,
-    /// SNI for the cover server TLS handshake (e.g., "www.microsoft.com").
-    /// This determines what the TLS ClientHello looks like to DPI.
-    pub sni: String,
 }
 
 /// TUN device configuration.

@@ -52,9 +52,6 @@ pub struct ServerConfig {
     /// Static routing rules (loaded from config, persist across restarts).
     #[serde(default)]
     pub routing: router::RoutingConfig,
-    /// ShadowTLS v3 configuration.
-    #[serde(default)]
-    pub shadow_tls: ShadowTlsServerConfig,
     /// WireGuard-compatible UDP transport.
     #[serde(default)]
     pub wireguard: crate::wireguard::WireGuardServerConfig,
@@ -79,46 +76,6 @@ pub struct ServerConfig {
     /// Multi-protocol inbounds (VMess, VLESS, Shadowsocks, Trojan).
     #[serde(default)]
     pub inbounds: Vec<InboundConfig>,
-}
-
-/// ShadowTLS v3 server configuration.
-///
-/// ShadowTLS uses a real TLS handshake with a legitimate server as camouflage.
-/// Proxy data is multiplexed in TLS application data frames and authenticated
-/// using HMAC to distinguish proxy traffic from the cover server's real responses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShadowTlsServerConfig {
-    /// Whether ShadowTLS listener is enabled.
-    #[serde(default)]
-    pub enabled: bool,
-    /// Listen address for ShadowTLS connections (e.g., "0.0.0.0:8444").
-    #[serde(default = "default_shadow_tls_listen_addr")]
-    pub listen_addr: String,
-    /// The legitimate TLS server to forward handshakes to (e.g., "www.microsoft.com:443").
-    #[serde(default)]
-    pub handshake_server: Option<String>,
-    /// Pre-shared password used to derive the HMAC key for frame authentication.
-    #[serde(default)]
-    pub password: String,
-    /// SNI to expect from clients (for validation).
-    #[serde(default)]
-    pub sni: Option<String>,
-}
-
-impl Default for ShadowTlsServerConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            listen_addr: default_shadow_tls_listen_addr(),
-            handshake_server: None,
-            password: String::new(),
-            sni: None,
-        }
-    }
-}
-
-fn default_shadow_tls_listen_addr() -> String {
-    "0.0.0.0:8444".into()
 }
 
 fn default_dns_upstream() -> String {

@@ -130,11 +130,6 @@ pub fn configured_transports(config: &ServerConfig) -> Vec<String> {
         }
     }
 
-    // ShadowTLS
-    if config.shadow_tls.enabled {
-        transports.push("shadow-tls".into());
-    }
-
     // SSH
     if config.ssh.enabled {
         transports.push("ssh".into());

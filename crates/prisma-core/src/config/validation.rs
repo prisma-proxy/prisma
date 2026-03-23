@@ -249,20 +249,6 @@ pub fn validate_server_config(config: &ServerConfig) -> Result<(), ConfigError> 
     // Multi-protocol inbound validation
     validate_inbounds(&config.inbounds)?;
 
-    // ShadowTLS server validation
-    if config.shadow_tls.enabled {
-        if config.shadow_tls.password.is_empty() {
-            return Err(ConfigError::ValidationFailed(
-                "shadow_tls.password must not be empty when enabled".into(),
-            ));
-        }
-        if config.shadow_tls.handshake_server.is_none() {
-            return Err(ConfigError::ValidationFailed(
-                "shadow_tls.handshake_server must be set when enabled".into(),
-            ));
-        }
-    }
-
     Ok(())
 }
 
@@ -307,7 +293,6 @@ pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> 
         "xhttp",
         "xporta",
         "prisma-tls",
-        "shadow-tls",
         "wireguard",
     ];
     if !valid_transports.contains(&config.transport.as_str()) {
@@ -433,30 +418,6 @@ pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> 
         if !(10..=90).contains(&xporta.poll_timeout_secs) {
             return Err(ConfigError::ValidationFailed(
                 "xporta.poll_timeout_secs must be 10-90".into(),
-            ));
-        }
-    }
-
-    // ShadowTLS transport validation
-    if config.transport == "shadow-tls" {
-        let stls = config.shadow_tls.as_ref().ok_or_else(|| {
-            ConfigError::ValidationFailed(
-                "transport = \"shadow-tls\" requires [shadow_tls] config section".into(),
-            )
-        })?;
-        if stls.server_addr.is_empty() {
-            return Err(ConfigError::ValidationFailed(
-                "shadow_tls.server_addr must not be empty".into(),
-            ));
-        }
-        if stls.password.is_empty() {
-            return Err(ConfigError::ValidationFailed(
-                "shadow_tls.password must not be empty".into(),
-            ));
-        }
-        if stls.sni.is_empty() {
-            return Err(ConfigError::ValidationFailed(
-                "shadow_tls.sni must not be empty".into(),
             ));
         }
     }

@@ -6,7 +6,6 @@ pub mod h3_masquerade;
 pub mod quic;
 pub mod reality;
 pub mod reverse_proxy;
-pub mod shadowtls;
 pub mod ssh;
 pub mod tcp;
 pub mod wireguard;

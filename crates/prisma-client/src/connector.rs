@@ -6,7 +6,6 @@ use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use crate::grpc_stream::GrpcStream;
-use crate::shadow_tls_stream::ShadowTlsClientStream;
 use crate::wg_stream::WgStream;
 use crate::ws_stream::WsStream;
 use crate::xhttp_stream::XhttpStream;
@@ -23,7 +22,6 @@ pub enum TransportStream {
     Grpc(GrpcStream),
     Xhttp(XhttpStream),
     XPorta(XPortaClientStream),
-    ShadowTls(ShadowTlsClientStream),
     WireGuard(WgStream),
 }
 
@@ -46,7 +44,6 @@ impl AsyncRead for TransportStream {
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_read(cx, buf),
             TransportStream::Xhttp(s) => std::pin::Pin::new(s).poll_read(cx, buf),
             TransportStream::XPorta(s) => std::pin::Pin::new(s).poll_read(cx, buf),
-            TransportStream::ShadowTls(s) => std::pin::Pin::new(s).poll_read(cx, buf),
             TransportStream::WireGuard(s) => std::pin::Pin::new(s).poll_read(cx, buf),
         }
     }
@@ -68,7 +65,6 @@ impl AsyncWrite for TransportStream {
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_write(cx, buf),
             TransportStream::Xhttp(s) => std::pin::Pin::new(s).poll_write(cx, buf),
             TransportStream::XPorta(s) => std::pin::Pin::new(s).poll_write(cx, buf),
-            TransportStream::ShadowTls(s) => std::pin::Pin::new(s).poll_write(cx, buf),
             TransportStream::WireGuard(s) => std::pin::Pin::new(s).poll_write(cx, buf),
         }
     }
@@ -87,7 +83,6 @@ impl AsyncWrite for TransportStream {
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_flush(cx),
             TransportStream::Xhttp(s) => std::pin::Pin::new(s).poll_flush(cx),
             TransportStream::XPorta(s) => std::pin::Pin::new(s).poll_flush(cx),
-            TransportStream::ShadowTls(s) => std::pin::Pin::new(s).poll_flush(cx),
             TransportStream::WireGuard(s) => std::pin::Pin::new(s).poll_flush(cx),
         }
     }
@@ -106,7 +101,6 @@ impl AsyncWrite for TransportStream {
             TransportStream::Grpc(s) => std::pin::Pin::new(s).poll_shutdown(cx),
             TransportStream::Xhttp(s) => std::pin::Pin::new(s).poll_shutdown(cx),
             TransportStream::XPorta(s) => std::pin::Pin::new(s).poll_shutdown(cx),
-            TransportStream::ShadowTls(s) => std::pin::Pin::new(s).poll_shutdown(cx),
             TransportStream::WireGuard(s) => std::pin::Pin::new(s).poll_shutdown(cx),
         }
     }
@@ -298,20 +292,6 @@ pub async fn connect_prisma_tls(
     let tls_stream = connector.connect(sni, tcp_stream).await?;
 
     Ok(TransportStream::TcpTls(tls_stream))
-}
-
-/// Connect to the remote Prisma server via ShadowTLS v3.
-///
-/// Performs a real TLS handshake (relayed through the ShadowTLS server to a
-/// cover server), then switches to HMAC-authenticated proxy framing.
-pub async fn connect_shadow_tls(
-    server_addr: &str,
-    password: &str,
-    sni: &str,
-) -> Result<TransportStream> {
-    debug!(addr = %server_addr, sni = %sni, "Connecting to server via ShadowTLS v3");
-    let stream = ShadowTlsClientStream::connect(server_addr, password, sni).await?;
-    Ok(TransportStream::ShadowTls(stream))
 }
 
 /// Connect to the remote Prisma server via WebSocket.

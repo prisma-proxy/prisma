@@ -246,7 +246,7 @@ pub async fn handle_quic_stream(
 /// Handle an incoming connection over a generic AsyncRead + AsyncWrite stream.
 ///
 /// Used by transports that present a non-TCP stream to the Prisma protocol
-/// handler (e.g., ShadowTLS duplex streams).
+/// handler (e.g., WireGuard duplex streams).
 pub async fn handle_generic_connection<S>(
     stream: S,
     auth: AuthStore,
