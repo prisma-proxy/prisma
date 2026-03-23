@@ -91,3 +91,4 @@ tmp/
 
 # Misc
 prisma-plan.md
+.claude/
