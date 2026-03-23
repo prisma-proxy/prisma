@@ -7,14 +7,15 @@ import TabItem from '@theme/TabItem';
 
 # GUI 客户端
 
-Prisma 为所有主流平台提供 GUI 客户端。主要的桌面客户端是 **prisma-gui**，一个基于 Tauri 2 + React 的跨平台应用，可在 Windows、macOS 和 Linux 上运行。移动平台使用原生客户端，通过 **prisma-ffi**（一个基于相同 Rust 代码库构建的 C-ABI 共享库）连接到核心 Prisma 逻辑。
+Prisma 提供统一的 GUI 客户端，覆盖所有主流平台。**prisma-gui** 是一个基于 **Tauri 2 + React** 的跨平台应用，可从单一代码库编译到 Windows、macOS、Linux、Android 和 iOS 五个平台。Tauri 2 的移动端支持消除了对独立原生应用的需求——同一个 Rust 后端和 React 前端编译到所有五个目标平台。
 
 ```
-prisma-ffi  ←──────────────────────────────────────┐
-    │                                               │
-    ├── prisma-gui          (Tauri 2 + React)       │  桌面端 (Win/Mac/Linux)
-    ├── prisma-gui-android  (Kotlin + JNI)           │  同一 C API
-    └── prisma-gui-ios      (Swift + xcframework)   │
+prisma-gui  (Tauri 2 + React 19)
+    |
+    |-- 桌面端:  Windows / macOS / Linux   (Tauri 桌面目标)
+    +-- 移动端:  Android / iOS             (Tauri 2 移动目标)
+              |
+              +-- prisma-ffi  (C-ABI 共享库，由 Tauri 移动 shell 链接)
 ```
 
 ---
@@ -219,86 +220,46 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
-## Android
+## 移动端支持（Tauri 2）
 
-基于 Jetpack Compose 的应用，目标 Android 7.0+（API 24）。Kotlin 代码通过 JNI 桥接（`libprisma_client.so`）调用 `prisma-ffi`。
+从 v2.0.0 开始，**prisma-gui** 使用 **Tauri 2 移动目标** 支持 Android 和 iOS。不再需要独立的原生应用（`prisma-gui-android`、`prisma-gui-ios`）。同一个 Tauri 2 + React 代码库编译到移动目标，`prisma-ffi` 作为原生后端通过 Tauri 的移动 shell 链接。
 
-### 架构
+移动端构建与桌面端客户端具有完全功能对等，包括订阅、代理组、统一导入页面、活跃连接视图、延迟测试、规则提供者和完整的国际化（英文 + 中文）。
 
+### 移动端构建目标
+
+```bash
+cd apps/prisma-gui
+
+# Android（需要 Android SDK + NDK）
+npm run tauri android init
+npm run tauri android dev
+npm run tauri android build
+
+# iOS（需要 macOS 上的 Xcode）
+npm run tauri ios init
+npm run tauri ios dev
+npm run tauri ios build
 ```
-UI (Compose) ─── PrismaViewModel ─── PrismaJni (JNI) ─── libprisma_client.so
-                                                                │
-                                        PrismaVpnService ───────┘
-```
 
-- **`PrismaJni`** — 封装所有 `external` 原生调用的 Kotlin `object`
-- **`PrismaViewModel`** — 管理原生句柄生命周期，通过 `StateFlow` 发射 `PrismaUiState`
-- **`PrismaVpnService`** — 用于 TUN/按应用模式的 `android.net.VpnService` 子类
-- **`prisma_jni_bridge.c`** — 将调用转发到 Rust FFI 符号的 JNI C 层
+### 平台特定行为
+
+| 功能 | Android | iOS |
+|------|---------|-----|
+| VPN / TUN | 通过 Tauri 插件使用 `VpnService` | 通过 Tauri 插件使用 `NEPacketTunnelProvider` |
+| 按应用代理 | `VpnService.Builder.addAllowedApplication()` | `NEAppProxyProvider` |
+| 系统代理 | `VpnService.Builder.setHttpProxy()` | 不可用 |
+| 二维码导入 | 摄像头扫描 | 摄像头扫描 |
+| 自动更新 | 应用内更新 | App Store |
 
 ### 代理模式
 
-| 模式 | Android 实现机制 |
-|------|------------------|
-| SOCKS5 | 在 127.0.0.1:1080 上直接启动 SOCKS5 监听器 |
-| 系统代理 (System Proxy) | 通过 `VpnService.Builder.setHttpProxy()` 设置 `ProxyInfo` |
-| TUN | `VpnService.Builder.establish()` — 创建 tun fd |
-| 按应用 (Per-App) | `VpnService.Builder.addAllowedApplication()` |
-
-### 构建
-
-```bash
-cd prisma-gui-android
-
-# Debug APK
-./gradlew assembleDebug
-
-# Release APK (requires keystore)
-./gradlew assembleRelease
-```
-
-Gradle 构建期望交叉编译的 `.so` 文件位于 `app/src/main/jniLibs/` 下。辅助脚本 `scripts/build-android-ffi.sh` 会为所有四个 ABI 交叉编译 `prisma-ffi` 并将其复制到正确位置。
-
-### QR 码导入
-
-在配置文件页面点击 QR 图标打开相机扫描器（ML Kit 条形码 API）。扫描 Prisma 分享二维码 — 应用通过 `prisma_profile_from_qr` 解码并自动保存配置文件。
-
----
-
-## iOS
-
-面向 iPhone 和 iPad 的 SwiftUI 应用，目标 iOS 16+。该应用使用 Apple 的 NetworkExtension 框架实现 VPN 和按应用代理功能。
-
-### 架构
-
-```
-SwiftUI Views ─── PrismaFFIClient (ObservableObject) ─── prisma_ffi.xcframework
-                                                               │
-                 TunnelProvider (NEPacketTunnelProvider) ───────┘
-                 ProxyProvider  (NEAppProxyProvider)    ───────┘
-```
-
-`PrismaFFIClient` 是一个 `ObservableObject`，使用 `Unmanaged` 指针桥接封装 C 回调，并在主线程上发布状态变更。
-
-### Entitlements
-
-主应用目标需要：
-- `com.apple.developer.networking.networkextension` — `packet-tunnel-provider`、`app-proxy-provider`
-- `com.apple.developer.networking.vpn.api` — 用于 VPN 按需规则
-
-### 构建 xcframework
-
-```bash
-# Build for device + simulator and merge into an xcframework
-scripts/build-ios-xcframework.sh
-# Output: prisma_client.xcframework
-```
-
-Xcode 项目将此 xcframework 作为依赖链接。
-
-### QR 码导入
-
-配置文件页面有一个 QR 扫描器面板（使用 `AVCaptureMetadataOutput`）。该应用还处理 `prisma://` URL scheme — 分享链接会打开应用并自动导入配置文件。
+| 模式 | Android 实现机制 | iOS 实现机制 |
+|------|-------------------|--------------|
+| SOCKS5 | 在 127.0.0.1:1080 上直接启动 SOCKS5 监听器 | 在 127.0.0.1:1080 上直接启动 SOCKS5 监听器 |
+| 系统代理 | 通过 `VpnService.Builder.setHttpProxy()` 设置 `ProxyInfo` | -- |
+| TUN | `VpnService.Builder.establish()` | `NEPacketTunnelProvider` |
+| 按应用 | `VpnService.Builder.addAllowedApplication()` | `NEAppProxyProvider` |
 
 ---
 
@@ -325,14 +286,6 @@ char* svg = prisma_profile_to_qr_svg(profile_json);
 
 ## 故障排除
 
-### Android："Native library not available"
-
-未找到 `prisma_client` JNI 库。请确保在构建 APK 之前，将交叉编译的 `.so` 文件放置在 `app/src/main/jniLibs/<abi>/libprisma_client.so` 路径下。
-
-### iOS："Missing entitlement"
-
-Network Extension entitlements 需要在 Apple Developer 门户中启用了 NetworkExtension 功能的显式 App ID。Provisioning profiles 必须包含此功能。
-
 ### prisma-gui：系统代理设置失败
 
 设置系统代理需要平台特定的权限。在 macOS 上，应用调用 `networksetup`，可能会提示输入管理员凭据。在 Linux 上，系统代理配置取决于您的桌面环境。
@@ -340,3 +293,7 @@ Network Extension entitlements 需要在 Apple Developer 门户中启用了 Netw
 ### prisma-gui：托盘图标不可见
 
 在 Linux 上，系统托盘支持取决于您的桌面环境和合成器。请确保安装了兼容的系统托盘实现（如 `libappindicator`）。在 GNOME 上，您可能需要 AppIndicator 扩展。
+
+### 移动端：VPN 权限被拒绝
+
+在 Android 上，必须接受系统 VPN 同意对话框。在 iOS 上，必须在 Apple Developer 门户中配置 Network Extension entitlement 并包含在 provisioning profile 中。

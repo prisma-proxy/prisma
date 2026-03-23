@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v1.5.1**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -17,7 +17,7 @@ This page reflects Prisma **v1.5.1**. Protocol v4 support has been removed; only
 | `listen_addr` | string | `"0.0.0.0:8443"` | TCP listen address for direct and TLS-wrapped connections |
 | `quic_listen_addr` | string | `"0.0.0.0:8443"` | QUIC/UDP listen address |
 | `dns_upstream` | string | `"8.8.8.8:53"` | Upstream DNS server for `CMD_DNS_QUERY` forwarding |
-| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 1.5.1) |
+| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 2.0.0) |
 | `allow_transport_only_cipher` | bool | `false` | Allow clients to use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). |
 | `config_watch` | bool | `false` | Watch the config file for changes and auto-reload at runtime |
 | `shutdown_drain_timeout_secs` | u64 | `30` | Seconds to wait for in-flight connections during graceful shutdown |
@@ -73,6 +73,43 @@ name = "phone"
 ```
 
 Clients can also be managed at runtime via the [Management API](/docs/features/management-api) or the [Console](/docs/features/console) without restarting the server.
+
+### `[permissions]` -- Per-client permissions
+
+Each `[[authorized_clients]]` entry may include an optional `[permissions]` table for granular access control. When omitted, all permissions default to unrestricted.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `allow_port_forwarding` | bool | `true` | Whether port forwarding is allowed for this client |
+| `allow_udp` | bool | `true` | Whether UDP relay is allowed for this client |
+| `allowed_destinations` | string[] | `[]` | Allowed destination patterns (CIDR or domain glob). Empty = allow all |
+| `blocked_destinations` | string[] | `[]` | Blocked destination patterns. Blocked takes precedence over allowed |
+| `max_connections` | u32 | `0` | Maximum concurrent connections for this client (0 = unlimited) |
+| `bandwidth_limit` | u64? | -- | Per-client bandwidth limit in bytes/sec (null = unlimited) |
+| `allowed_ports` | PortRange[] | `[]` | Allowed port ranges (each with `start` and `end`). Empty = allow all ports |
+| `blocked_ports` | u16[] | `[]` | Blocked ports. Blocked takes precedence over allowed |
+
+Destination patterns support:
+- **CIDR notation**: `"10.0.0.0/8"`, `"192.168.0.0/16"`
+- **Domain globs**: `"*.google.com"` matches `www.google.com` and `mail.google.com`
+- **Exact match**: `"example.com"` or `"8.8.8.8"`
+
+Example:
+
+```toml
+[[authorized_clients]]
+id = "client-uuid-1"
+auth_secret = "hex-secret-1"
+name = "restricted-client"
+
+[authorized_clients.permissions]
+allow_port_forwarding = false
+allow_udp = true
+max_connections = 10
+blocked_destinations = ["*.torrent.com", "10.0.0.0/8"]
+blocked_ports = [22, 25, 445]
+allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start = 8000, end = 9000 }]
+```
 
 ## `[management_api]` -- REST/WebSocket API
 
@@ -274,6 +311,31 @@ enabled = true
 
 [inbounds.settings]
 password = "your-trojan-password"
+```
+
+## `[fallback]` -- Transport fallback
+
+Server-side transport fallback configuration. When the primary transport fails or encounters repeated errors, the server can automatically activate fallback transports.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Whether transport fallback is enabled |
+| `chain` | string[] | `["tcp", "quic", "websocket", "grpc"]` | Ordered list of transports to try: `"tcp"` / `"quic"` / `"websocket"` / `"grpc"` / `"xhttp"` / `"xporta"` |
+| `health_check_interval` | u64 | `30` | Interval in seconds for health checks on each transport listener |
+| `auto_switch_on_failure` | bool | `true` | Automatically switch to the next transport on failure |
+| `max_consecutive_failures` | u32 | `5` | Maximum consecutive failures before triggering fallback |
+| `migrate_back_on_recovery` | bool | `false` | Whether to migrate back to the primary transport when it recovers |
+
+Example:
+
+```toml
+[fallback]
+enabled = true
+chain = ["tcp", "quic", "websocket", "grpc"]
+health_check_interval = 30
+auto_switch_on_failure = true
+max_consecutive_failures = 5
+migrate_back_on_recovery = true
 ```
 
 ## `[logging]` -- Log output
@@ -549,6 +611,15 @@ alpn_protocols = ["h2", "http/1.1"]
 # [acls.client-uuid-1.rules.matcher]
 # type = "domain-keyword"
 # value = "torrent"
+
+# Transport fallback
+# [fallback]
+# enabled = true
+# chain = ["tcp", "quic", "websocket", "grpc"]
+# health_check_interval = 30
+# auto_switch_on_failure = true
+# max_consecutive_failures = 5
+# migrate_back_on_recovery = false
 ```
 
 ## Validation rules

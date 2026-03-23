@@ -80,7 +80,7 @@ sudo cp target/release/prisma /usr/local/bin/
 
 ```bash
 prisma --version
-# Expected: prisma 1.5.1
+# Expected: prisma 2.0.0
 ```
 
 ## Daemon mode

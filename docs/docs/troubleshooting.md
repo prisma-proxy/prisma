@@ -4,7 +4,7 @@ sidebar_position: 9
 
 # Troubleshooting
 
-Common issues and their solutions for Prisma v1.5.1.
+Common issues and their solutions for Prisma v2.0.0.
 
 ## Authentication Failed
 
@@ -265,7 +265,7 @@ Common issues and their solutions for Prisma v1.5.1.
 | Error message | Cause | Fix |
 |--------------|-------|-----|
 | `AcceptStatus::AuthFailed` | Client ID or auth secret mismatch | Re-run `prisma gen-key` and update both configs |
-| `AcceptStatus::VersionMismatch` | Client and server protocol versions differ | Ensure both are v1.5.1 (PrismaVeil v5 only) |
+| `AcceptStatus::VersionMismatch` | Client and server protocol versions differ | Ensure both are v2.0.0 (PrismaVeil v5 only) |
 | `AcceptStatus::ServerBusy` | Server `max_connections` limit reached | Increase `performance.max_connections` |
 | `AcceptStatus::QuotaExceeded` | Client traffic quota exhausted | Increase quota via `prisma bandwidth quota <ID> --limit <BYTES>` |
 | `Connection refused` | Server not running or wrong port | Check `prisma server status` and verify port |

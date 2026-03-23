@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v1.5.1**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.0.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -17,7 +17,7 @@ sidebar_position: 1
 | `listen_addr` | string | `"0.0.0.0:8443"` | TCP 监听地址，用于直连和 TLS 包裹连接 |
 | `quic_listen_addr` | string | `"0.0.0.0:8443"` | QUIC/UDP 监听地址 |
 | `dns_upstream` | string | `"8.8.8.8:53"` | `CMD_DNS_QUERY` 转发的上游 DNS 服务器 |
-| `protocol_version` | string | `"v5"` | 协议版本（只读，1.5.1 中始终为 `"v5"`） |
+| `protocol_version` | string | `"v5"` | 协议版本（只读，2.0.0 中始终为 `"v5"`） |
 | `allow_transport_only_cipher` | bool | `false` | 允许客户端使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。 |
 | `config_watch` | bool | `false` | 监视配置文件变化并在运行时自动重载 |
 | `shutdown_drain_timeout_secs` | u64 | `30` | 优雅关闭时等待进行中连接的秒数 |
@@ -73,6 +73,43 @@ name = "phone"
 ```
 
 客户端也可以通过[管理 API](/docs/features/management-api)或[控制台](/docs/features/console)在运行时管理，无需重启服务器。
+
+### `[permissions]` -- 单客户端权限
+
+每个 `[[authorized_clients]]` 条目可包含一个可选的 `[permissions]` 表，用于细粒度访问控制。未设置时，所有权限默认为不受限。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `allow_port_forwarding` | bool | `true` | 是否允许此客户端进行端口转发 |
+| `allow_udp` | bool | `true` | 是否允许此客户端进行 UDP 中继 |
+| `allowed_destinations` | string[] | `[]` | 允许的目标模式（CIDR 或域名通配符）。空 = 允许全部 |
+| `blocked_destinations` | string[] | `[]` | 阻止的目标模式。阻止优先于允许 |
+| `max_connections` | u32 | `0` | 此客户端的最大并发连接数（0 = 无限制） |
+| `bandwidth_limit` | u64? | -- | 单客户端带宽限制，单位字节/秒（null = 无限制） |
+| `allowed_ports` | PortRange[] | `[]` | 允许的端口范围（每个包含 `start` 和 `end`）。空 = 允许所有端口 |
+| `blocked_ports` | u16[] | `[]` | 阻止的端口。阻止优先于允许 |
+
+目标模式支持：
+- **CIDR 表示法**：`"10.0.0.0/8"`、`"192.168.0.0/16"`
+- **域名通配符**：`"*.google.com"` 匹配 `www.google.com` 和 `mail.google.com`
+- **精确匹配**：`"example.com"` 或 `"8.8.8.8"`
+
+示例：
+
+```toml
+[[authorized_clients]]
+id = "client-uuid-1"
+auth_secret = "hex-secret-1"
+name = "restricted-client"
+
+[authorized_clients.permissions]
+allow_port_forwarding = false
+allow_udp = true
+max_connections = 10
+blocked_destinations = ["*.torrent.com", "10.0.0.0/8"]
+blocked_ports = [22, 25, 445]
+allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start = 8000, end = 9000 }]
+```
 
 ## `[management_api]` -- REST/WebSocket API
 
@@ -276,6 +313,31 @@ enabled = true
 password = "your-trojan-password"
 ```
 
+## `[fallback]` -- 传输回退
+
+服务端传输回退配置。当主要传输失败或遇到重复错误时，服务器可以自动激活备用传输。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 是否启用传输回退 |
+| `chain` | string[] | `["tcp", "quic", "websocket", "grpc"]` | 有序的传输尝试列表：`"tcp"` / `"quic"` / `"websocket"` / `"grpc"` / `"xhttp"` / `"xporta"` |
+| `health_check_interval` | u64 | `30` | 每个传输监听器的健康检查间隔（秒） |
+| `auto_switch_on_failure` | bool | `true` | 失败时自动切换到下一个传输 |
+| `max_consecutive_failures` | u32 | `5` | 触发回退前的最大连续失败次数 |
+| `migrate_back_on_recovery` | bool | `false` | 主要传输恢复时是否迁移回来 |
+
+示例：
+
+```toml
+[fallback]
+enabled = true
+chain = ["tcp", "quic", "websocket", "grpc"]
+health_check_interval = 30
+auto_switch_on_failure = true
+max_consecutive_failures = 5
+migrate_back_on_recovery = true
+```
+
 ## `[logging]` -- 日志输出
 
 | 字段 | 类型 | 默认值 | 描述 |
@@ -453,6 +515,15 @@ alpn_protocols = ["h2", "http/1.1"]
 # [[inbounds.settings.clients]]
 # id = "vmess-client-uuid"
 # alter_id = 0
+
+# 传输回退
+# [fallback]
+# enabled = true
+# chain = ["tcp", "quic", "websocket", "grpc"]
+# health_check_interval = 30
+# auto_switch_on_failure = true
+# max_consecutive_failures = 5
+# migrate_back_on_recovery = false
 ```
 
 ## 验证规则

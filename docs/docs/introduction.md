@@ -148,7 +148,7 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 1.5.1
+## What's New in 2.0.0
 
 - **Full project synchronization** — version references, documentation, and feature awareness aligned across all subprojects
 - **Connection pool documentation** — `connection_pool.enabled` fully documented in client config reference

@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI Reference
 
-The `prisma` binary (v1.5.1) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, importing server configurations, managing subscriptions, testing latency, and controlling a live server via the management API.
+The `prisma` binary (v2.0.0) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, importing server configurations, managing subscriptions, testing latency, and controlling a live server via the management API.
 
 ## Global Flags
 

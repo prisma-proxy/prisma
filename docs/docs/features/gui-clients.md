@@ -7,14 +7,15 @@ import TabItem from '@theme/TabItem';
 
 # GUI Clients
 
-Prisma ships GUI clients for all major platforms. The primary desktop client is **prisma-gui**, a cross-platform Tauri 2 + React application that runs on Windows, macOS, and Linux. Mobile platforms use native clients that link against **prisma-ffi**, a C-ABI shared library built from the same Rust codebase as the CLI.
+Prisma ships a unified GUI client for all major platforms. **prisma-gui** is a cross-platform **Tauri 2 + React** application that runs on Windows, macOS, Linux, Android, and iOS from a single codebase. Tauri 2's mobile support eliminates the need for separate native apps -- the same Rust backend and React frontend compile to all five targets.
 
 ```
-prisma-ffi  ←──────────────────────────────────────┐
-    │                                               │
-    ├── prisma-gui          (Tauri 2 + React)       │  desktop (Win/Mac/Linux)
-    ├── prisma-gui-android  (Kotlin + JNI)           │  same C API
-    └── prisma-gui-ios      (Swift + xcframework)   │
+prisma-gui  (Tauri 2 + React 19)
+    │
+    ├── Desktop:  Windows / macOS / Linux   (Tauri desktop targets)
+    └── Mobile:   Android / iOS             (Tauri 2 mobile targets)
+              │
+              └── prisma-ffi  (C-ABI shared library, linked by Tauri mobile shell)
 ```
 
 ---
@@ -229,122 +230,46 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ---
 
-## Mobile Support (v1.5.0)
+## Mobile Support (Tauri 2)
 
-As of v1.5.0, the Android and iOS clients have reached feature parity with the desktop client for core proxy functionality. Both mobile platforms now support subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n.
+As of v2.0.0, **prisma-gui** uses **Tauri 2 mobile targets** for Android and iOS. There are no longer separate native apps (`prisma-gui-android`, `prisma-gui-ios`). The same Tauri 2 + React codebase compiles to mobile targets, with `prisma-ffi` linked as the native backend through Tauri's mobile shell.
 
----
+Mobile builds have full feature parity with the desktop client, including subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n (English + Chinese).
 
-## Android
+### Mobile build targets
 
-A Jetpack Compose application targeting Android 7.0+ (API 24). The Kotlin code calls `prisma-ffi` through a JNI bridge (`libprisma_client.so`).
+```bash
+cd apps/prisma-gui
 
-### Architecture
+# Android (requires Android SDK + NDK)
+npm run tauri android init
+npm run tauri android dev
+npm run tauri android build
 
+# iOS (requires Xcode on macOS)
+npm run tauri ios init
+npm run tauri ios dev
+npm run tauri ios build
 ```
-UI (Compose) ─── PrismaViewModel ─── PrismaJni (JNI) ─── libprisma_client.so
-                                                                │
-                                        PrismaVpnService ───────┘
-```
 
-- **`PrismaJni`** — Kotlin `object` wrapping all `external` native calls
-- **`PrismaViewModel`** — manages the native handle lifecycle and emits `PrismaUiState` via `StateFlow`
-- **`PrismaVpnService`** — `android.net.VpnService` subclass for TUN/per-app modes
-- **`prisma_jni_bridge.c`** — JNI C layer that forwards calls to Rust FFI symbols
+### Platform-specific behavior
+
+| Feature | Android | iOS |
+|---------|---------|-----|
+| VPN / TUN | `VpnService` via Tauri plugin | `NEPacketTunnelProvider` via Tauri plugin |
+| Per-app proxy | `VpnService.Builder.addAllowedApplication()` | `NEAppProxyProvider` |
+| System proxy | `VpnService.Builder.setHttpProxy()` | Not available |
+| QR code import | Camera scan | Camera scan |
+| Auto-update | In-app update | App Store |
 
 ### Proxy modes
 
-| Mode | Android mechanism |
-|------|-------------------|
-| SOCKS5 | Direct SOCKS5 listener on 127.0.0.1:1080 |
-| System Proxy | `ProxyInfo` set via `VpnService.Builder.setHttpProxy()` |
-| TUN | `VpnService.Builder.establish()` — creates a tun fd |
-| Per-App | `VpnService.Builder.addAllowedApplication()` |
-
-### Build
-
-```bash
-cd prisma-gui-android
-
-# Debug APK
-./gradlew assembleDebug
-
-# Release APK (requires keystore)
-./gradlew assembleRelease
-```
-
-The Gradle build expects the cross-compiled `.so` files under `app/src/main/jniLibs/`. A helper script at `scripts/build-android-ffi.sh` cross-compiles `prisma-ffi` for all four ABIs and copies them into place.
-
-### Pages (Android)
-
-The Android app mirrors the desktop page structure:
-
-| Page | Description |
-|------|-------------|
-| **Home** | Connection toggle, speed graph, proxy mode selector (SOCKS5/TUN/Per-App), stats |
-| **Profiles** | Server list with latency indicators, tap to test latency, create/edit/share profiles |
-| **Subscriptions** | Add/manage subscription URLs, auto-refresh, import from clipboard or QR |
-| **Proxy Groups** | Visual group management (Select/AutoUrl/Fallback/LoadBalance) |
-| **Import** | QR scan via camera, clipboard detection, file import, subscription URL |
-| **Connections** | Active connections list with speed, destination, and close button |
-| **Rules** | Routing rules editor with rule provider support |
-| **Settings** | Language, theme, proxy ports, DNS mode, auto-reconnect, backup/restore |
-
-### QR code import
-
-Tap the QR icon on the Profiles screen to open the camera scanner (ML Kit barcode API). Scan a Prisma share QR code — the app decodes it via `prisma_profile_from_qr` and saves the profile automatically.
-
----
-
-## iOS
-
-A SwiftUI application for iPhone and iPad targeting iOS 16+. The app uses Apple's NetworkExtension framework for VPN and per-app proxy functionality.
-
-### Architecture
-
-```
-SwiftUI Views ─── PrismaFFIClient (ObservableObject) ─── prisma_ffi.xcframework
-                                                               │
-                 TunnelProvider (NEPacketTunnelProvider) ───────┘
-                 ProxyProvider  (NEAppProxyProvider)    ───────┘
-```
-
-`PrismaFFIClient` is an `ObservableObject` that wraps the C callback with an `Unmanaged` pointer bridge and publishes state changes on the main thread.
-
-### Entitlements
-
-The main app target requires:
-- `com.apple.developer.networking.networkextension` — `packet-tunnel-provider`, `app-proxy-provider`
-- `com.apple.developer.networking.vpn.api` — for VPN on-demand rules
-
-### Building the xcframework
-
-```bash
-# Build for device + simulator and merge into an xcframework
-scripts/build-ios-xcframework.sh
-# Output: prisma_client.xcframework
-```
-
-The Xcode project links this xcframework as a dependency.
-
-### Pages (iOS)
-
-The iOS app mirrors the desktop page structure:
-
-| Page | Description |
-|------|-------------|
-| **Home** | Connection toggle, speed graph, proxy mode selector (SOCKS5/TUN/Per-App), stats |
-| **Profiles** | Server list with latency indicators, tap to test latency, create/edit/share profiles |
-| **Subscriptions** | Add/manage subscription URLs, auto-refresh, import from clipboard or QR |
-| **Proxy Groups** | Visual group management (Select/AutoUrl/Fallback/LoadBalance) |
-| **Import** | QR scan via camera, clipboard detection, file import, subscription URL |
-| **Connections** | Active connections list with speed, destination, and close button |
-| **Rules** | Routing rules editor with rule provider support |
-| **Settings** | Language, theme, DNS mode, auto-reconnect, backup/restore |
-
-### QR code import
-
-The Profiles screen has a QR scanner sheet (using `AVCaptureMetadataOutput`). The app also handles the `prisma://` URL scheme — share links open the app and auto-import the profile.
+| Mode | Android mechanism | iOS mechanism |
+|------|-------------------|---------------|
+| SOCKS5 | Direct SOCKS5 listener on 127.0.0.1:1080 | Direct SOCKS5 listener on 127.0.0.1:1080 |
+| System Proxy | `ProxyInfo` set via `VpnService.Builder.setHttpProxy()` | -- |
+| TUN | `VpnService.Builder.establish()` | `NEPacketTunnelProvider` |
+| Per-App | `VpnService.Builder.addAllowedApplication()` | `NEAppProxyProvider` |
 
 ---
 
@@ -371,14 +296,6 @@ char* svg = prisma_profile_to_qr_svg(profile_json);
 
 ## Troubleshooting
 
-### Android: "Native library not available"
-
-The `prisma_client` JNI library was not found. Ensure the cross-compiled `.so` files are placed in `app/src/main/jniLibs/<abi>/libprisma_client.so` before building the APK.
-
-### iOS: "Missing entitlement"
-
-Network Extension entitlements require an explicit App ID with the NetworkExtension capability enabled in the Apple Developer portal. Provisioning profiles must include this capability.
-
 ### prisma-gui: System proxy fails
 
 Setting the system proxy requires platform-specific permissions. On macOS, the app calls `networksetup` which may prompt for administrator credentials. On Linux, system proxy configuration depends on your desktop environment.
@@ -386,3 +303,7 @@ Setting the system proxy requires platform-specific permissions. On macOS, the a
 ### prisma-gui: Tray icon not visible
 
 On Linux, system tray support depends on your desktop environment and compositor. Ensure a compatible system tray implementation (e.g., `libappindicator`) is installed. On GNOME, you may need the AppIndicator extension.
+
+### Mobile: VPN permission denied
+
+On Android, the system VPN consent dialog must be accepted. On iOS, the Network Extension entitlement must be configured in the Apple Developer portal and included in the provisioning profile.

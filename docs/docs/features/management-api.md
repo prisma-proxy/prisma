@@ -42,7 +42,7 @@ If `auth_token` is empty, authentication is disabled (development mode only).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"1.5.1"}
+# {"status":"ok","uptime_secs":3600,"version":"2.0.0"}
 ```
 
 ### Connections
@@ -306,7 +306,7 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v1.5.1):
+All endpoints at a glance (v2.0.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
