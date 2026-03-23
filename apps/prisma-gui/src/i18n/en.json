@@ -316,7 +316,10 @@
     "vpnPermission": "VPN Permission",
     "vpnPermissionDesc": "Required for TUN mode on mobile",
     "vpnGranted": "Granted",
-    "vpnRequest": "Request"
+    "vpnRequest": "Request",
+    "performance": "Performance",
+    "connectionPool": "Connection pooling",
+    "connectionPoolDesc": "Reuse established connections to reduce handshake overhead and improve throughput"
   },
   "wizard": {
     "newProfile": "New Profile",
@@ -417,6 +420,21 @@
     "fecDesc": "Reed-Solomon erasure coding for lossy links",
     "fecDataShards": "Data shards",
     "fecParityShards": "Parity shards",
+    "shadowTlsSettings": "ShadowTLS v3 settings",
+    "shadowTlsServerAddr": "ShadowTLS server address",
+    "shadowTlsPassword": "ShadowTLS password",
+    "shadowTlsSni": "ShadowTLS SNI",
+    "wireguardSettings": "WireGuard settings",
+    "wireguardEndpoint": "WireGuard endpoint",
+    "wireguardKeepalive": "Keepalive interval (seconds)",
+    "serverKeyPin": "Server key pin",
+    "serverKeyPinError": "Must be lowercase hex characters",
+    "advancedFallback": "Advanced: Fallback Strategy",
+    "advancedFallbackDesc": "Controls how the client retries connections when the primary transport fails.",
+    "fallbackUseServer": "Use server fallback",
+    "fallbackUseServerDesc": "Allow the server to redirect to an alternate endpoint",
+    "fallbackMaxAttempts": "Max attempts",
+    "fallbackConnectTimeout": "Connect timeout (s)",
     "tags": "Tags",
     "addTag": "Add tag…",
     "configPreview": "Config preview",
@@ -432,7 +450,8 @@
       "portHopping": "Periodically switches the server port to evade per-port throttling or blocking.",
       "xmux": "Multiplexes multiple logical streams over fewer physical connections, reducing handshake overhead.",
       "trafficShaping": "Adds padding, jitter, or dummy packets to disguise traffic patterns from statistical analysis.",
-      "fec": "Adds redundant data shards so lost packets can be recovered without retransmission. Increases bandwidth usage."
+      "fec": "Adds redundant data shards so lost packets can be recovered without retransmission. Increases bandwidth usage.",
+      "serverKeyPin": "Pin the server's public key hash. If set, the client will verify the server's key matches this hex-encoded hash before connecting. Prevents man-in-the-middle attacks even if certificate verification is relaxed."
     }
   },
   "status": {
@@ -515,7 +534,16 @@
     "totalServers": "Servers",
     "manualProfiles": "Manual",
     "servers": "servers",
-    "updated": "Updated {{time}}"
+    "updated": "Updated {{time}}",
+    "edit": "Edit",
+    "editTitle": "Edit Subscription",
+    "editName": "Display name",
+    "editNamePlaceholder": "My subscription",
+    "editInterval": "Auto-update interval (hours)",
+    "editIntervalHint": "0 = manual updates only",
+    "editSave": "Save",
+    "editSaved": "Subscription settings saved",
+    "autoUpdateInterval": "every {{hours}}h"
   },
   "proxyGroups": {
     "title": "Proxy Groups",

@@ -24,6 +24,7 @@ export interface AppSettings {
   portForwards: string;      // "name,local_addr,remote_port" per line
   routingGeoipPath: string;
   routingGeositePath: string;
+  connectionPoolEnabled: boolean;
 }
 
 interface SettingsStore extends AppSettings {
@@ -55,6 +56,7 @@ export const useSettings = create<SettingsStore>()(
       portForwards: "",
       routingGeoipPath: "",
       routingGeositePath: "",
+      connectionPoolEnabled: true,
       patch: (values) => set(values),
     }),
     { name: "prisma-settings" }

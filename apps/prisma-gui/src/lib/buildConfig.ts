@@ -15,8 +15,11 @@ export interface WizardState {
   prismaAuthSecret: string;
   transportOnlyCipher: boolean;
 
+  // Step 2 — Server key pinning
+  serverKeyPin: string;
+
   // Step 3 — Transport + sub-fields
-  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp";
+  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp" | "shadow-tls" | "wireguard";
   cipher: string;
   fingerprint: string;
   quicVersion: string;
@@ -69,6 +72,17 @@ export interface WizardState {
   fecEnabled: boolean;
   fecDataShards: number;
   fecParityShards: number;
+  // ShadowTLS v3
+  shadowTlsServerAddr: string;
+  shadowTlsPassword: string;
+  shadowTlsSni: string;
+  // WireGuard
+  wireguardEndpoint: string;
+  wireguardKeepalive: number;
+  // Client fallback strategy
+  fallbackUseServerFallback: boolean;
+  fallbackMaxAttempts: number;
+  fallbackConnectTimeout: number;
 
   // Step 4
   tags: string[];
@@ -85,6 +99,7 @@ export const DEFAULT_WIZARD: WizardState = {
   clientId: "",
   authSecret: "",
   prismaAuthSecret: "",
+  serverKeyPin: "",
   transportOnlyCipher: false,
   transport: "quic",
   cipher: "chacha20-poly1305",
@@ -132,6 +147,14 @@ export const DEFAULT_WIZARD: WizardState = {
   fecEnabled: false,
   fecDataShards: 10,
   fecParityShards: 3,
+  shadowTlsServerAddr: "",
+  shadowTlsPassword: "",
+  shadowTlsSni: "",
+  wireguardEndpoint: "",
+  wireguardKeepalive: 25,
+  fallbackUseServerFallback: false,
+  fallbackMaxAttempts: 3,
+  fallbackConnectTimeout: 10,
   tags: [],
 };
 
@@ -248,6 +271,11 @@ export function mergeSettingsIntoConfig(
   } else {
     delete config.port_forwards;
   }
+
+  // Connection pool
+  config.connection_pool = {
+    enabled: settings.connectionPoolEnabled ?? true,
+  };
 
   // Routing rules + geo paths
   const routing = { ...((config.routing ?? {}) as Record<string, unknown>) };
@@ -434,6 +462,37 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     config.prisma_auth_secret = w.prismaAuthSecret;
   }
 
+  // Server key pinning
+  if (w.serverKeyPin) {
+    config.server_key_pin = w.serverKeyPin;
+  }
+
+  // ShadowTLS v3
+  if (w.transport === "shadow-tls" && w.shadowTlsServerAddr) {
+    config.shadow_tls = {
+      server_addr: w.shadowTlsServerAddr,
+      password: w.shadowTlsPassword,
+      sni: w.shadowTlsSni,
+    };
+  }
+
+  // WireGuard
+  if (w.transport === "wireguard" && w.wireguardEndpoint) {
+    config.wireguard = {
+      endpoint: w.wireguardEndpoint,
+      keepalive_secs: w.wireguardKeepalive,
+    };
+  }
+
+  // Client fallback strategy
+  if (w.fallbackUseServerFallback || w.fallbackMaxAttempts !== 3 || w.fallbackConnectTimeout !== 10) {
+    config.fallback = {
+      use_server_fallback: w.fallbackUseServerFallback,
+      max_fallback_attempts: w.fallbackMaxAttempts,
+      connect_timeout_secs: w.fallbackConnectTimeout,
+    };
+  }
+
   return config;
 }
 
@@ -447,6 +506,9 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
   const xmux = (c.xmux ?? null) as Record<string, unknown> | null;
   const ts = (c.traffic_shaping ?? {}) as Record<string, unknown>;
   const fec = (c.udp_fec ?? {}) as Record<string, unknown>;
+  const shadowTls = (c.shadow_tls ?? {}) as Record<string, unknown>;
+  const wg = (c.wireguard ?? {}) as Record<string, unknown>;
+  const fb = (c.fallback ?? {}) as Record<string, unknown>;
 
   // Parse server_addr "host:port"
   const serverAddr = String(c.server_addr ?? "");
@@ -486,6 +548,7 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     clientId: String(identity.client_id ?? ""),
     authSecret: String(identity.auth_secret ?? ""),
     prismaAuthSecret: String(c.prisma_auth_secret ?? ""),
+    serverKeyPin: String(c.server_key_pin ?? ""),
     transportOnlyCipher: Boolean(c.transport_only_cipher),
     transport: (c.transport as WizardState["transport"]) ?? "quic",
     cipher: String(c.cipher_suite ?? "chacha20-poly1305"),
@@ -533,6 +596,14 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fecEnabled: Boolean(fec.enabled),
     fecDataShards: Number(fec.data_shards ?? 10),
     fecParityShards: Number(fec.parity_shards ?? 3),
+    shadowTlsServerAddr: String(shadowTls.server_addr ?? ""),
+    shadowTlsPassword: String(shadowTls.password ?? ""),
+    shadowTlsSni: String(shadowTls.sni ?? ""),
+    wireguardEndpoint: String(wg.endpoint ?? ""),
+    wireguardKeepalive: Number(wg.keepalive_secs ?? 25),
+    fallbackUseServerFallback: Boolean(fb.use_server_fallback),
+    fallbackMaxAttempts: Number(fb.max_fallback_attempts ?? 3),
+    fallbackConnectTimeout: Number(fb.connect_timeout_secs ?? 10),
     tags: tags ?? [],
   };
 }

@@ -8,6 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Pencil,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,11 @@ export default function Subscriptions() {
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePendingUrl, setDeletePendingUrl] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUrl, setEditUrl] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editInterval, setEditInterval] = useState(24);
+  const [subMeta, setSubMeta] = useState<Record<string, { name: string; intervalHours: number }>>({});
 
   const reload = useCallback(
     () =>
@@ -170,6 +177,24 @@ export default function Subscriptions() {
     }
   }
 
+  function openEditDialog(url: string) {
+    const meta = subMeta[url];
+    setEditUrl(url);
+    setEditName(meta?.name ?? url.replace(/^https?:\/\//, "").split("/")[0]);
+    setEditInterval(meta?.intervalHours ?? 24);
+    setEditOpen(true);
+  }
+
+  function handleSaveEdit() {
+    if (!editUrl) return;
+    setSubMeta((prev) => ({
+      ...prev,
+      [editUrl]: { name: editName, intervalHours: editInterval },
+    }));
+    setEditOpen(false);
+    notify.success(t("subscriptions.editSaved"));
+  }
+
   return (
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
@@ -265,7 +290,7 @@ export default function Subscriptions() {
                     <Globe size={14} className="shrink-0 text-blue-400" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate font-mono">
-                        {sub.url.replace(/^https?:\/\//, "").split("/")[0]}
+                        {subMeta[sub.url]?.name ?? sub.url.replace(/^https?:\/\//, "").split("/")[0]}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <Badge
@@ -282,6 +307,12 @@ export default function Subscriptions() {
                             })}
                           </span>
                         )}
+                        {subMeta[sub.url]?.intervalHours && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                            <Clock size={10} />
+                            {t("subscriptions.autoUpdateInterval", { hours: subMeta[sub.url].intervalHours })}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -290,6 +321,15 @@ export default function Subscriptions() {
                     className="flex gap-1 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => openEditDialog(sub.url)}
+                      title={t("subscriptions.edit")}
+                    >
+                      <Pencil size={12} />
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -406,6 +446,47 @@ export default function Subscriptions() {
               {importing
                 ? t("subscriptions.importing")
                 : t("subscriptions.add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit subscription dialog */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("subscriptions.editTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>{t("subscriptions.editName")}</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder={t("subscriptions.editNamePlaceholder")}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t("subscriptions.editInterval")}</Label>
+              <Input
+                type="number"
+                min={0}
+                max={720}
+                value={editInterval}
+                onChange={(e) => setEditInterval(parseInt(e.target.value, 10) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">{t("subscriptions.editIntervalHint")}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">{t("common.cancel")}</Button>
+            </DialogClose>
+            <Button onClick={handleSaveEdit}>
+              {t("subscriptions.editSave")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -316,7 +316,10 @@
     "vpnPermission": "VPN 权限",
     "vpnPermissionDesc": "移动端 TUN 模式需要此权限",
     "vpnGranted": "已授权",
-    "vpnRequest": "请求授权"
+    "vpnRequest": "请求授权",
+    "performance": "性能",
+    "connectionPool": "连接池",
+    "connectionPoolDesc": "复用已建立的连接以减少握手开销并提高吞吐量"
   },
   "wizard": {
     "newProfile": "新建配置",
@@ -417,6 +420,21 @@
     "fecDesc": "Reed-Solomon 纠删码，适用于丢包链路",
     "fecDataShards": "数据分片",
     "fecParityShards": "校验分片",
+    "shadowTlsSettings": "ShadowTLS v3 设置",
+    "shadowTlsServerAddr": "ShadowTLS 服务器地址",
+    "shadowTlsPassword": "ShadowTLS 密码",
+    "shadowTlsSni": "ShadowTLS SNI",
+    "wireguardSettings": "WireGuard 设置",
+    "wireguardEndpoint": "WireGuard 端点",
+    "wireguardKeepalive": "保活间隔（秒）",
+    "serverKeyPin": "服务器密钥固定",
+    "serverKeyPinError": "必须是小写十六进制字符",
+    "advancedFallback": "高级：回退策略",
+    "advancedFallbackDesc": "控制主传输失败时客户端如何重试连接。",
+    "fallbackUseServer": "使用服务器回退",
+    "fallbackUseServerDesc": "允许服务器重定向到备用端点",
+    "fallbackMaxAttempts": "最大尝试次数",
+    "fallbackConnectTimeout": "连接超时（秒）",
     "tags": "标签",
     "addTag": "添加标签…",
     "configPreview": "配置预览",
@@ -432,7 +450,8 @@
       "portHopping": "定期切换服务器端口以规避按端口的限速或封锁。",
       "xmux": "在较少的物理连接上复用多个逻辑流，减少握手开销。",
       "trafficShaping": "添加填充、抖动或虚假数据包以伪装流量模式，防止统计分析。",
-      "fec": "添加冗余数据分片，使丢失的数据包无需重传即可恢复。会增加带宽使用。"
+      "fec": "添加冗余数据分片，使丢失的数据包无需重传即可恢复。会增加带宽使用。",
+      "serverKeyPin": "固定服务器的公钥哈希。设置后，客户端将在连接前验证服务器密钥是否与此十六进制编码的哈希匹配。即使证书验证放松，也能防止中间人攻击。"
     }
   },
   "status": {
@@ -515,7 +534,16 @@
     "totalServers": "服务器",
     "manualProfiles": "手动",
     "servers": "个服务器",
-    "updated": "更新于 {{time}}"
+    "updated": "更新于 {{time}}",
+    "edit": "编辑",
+    "editTitle": "编辑订阅",
+    "editName": "显示名称",
+    "editNamePlaceholder": "我的订阅",
+    "editInterval": "自动更新间隔（小时）",
+    "editIntervalHint": "0 = 仅手动更新",
+    "editSave": "保存",
+    "editSaved": "订阅设置已保存",
+    "autoUpdateInterval": "每 {{hours}} 小时"
   },
   "proxyGroups": {
     "title": "代理组",

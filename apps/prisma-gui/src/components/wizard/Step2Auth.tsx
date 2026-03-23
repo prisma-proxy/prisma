@@ -80,6 +80,23 @@ export default function Step2Auth({ state, onChange }: Props) {
         />
       </div>
 
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <Label htmlFor="w-keypin">{t("wizard.serverKeyPin")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
+          <HelpTip content={t("wizard.help.serverKeyPin")} />
+        </div>
+        <Input
+          id="w-keypin"
+          value={state.serverKeyPin}
+          onChange={(e) => onChange({ serverKeyPin: e.target.value.toLowerCase() })}
+          className="font-mono text-xs"
+          placeholder="hex-encoded public key hash"
+        />
+        {state.serverKeyPin && !/^[0-9a-f]+$/.test(state.serverKeyPin) && (
+          <p className="text-xs text-destructive">{t("wizard.serverKeyPinError")}</p>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           <div>

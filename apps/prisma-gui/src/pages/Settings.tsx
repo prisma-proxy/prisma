@@ -44,6 +44,7 @@ const SETTINGS_KEYS: (keyof AppSettings)[] = [
   "logLevel", "logFormat",
   "tunEnabled", "tunDevice", "tunMtu", "tunIncludeRoutes", "tunExcludeRoutes",
   "portForwards", "routingGeoipPath", "routingGeositePath",
+  "connectionPoolEnabled",
 ];
 
 // ── Port input with local state, commits on blur ─────────────────────────────
@@ -101,6 +102,7 @@ export default function Settings() {
     logLevel, logFormat,
     tunEnabled, tunDevice, tunMtu, tunIncludeRoutes, tunExcludeRoutes,
     portForwards, routingGeoipPath, routingGeositePath,
+    connectionPoolEnabled,
     patch,
   } = useSettings();
   const clearHistory = useConnectionHistory((s) => s.clear);
@@ -240,6 +242,7 @@ export default function Settings() {
           logLevel, logFormat,
           tunEnabled, tunDevice, tunMtu, tunIncludeRoutes, tunExcludeRoutes,
           portForwards, routingGeoipPath, routingGeositePath,
+          connectionPoolEnabled,
         },
       };
       await downloadJson(data, `prisma-settings-${Date.now()}.json`);
@@ -291,6 +294,7 @@ export default function Settings() {
       portForwards: "",
       routingGeoipPath: "",
       routingGeositePath: "",
+      connectionPoolEnabled: true,
     });
     i18n.changeLanguage("en");
     notify.success(t("settings.settingsReset"));
@@ -928,6 +932,20 @@ export default function Settings() {
             </div>
           </div>
         )}
+      </div>
+
+      <Separator />
+
+      {/* Performance */}
+      <div className="space-y-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("settings.performance")}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>{t("settings.connectionPool")}</Label>
+            <p className="text-xs text-muted-foreground">{t("settings.connectionPoolDesc")}</p>
+          </div>
+          <Switch checked={connectionPoolEnabled} onCheckedChange={(v) => patch({ connectionPoolEnabled: v })} />
+        </div>
       </div>
 
       <Separator />

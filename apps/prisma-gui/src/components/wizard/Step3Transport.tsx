@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -15,16 +17,19 @@ interface Props {
 }
 
 const TRANSPORTS: { value: WizardState["transport"]; label: string }[] = [
-  { value: "quic",   label: "QUIC" },
-  { value: "ws",     label: "WebSocket" },
-  { value: "grpc",   label: "gRPC" },
-  { value: "xhttp",  label: "XHTTP" },
-  { value: "xporta", label: "XPorta" },
-  { value: "tcp",    label: "TCP" },
+  { value: "quic",       label: "QUIC" },
+  { value: "ws",         label: "WebSocket" },
+  { value: "grpc",       label: "gRPC" },
+  { value: "xhttp",      label: "XHTTP" },
+  { value: "xporta",     label: "XPorta" },
+  { value: "tcp",        label: "TCP" },
+  { value: "shadow-tls", label: "ShadowTLS v3" },
+  { value: "wireguard",  label: "WireGuard" },
 ];
 
 export default function Step3Transport({ state, onChange }: Props) {
   const { t } = useTranslation();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -255,6 +260,40 @@ export default function Step3Transport({ state, onChange }: Props) {
         </div>
       )}
 
+      {/* ShadowTLS v3 sub-fields */}
+      {state.transport === "shadow-tls" && (
+        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.shadowTlsSettings")}</p>
+          <div className="space-y-1">
+            <Label>{t("wizard.shadowTlsServerAddr")}</Label>
+            <Input value={state.shadowTlsServerAddr} onChange={(e) => onChange({ shadowTlsServerAddr: e.target.value })} placeholder="1.2.3.4:443" />
+          </div>
+          <div className="space-y-1">
+            <Label>{t("wizard.shadowTlsPassword")}</Label>
+            <Input type="password" value={state.shadowTlsPassword} onChange={(e) => onChange({ shadowTlsPassword: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>{t("wizard.shadowTlsSni")}</Label>
+            <Input value={state.shadowTlsSni} onChange={(e) => onChange({ shadowTlsSni: e.target.value })} placeholder="www.example.com" />
+          </div>
+        </div>
+      )}
+
+      {/* WireGuard sub-fields */}
+      {state.transport === "wireguard" && (
+        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.wireguardSettings")}</p>
+          <div className="space-y-1">
+            <Label>{t("wizard.wireguardEndpoint")}</Label>
+            <Input value={state.wireguardEndpoint} onChange={(e) => onChange({ wireguardEndpoint: e.target.value })} placeholder="1.2.3.4:51820" />
+          </div>
+          <div className="space-y-1">
+            <Label>{t("wizard.wireguardKeepalive")}</Label>
+            <Input type="number" min={0} value={state.wireguardKeepalive} onChange={(e) => onChange({ wireguardKeepalive: parseInt(e.target.value, 10) || 25 })} />
+          </div>
+        </div>
+      )}
+
       {/* Header obfuscation */}
       <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.headerObfuscation")}</p>
@@ -410,6 +449,40 @@ export default function Step3Transport({ state, onChange }: Props) {
             <div className="flex-1 space-y-1">
               <Label className="text-xs">{t("wizard.fecParityShards")}</Label>
               <Input type="number" min={1} value={state.fecParityShards} onChange={(e) => onChange({ fecParityShards: parseInt(e.target.value, 10) || 3 })} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Advanced: Client Fallback Strategy */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {t("wizard.advancedFallback")}
+        </button>
+        {advancedOpen && (
+          <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+            <p className="text-xs text-muted-foreground">{t("wizard.advancedFallbackDesc")}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>{t("wizard.fallbackUseServer")}</Label>
+                <p className="text-xs text-muted-foreground">{t("wizard.fallbackUseServerDesc")}</p>
+              </div>
+              <Switch checked={state.fallbackUseServerFallback} onCheckedChange={(v) => onChange({ fallbackUseServerFallback: v })} />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs">{t("wizard.fallbackMaxAttempts")}</Label>
+                <Input type="number" min={1} max={20} value={state.fallbackMaxAttempts} onChange={(e) => onChange({ fallbackMaxAttempts: parseInt(e.target.value, 10) || 3 })} />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs">{t("wizard.fallbackConnectTimeout")}</Label>
+                <Input type="number" min={1} max={120} value={state.fallbackConnectTimeout} onChange={(e) => onChange({ fallbackConnectTimeout: parseInt(e.target.value, 10) || 10 })} />
+              </div>
             </div>
           </div>
         )}
