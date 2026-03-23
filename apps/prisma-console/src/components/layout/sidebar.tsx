@@ -184,7 +184,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         {/* Footer */}
         {!collapsed && (
           <div className="border-t border-sidebar-border px-4 py-3">
-            <p className="text-[10px] text-muted-foreground">Prisma Console v{process.env.NEXT_PUBLIC_APP_VERSION || "1.7.0"}</p>
+            <p className="text-[10px] text-muted-foreground">Prisma Console v{process.env.NEXT_PUBLIC_APP_VERSION || "2.0.0"}</p>
           </div>
         )}
       </aside>
