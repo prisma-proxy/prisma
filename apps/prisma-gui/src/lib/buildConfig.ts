@@ -19,7 +19,7 @@ export interface WizardState {
   serverKeyPin: string;
 
   // Step 3 — Transport + sub-fields
-  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp" | "shadow-tls" | "wireguard";
+  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp" | "wireguard";
   cipher: string;
   fingerprint: string;
   quicVersion: string;
@@ -72,10 +72,6 @@ export interface WizardState {
   fecEnabled: boolean;
   fecDataShards: number;
   fecParityShards: number;
-  // ShadowTLS v3
-  shadowTlsServerAddr: string;
-  shadowTlsPassword: string;
-  shadowTlsSni: string;
   // WireGuard
   wireguardEndpoint: string;
   wireguardKeepalive: number;
@@ -147,9 +143,6 @@ export const DEFAULT_WIZARD: WizardState = {
   fecEnabled: false,
   fecDataShards: 10,
   fecParityShards: 3,
-  shadowTlsServerAddr: "",
-  shadowTlsPassword: "",
-  shadowTlsSni: "",
   wireguardEndpoint: "",
   wireguardKeepalive: 25,
   fallbackUseServerFallback: false,
@@ -390,7 +383,7 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
   }
 
   // XPorta — nested object matching XPortaClientConfig
-  if (w.transport === "xporta" && w.xportaBaseUrl) {
+  if (w.transport === "xporta") {
     config.xporta = {
       base_url: w.xportaBaseUrl,
       encoding: w.xportaEncoding,
@@ -467,17 +460,8 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     config.server_key_pin = w.serverKeyPin;
   }
 
-  // ShadowTLS v3
-  if (w.transport === "shadow-tls" && w.shadowTlsServerAddr) {
-    config.shadow_tls = {
-      server_addr: w.shadowTlsServerAddr,
-      password: w.shadowTlsPassword,
-      sni: w.shadowTlsSni,
-    };
-  }
-
   // WireGuard
-  if (w.transport === "wireguard" && w.wireguardEndpoint) {
+  if (w.transport === "wireguard") {
     config.wireguard = {
       endpoint: w.wireguardEndpoint,
       keepalive_secs: w.wireguardKeepalive,
@@ -506,7 +490,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
   const xmux = (c.xmux ?? null) as Record<string, unknown> | null;
   const ts = (c.traffic_shaping ?? {}) as Record<string, unknown>;
   const fec = (c.udp_fec ?? {}) as Record<string, unknown>;
-  const shadowTls = (c.shadow_tls ?? {}) as Record<string, unknown>;
   const wg = (c.wireguard ?? {}) as Record<string, unknown>;
   const fb = (c.fallback ?? {}) as Record<string, unknown>;
 
@@ -596,9 +579,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fecEnabled: Boolean(fec.enabled),
     fecDataShards: Number(fec.data_shards ?? 10),
     fecParityShards: Number(fec.parity_shards ?? 3),
-    shadowTlsServerAddr: String(shadowTls.server_addr ?? ""),
-    shadowTlsPassword: String(shadowTls.password ?? ""),
-    shadowTlsSni: String(shadowTls.sni ?? ""),
     wireguardEndpoint: String(wg.endpoint ?? ""),
     wireguardKeepalive: Number(wg.keepalive_secs ?? 25),
     fallbackUseServerFallback: Boolean(fb.use_server_fallback),
@@ -621,5 +601,9 @@ export function validateWizard(w: WizardState): string[] {
     errs.push("FEC data shards must be at least 1");
   if (w.fecEnabled && w.fecParityShards < 1)
     errs.push("FEC parity shards must be at least 1");
+  if (w.transport === "xporta" && !w.xportaBaseUrl.trim())
+    errs.push("XPorta base URL is required");
+  if (w.transport === "wireguard" && !w.wireguardEndpoint.trim())
+    errs.push("WireGuard endpoint is required");
   return errs;
 }
