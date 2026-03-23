@@ -26,7 +26,7 @@ Read `.claude/skills/prisma-crate-map.md` for the full project map. Read `.claud
 Cross-crate order: core -> server -> client -> cli -> mgmt -> ffi -> frontend -> tests
 
 4. **Quality gates** — per `prisma-workflow.md`
-5. **Version bump** (if warranted) — per `prisma-workflow.md`
+5. **Version bump** (auto-determined from commit type per `prisma-workflow.md`) — determine bump type from accumulated changes in the current work, do not ask the user
 6. **Commit** — per `prisma-workflow.md`
 
 ## Decision Hierarchy
