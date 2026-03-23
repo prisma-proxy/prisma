@@ -130,35 +130,6 @@ jobs:
         run: cargo test --workspace --doc --target ${{ matrix.target }}
 
   # ---------------------------------------------------------------------------
-  # Benchmark regression check (PR only — compare against master)
-  # ---------------------------------------------------------------------------
-  bench:
-    name: Benchmark Check
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: bench
-
-      - name: Run benchmarks (PR)
-        run: cargo bench -p prisma-core -- --output-format bencher | tee bench-pr.txt
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v7
-        with:
-          name: benchmark-results
-          path: bench-pr.txt
-          retention-days: 5
-
-  # ---------------------------------------------------------------------------
   # GUI: TypeScript check + Tauri Rust check
   # ---------------------------------------------------------------------------
   gui-check:

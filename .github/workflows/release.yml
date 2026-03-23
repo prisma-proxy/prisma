@@ -22,8 +22,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -365,37 +363,7 @@ jobs:
           retention-days: 5
 
   # ---------------------------------------------------------------------------
-  # Job 4: Build prisma-docs (Docusaurus)
-  # ---------------------------------------------------------------------------
-  build-docs:
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: prisma-docs/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: prisma-docs
-
-      - name: Build docs
-        run: npm run build
-        working-directory: prisma-docs
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: prisma-docs/build
-
-  # ---------------------------------------------------------------------------
-  # Job 5: Build prisma-ffi shared libraries
+  # Job 4: Build prisma-ffi shared libraries
   # ---------------------------------------------------------------------------
   build-ffi:
     name: FFI / ${{ matrix.label }}
@@ -586,11 +554,11 @@ jobs:
           retention-days: 5
 
   # ---------------------------------------------------------------------------
-  # Job 6: Create GitHub Release
+  # Job 5: Create GitHub Release
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build-server, build-gui, build-console, build-docs, build-ffi]
+    needs: [build-server, build-gui, build-console, build-ffi]
     # Run even if optional jobs (gui, ffi) were skipped or failed
     if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
     runs-on: ubuntu-latest
@@ -825,18 +793,3 @@ jobs:
             --notes-file release-notes.md \
             release/*
 
-  # ---------------------------------------------------------------------------
-  # Job 7: Deploy docs to GitHub Pages
-  # ---------------------------------------------------------------------------
-  deploy-docs:
-    name: Deploy Docs
-    needs: [build-docs, release]
-    if: ${{ always() && needs.build-docs.result == 'success' }}
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
