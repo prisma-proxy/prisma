@@ -1,14 +1,18 @@
 # Rust
-/target
+/target/
+**/*.rs.bk
 
 # Editor
 *.swp
 *.swo
+*~
 .idea/
 .vscode/
 
 # Secrets / TLS
 .env
+.env.local
+.env.*.local
 *.pem
 *.crt
 *.key
@@ -16,10 +20,10 @@
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 ._*
 __MACOSX/
 ehthumbs.db
-Desktop.ini
 
 # Docs (Docusaurus)
 prisma-docs/node_modules/
@@ -30,23 +34,6 @@ prisma-docs/.docusaurus/
 prisma-console/node_modules/
 prisma-console/.next/
 prisma-console/out/
-prisma-console/.env*
-
-# Claude agent memory (per-machine state, not tracked)
-.claude/agent-memory/
-**/.claude/agent-memory/
-
-# Fuzzing
-fuzz/target/
-fuzz/corpus/
-fuzz/artifacts/
-
-# Benchmark artifacts
-benchmark-results/
-criterion-reports/
-
-# Misc
-prisma-plan.md
 
 # prisma-gui (Tauri + Vite)
 prisma-gui/node_modules/
@@ -57,7 +44,6 @@ prisma-gui/src-tauri/gen/
 prisma-gui/src-tauri/WixTools/
 
 # prisma-ffi build artifacts
-prisma-ffi/target/
 prisma-ffi/include/*.generated.h
 
 # prisma-mcp (MCP dev server)
@@ -77,9 +63,30 @@ prisma-android/.gradle/
 prisma-android/build/
 prisma-android/app/build/
 prisma-android/local.properties
-prisma-android/.idea/
+
+# Claude agent memory
+.claude/agent-memory/
+**/.claude/agent-memory/
+
+# Fuzzing
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+
+# Benchmark artifacts
+benchmark-results/
+criterion-reports/
+target/criterion/
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+tarpaulin-report.html
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
@@ -88,7 +95,12 @@ pnpm-debug.log*
 *.orig
 *.bak
 *.tmp
+tmp/
+.tmp/
 
 # Build caches
 *.tsbuildinfo
 .turbo/
+
+# Misc
+prisma-plan.md
