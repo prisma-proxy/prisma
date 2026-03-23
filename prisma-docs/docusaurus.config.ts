@@ -58,7 +58,6 @@ const config: Config = {
           lastVersion: 'current',
           versions: {
             current: {label: 'v1.7.0', path: ''},
-            '0.8.0': {label: 'v0.8.0', path: '0.8.0'},
           },
         },
         blog: false,
@@ -129,10 +128,6 @@ const config: Config = {
           to: '/dev/',
           label: 'Dev',
           position: 'left',
-        },
-        {
-          type: 'docsVersionDropdown',
-          position: 'right',
         },
         {
           type: 'localeDropdown',
