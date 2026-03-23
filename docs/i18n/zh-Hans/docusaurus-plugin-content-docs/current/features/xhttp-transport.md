@@ -72,18 +72,22 @@ key_path = "origin-key.pem"
 
 ```toml
 transport = "xhttp"
-xhttp_mode = "stream-one"
-xhttp_stream_url = "https://your-domain.com/api/v1/stream"
-
-# 对于 packet-up 或 stream-up 模式：
-# xhttp_mode = "packet-up"
-# xhttp_upload_url = "https://your-domain.com/api/v1/upload"
-# xhttp_download_url = "https://your-domain.com/api/v1/pull"
 
 # 头部混淆
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 referer = "https://www.google.com/"
-# xhttp_extra_headers = [["Accept", "text/html"]]
+
+[xhttp]
+mode = "stream-one"
+stream_url = "https://your-domain.com/api/v1/stream"
+
+# 对于 packet-up 或 stream-up 模式：
+# mode = "packet-up"
+# upload_url = "https://your-domain.com/api/v1/upload"
+# download_url = "https://your-domain.com/api/v1/pull"
+
+# 额外请求头
+# extra_headers = [["Accept", "text/html"]]
 ```
 
 ## XMUX 连接池 (Connection Pooling)
@@ -118,7 +122,7 @@ max_requests_max = 200        # 轮换前最大请求数
 
 - **`user_agent`**：覆盖 `User-Agent` 请求头
 - **`referer`**：添加 `Referer` 请求头
-- **`xhttp_extra_headers`**：添加任意请求头
+- **`xhttp.extra_headers`**：在 `[xhttp]` 配置节中添加任意请求头
 
 ## 与其他传输协议的比较
 

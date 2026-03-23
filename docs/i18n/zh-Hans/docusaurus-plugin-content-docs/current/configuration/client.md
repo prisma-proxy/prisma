@@ -36,9 +36,6 @@ sidebar_position: 2
 | `prisma_auth_secret` | string? | -- | PrismaTLS 认证密钥（十六进制编码，须与服务端匹配） |
 | `user_agent` | string? | -- | 覆盖 User-Agent 请求头 |
 | `referer` | string? | -- | 覆盖 Referer 请求头 |
-| `mux_enabled` | bool | `false` | 启用 XMUX 流多路复用 |
-| `mux_max_streams` | u32 | `128` | 每个 mux 连接的最大并发流数 |
-| `mux_max_connections` | u16 | `4` | 连接池中的最大 mux 传输连接数 |
 
 ## `[connection_pool]` -- 传输连接复用
 
@@ -70,31 +67,31 @@ idle_timeout_secs = 600
 | `client_id` | string | -- | 客户端 UUID（须与服务端 `authorized_clients[].id` 匹配） |
 | `auth_secret` | string | -- | 64 个十六进制字符的共享密钥（须与服务端匹配） |
 
-## 传输特定字段
+## 传输特定配置节
 
-### WebSocket
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `ws_url` | string? | -- | WebSocket 服务器 URL（如 `"wss://domain.com/ws-tunnel"`） |
-| `ws_host` | string? | -- | 覆盖 WebSocket `Host` 请求头 |
-| `ws_extra_headers` | \[\[k,v\]\] | `[]` | 额外的 WebSocket 请求头 |
-
-### gRPC
+### `[ws]` -- WebSocket 传输
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `grpc_url` | string? | -- | gRPC 服务器 URL |
+| `url` | string? | -- | WebSocket 服务器 URL（如 `"wss://domain.com/ws-tunnel"`） |
+| `host` | string? | -- | 覆盖 WebSocket `Host` 请求头 |
+| `extra_headers` | \[\[k,v\]\] | `[]` | 额外的 WebSocket 请求头 |
 
-### XHTTP
+### `[grpc]` -- gRPC 传输
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `xhttp_mode` | string? | -- | XHTTP 模式：`"packet-up"` / `"stream-up"` / `"stream-one"` |
-| `xhttp_upload_url` | string? | -- | XHTTP packet-up/stream-up 上传 URL |
-| `xhttp_download_url` | string? | -- | XHTTP packet-up 下载 URL |
-| `xhttp_stream_url` | string? | -- | XHTTP stream-one 流 URL |
-| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | 额外的 XHTTP 请求头 |
+| `url` | string? | -- | gRPC 服务器 URL |
+
+### `[xhttp]` -- XHTTP 传输
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `mode` | string? | -- | XHTTP 模式：`"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `upload_url` | string? | -- | XHTTP packet-up/stream-up 上传 URL |
+| `download_url` | string? | -- | XHTTP packet-up 下载 URL |
+| `stream_url` | string? | -- | XHTTP stream-one 流 URL |
+| `extra_headers` | \[\[k,v\]\] | `[]` | 额外的 XHTTP 请求头 |
 
 ### `[xporta]` -- XPorta 传输
 
@@ -127,9 +124,9 @@ idle_timeout_secs = 600
 | `endpoint` | string | -- | 服务器 WireGuard 端点（如 `"1.2.3.4:51820"`） |
 | `keepalive_secs` | u64 | `25` | Keepalive 间隔（秒） |
 
-## `[xmux]` -- 连接池
+## `[xmux]` -- 流多路复用
 
-随机化连接生命周期以避免指纹识别。用于 XHTTP 和 WebSocket 传输。
+启用传输连接上的 XMUX 流多路复用。此配置节的存在即表示启用多路复用，无需单独的开关。随机化连接生命周期以避免指纹识别。用于 XHTTP 和 WebSocket 传输。
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
@@ -365,9 +362,9 @@ format = "pretty"
 - `identity.auth_secret` 必须是有效的十六进制字符串
 - `cipher_suite` 必须是以下之一：`chacha20-poly1305`、`aes-256-gcm`、`auto`
 - `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`、`shadowtls`、`ssh`、`wireguard`
-- `xhttp_mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
-- `xhttp_mode = "stream-one"` 需要设置 `xhttp_stream_url`
-- `xhttp_mode = "packet-up"` 或 `"stream-up"` 需要设置 `xhttp_upload_url` 和 `xhttp_download_url`
+- `xhttp.mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
+- `xhttp.mode = "stream-one"` 需要设置 `xhttp.stream_url`
+- `xhttp.mode = "packet-up"` 或 `"stream-up"` 需要设置 `xhttp.upload_url` 和 `xhttp.download_url`
 - XMUX 范围须满足 `min <= max`
 - `transport = "xporta"` 时需要设置 `xporta.base_url`
 - XPorta：所有路径必须以 `/` 开头

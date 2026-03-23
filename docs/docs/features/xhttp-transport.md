@@ -72,18 +72,22 @@ key_path = "origin-key.pem"
 
 ```toml
 transport = "xhttp"
-xhttp_mode = "stream-one"
-xhttp_stream_url = "https://your-domain.com/api/v1/stream"
-
-# For packet-up or stream-up mode:
-# xhttp_mode = "packet-up"
-# xhttp_upload_url = "https://your-domain.com/api/v1/upload"
-# xhttp_download_url = "https://your-domain.com/api/v1/pull"
 
 # Header obfuscation
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 referer = "https://www.google.com/"
-# xhttp_extra_headers = [["Accept", "text/html"]]
+
+[xhttp]
+mode = "stream-one"
+stream_url = "https://your-domain.com/api/v1/stream"
+
+# For packet-up or stream-up mode:
+# mode = "packet-up"
+# upload_url = "https://your-domain.com/api/v1/upload"
+# download_url = "https://your-domain.com/api/v1/pull"
+
+# Extra request headers
+# extra_headers = [["Accept", "text/html"]]
 ```
 
 ## XMUX connection pooling
@@ -118,7 +122,7 @@ Both client and server can inject headers to make traffic look like normal web b
 
 - **`user_agent`**: Override `User-Agent` request header
 - **`referer`**: Add `Referer` request header
-- **`xhttp_extra_headers`**: Add arbitrary request headers
+- **`xhttp.extra_headers`**: Add arbitrary request headers (inside the `[xhttp]` section)
 
 ## Comparison with other transports
 

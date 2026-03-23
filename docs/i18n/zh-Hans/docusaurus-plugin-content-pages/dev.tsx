@@ -341,7 +341,7 @@ export default function DevPage(): ReactNode {
             <li><strong>[tun]</strong>: <code>enabled</code>、<code>device_name</code>、<code>mtu</code>、<code>include_routes</code></li>
             <li><strong>[congestion]</strong>: <code>mode</code> (bbr/brutal/adaptive)</li>
             <li><strong>[routing]</strong>: <code>rules</code>、<code>geoip_path</code></li>
-            <li><strong>多路复用</strong>: <code>mux_enabled</code>、<code>mux_max_streams</code></li>
+            <li><strong>多路复用</strong>: <code>[xmux]</code> 配置节（存在即启用）</li>
           </ul>
         </section>
 

@@ -220,7 +220,9 @@ http_listen_addr = "127.0.0.1:8080"
 server_addr = "proxy.example.com:443"
 cipher_suite = "chacha20-poly1305"
 transport = "ws"
-ws_url = "wss://proxy.example.com/ws-tunnel"
+
+[ws]
+url = "wss://proxy.example.com/ws-tunnel"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"
@@ -298,9 +300,11 @@ http_listen_addr = "127.0.0.1:8080"
 server_addr = "proxy.example.com:443"
 cipher_suite = "chacha20-poly1305"
 transport = "xhttp"
-xhttp_mode = "stream-one"
-xhttp_stream_url = "https://proxy.example.com/api/v1/stream"
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+[xhttp]
+mode = "stream-one"
+stream_url = "https://proxy.example.com/api/v1/stream"
 
 [identity]
 client_id = "YOUR-CLIENT-UUID"

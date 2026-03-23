@@ -73,9 +73,12 @@ graph LR
 ```
 
 ```toml
-mux_enabled = true
-mux_max_streams = 128
-mux_max_connections = 4
+# The presence of [xmux] enables multiplexing -- no separate toggle needed
+[xmux]
+max_connections_min = 1
+max_connections_max = 4
+max_concurrency_min = 8
+max_concurrency_max = 128
 ```
 
 ## Routing rules (split tunneling)

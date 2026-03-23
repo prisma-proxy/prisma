@@ -181,7 +181,9 @@ socks5_listen_addr = "127.0.0.1:1080"
 http_listen_addr = "127.0.0.1:8080"
 server_addr = "proxy.example.com:443"
 transport = "ws"
-ws_url = "wss://proxy.example.com/ws-tunnel"
+
+[ws]
+url = "wss://proxy.example.com/ws-tunnel"
 
 [identity]
 client_id = "your-client-uuid"
@@ -195,7 +197,9 @@ auth_secret = "your-auth-secret-hex"
 ```toml
 server_addr = "proxy.example.com:443"
 transport = "grpc"
-grpc_url = "https://proxy.example.com/tunnel.PrismaTunnel/Tunnel"
+
+[grpc]
+url = "https://proxy.example.com/tunnel.PrismaTunnel/Tunnel"
 ```
 
 ### XHTTP（最高隐蔽性）
@@ -205,19 +209,23 @@ grpc_url = "https://proxy.example.com/tunnel.PrismaTunnel/Tunnel"
 ```toml
 server_addr = "proxy.example.com:443"
 transport = "xhttp"
-xhttp_mode = "stream-one"
-xhttp_stream_url = "https://proxy.example.com/api/v1/stream"
 # 可选：添加逼真的请求头
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+[xhttp]
+mode = "stream-one"
+stream_url = "https://proxy.example.com/api/v1/stream"
 ```
 
 `packet-up` 模式（即使 CDN 有激进的请求超时也能工作）：
 
 ```toml
 transport = "xhttp"
-xhttp_mode = "packet-up"
-xhttp_upload_url = "https://proxy.example.com/api/v1/upload"
-xhttp_download_url = "https://proxy.example.com/api/v1/pull"
+
+[xhttp]
+mode = "packet-up"
+upload_url = "https://proxy.example.com/api/v1/upload"
+download_url = "https://proxy.example.com/api/v1/pull"
 ```
 
 ### XPorta（终极隐蔽性）

@@ -32,9 +32,12 @@ graph LR
 ```
 
 ```toml
-mux_enabled = true
-mux_max_streams = 128
-mux_max_connections = 4
+# [xmux] 配置节的存在即表示启用多路复用，无需单独的开关
+[xmux]
+max_connections_min = 1
+max_connections_max = 4
+max_concurrency_min = 8
+max_concurrency_max = 128
 ```
 
 ## 路由规则（分流）

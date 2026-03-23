@@ -36,9 +36,6 @@ This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only
 | `prisma_auth_secret` | string? | -- | PrismaTLS auth secret (hex-encoded, must match server) |
 | `user_agent` | string? | -- | Override User-Agent header |
 | `referer` | string? | -- | Override Referer header |
-| `mux_enabled` | bool | `false` | Enable XMUX stream multiplexing over transport connections |
-| `mux_max_streams` | u32 | `128` | Max concurrent streams per mux connection |
-| `mux_max_connections` | u16 | `4` | Max mux transport connections in pool |
 
 ## `[connection_pool]` -- Transport connection reuse
 
@@ -70,31 +67,31 @@ Connection pooling is most beneficial when using transports with expensive hands
 | `client_id` | string | -- | Client UUID (must match server `authorized_clients[].id`) |
 | `auth_secret` | string | -- | 64 hex character shared secret (must match server) |
 
-## Transport-specific fields
+## Transport-specific sections
 
-### WebSocket
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `ws_url` | string? | -- | WebSocket server URL (e.g. `"wss://domain.com/ws-tunnel"`) |
-| `ws_host` | string? | -- | Override WebSocket `Host` header |
-| `ws_extra_headers` | \[\[k,v\]\] | `[]` | Extra WebSocket request headers |
-
-### gRPC
+### `[ws]` -- WebSocket transport
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `grpc_url` | string? | -- | gRPC server URL |
+| `url` | string? | -- | WebSocket server URL (e.g. `"wss://domain.com/ws-tunnel"`) |
+| `host` | string? | -- | Override WebSocket `Host` header |
+| `extra_headers` | \[\[k,v\]\] | `[]` | Extra WebSocket request headers |
 
-### XHTTP
+### `[grpc]` -- gRPC transport
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `xhttp_mode` | string? | -- | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
-| `xhttp_upload_url` | string? | -- | XHTTP upload URL for packet-up/stream-up |
-| `xhttp_download_url` | string? | -- | XHTTP download URL for packet-up |
-| `xhttp_stream_url` | string? | -- | XHTTP stream URL for stream-one |
-| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | Extra XHTTP request headers |
+| `url` | string? | -- | gRPC server URL |
+
+### `[xhttp]` -- XHTTP transport
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | string? | -- | XHTTP mode: `"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `upload_url` | string? | -- | XHTTP upload URL for packet-up/stream-up |
+| `download_url` | string? | -- | XHTTP download URL for packet-up |
+| `stream_url` | string? | -- | XHTTP stream URL for stream-one |
+| `extra_headers` | \[\[k,v\]\] | `[]` | Extra XHTTP request headers |
 
 ### `[xporta]` -- XPorta transport
 
@@ -127,9 +124,9 @@ Connection pooling is most beneficial when using transports with expensive hands
 | `endpoint` | string | -- | Server WireGuard endpoint (e.g., `"1.2.3.4:51820"`) |
 | `keepalive_secs` | u64 | `25` | Keepalive interval in seconds |
 
-## `[xmux]` -- Connection pool
+## `[xmux]` -- Stream multiplexing
 
-Randomizes connection lifecycles to avoid fingerprinting. Used with XHTTP and WebSocket transports.
+Enables XMUX stream multiplexing over transport connections. The presence of this section implies mux is enabled -- no separate toggle is needed. Randomizes connection lifecycles to avoid fingerprinting. Used with XHTTP and WebSocket transports.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -365,9 +362,9 @@ The client config is validated at startup. The following rules are enforced:
 - `identity.auth_secret` must be valid hex
 - `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`, `auto`
 - `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`, `shadowtls`, `ssh`, `wireguard`
-- `xhttp_mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
-- `xhttp_mode = "stream-one"` requires `xhttp_stream_url`
-- `xhttp_mode = "packet-up"` or `"stream-up"` requires `xhttp_upload_url` and `xhttp_download_url`
+- `xhttp.mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
+- `xhttp.mode = "stream-one"` requires `xhttp.stream_url`
+- `xhttp.mode = "packet-up"` or `"stream-up"` requires `xhttp.upload_url` and `xhttp.download_url`
 - XMUX ranges must have min ≤ max
 - `transport = "xporta"` requires `xporta.base_url` to be set
 - XPorta: all paths must start with `/`
