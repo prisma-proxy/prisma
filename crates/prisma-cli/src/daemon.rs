@@ -79,10 +79,29 @@ pub fn is_process_running(pid: u32) -> bool {
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 pub fn is_process_running(pid: u32) -> bool {
-    // Fallback: try to read /proc/{pid} on Linux, or assume running
-    std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    use std::os::raw::c_void;
+
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+
+    extern "system" {
+        fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> *mut c_void;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return false;
+    }
+    unsafe { CloseHandle(handle) };
+    true
+}
+
+#[cfg(not(any(unix, windows)))]
+pub fn is_process_running(_pid: u32) -> bool {
+    // Unknown platform — conservatively assume the process is running
+    true
 }
 
 /// Send SIGTERM to a process (Unix).
@@ -96,7 +115,36 @@ pub fn send_sigterm(pid: u32) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+pub fn send_sigterm(pid: u32) -> Result<()> {
+    use std::os::raw::c_void;
+
+    const PROCESS_TERMINATE: u32 = 0x0001;
+
+    extern "system" {
+        fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> *mut c_void;
+        fn TerminateProcess(handle: *mut c_void, exit_code: u32) -> i32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if handle.is_null() {
+        let err = std::io::Error::last_os_error();
+        anyhow::bail!("Failed to open process PID {}: {}", pid, err);
+    }
+
+    let ret = unsafe { TerminateProcess(handle, 1) };
+    unsafe { CloseHandle(handle) };
+
+    if ret == 0 {
+        let err = std::io::Error::last_os_error();
+        anyhow::bail!("Failed to terminate PID {}: {}", pid, err);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
 pub fn send_sigterm(pid: u32) -> Result<()> {
     anyhow::bail!(
         "Sending signals is not supported on this platform. Manually terminate PID {}.",
@@ -106,7 +154,7 @@ pub fn send_sigterm(pid: u32) -> Result<()> {
 
 /// Spawn the current executable as a background daemon process.
 ///
-/// Re-executes the binary with `--_daemon_child` appended, redirecting
+/// Re-executes the binary with `--daemon-child` appended, redirecting
 /// stdout/stderr to the log file. The parent prints a success message and exits.
 pub fn daemonize(
     service: &str,
@@ -149,8 +197,8 @@ pub fn daemonize(
 
     let log_err = log.try_clone()?;
 
-    // Build command: re-exec with --_daemon_child flag
-    // Filter out --daemon/-d from args, add --_daemon_child
+    // Build command: re-exec with --daemon-child flag
+    // Filter out --daemon/-d from args, add --daemon-child
     let filtered_args: Vec<&String> = args
         .iter()
         .filter(|a| *a != "--daemon" && *a != "-d")
@@ -158,9 +206,10 @@ pub fn daemonize(
 
     let mut cmd = std::process::Command::new(&exe);
     cmd.args(&filtered_args);
-    cmd.arg("--_daemon_child");
-    cmd.arg("--_pid_file");
-    cmd.arg(pid_path.to_str().unwrap_or("/tmp/prisma.pid"));
+    cmd.arg("--daemon-child");
+    cmd.arg("--pid-file");
+    // Pass PID file path to child. Use OsStr so non-UTF-8 paths still work.
+    cmd.arg(&pid_path);
     cmd.stdout(log);
     cmd.stderr(log_err);
 
@@ -191,6 +240,12 @@ pub fn daemonize(
                 Ok(())
             });
         }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
     // Preserve the working directory so config-relative paths resolve correctly

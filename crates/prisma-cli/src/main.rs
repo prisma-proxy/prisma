@@ -1058,8 +1058,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Collect the original CLI arguments, filtering out --_daemon_child and --_pid_file.
-/// Used when the daemon parent needs to re-exec itself.
+/// Collect the original CLI arguments (skipping the binary name).
+/// Used when the daemon parent needs to re-exec itself with `--daemon-child`.
 fn collect_args_for_daemon() -> Vec<String> {
     std::env::args()
         .skip(1) // skip the binary name
