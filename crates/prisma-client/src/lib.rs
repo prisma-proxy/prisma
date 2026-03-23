@@ -254,7 +254,6 @@ async fn run_inner(
             let geoip = load_geoip_matcher(config.routing.geoip_path.as_deref(), has_geoip_rules);
             Router::with_geoip(config.routing.rules.clone(), geoip)
         }),
-        protocol_version: config.protocol_version.clone(),
         fingerprint: config.fingerprint.clone(),
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),

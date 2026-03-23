@@ -24,7 +24,6 @@ This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
 | `tls_server_name` | string? | -- | TLS SNI server name override (defaults to `server_addr` hostname) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN protocols |
-| `protocol_version` | string | `"v5"` | Protocol version (read-only, always `"v5"` in 2.0.0) |
 | `fingerprint` | string | `"chrome"` | uTLS fingerprint: `"chrome"` / `"firefox"` / `"safari"` / `"random"` / `"none"` |
 | `quic_version` | string | `"auto"` | QUIC version: `"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | Transport mode: `"auto"` or explicit name |

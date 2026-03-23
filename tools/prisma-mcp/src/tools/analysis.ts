@@ -318,7 +318,6 @@ const SERVER_OPTIONAL_FIELDS = [
   "congestion",
   "port_hopping",
   "dns_upstream",
-  "protocol_version",
   "prisma_tls",
   "traffic_shaping",
   "allow_transport_only_cipher",
@@ -374,7 +373,6 @@ const CLIENT_OPTIONAL_FIELDS = [
   "dns",
   "routing",
   "tun",
-  "protocol_version",
   "fingerprint",
   "quic_version",
   "transport_mode",
@@ -431,11 +429,6 @@ function validateServerConfig(
           errors.push(`authorized_clients[${i}]: missing \`auth_secret\``);
       }
     }
-  }
-  if (config.protocol_version !== undefined && config.protocol_version !== "v5") {
-    warnings.push(
-      `\`protocol_version\` is "${config.protocol_version}" but only "v5" is supported`,
-    );
   }
 }
 
@@ -498,10 +491,5 @@ function validateClientConfig(
         `\`transport\` is "${config.transport}" — known values: ${valid.join(", ")}`,
       );
     }
-  }
-  if (config.protocol_version !== undefined && config.protocol_version !== "v5") {
-    warnings.push(
-      `\`protocol_version\` is "${config.protocol_version}" but only "v5" is supported`,
-    );
   }
 }

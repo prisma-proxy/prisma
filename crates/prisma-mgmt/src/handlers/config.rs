@@ -95,7 +95,6 @@ pub struct ConfigResponse {
     pub authorized_clients_count: usize,
     pub logging_level: String,
     pub logging_format: String,
-    pub protocol_version: String,
     pub dns_upstream: String,
     pub allow_transport_only_cipher: bool,
     // Nested sections
@@ -138,7 +137,6 @@ pub async fn get_config(State(state): State<MgmtState>) -> Json<ConfigResponse> 
         authorized_clients_count: cfg.authorized_clients.len(),
         logging_level: cfg.logging.level.clone(),
         logging_format: cfg.logging.format.clone(),
-        protocol_version: cfg.protocol_version.clone(),
         dns_upstream: cfg.dns_upstream.clone(),
         allow_transport_only_cipher: cfg.allow_transport_only_cipher,
         performance: PerformanceInfo {
@@ -220,7 +218,6 @@ pub struct PatchConfigRequest {
     // Top-level
     pub listen_addr: Option<String>,
     pub quic_listen_addr: Option<String>,
-    // protocol_version removed (always "v5" since 0.9.0)
     pub dns_upstream: Option<String>,
     pub allow_transport_only_cipher: Option<bool>,
     // Logging
@@ -295,7 +292,6 @@ pub async fn patch_config(
     if let Some(addr) = req.quic_listen_addr {
         cfg.quic_listen_addr = addr;
     }
-    // protocol_version is always "v5" (read-only since 0.9.0); ignore attempts to change it
     if let Some(upstream) = req.dns_upstream {
         cfg.dns_upstream = upstream;
     }

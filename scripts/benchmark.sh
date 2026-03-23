@@ -142,7 +142,6 @@ generate_configs() {
     cat > "$RESULTS_DIR/server-quic.toml" <<EOF
 listen_addr = "127.0.0.1:18443"
 quic_listen_addr = "127.0.0.1:18443"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -162,7 +161,6 @@ socks5_listen_addr = "127.0.0.1:11080"
 server_addr = "127.0.0.1:18443"
 transport = "quic"
 skip_cert_verify = true
-protocol_version = "v4"
 quic_version = "v1"
 
 [identity]
@@ -173,7 +171,6 @@ EOF
     # --- Prisma TCP + TLS -------------------------------------------------
     cat > "$RESULTS_DIR/server-tcp.toml" <<EOF
 listen_addr = "127.0.0.1:18445"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -199,7 +196,6 @@ transport = "tcp"
 tls_on_tcp = true
 tls_server_name = "benchmark.local"
 skip_cert_verify = true
-protocol_version = "v4"
 
 [identity]
 client_id = "$CLIENT_ID"
@@ -210,7 +206,6 @@ EOF
     cat > "$RESULTS_DIR/server-shaped.toml" <<EOF
 listen_addr = "127.0.0.1:18444"
 quic_listen_addr = "127.0.0.1:18444"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -230,7 +225,6 @@ socks5_listen_addr = "127.0.0.1:11081"
 server_addr = "127.0.0.1:18444"
 transport = "quic"
 skip_cert_verify = true
-protocol_version = "v4"
 quic_version = "v1"
 
 [identity]
@@ -242,7 +236,6 @@ EOF
     cat > "$RESULTS_DIR/server-quic-aes.toml" <<EOF
 listen_addr = "127.0.0.1:18446"
 quic_listen_addr = "127.0.0.1:18446"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -263,7 +256,6 @@ server_addr = "127.0.0.1:18446"
 transport = "quic"
 cipher_suite = "aes-256-gcm"
 skip_cert_verify = true
-protocol_version = "v4"
 quic_version = "v1"
 
 [identity]
@@ -274,7 +266,6 @@ EOF
     # --- Prisma TCP+TLS + Transport-Only cipher -----------------------
     cat > "$RESULTS_DIR/server-transport-only.toml" <<EOF
 listen_addr = "127.0.0.1:18447"
-protocol_version = "v4"
 allow_transport_only_cipher = true
 
 [tls]
@@ -301,7 +292,6 @@ transport = "tcp"
 tls_on_tcp = true
 tls_server_name = "benchmark.local"
 skip_cert_verify = true
-protocol_version = "v4"
 transport_only_cipher = true
 
 [identity]
@@ -312,7 +302,6 @@ EOF
     # --- Prisma WebSocket + TLS (CDN-compatible) ----------------------
     cat > "$RESULTS_DIR/server-ws.toml" <<EOF
 listen_addr = "127.0.0.1:18449"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -343,7 +332,6 @@ transport = "ws"
 ws_url = "wss://127.0.0.1:18460/ws-tunnel"
 tls_server_name = "benchmark.local"
 skip_cert_verify = true
-protocol_version = "v4"
 
 [identity]
 client_id = "$CLIENT_ID"
@@ -353,7 +341,6 @@ EOF
     # --- Prisma TCP+TLS + bucket padding ------------------------------
     cat > "$RESULTS_DIR/server-bucket.toml" <<EOF
 listen_addr = "127.0.0.1:18450"
-protocol_version = "v4"
 
 [tls]
 cert_path = "$RESULTS_DIR/prisma-cert.pem"
@@ -380,7 +367,6 @@ transport = "tcp"
 tls_on_tcp = true
 tls_server_name = "benchmark.local"
 skip_cert_verify = true
-protocol_version = "v4"
 
 [identity]
 client_id = "$CLIENT_ID"

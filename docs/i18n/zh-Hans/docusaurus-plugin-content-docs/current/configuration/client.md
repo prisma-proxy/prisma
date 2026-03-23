@@ -24,7 +24,6 @@ sidebar_position: 2
 | `tls_on_tcp` | bool | `false` | 通过 TLS 包裹的 TCP 连接（须与服务端伪装设置匹配） |
 | `tls_server_name` | string? | -- | TLS SNI 服务器名称覆盖（默认使用 `server_addr` 的主机名） |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN 协议 |
-| `protocol_version` | string | `"v5"` | 协议版本（只读，2.0.0 中始终为 `"v5"`） |
 | `fingerprint` | string | `"chrome"` | uTLS 指纹：`"chrome"` / `"firefox"` / `"safari"` / `"random"` / `"none"` |
 | `quic_version` | string | `"auto"` | QUIC 版本：`"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | 传输模式：`"auto"` 或显式名称 |

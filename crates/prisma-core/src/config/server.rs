@@ -34,9 +34,6 @@ pub struct ServerConfig {
     /// Upstream DNS server for CMD_DNS_QUERY forwarding.
     #[serde(default = "default_dns_upstream")]
     pub dns_upstream: String,
-    /// Protocol version (always "v5"; read-only, kept for config file compatibility).
-    #[serde(default = "default_protocol_version")]
-    pub protocol_version: String,
     /// PrismaTLS configuration (replaces REALITY).
     #[serde(default)]
     pub prisma_tls: PrismaTlsConfig,
@@ -120,10 +117,6 @@ impl Default for ShadowTlsServerConfig {
 
 fn default_shadow_tls_listen_addr() -> String {
     "0.0.0.0:8444".into()
-}
-
-fn default_protocol_version() -> String {
-    "v5".into()
 }
 
 fn default_dns_upstream() -> String {

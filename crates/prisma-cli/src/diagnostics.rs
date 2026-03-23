@@ -75,7 +75,6 @@ fn build_proxy_context(
             &prisma_core::dns::DnsConfig::default(),
         ),
         router: Arc::new(prisma_core::router::Router::new(vec![])),
-        protocol_version: config.protocol_version.clone(),
         fingerprint: config.fingerprint.clone(),
         quic_version: config.quic_version.clone(),
         traffic_shaping: config.traffic_shaping.clone(),

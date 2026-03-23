@@ -320,7 +320,7 @@ export default function DevPage(): ReactNode {
           <p>TOML 格式。环境变量覆盖：<code>PRISMA_*</code>。完整字段列表请参阅英文版 — 配置键名相同。</p>
           <Heading as="h3">关键配置分组</Heading>
           <ul>
-            <li><strong>顶级</strong>: <code>listen_addr</code>、<code>quic_listen_addr</code>、<code>protocol_version</code></li>
+            <li><strong>顶级</strong>: <code>listen_addr</code>、<code>quic_listen_addr</code></li>
             <li><strong>[tls]</strong>: <code>cert_path</code>、<code>key_path</code></li>
             <li><strong>[[authorized_clients]]</strong>: <code>id</code>、<code>auth_secret</code>、<code>name</code>、<code>bandwidth_up/down</code>、<code>quota</code></li>
             <li><strong>[management_api]</strong>: <code>enabled</code>、<code>listen_addr</code>、<code>auth_token</code></li>

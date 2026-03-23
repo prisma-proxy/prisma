@@ -13,7 +13,6 @@ export interface WizardState {
   clientId: string;
   authSecret: string;
   prismaAuthSecret: string;
-  protocolVersion: "v5" | "v4";
   transportOnlyCipher: boolean;
 
   // Step 3 — Transport + sub-fields
@@ -86,7 +85,6 @@ export const DEFAULT_WIZARD: WizardState = {
   clientId: "",
   authSecret: "",
   prismaAuthSecret: "",
-  protocolVersion: "v5",
   transportOnlyCipher: false,
   transport: "quic",
   cipher: "chacha20-poly1305",
@@ -304,7 +302,6 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     // Transport — plain string, not an object
     transport: w.transport,
     cipher_suite: w.cipher,
-    protocol_version: w.protocolVersion,
     fingerprint: w.fingerprint,
     quic_version: w.quicVersion,
     transport_mode: w.transportMode,
@@ -480,7 +477,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     clientId: String(identity.client_id ?? ""),
     authSecret: String(identity.auth_secret ?? ""),
     prismaAuthSecret: String(c.prisma_auth_secret ?? ""),
-    protocolVersion: (c.protocol_version as "v5" | "v4") ?? "v5",
     transportOnlyCipher: Boolean(c.transport_only_cipher),
     transport: (c.transport as WizardState["transport"]) ?? "quic",
     cipher: String(c.cipher_suite ?? "chacha20-poly1305"),

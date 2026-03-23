@@ -17,7 +17,6 @@ sidebar_position: 1
 | `listen_addr` | string | `"0.0.0.0:8443"` | TCP 监听地址，用于直连和 TLS 包裹连接 |
 | `quic_listen_addr` | string | `"0.0.0.0:8443"` | QUIC/UDP 监听地址 |
 | `dns_upstream` | string | `"8.8.8.8:53"` | `CMD_DNS_QUERY` 转发的上游 DNS 服务器 |
-| `protocol_version` | string | `"v5"` | 协议版本（只读，2.0.0 中始终为 `"v5"`） |
 | `allow_transport_only_cipher` | bool | `false` | 允许客户端使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。 |
 | `config_watch` | bool | `false` | 监视配置文件变化并在运行时自动重载 |
 | `shutdown_drain_timeout_secs` | u64 | `30` | 优雅关闭时等待进行中连接的秒数 |

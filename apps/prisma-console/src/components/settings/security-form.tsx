@@ -105,10 +105,6 @@ export function SecurityForm({ config, tls, onSave, isLoading: saving }: Securit
               min={1}
             />
           </div>
-          <KeyValue
-            label={t("settings.protocolVersion")}
-            value={<span className="font-mono text-xs">{config.protocol_version || "\u2014"}</span>}
-          />
         </CardContent>
       </Card>
 

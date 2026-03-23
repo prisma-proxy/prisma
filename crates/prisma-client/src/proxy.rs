@@ -51,8 +51,6 @@ pub struct ProxyContext {
     pub dns_config: DnsConfig,
     pub dns_resolver: DnsResolver,
     pub router: Arc<Router>,
-    /// Protocol version (always "v5").
-    pub protocol_version: String,
     /// uTLS fingerprint profile for TLS ClientHello mimicry.
     pub fingerprint: String,
     /// QUIC version preference: "v2", "v1", or "auto".

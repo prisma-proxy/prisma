@@ -134,8 +134,7 @@ fn default_import_config() -> ClientConfig {
             "identity": { "client_id": "imported", "auth_secret": "0000000000000000000000000000000000000000000000000000000000000000" },
             "cipher_suite": "chacha20-poly1305",
             "transport": "tcp",
-            "skip_cert_verify": true,
-            "protocol_version": "v5"
+            "skip_cert_verify": true
         }"#,
     )
     .expect("default import config must parse")

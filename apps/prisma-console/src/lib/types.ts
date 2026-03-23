@@ -134,7 +134,6 @@ export interface ConfigResponse {
   authorized_clients_count: number;
   logging_level: string;
   logging_format: string;
-  protocol_version: string;
   dns_upstream: string;
   allow_transport_only_cipher: boolean;
   performance: PerformanceInfo;

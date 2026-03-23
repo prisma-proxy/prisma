@@ -5,9 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
 
@@ -81,22 +78,6 @@ export default function Step2Auth({ state, onChange }: Props) {
           value={state.prismaAuthSecret}
           onChange={(e) => onChange({ prismaAuthSecret: e.target.value })}
         />
-      </div>
-
-      <div className="space-y-1">
-        <Label>{t("wizard.protocolVersion")}</Label>
-        <Select
-          value={state.protocolVersion}
-          onValueChange={(v) => onChange({ protocolVersion: v as "v5" | "v4" })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="v5">{t("wizard.protocolV5")}</SelectItem>
-            <SelectItem value="v4">{t("wizard.protocolV4")}</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex items-center justify-between">

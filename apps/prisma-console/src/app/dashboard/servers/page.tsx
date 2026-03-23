@@ -94,7 +94,6 @@ export default function ServersPage() {
             {[
               { label: t("settings.listenAddr"),       value: config.listen_addr },
               { label: t("settings.quicListenAddr"),   value: config.quic_listen_addr },
-              { label: t("settings.protocolVersion"),  value: config.protocol_version },
               { label: t("settings.dnsUpstream"),      value: config.dns_upstream },
               { label: t("settings.maxConnections"),   value: config.performance.max_connections },
               { label: t("settings.connectionTimeout"), value: `${config.performance.connection_timeout_secs}s` },
