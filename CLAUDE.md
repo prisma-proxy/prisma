@@ -6,13 +6,20 @@ Encrypted proxy system built in Rust. Workspace version 1.7.0, edition 2021.
 
 | Crate | Role |
 |-------|------|
-| `prisma-core` | Shared library: crypto, protocol (PrismaVeil v5 + VMess/VLESS/Shadowsocks/Trojan compat), config, types, bandwidth, DNS, routing |
+| `prisma-core` | Shared library: crypto (PrismaVeil v5), protocol, config, types, bandwidth, DNS, routing |
 | `prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta + multi-protocol inbounds), relay, auth, camouflage |
 | `prisma-client` | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool |
-| `prisma-cli` | CLI binary (clap 4): server/client runners, management commands, web console |
+| `prisma-cli` | CLI binary (clap 4): server/client runners, management commands |
 | `prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |
 | `prisma-ffi` | C FFI shared library for GUI/mobile: lifecycle, profiles, QR, system proxy, auto-update |
-| `prisma-mcp` | MCP development server: workspace intelligence tools for AI agents |
+
+Other packages (not Cargo workspace members):
+| Package | Role |
+|---------|------|
+| `prisma-gui` | Tauri 2 + React 19 desktop app |
+| `prisma-console` | Next.js dashboard (independent version) |
+| `prisma-docs` | Docusaurus documentation site (EN + CN) |
+| `prisma-mcp` | MCP development server for AI agents |
 | `prisma-ios` | iOS app (Swift/SwiftUI, uses prisma-ffi via C bridge) |
 | `prisma-android` | Android app (Kotlin, uses prisma-ffi via JNI) |
 
@@ -30,44 +37,27 @@ cargo fmt --all -- --check              # Format check
 All workspace deps are declared in the root `Cargo.toml` under `[workspace.dependencies]`.
 Crates reference them with `dep.workspace = true`.
 
-## AI Agent Team System
+## AI Agent System
 
-Prisma uses a self-evolving AI agent team for autonomous development. Send demands in plain language — the system plans, implements, tests, versions, and commits automatically.
+Use `prisma-orchestrator` for any project work — it plans, executes, tests, versions, and commits.
 
-### Usage
-Just invoke `prisma-orchestrator` with any demand:
-- "add feature X" → analyzes, plans, implements, tests, bumps version, commits
-- "optimize Y" → profiles, identifies bottleneck, optimizes, benchmarks, ships
-- "release 1.0.0" → full audit, fix issues, bump, sync docs, commit + tag
-- "evolve the project" → reads memory, audits, prioritizes, implements top items
+### Agents (`.claude/agents/`)
 
-### Agent Registry
 | Agent | Role |
 |-------|------|
-| `prisma-orchestrator` | Autonomous brain — receives demands, coordinates everything |
-| `rust-architect` | Cross-crate Rust implementation |
-| `perf-engineer` | Hot path optimization, benchmarking |
-| `security-engineer` | Protocol, crypto, anti-detection |
-| `ux-engineer` | GUI, dashboard, CLI UX |
-| `platform-engineer` | FFI, mobile, cross-platform |
-| `qa-engineer` | Tests, coverage, CI/CD |
-| `docs-engineer` | Documentation sync |
-| `feature-validator` | Post-implementation validation |
+| `prisma-orchestrator` | Primary entry point — receives demands, coordinates everything |
+| `rust-engineer` | All Rust work: protocol, crypto, transport, routing, relay, security, performance |
+| `frontend-engineer` | GUI (Tauri/React), Console (Next.js), CLI UX, Docusaurus docs |
+| `platform-engineer` | FFI safety, mobile (iOS/Android), TUN, system proxy, cross-platform |
+| `qa-engineer` | Tests, validation, benchmarks, CI/CD, quality gates |
 
-### Skills (domain knowledge)
-- `.claude/skills/prisma-rust.md` — Rust architecture, conventions, crate map
-- `.claude/skills/prisma-perf.md` — Performance engineering, benchmarking
-- `.claude/skills/prisma-security.md` — Security, protocol, anti-detection
-- `.claude/skills/prisma-ux.md` — UI/UX, Tauri/React, Next.js
-- `.claude/skills/prisma-platform.md` — FFI, mobile, cross-platform
-- `.claude/skills/prisma-qa.md` — Testing, CI/CD, coverage
-- `.claude/skills/prisma-docs.md` — Documentation sync
-- `.claude/skills/prisma-workflow.md` — Build, test, version, commit
-- `.claude/skills/prisma-orchestrator.md` — Orchestration protocol
-- `.claude/skills/prisma-evolve.md` — Self-evolution protocol
+### Skills (`.claude/skills/`)
 
-### Self-Evolution
-The system improves itself after each task — updating skills, agents, and memory based on what it learned. See `.claude/agents/prisma-agent-teams.md` for the full architecture.
+| Skill | Purpose |
+|-------|---------|
+| `prisma-workflow.md` | Shared procedures: simplify, test/format, version bump, commit |
+| `prisma-crate-map.md` | Module reference for all 6 crates with file paths and extension recipes |
+| `prisma-docs-sync.md` | Version sync rules, README audit, Docusaurus sync |
 
 ## MCP Server (prisma-dev)
 
