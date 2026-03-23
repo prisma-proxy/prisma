@@ -118,27 +118,5 @@ case "$TARGET_VALUE" in
         ;;
 esac
 
-# Copy libraries to Android project jniLibs if it exists
-ANDROID_APP_DIR="prisma-android/app/src/main/jniLibs"
-if [ -d "prisma-android" ]; then
-    echo ""
-    echo "=== Copying to Android project jniLibs ==="
-    mkdir -p "$ANDROID_APP_DIR/arm64-v8a"
-    mkdir -p "$ANDROID_APP_DIR/armeabi-v7a"
-    mkdir -p "$ANDROID_APP_DIR/x86_64"
-
-    [ -f "target/aarch64-linux-android/$PROFILE/libprisma_ffi.so" ] && \
-        cp "target/aarch64-linux-android/$PROFILE/libprisma_ffi.so" "$ANDROID_APP_DIR/arm64-v8a/" && \
-        echo "  -> $ANDROID_APP_DIR/arm64-v8a/libprisma_ffi.so"
-
-    [ -f "target/armv7-linux-androideabi/$PROFILE/libprisma_ffi.so" ] && \
-        cp "target/armv7-linux-androideabi/$PROFILE/libprisma_ffi.so" "$ANDROID_APP_DIR/armeabi-v7a/" && \
-        echo "  -> $ANDROID_APP_DIR/armeabi-v7a/libprisma_ffi.so"
-
-    [ -f "target/x86_64-linux-android/$PROFILE/libprisma_ffi.so" ] && \
-        cp "target/x86_64-linux-android/$PROFILE/libprisma_ffi.so" "$ANDROID_APP_DIR/x86_64/" && \
-        echo "  -> $ANDROID_APP_DIR/x86_64/libprisma_ffi.so"
-fi
-
 echo ""
 echo "=== Android build complete ==="

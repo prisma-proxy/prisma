@@ -60,20 +60,4 @@ else
 fi
 
 echo ""
-
-# 4. Summary of workspace dependency versions
-echo "--- Workspace Dependency Summary ---"
-echo "Key dependencies from root Cargo.toml:"
-echo "  tokio:              1.x"
-echo "  quinn:              0.11"
-echo "  rustls:             0.23"
-echo "  chacha20poly1305:   0.10"
-echo "  aes-gcm:            0.10"
-echo "  x25519-dalek:       2.x"
-echo "  ml-kem:             0.2"
-echo "  axum:               0.8"
-echo "  tonic:              0.13"
-echo "  serde:              1.x"
-echo ""
-
 echo -e "${GREEN}Audit complete.${NC}"
