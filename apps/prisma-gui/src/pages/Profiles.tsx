@@ -78,6 +78,7 @@ export default function Profiles() {
   const [editInitial,  setEditInitial]  = useState<WizardState | undefined>();
   const [editingId,    setEditingId]    = useState<string | null>(null);
   const [editingCreatedAt, setEditingCreatedAt] = useState<string>("");
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
 
   // Share dialog
   const [shareOpen, setShareOpen] = useState(false);
@@ -243,6 +244,8 @@ export default function Profiles() {
       tags,
       config,
       created_at: editingCreatedAt || new Date().toISOString(),
+      ...(editingProfile?.subscription_url ? { subscription_url: editingProfile.subscription_url } : {}),
+      ...(editingProfile?.last_updated ? { last_updated: editingProfile.last_updated } : {}),
     };
     await api.saveProfile(JSON.stringify(profile));
     await reload();
@@ -251,12 +254,14 @@ export default function Profiles() {
     setEditInitial(undefined);
     setEditingId(null);
     setEditingCreatedAt("");
+    setEditingProfile(null);
   }
 
   function openAdd() {
     setEditInitial(undefined);
     setEditingId(null);
     setEditingCreatedAt("");
+    setEditingProfile(null);
     setWizardOpen(true);
   }
 
@@ -264,6 +269,7 @@ export default function Profiles() {
     setEditInitial(parseProfileToWizard(p.name, p.config, p.tags));
     setEditingId(p.id);
     setEditingCreatedAt(p.created_at);
+    setEditingProfile(p);
     setWizardOpen(true);
   }
 
@@ -615,7 +621,7 @@ export default function Profiles() {
       {/* Profile wizard */}
       <ProfileWizard
         open={wizardOpen}
-        onOpenChange={(v) => { setWizardOpen(v); if (!v) { setEditInitial(undefined); setEditingId(null); setEditingCreatedAt(""); } }}
+        onOpenChange={(v) => { setWizardOpen(v); if (!v) { setEditInitial(undefined); setEditingId(null); setEditingCreatedAt(""); setEditingProfile(null); } }}
         initial={editInitial}
         onSave={handleSave}
       />

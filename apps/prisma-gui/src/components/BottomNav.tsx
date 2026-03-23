@@ -1,19 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, List, Network, BarChart3, Settings, Globe, Import } from "lucide-react";
+import { Home, List, Network, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function BottomNav() {
   const { t } = useTranslation();
 
   const links = [
-    { to: "/",         icon: Home,       label: t("nav.home") },
-    { to: "/profiles", icon: List,       label: t("nav.profiles") },
-    { to: "/subscriptions", icon: Globe, label: t("nav.subscriptions") },
-    { to: "/import",   icon: Import,     label: t("nav.import") },
-    { to: "/connections", icon: Network, label: t("nav.connections") },
-    { to: "/analytics", icon: BarChart3, label: t("nav.analytics") },
-    { to: "/settings", icon: Settings,   label: t("nav.settings") },
+    { to: "/",           icon: Home,      label: t("nav.home") },
+    { to: "/profiles",   icon: List,      label: t("nav.profiles") },
+    { to: "/connections", icon: Network,  label: t("nav.connections") },
+    { to: "/analytics",  icon: BarChart3, label: t("nav.analytics") },
+    { to: "/settings",   icon: Settings,  label: t("nav.settings") },
   ];
 
   return (
@@ -25,12 +23,13 @@ export default function BottomNav() {
           end={to === "/"}
           className={({ isActive }) =>
             cn(
-              "flex flex-1 flex-col items-center gap-1 py-2 text-muted-foreground hover:text-foreground transition-colors text-[10px]",
+              "flex flex-1 flex-col items-center gap-1 py-3 text-muted-foreground hover:text-foreground transition-colors active:scale-95 transition-transform text-[10px]",
+              "min-h-[44px]",
               isActive && "text-foreground",
             )
           }
         >
-          <Icon size={22} />
+          <Icon size={24} />
           <span>{label}</span>
         </NavLink>
       ))}

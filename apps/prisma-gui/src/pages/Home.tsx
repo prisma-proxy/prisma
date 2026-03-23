@@ -154,7 +154,7 @@ export default function Home() {
 
       {/* Session stats */}
       {connected && stats && (
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <ArrowDown size={14} className="text-green-400 mb-0.5" />

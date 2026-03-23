@@ -21,7 +21,7 @@ tauri          = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell        = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-os           = "2"
-tauri-plugin-autostart    = "2"
+tauri-plugin-autostart    = { version = "2", optional = true }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog   = "2"
 tauri-plugin-fs       = "2"
@@ -30,3 +30,7 @@ serde_json = "1"
 prisma-ffi = { path = "../../../crates/prisma-ffi" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "socks"] }
 tokio   = { version = "1", features = ["rt", "fs"] }
+
+[features]
+default = ["desktop"]
+desktop = ["tauri-plugin-autostart"]

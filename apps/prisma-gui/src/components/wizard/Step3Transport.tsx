@@ -23,7 +23,6 @@ const TRANSPORTS: { value: WizardState["transport"]; label: string }[] = [
   { value: "xhttp",      label: "XHTTP" },
   { value: "xporta",     label: "XPorta" },
   { value: "tcp",        label: "TCP" },
-  { value: "shadow-tls", label: "ShadowTLS v3" },
   { value: "wireguard",  label: "WireGuard" },
 ];
 
@@ -256,25 +255,6 @@ export default function Step3Transport({ state, onChange }: Props) {
                 <SelectItem value="none">{t("common.none")}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-      )}
-
-      {/* ShadowTLS v3 sub-fields */}
-      {state.transport === "shadow-tls" && (
-        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.shadowTlsSettings")}</p>
-          <div className="space-y-1">
-            <Label>{t("wizard.shadowTlsServerAddr")}</Label>
-            <Input value={state.shadowTlsServerAddr} onChange={(e) => onChange({ shadowTlsServerAddr: e.target.value })} placeholder="1.2.3.4:443" />
-          </div>
-          <div className="space-y-1">
-            <Label>{t("wizard.shadowTlsPassword")}</Label>
-            <Input type="password" value={state.shadowTlsPassword} onChange={(e) => onChange({ shadowTlsPassword: e.target.value })} />
-          </div>
-          <div className="space-y-1">
-            <Label>{t("wizard.shadowTlsSni")}</Label>
-            <Input value={state.shadowTlsSni} onChange={(e) => onChange({ shadowTlsSni: e.target.value })} placeholder="www.example.com" />
           </div>
         </div>
       )}
