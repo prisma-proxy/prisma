@@ -51,6 +51,21 @@ The app has **10 pages** accessible via sidebar navigation (collapsible) or bott
 | **Speed Test** | Run speed tests through the proxy with configurable server (Cloudflare/Google) and duration (5-60s). Measures download, upload, and latency. Persistent test history with list and chart views, summary statistics (average/best) |
 | **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install |
 
+### Subscription flow
+
+The subscription system automatically fetches and updates server profiles from remote URLs:
+
+```mermaid
+flowchart TD
+    URL[Subscription URL] --> FETCH[HTTP Fetch]
+    FETCH --> DECODE[Base64 Decode]
+    DECODE --> PARSE[Parse Protocol Links]
+    PARSE --> CONV[Convert to Prisma Config]
+    CONV --> SAVE[Save as Profile]
+    SAVE --> AUTO[Auto-Update Timer]
+    AUTO --> |interval elapsed| FETCH
+```
+
 ### System tray integration
 
 On desktop platforms, prisma-gui displays a **system tray icon** with the following features:

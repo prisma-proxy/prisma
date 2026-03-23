@@ -63,6 +63,32 @@ sequenceDiagram
 
 ---
 
+## Client Architecture
+
+```mermaid
+flowchart LR
+    S5[SOCKS5 Inbound] --> TS[Transport Selector]
+    HTTP[HTTP Proxy] --> TS
+    TUN[TUN Device] --> TS
+    TS --> |QUIC| Q[QUIC Transport]
+    TS --> |WS| WS[WebSocket]
+    TS --> |gRPC| G[gRPC]
+    TS --> |XHTTP| XH[XHTTP]
+    TS --> |XPorta| XP[XPorta]
+    TS --> |ShadowTLS| ST[ShadowTLS v3]
+    TS --> |WireGuard| WG[WireGuard]
+    Q --> ENC[PrismaVeil v5 Encryption]
+    WS --> ENC
+    G --> ENC
+    XH --> ENC
+    XP --> ENC
+    ST --> ENC
+    WG --> ENC
+    ENC --> SRV[Prisma Server]
+```
+
+---
+
 ## Transport Selection
 
 | Transport | Description |

@@ -6,6 +6,19 @@ sidebar_position: 4
 
 常见部署场景的即用配置模板。每个示例包含完整的服务端和客户端配置，以及优缺点和推荐使用场景。
 
+使用此流程图找到适合您网络的部署方案：
+
+```mermaid
+flowchart LR
+    Start --> Q1{Behind CDN?}
+    Q1 -->|No| Q2{UDP blocked?}
+    Q1 -->|Yes| Q3{Need stealth?}
+    Q2 -->|No| S1[Scenario 1: Direct QUIC]
+    Q2 -->|Yes| S2[Scenario 2: TCP + TLS]
+    Q3 -->|Yes| S4[Scenario 4: XHTTP stream-one]
+    Q3 -->|No| S3[Scenario 3: WebSocket CDN]
+```
+
 ## 1. 基础 — 直连 QUIC
 
 最简单的部署。客户端通过 QUIC (UDP) 直接连接服务器。

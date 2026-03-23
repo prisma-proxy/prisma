@@ -382,6 +382,23 @@ format = "pretty"
 
 ## 传输选择
 
+使用此决策树为您的网络环境选择合适的传输方式：
+
+```mermaid
+flowchart TD
+    A[Choose Transport] --> B{UDP available?}
+    B -->|Yes| C{Need CDN?}
+    B -->|No| D{Need CDN?}
+    C -->|No| E[QUIC - fastest]
+    C -->|Yes| F[XPorta - CDN+UDP]
+    D -->|No| G{DPI concern?}
+    D -->|Yes| H{Stealth needed?}
+    G -->|Yes| I[ShadowTLS v3]
+    G -->|No| J[TCP]
+    H -->|Yes| K[XHTTP stream-one]
+    H -->|No| L[WebSocket]
+```
+
 ### QUIC（默认）
 
 QUIC 基于 UDP 提供多路复用流传输，内置 TLS 1.3。这是大多数部署的推荐传输方式。

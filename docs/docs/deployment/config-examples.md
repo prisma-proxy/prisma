@@ -6,6 +6,19 @@ sidebar_position: 4
 
 Ready-to-use configuration templates for common deployment scenarios. Each example includes complete server and client configs with pros, cons, and recommended use cases.
 
+Use this flowchart to find the right deployment scenario for your network:
+
+```mermaid
+flowchart LR
+    Start --> Q1{Behind CDN?}
+    Q1 -->|No| Q2{UDP blocked?}
+    Q1 -->|Yes| Q3{Need stealth?}
+    Q2 -->|No| S1[Scenario 1: Direct QUIC]
+    Q2 -->|Yes| S2[Scenario 2: TCP + TLS]
+    Q3 -->|Yes| S4[Scenario 4: XHTTP stream-one]
+    Q3 -->|No| S3[Scenario 3: WebSocket CDN]
+```
+
 ## 1. Basic — Direct QUIC Connection
 
 The simplest setup. Client connects directly to the server over QUIC (UDP).
