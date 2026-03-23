@@ -20,8 +20,8 @@ Other packages (not Cargo workspace members):
 | `prisma-console` | Next.js dashboard (independent version) |
 | `prisma-docs` | Docusaurus documentation site (EN + CN) |
 | `prisma-mcp` | MCP development server for AI agents |
-| `prisma-ios` | iOS app (Swift/SwiftUI, uses prisma-ffi via C bridge) |
-| `prisma-android` | Android app (Kotlin, uses prisma-ffi via JNI) |
+
+Mobile: `prisma-gui` uses Tauri 2 mobile targets (iOS/Android) — no separate native apps.
 
 ## Key Commands
 
@@ -48,7 +48,7 @@ Use `prisma-orchestrator` for any project work — it plans, executes, tests, ve
 | `prisma-orchestrator` | Primary entry point — receives demands, coordinates everything |
 | `rust-engineer` | All Rust work: protocol, crypto, transport, routing, relay, security, performance |
 | `frontend-engineer` | GUI (Tauri/React), Console (Next.js), CLI UX, Docusaurus docs |
-| `platform-engineer` | FFI safety, mobile (iOS/Android), TUN, system proxy, cross-platform |
+| `platform-engineer` | FFI safety, Tauri 2 mobile, TUN, system proxy, cross-platform |
 | `qa-engineer` | Tests, validation, benchmarks, CI/CD, quality gates |
 
 ### Skills (`.claude/skills/`)

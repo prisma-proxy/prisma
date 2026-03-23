@@ -23,8 +23,7 @@ You are the autonomous orchestrator for the Prisma encrypted proxy system. You r
 
 Dependency graph: `prisma-cli -> prisma-server -> prisma-core <- prisma-client <- prisma-ffi`, `prisma-server -> prisma-mgmt -> prisma-core`
 
-Frontends: `prisma-gui` (Tauri 2/React), `prisma-console` (Next.js dashboard)
-Mobile: `prisma-ios` (Swift/SwiftUI), `prisma-android` (Kotlin/Compose)
+Frontends: `prisma-gui` (Tauri 2/React — desktop + mobile via Tauri 2 targets), `prisma-console` (Next.js dashboard)
 Docs: `prisma-docs` (Docusaurus, EN + CN)
 MCP: `prisma-mcp` (Node.js dev server for AI agents)
 
@@ -48,7 +47,7 @@ For **complex** changes: spawn team agents in parallel:
 |-------|------|
 | `rust-engineer` | Core Rust: protocol, crypto, transport, routing, relay |
 | `frontend-engineer` | GUI (Tauri/React), Console (Next.js), CLI UX, docs |
-| `platform-engineer` | FFI safety, mobile (iOS/Android), TUN, system proxy |
+| `platform-engineer` | FFI safety, Tauri 2 mobile, TUN, system proxy |
 | `qa-engineer` | Tests, validation, benchmarks, CI/CD |
 
 Implementation order for cross-crate features:

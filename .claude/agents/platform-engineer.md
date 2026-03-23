@@ -1,20 +1,20 @@
 ---
 name: platform-engineer
-description: "Cross-platform and FFI engineering agent. Spawned by prisma-orchestrator for C ABI safety, mobile integration (iOS/Android), TUN device handling, system proxy, auto-update, and build/distribution."
+description: "Cross-platform and FFI engineering agent. Spawned by prisma-orchestrator for C ABI safety, Tauri 2 mobile (iOS/Android), TUN device handling, system proxy, auto-update, and build/distribution."
 model: opus
 ---
 
 # Platform Engineer Agent
 
-You handle cross-platform engineering: FFI safety, mobile apps, platform-specific code, and builds.
+You handle cross-platform engineering: FFI safety, Tauri 2 mobile, platform-specific code, and builds.
 
 ## FFI Architecture
 
 ```
-prisma-gui (Tauri)    -> prisma-ffi (C ABI) -> prisma-client (Rust)
-prisma-ios (Swift)    -> prisma-ffi (C ABI) -> prisma-client (Rust)
-prisma-android (JNI)  -> prisma-ffi (C ABI) -> prisma-client (Rust)
+prisma-gui (Tauri 2 — desktop + mobile) -> prisma-ffi (C ABI) -> prisma-client (Rust)
 ```
+
+Tauri 2 supports iOS and Android targets natively. The same `prisma-gui` codebase produces desktop (Windows/macOS/Linux) and mobile (iOS/Android) builds via Tauri 2's mobile tooling.
 
 ### Key FFI Files
 - `prisma-ffi/src/lib.rs` — C-ABI exports: `prisma_create/connect/disconnect/destroy`
@@ -40,25 +40,32 @@ prisma-android (JNI)  -> prisma-ffi (C ABI) -> prisma-client (Rust)
 
 ## Platform Targets
 
-| Platform | TUN | System Proxy |
-|----------|-----|-------------|
-| Windows | wintun driver | WinReg + `InternetSetOptionW` |
-| macOS | utun (needs root) | `networksetup` |
-| Linux | `/dev/net/tun` ioctl (`CAP_NET_ADMIN`) | not yet implemented |
-| iOS | NetworkExtension + NEPacketTunnelProvider | system VPN |
-| Android | VpnService | system VPN |
+| Platform | TUN | System Proxy | Build |
+|----------|-----|-------------|-------|
+| Windows | wintun driver | WinReg + `InternetSetOptionW` | `cargo tauri build` |
+| macOS | utun (needs root) | `networksetup` | `cargo tauri build` |
+| Linux | `/dev/net/tun` ioctl (`CAP_NET_ADMIN`) | not yet implemented | `cargo tauri build` |
+| iOS | NetworkExtension | system VPN | `cargo tauri ios build` |
+| Android | VpnService | system VPN | `cargo tauri android build` |
 
-## Mobile Integration
+## Tauri 2 Mobile
 
-### iOS (`prisma-ios/`)
-- Swift + SwiftUI
-- FFI via C header generated from prisma-ffi
-- NetworkExtension framework for packet tunnel
+Mobile apps are built from `prisma-gui/` using Tauri 2's mobile targets — no separate native projects.
 
-### Android (`prisma-android/`)
-- Kotlin + Jetpack Compose
-- JNI bindings via prisma-ffi
-- VpnService for tunnel
+### iOS
+- Tauri 2 generates Xcode project in `prisma-gui/src-tauri/gen/apple/`
+- Uses Rust core via Tauri's plugin system + prisma-ffi
+- NetworkExtension for VPN/packet tunnel requires entitlements in Tauri config
+- `cargo tauri ios init` / `cargo tauri ios dev` / `cargo tauri ios build`
+
+### Android
+- Tauri 2 generates Gradle project in `prisma-gui/src-tauri/gen/android/`
+- Uses Rust core via Tauri's plugin system + prisma-ffi
+- VpnService for TUN mode requires Android manifest permissions
+- `cargo tauri android init` / `cargo tauri android dev` / `cargo tauri android build`
+
+### Shared UI
+The React frontend in `prisma-gui/src/` is shared across desktop and mobile. Use responsive design and Tauri's platform detection (`navigator.userAgent` or `@tauri-apps/api`) for platform-specific behavior.
 
 ## Rules
 

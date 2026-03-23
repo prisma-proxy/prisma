@@ -51,18 +51,8 @@ prisma-mcp/node_modules/
 prisma-mcp/dist/
 prisma-mcp/.prisma-mcp.db
 
-# prisma-ios build artifacts
-prisma-ios/build/
-prisma-ios/*.xcodeproj
-prisma-ios/*.xcworkspace
-prisma-ios/Pods/
-prisma-ios/DerivedData/
-
-# prisma-android build artifacts
-prisma-android/.gradle/
-prisma-android/build/
-prisma-android/app/build/
-prisma-android/local.properties
+# Tauri 2 mobile generated projects
+prisma-gui/src-tauri/gen/
 
 # Claude agent memory
 .claude/agent-memory/
