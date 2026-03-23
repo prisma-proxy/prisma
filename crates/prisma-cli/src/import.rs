@@ -96,10 +96,10 @@ fn print_server(server: &ImportedServer, json_output: bool) -> anyhow::Result<()
         if let Some(ref sni) = server.config.tls_server_name {
             println!("  SNI:        {}", sni);
         }
-        if let Some(ref ws) = server.config.ws_url {
+        if let Some(ref ws) = server.config.ws.url {
             println!("  WS URL:     {}", ws);
         }
-        if let Some(ref grpc) = server.config.grpc_url {
+        if let Some(ref grpc) = server.config.grpc.url {
             println!("  gRPC URL:   {}", grpc);
         }
     }

@@ -189,13 +189,13 @@ async fn run_inner(
     );
 
     if use_ws {
-        info!(ws_url = ?config.ws_url, "WebSocket transport enabled");
+        info!(ws_url = ?config.ws.url, "WebSocket transport enabled");
     }
     if use_grpc {
-        info!(grpc_url = ?config.grpc_url, "gRPC transport enabled");
+        info!(grpc_url = ?config.grpc.url, "gRPC transport enabled");
     }
     if use_xhttp {
-        info!(xhttp_mode = ?config.xhttp_mode, "XHTTP transport enabled");
+        info!(xhttp_mode = ?config.xhttp.mode, "XHTTP transport enabled");
     }
     if use_xporta {
         info!("XPorta transport enabled");
@@ -221,16 +221,11 @@ async fn run_inner(
         alpn_protocols: config.alpn_protocols.clone(),
         tls_server_name: config.tls_server_name.clone(),
         use_ws,
-        ws_url: config.ws_url.clone(),
-        ws_extra_headers: config.ws_extra_headers.clone(),
+        ws: config.ws.clone(),
         use_grpc,
-        grpc_url: config.grpc_url.clone(),
+        grpc: config.grpc.clone(),
         use_xhttp,
-        xhttp_mode: config.xhttp_mode.clone(),
-        xhttp_stream_url: config.xhttp_stream_url.clone(),
-        xhttp_upload_url: config.xhttp_upload_url.clone(),
-        xhttp_download_url: config.xhttp_download_url.clone(),
-        xhttp_extra_headers: config.xhttp_extra_headers.clone(),
+        xhttp: config.xhttp.clone(),
         use_xporta,
         xporta_config: config.xporta.clone(),
         user_agent: config.user_agent.clone(),

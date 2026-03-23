@@ -14,7 +14,10 @@ use crate::connector::{self, TransportStream};
 use crate::dns_resolver::DnsResolver;
 use crate::metrics::ClientMetrics;
 use crate::xporta_stream;
-use prisma_core::config::client::{ShadowTlsClientConfig, XPortaClientConfig};
+use prisma_core::config::client::{
+    GrpcTransportConfig, ShadowTlsClientConfig, WsTransportConfig, XPortaClientConfig,
+    XhttpTransportConfig,
+};
 use prisma_core::xporta::types::XPortaEncoding;
 
 /// Shared configuration for all proxy sessions (SOCKS5 and HTTP).
@@ -30,16 +33,11 @@ pub struct ProxyContext {
     pub alpn_protocols: Vec<String>,
     pub tls_server_name: Option<String>,
     pub use_ws: bool,
-    pub ws_url: Option<String>,
-    pub ws_extra_headers: Vec<(String, String)>,
+    pub ws: WsTransportConfig,
     pub use_grpc: bool,
-    pub grpc_url: Option<String>,
+    pub grpc: GrpcTransportConfig,
     pub use_xhttp: bool,
-    pub xhttp_mode: Option<String>,
-    pub xhttp_stream_url: Option<String>,
-    pub xhttp_upload_url: Option<String>,
-    pub xhttp_download_url: Option<String>,
-    pub xhttp_extra_headers: Vec<(String, String)>,
+    pub xhttp: XhttpTransportConfig,
     pub use_xporta: bool,
     pub xporta_config: Option<XPortaClientConfig>,
     pub user_agent: Option<String>,
@@ -160,22 +158,23 @@ impl ProxyContext {
             Ok(TransportStream::XPorta(stream))
         } else if self.use_xhttp {
             let stream_url = self
-                .xhttp_stream_url
+                .xhttp
+                .stream_url
                 .as_deref()
                 .unwrap_or("https://localhost/api/v1/stream");
             connector::connect_xhttp(
                 stream_url,
-                &self.xhttp_extra_headers,
+                &self.xhttp.extra_headers,
                 self.user_agent.as_deref(),
                 self.referer.as_deref(),
                 self.skip_cert_verify,
             )
             .await
         } else if self.use_ws {
-            let ws_url = self.ws_url.as_deref().unwrap_or("ws://localhost");
-            connector::connect_ws(ws_url, self.skip_cert_verify, &self.ws_extra_headers).await
+            let ws_url = self.ws.url.as_deref().unwrap_or("ws://localhost");
+            connector::connect_ws(ws_url, self.skip_cert_verify, &self.ws.extra_headers).await
         } else if self.use_grpc {
-            let grpc_url = self.grpc_url.as_deref().unwrap_or("http://localhost");
+            let grpc_url = self.grpc.url.as_deref().unwrap_or("http://localhost");
             connector::connect_grpc(grpc_url).await
         } else if self.use_prisma_tls {
             // PrismaTLS: TCP+TLS with fingerprint-aware ClientHello

@@ -318,45 +318,45 @@ pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> 
     }
 
     // WS transport validation
-    if config.transport == "ws" && config.ws_url.is_none() {
+    if config.transport == "ws" && config.ws.url.is_none() {
         return Err(ConfigError::ValidationFailed(
-            "transport = \"ws\" requires ws_url".into(),
+            "transport = \"ws\" requires ws.url".into(),
         ));
     }
 
     // gRPC transport validation
-    if config.transport == "grpc" && config.grpc_url.is_none() {
+    if config.transport == "grpc" && config.grpc.url.is_none() {
         return Err(ConfigError::ValidationFailed(
-            "transport = \"grpc\" requires grpc_url".into(),
+            "transport = \"grpc\" requires grpc.url".into(),
         ));
     }
 
     // XHTTP transport validation
     if config.transport == "xhttp" {
-        if config.xhttp_mode.is_none() {
+        if config.xhttp.mode.is_none() {
             return Err(ConfigError::ValidationFailed(
-                "transport = \"xhttp\" requires xhttp_mode".into(),
+                "transport = \"xhttp\" requires xhttp.mode".into(),
             ));
         }
         // SAFETY: is_none() is checked above and returns early.
-        let mode = config.xhttp_mode.as_deref().expect("checked above");
+        let mode = config.xhttp.mode.as_deref().expect("checked above");
         let valid_modes = ["packet-up", "stream-up", "stream-one"];
         if !valid_modes.contains(&mode) {
             return Err(ConfigError::ValidationFailed(format!(
-                "xhttp_mode must be one of: {:?}",
+                "xhttp.mode must be one of: {:?}",
                 valid_modes
             )));
         }
-        if mode == "stream-one" && config.xhttp_stream_url.is_none() {
+        if mode == "stream-one" && config.xhttp.stream_url.is_none() {
             return Err(ConfigError::ValidationFailed(
-                "xhttp_mode = \"stream-one\" requires xhttp_stream_url".into(),
+                "xhttp.mode = \"stream-one\" requires xhttp.stream_url".into(),
             ));
         }
         if (mode == "packet-up" || mode == "stream-up")
-            && (config.xhttp_upload_url.is_none() || config.xhttp_download_url.is_none())
+            && (config.xhttp.upload_url.is_none() || config.xhttp.download_url.is_none())
         {
             return Err(ConfigError::ValidationFailed(
-                "xhttp_mode \"packet-up\" or \"stream-up\" requires xhttp_upload_url and xhttp_download_url".into(),
+                "xhttp.mode \"packet-up\" or \"stream-up\" requires xhttp.upload_url and xhttp.download_url".into(),
             ));
         }
     }

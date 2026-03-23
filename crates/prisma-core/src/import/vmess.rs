@@ -163,17 +163,17 @@ pub fn parse(uri: &str) -> Result<ImportedServer, ConfigError> {
                 .filter(|s| !s.is_empty())
                 .unwrap_or(&host);
             let ws_path = vmess.path.as_deref().unwrap_or("/");
-            config.ws_url = Some(format!("{}://{}:{}{}", ws_scheme, ws_host, port, ws_path));
+            config.ws.url = Some(format!("{}://{}:{}{}", ws_scheme, ws_host, port, ws_path));
             if let Some(ref h) = vmess.host {
                 if !h.is_empty() {
-                    config.ws_host = Some(h.clone());
+                    config.ws.host = Some(h.clone());
                 }
             }
         }
         "grpc" => {
             let grpc_scheme = if use_tls { "https" } else { "http" };
             let service_name = vmess.path.as_deref().unwrap_or("GunService/Tun");
-            config.grpc_url = Some(format!(
+            config.grpc.url = Some(format!(
                 "{}://{}:{}/{}",
                 grpc_scheme, host, port, service_name
             ));
@@ -287,8 +287,8 @@ mod tests {
         }"#;
         let result = parse(&make_vmess_uri(json)).unwrap();
         assert_eq!(result.config.transport, "ws");
-        assert!(result.config.ws_url.as_ref().unwrap().contains("wss://"));
-        assert!(result.config.ws_url.as_ref().unwrap().contains("/ws-path"));
+        assert!(result.config.ws.url.as_ref().unwrap().contains("wss://"));
+        assert!(result.config.ws.url.as_ref().unwrap().contains("/ws-path"));
         assert_eq!(result.config.cipher_suite, "chacha20-poly1305");
     }
 
@@ -306,7 +306,7 @@ mod tests {
         }"#;
         let result = parse(&make_vmess_uri(json)).unwrap();
         assert_eq!(result.config.transport, "grpc");
-        assert!(result.config.grpc_url.is_some());
+        assert!(result.config.grpc.url.is_some());
     }
 
     #[test]

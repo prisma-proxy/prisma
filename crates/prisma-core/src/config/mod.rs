@@ -2,11 +2,40 @@ pub mod client;
 pub mod server;
 pub mod validation;
 
+use serde::{Deserialize, Serialize};
+
+use crate::error::ConfigError;
+
 pub(crate) fn default_alpn() -> Vec<String> {
     vec!["h2".into(), "http/1.1".into()]
 }
 
-use crate::error::ConfigError;
+// ── Shared configuration types ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    #[serde(default = "default_level")]
+    pub level: String,
+    #[serde(default = "default_format")]
+    pub format: String,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: default_level(),
+            format: default_format(),
+        }
+    }
+}
+
+fn default_level() -> String {
+    "info".into()
+}
+
+fn default_format() -> String {
+    "pretty".into()
+}
 
 /// Load server config from file path with layered overrides:
 /// defaults → TOML file → env vars (PRISMA_*)

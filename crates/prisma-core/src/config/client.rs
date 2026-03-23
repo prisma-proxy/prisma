@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::server::LoggingConfig;
+use super::LoggingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
@@ -28,40 +28,21 @@ pub struct ClientConfig {
     pub alpn_protocols: Vec<String>,
     #[serde(default)]
     pub tls_server_name: Option<String>,
+    /// WebSocket transport configuration.
     #[serde(default)]
-    pub ws_url: Option<String>,
+    pub ws: WsTransportConfig,
+    /// gRPC transport configuration.
     #[serde(default)]
-    pub ws_host: Option<String>,
+    pub grpc: GrpcTransportConfig,
+    /// XHTTP transport configuration.
     #[serde(default)]
-    pub ws_extra_headers: Vec<(String, String)>,
-    #[serde(default)]
-    pub grpc_url: Option<String>,
-    // XHTTP transport
-    #[serde(default)]
-    pub xhttp_mode: Option<String>,
-    #[serde(default)]
-    pub xhttp_upload_url: Option<String>,
-    #[serde(default)]
-    pub xhttp_download_url: Option<String>,
-    #[serde(default)]
-    pub xhttp_stream_url: Option<String>,
-    #[serde(default)]
-    pub xhttp_extra_headers: Vec<(String, String)>,
+    pub xhttp: XhttpTransportConfig,
     // XPorta transport (next-gen CDN transport)
     #[serde(default)]
     pub xporta: Option<XPortaClientConfig>,
-    // XMUX connection pool
+    /// XMUX connection multiplexing. Presence implies enabled.
     #[serde(default)]
     pub xmux: Option<XmuxConfig>,
-    /// Enable XMUX stream multiplexing over transport connections.
-    #[serde(default)]
-    pub mux_enabled: bool,
-    /// Maximum number of concurrent streams per mux connection.
-    #[serde(default = "default_mux_max_streams")]
-    pub mux_max_streams: u32,
-    /// Maximum number of mux transport connections in the pool.
-    #[serde(default = "default_mux_max_connections")]
-    pub mux_max_connections: u16,
     // Header obfuscation
     #[serde(default)]
     pub user_agent: Option<String>,
@@ -357,6 +338,33 @@ fn default_xmux_max_requests_max() -> u32 {
     200
 }
 
+// ── Transport-specific configuration ────────────────────────────────────
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WsTransportConfig {
+    pub url: Option<String>,
+    pub host: Option<String>,
+    #[serde(default)]
+    pub extra_headers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GrpcTransportConfig {
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct XhttpTransportConfig {
+    pub mode: Option<String>,
+    pub upload_url: Option<String>,
+    pub download_url: Option<String>,
+    pub stream_url: Option<String>,
+    #[serde(default)]
+    pub extra_headers: Vec<(String, String)>,
+}
+
+// ── Identity ────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientIdentity {
     pub client_id: String,
@@ -439,14 +447,6 @@ fn default_cipher_suite() -> String {
 
 fn default_transport() -> String {
     "quic".into()
-}
-
-fn default_mux_max_streams() -> u32 {
-    128
-}
-
-fn default_mux_max_connections() -> u16 {
-    4
 }
 
 /// XPorta client configuration — next-generation CDN transport.

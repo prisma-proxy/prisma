@@ -97,12 +97,12 @@ fn validate_client(path: &str) -> Result<()> {
     println!("  Cipher:    {}", config.cipher_suite);
 
     if config.transport == "ws" {
-        if let Some(ref url) = config.ws_url {
+        if let Some(ref url) = config.ws.url {
             println!("  WS URL:    {}", url);
         }
     }
     if config.transport == "grpc" {
-        if let Some(ref url) = config.grpc_url {
+        if let Some(ref url) = config.grpc.url {
             println!("  gRPC URL:  {}", url);
         }
     }

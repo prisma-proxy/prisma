@@ -334,27 +334,31 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     if (w.entropyCamouflage) config.entropy_camouflage = true;
   }
 
-  // WebSocket top-level fields
+  // WebSocket nested config
   if (w.transport === "ws") {
-    config.ws_url = w.wsUrl;
-    if (w.wsHost) config.ws_host = w.wsHost;
+    const ws: Record<string, unknown> = { url: w.wsUrl };
+    if (w.wsHost) ws.host = w.wsHost;
     const wsHeaders = parseHeaderLines(w.wsExtraHeaders);
-    if (wsHeaders.length > 0) config.ws_extra_headers = wsHeaders;
+    if (wsHeaders.length > 0) ws.extra_headers = wsHeaders;
+    config.ws = ws;
   }
 
-  // gRPC top-level field
+  // gRPC nested config
   if (w.transport === "grpc") {
-    config.grpc_url = w.grpcUrl;
+    config.grpc = { url: w.grpcUrl };
   }
 
-  // XHTTP top-level fields
+  // XHTTP nested config
   if (w.transport === "xhttp") {
-    config.xhttp_mode = w.xhttpMode;
-    config.xhttp_upload_url = w.xhttpUploadUrl;
-    config.xhttp_download_url = w.xhttpDownloadUrl;
-    config.xhttp_stream_url = w.xhttpStreamUrl;
+    const xhttp: Record<string, unknown> = {
+      mode: w.xhttpMode,
+      upload_url: w.xhttpUploadUrl,
+      download_url: w.xhttpDownloadUrl,
+      stream_url: w.xhttpStreamUrl,
+    };
     const xhttpHeaders = parseHeaderLines(w.xhttpExtraHeaders);
-    if (xhttpHeaders.length > 0) config.xhttp_extra_headers = xhttpHeaders;
+    if (xhttpHeaders.length > 0) xhttp.extra_headers = xhttpHeaders;
+    config.xhttp = xhttp;
   }
 
   // XPorta — nested object matching XPortaClientConfig
@@ -450,12 +454,17 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
   const serverHost = lastColon > 0 ? serverAddr.slice(0, lastColon) : serverAddr;
   const serverPort = lastColon > 0 ? Number(serverAddr.slice(lastColon + 1)) || 443 : 443;
 
+  // Parse nested transport configs
+  const ws = (c.ws ?? {}) as Record<string, unknown>;
+  const grpc = (c.grpc ?? {}) as Record<string, unknown>;
+  const xhttp = (c.xhttp ?? {}) as Record<string, unknown>;
+
   // Parse extra headers back to "Key: Value" lines
-  const wsHeaders = Array.isArray(c.ws_extra_headers)
-    ? (c.ws_extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
+  const wsHeaders = Array.isArray(ws.extra_headers)
+    ? (ws.extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
     : "";
-  const xhttpHeaders = Array.isArray(c.xhttp_extra_headers)
-    ? (c.xhttp_extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
+  const xhttpHeaders = Array.isArray(xhttp.extra_headers)
+    ? (xhttp.extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
     : "";
 
   // Parse alpn back to comma-separated
@@ -483,14 +492,14 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fingerprint: String(c.fingerprint ?? "chrome"),
     quicVersion: String(c.quic_version ?? "auto"),
     sniSlicing: Boolean(c.sni_slicing),
-    wsUrl: String(c.ws_url ?? "/ws"),
-    wsHost: String(c.ws_host ?? ""),
+    wsUrl: String(ws.url ?? "/ws"),
+    wsHost: String(ws.host ?? ""),
     wsExtraHeaders: wsHeaders,
-    grpcUrl: String(c.grpc_url ?? "/prisma.Proxy/Relay"),
-    xhttpMode: String(c.xhttp_mode ?? "auto"),
-    xhttpUploadUrl: String(c.xhttp_upload_url ?? "/up"),
-    xhttpDownloadUrl: String(c.xhttp_download_url ?? "/down"),
-    xhttpStreamUrl: String(c.xhttp_stream_url ?? "/stream"),
+    grpcUrl: String(grpc.url ?? "/prisma.Proxy/Relay"),
+    xhttpMode: String(xhttp.mode ?? "auto"),
+    xhttpUploadUrl: String(xhttp.upload_url ?? "/up"),
+    xhttpDownloadUrl: String(xhttp.download_url ?? "/down"),
+    xhttpStreamUrl: String(xhttp.stream_url ?? "/stream"),
     xhttpExtraHeaders: xhttpHeaders,
     xportaBaseUrl: String(xporta.base_url ?? ""),
     xportaEncoding: String(xporta.encoding ?? "json"),

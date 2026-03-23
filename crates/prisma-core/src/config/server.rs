@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::router;
 
+use super::LoggingConfig;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub listen_addr: String,
@@ -149,23 +151,6 @@ pub struct AuthorizedClient {
     /// Per-client permissions (granular access control).
     #[serde(default)]
     pub permissions: Option<crate::permissions::ClientPermissions>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoggingConfig {
-    #[serde(default = "default_level")]
-    pub level: String,
-    #[serde(default = "default_format")]
-    pub format: String,
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            level: default_level(),
-            format: default_format(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -816,12 +801,6 @@ fn default_max_failures() -> u32 {
     5
 }
 
-fn default_level() -> String {
-    "info".into()
-}
-fn default_format() -> String {
-    "pretty".into()
-}
 fn default_max_connections() -> u32 {
     1024
 }

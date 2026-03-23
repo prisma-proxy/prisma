@@ -105,9 +105,9 @@ pub fn parse(uri: &str) -> Result<ImportedServer, ConfigError> {
             let ws_scheme = if use_tls { "wss" } else { "ws" };
             let ws_host = params.get("host").map(String::as_str).unwrap_or(&host);
             let ws_path = params.get("path").map(String::as_str).unwrap_or("/");
-            config.ws_url = Some(format!("{}://{}:{}{}", ws_scheme, ws_host, port, ws_path));
+            config.ws.url = Some(format!("{}://{}:{}{}", ws_scheme, ws_host, port, ws_path));
             if let Some(h) = params.get("host") {
-                config.ws_host = Some(h.clone());
+                config.ws.host = Some(h.clone());
             }
         }
         "grpc" => {
@@ -117,7 +117,7 @@ pub fn parse(uri: &str) -> Result<ImportedServer, ConfigError> {
                 .or_else(|| params.get("path"))
                 .map(String::as_str)
                 .unwrap_or("GunService/Tun");
-            config.grpc_url = Some(format!("{}://{}:{}/{}", grpc_scheme, host, port, service));
+            config.grpc.url = Some(format!("{}://{}:{}/{}", grpc_scheme, host, port, service));
         }
         _ => {}
     }
@@ -156,8 +156,8 @@ mod tests {
         let uri = "vless://uuid-here@cdn.example.com:443?type=ws&host=cdn.example.com&path=/vless-ws&security=tls&sni=cdn.example.com#WS";
         let result = parse(uri).unwrap();
         assert_eq!(result.config.transport, "ws");
-        assert!(result.config.ws_url.as_ref().unwrap().contains("wss://"));
-        assert!(result.config.ws_url.as_ref().unwrap().contains("/vless-ws"));
+        assert!(result.config.ws.url.as_ref().unwrap().contains("wss://"));
+        assert!(result.config.ws.url.as_ref().unwrap().contains("/vless-ws"));
     }
 
     #[test]
@@ -168,7 +168,8 @@ mod tests {
         assert_eq!(result.config.transport, "grpc");
         assert!(result
             .config
-            .grpc_url
+            .grpc
+            .url
             .as_ref()
             .unwrap()
             .contains("MyService"));
