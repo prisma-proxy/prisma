@@ -1,28 +1,28 @@
 # Prisma
 
-**简体中文** | [English](./README_EN.md)
+[简体中文](./README_CN.md) | **English**
 
-基于 Rust 构建的下一代加密代理基础设施套件。Prisma 实现了 **PrismaVeil v5** 线路协议，融合现代密码学、多种传输方式和高级抗审查特性。
+A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil v5** wire protocol — combining modern cryptography, multiple transport options, and advanced anti-censorship features.
 
-## 特性亮点
+## Highlights
 
-- **PrismaVeil v5 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only，头部认证加密（AAD）、连接迁移、增强型 KDF
-- **多协议兼容** — VMess、VLESS、Shadowsocks、Trojan 入站协议支持，通过 `[[inbounds]]` 配置
-- **9 种传输方式** — QUIC v2、PrismaTLS、WebSocket、gRPC、XHTTP、XPorta、ShadowTLS v3、SSH、WireGuard
-- **TUN 模式** — 通过虚拟网络接口实现系统级代理（Windows/Linux/macOS）
-- **GeoIP 路由** — 基于 v2fly geoip.dat 的国家级智能分流，客户端和服务端均支持
-- **PrismaTLS** — 替代 REALITY 的主动探测防御，浏览器指纹模拟 + 动态掩护服务器池
-- **流量整形** — 桶填充、时序抖动、杂音注入、帧合并，抵御封装 TLS 指纹识别
-- **抗审查** — Salamander UDP 混淆、HTTP/3 伪装、端口跳跃、TLS 伪装、熵伪装
-- **端口转发** — 通过加密隧道实现类 frp 的反向代理
-- **Web 管理控制台** — 基于 Next.js + shadcn/ui 的实时监控
-- **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
-- **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
-- **跨平台 GUI** — 速度测试、完整备份/恢复、系统托盘、键盘快捷键、通知历史、流量统计（Tauri 2 + React）
+- **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT resumption, X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only, header-authenticated encryption (AAD), connection migration, enhanced KDF
+- **Multi-protocol inbounds** — VMess, VLESS, Shadowsocks, Trojan compatibility via `[[inbounds]]` config
+- **9 transports** — QUIC v2, PrismaTLS, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard
+- **TUN mode** — system-wide proxy via virtual network interface (Windows/Linux/macOS)
+- **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server
+- **PrismaTLS** — active probing resistance replacing REALITY, with browser fingerprint mimicry + dynamic mask server pool
+- **Traffic shaping** — bucket padding, timing jitter, chaff injection, frame coalescing to defeat encapsulated TLS fingerprinting
+- **Anti-censorship** — Salamander UDP obfuscation, HTTP/3 masquerade, port hopping, TLS camouflage, entropy camouflage
+- **Port forwarding** — frp-style reverse proxy over encrypted tunnels
+- **Web console** — real-time monitoring with Next.js + shadcn/ui
+- **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
+- **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
+- **Cross-platform GUI** — speed test, full backup/restore, system tray, keyboard shortcuts, notification history, data usage tracking (Tauri 2 + React)
 
-## 快速开始
+## Quick Start
 
-### 安装
+### Install
 
 ```bash
 # Linux / macOS
@@ -32,103 +32,103 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Setup
 ```
 
-`--setup` 参数会自动生成凭证、TLS 证书和示例配置文件。
+The `--setup` flag generates credentials, TLS certificates, and example config files.
 
-安装脚本还支持以下选项：
+The installer also supports these options:
 
-| 选项 | 描述 |
-|------|------|
-| `--version v0.2.1` | 安装指定版本 |
-| `--dir ~/.local/bin` | 自定义安装目录 |
-| `--config-dir DIR` | `--setup` 的配置文件输出目录 |
-| `--uninstall` | 卸载 prisma |
-| `--no-verify` | 跳过 SHA256 校验和验证 |
-| `--force` | 覆盖已有安装而不提示 |
-| `--quiet` | 静默模式，不输出信息 |
+| Option | Description |
+|--------|-------------|
+| `--version v0.2.1` | Install a specific version |
+| `--dir ~/.local/bin` | Custom install directory |
+| `--config-dir DIR` | Config output directory for `--setup` |
+| `--uninstall` | Remove prisma |
+| `--no-verify` | Skip SHA256 checksum verification |
+| `--force` | Overwrite existing installation without prompting |
+| `--quiet` | Suppress informational output |
 
-完整选项请运行 `install.sh --help` 或 `install.ps1 -Help`。
+Run `install.sh --help` or `install.ps1 -Help` for the full list.
 
-### 运行
+### Run
 
 ```bash
-# 启动服务端
+# Start server
 prisma server -c server.toml
 
-# 启动客户端
+# Start client
 prisma client -c client.toml
 
-# 测试代理
+# Test
 curl --socks5 127.0.0.1:1080 https://httpbin.org/ip
 ```
 
-### 从源码构建
+### Build from source
 
 ```bash
 git clone https://github.com/Yamimega/prisma.git && cd prisma
 cargo build --release
 ```
 
-## 项目结构
+## Architecture
 
 ```
 prisma/
 ├── crates/
-│   ├── prisma-core/     # 共享库：加密、协议、配置、DNS、路由、GeoIP
-│   ├── prisma-server/   # 代理服务端（TCP、QUIC、CDN 入站）
-│   ├── prisma-client/   # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
-│   ├── prisma-mgmt/     # 管理 API（基于 axum 的 REST + WebSocket）
-│   ├── prisma-cli/      # CLI 工具：密钥/证书生成、初始化、校验
-│   └── prisma-ffi/      # C FFI 库，供 GUI 客户端调用
+│   ├── prisma-core/     # Shared library: crypto, protocol, config, DNS, routing, GeoIP
+│   ├── prisma-server/   # Proxy server (TCP, QUIC, CDN inbound)
+│   ├── prisma-client/   # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
+│   ├── prisma-mgmt/     # Management API (REST + WebSocket via axum)
+│   ├── prisma-cli/      # CLI with key/cert generation, init, validate
+│   └── prisma-ffi/      # C FFI library for GUI clients
 ├── apps/
-│   ├── prisma-gui/      # 跨平台 GUI（Tauri 2 + React + TypeScript）
-│   └── prisma-console/  # Web 管理控制台（Next.js + shadcn/ui）
-├── docs/                # 文档站点（Docusaurus）
+│   ├── prisma-gui/      # Cross-platform GUI (Tauri 2 + React + TypeScript)
+│   └── prisma-console/  # Web console (Next.js + shadcn/ui)
+├── docs/                # Documentation site (Docusaurus)
 ├── tools/
-│   └── prisma-mcp/      # MCP 开发服务器
-└── scripts/             # 安装脚本和基准测试
+│   └── prisma-mcp/      # MCP development server
+└── scripts/             # Install scripts and benchmarks
 ```
 
-## 文档
+## Documentation
 
-完整文档请访问 **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**，包括：
+Full documentation is available at **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**, including:
 
-- [快速入门](https://yamimega.github.io/prisma/docs/getting-started) — 第一个代理会话教程
-- [安装指南](https://yamimega.github.io/prisma/docs/installation) — 全平台、Docker、Cargo
-- [服务端配置](https://yamimega.github.io/prisma/docs/configuration/server) — 完整配置参考
-- [客户端配置](https://yamimega.github.io/prisma/docs/configuration/client) — 完整配置参考
-- [路由规则](https://yamimega.github.io/prisma/docs/features/routing-rules) — 客户端/服务端路由 + GeoIP
-- [PrismaTLS](https://yamimega.github.io/prisma/docs/features/prisma-tls) — 主动探测防御
-- [流量整形](https://yamimega.github.io/prisma/docs/features/traffic-shaping) — 抗指纹识别
-- [TUN 模式](https://yamimega.github.io/prisma/docs/features/tun-mode) — 系统级代理配置
-- [配置示例](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 种场景即用模板
-- [PrismaVeil 协议](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — 线路协议规范
-- [控制台](https://yamimega.github.io/prisma/docs/features/console) — Web UI 配置
-- [管理 API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API 参考
-- [GUI 客户端](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows、Android、iOS、macOS 应用
+- [Getting Started](https://yamimega.github.io/prisma/docs/getting-started) — first proxy session walkthrough
+- [Installation](https://yamimega.github.io/prisma/docs/installation) — all platforms, Docker, Cargo
+- [Server Configuration](https://yamimega.github.io/prisma/docs/configuration/server) — full config reference
+- [Client Configuration](https://yamimega.github.io/prisma/docs/configuration/client) — full config reference
+- [Routing Rules](https://yamimega.github.io/prisma/docs/features/routing-rules) — client/server routing + GeoIP
+- [PrismaTLS](https://yamimega.github.io/prisma/docs/features/prisma-tls) — active probing resistance
+- [Traffic Shaping](https://yamimega.github.io/prisma/docs/features/traffic-shaping) — anti-fingerprinting
+- [TUN Mode](https://yamimega.github.io/prisma/docs/features/tun-mode) — system-wide proxy setup
+- [Config Examples](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 ready-to-use templates
+- [PrismaVeil Protocol](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — wire protocol specification
+- [Console](https://yamimega.github.io/prisma/docs/features/console) — web UI setup
+- [Management API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API reference
+- [GUI Clients](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows, Android, iOS, macOS apps
 
-## 开发
+## Development
 
 ```bash
-# 运行测试
+# Run tests
 cargo test --workspace
 
-# 代码检查
+# Lint
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 
-# 构建 FFI 库
+# Build FFI library
 cargo build --release -p prisma-ffi
 
-# 构建 GUI（需要 Node.js）
+# Build GUI (requires Node.js)
 cd apps/prisma-gui && npm install && npm run tauri build
 
-# 构建控制台
+# Build console
 cd apps/prisma-console && npm ci && npm run build
 
-# 构建文档
+# Build docs
 cd docs && npm install && npm start
 ```
 
-## 许可证
+## License
 
 GPLv3.0

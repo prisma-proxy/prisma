@@ -2,7 +2,7 @@
 description: "Documentation sync: README audit (CN/EN), CLAUDE.md accuracy, Docusaurus EN/CN parity, code-docs consistency"
 globs:
   - "README.md"
-  - "README_EN.md"
+  - "README_CN.md"
   - "CLAUDE.md"
   - "docs/docs/**/*.md"
   - "docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**/*.md"
