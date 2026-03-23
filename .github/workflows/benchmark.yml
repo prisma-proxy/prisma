@@ -15,8 +15,8 @@ on:
   push:
     branches: [master]
     paths:
-      - 'prisma-*/src/**'
-      - 'prisma-*/Cargo.toml'
+      - 'crates/*/src/**'
+      - 'crates/*/Cargo.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'scripts/benchmark.sh'
@@ -244,7 +244,7 @@ jobs:
           }
 
           # Read existing data to preserve history
-          output_path = "prisma-docs/static/data/benchmark-results.json"
+          output_path = "docs/static/data/benchmark-results.json"
           os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
           existing_scenarios = []
@@ -285,7 +285,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: 'chore(benchmarks): update benchmark results [skip ci]'
-          file_pattern: 'prisma-docs/static/data/benchmark-results.json'
+          file_pattern: 'docs/static/data/benchmark-results.json'
           branch: master
           commit_user_name: 'github-actions[bot]'
           commit_user_email: 'github-actions[bot]@users.noreply.github.com'

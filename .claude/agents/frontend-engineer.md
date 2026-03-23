@@ -31,7 +31,7 @@ Read `.claude/skills/prisma-docs-sync.md` for doc sync procedures. Run quality g
 
 ## prisma-cli
 
-- clap 4 derive macros, entry: `prisma-cli/src/main.rs`
+- clap 4 derive macros, entry: `crates/prisma-cli/src/main.rs`
 - Actionable error messages, progress indicators for long ops
 
 ## UX Standards

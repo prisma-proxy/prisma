@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, main, docs]
     paths:
-      - 'prisma-docs/**'
+      - 'docs/**'
   workflow_run:
     workflows: ["Benchmark Prisma vs Xray-core vs sing-box"]
     types: [completed]
@@ -37,14 +37,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: prisma-docs/package-lock.json
+          cache-dependency-path: docs/package-lock.json
 
       - name: Install dependencies
-        working-directory: prisma-docs
+        working-directory: docs
         run: npm ci
 
       - name: Build site
-        working-directory: prisma-docs
+        working-directory: docs
         run: npm run build
 
       - name: Configure Pages
@@ -53,7 +53,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: prisma-docs/build
+          path: docs/build
 
   deploy:
     name: Deploy

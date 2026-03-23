@@ -4,10 +4,10 @@ globs:
   - "README.md"
   - "README_EN.md"
   - "CLAUDE.md"
-  - "prisma-docs/docs/**/*.md"
-  - "prisma-docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**/*.md"
-  - "prisma-gui/README.md"
-  - "prisma-console/README.md"
+  - "docs/docs/**/*.md"
+  - "docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**/*.md"
+  - "apps/prisma-gui/README.md"
+  - "apps/prisma-console/README.md"
 ---
 
 # Prisma Docs Sync
@@ -29,18 +29,18 @@ Procedures for keeping documentation in sync with code. Version sync rules live 
 
 ## Docusaurus Sync
 
-**EN:** `prisma-docs/docs/` | **CN:** `prisma-docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`
+**EN:** `docs/docs/` | **CN:** `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`
 
 - Every EN file must have a CN counterpart and vice versa
 - Code blocks must be identical across languages
 - Flag pairs with >20% line count difference
 
 ### Code <-> Docs
-- CLI reference vs `Commands` enum in `prisma-cli/src/main.rs`
+- CLI reference vs `Commands` enum in `crates/prisma-cli/src/main.rs`
 - Config docs vs `ServerConfig`/`ClientConfig` structs
-- API docs vs routes in `prisma-mgmt/src/router.rs`
+- API docs vs routes in `crates/prisma-mgmt/src/router.rs`
 
 ## Subsystem READMEs
 
-- `prisma-gui/README.md` — features vs actual pages/hooks/stores
-- `prisma-console/README.md` — pages vs routes, version stays independent
+- `apps/prisma-gui/README.md` — features vs actual pages/hooks/stores
+- `apps/prisma-console/README.md` — pages vs routes, version stays independent

@@ -1,5 +1,5 @@
 [workspace]
-members = ["prisma-core", "prisma-server", "prisma-client", "prisma-cli", "prisma-mgmt", "prisma-ffi"]
+members = ["crates/prisma-core", "crates/prisma-server", "crates/prisma-client", "crates/prisma-cli", "crates/prisma-mgmt", "crates/prisma-ffi"]
 resolver = "2"
 
 [workspace.package]

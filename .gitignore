@@ -26,30 +26,30 @@ __MACOSX/
 ehthumbs.db
 
 # Docs (Docusaurus)
-prisma-docs/node_modules/
-prisma-docs/build/
-prisma-docs/.docusaurus/
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
 
 # Console (Next.js)
-prisma-console/node_modules/
-prisma-console/.next/
-prisma-console/out/
+apps/prisma-console/node_modules/
+apps/prisma-console/.next/
+apps/prisma-console/out/
 
 # prisma-gui (Tauri + Vite)
-prisma-gui/node_modules/
-prisma-gui/dist/
-prisma-gui/.vite/
-prisma-gui/src-tauri/target/
-prisma-gui/src-tauri/gen/
-prisma-gui/src-tauri/WixTools/
+apps/prisma-gui/node_modules/
+apps/prisma-gui/dist/
+apps/prisma-gui/.vite/
+apps/prisma-gui/src-tauri/target/
+apps/prisma-gui/src-tauri/gen/
+apps/prisma-gui/src-tauri/WixTools/
 
 # prisma-ffi build artifacts
-prisma-ffi/include/*.generated.h
+crates/prisma-ffi/include/*.generated.h
 
 # prisma-mcp (MCP dev server)
-prisma-mcp/node_modules/
-prisma-mcp/dist/
-prisma-mcp/.prisma-mcp.db
+tools/prisma-mcp/node_modules/
+tools/prisma-mcp/dist/
+tools/prisma-mcp/.prisma-mcp.db
 
 # Claude agent memory
 .claude/agent-memory/

@@ -72,15 +72,19 @@ cargo build --release
 
 ```
 prisma/
-├── prisma-core/         # Shared library: crypto, protocol, config, DNS, routing, GeoIP
-├── prisma-server/       # Proxy server (TCP, QUIC, CDN inbound)
-├── prisma-client/       # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
-├── prisma-mgmt/         # Management API (REST + WebSocket via axum)
-├── prisma-cli/          # CLI with key/cert generation, init, validate
-├── prisma-ffi/          # C FFI library for GUI clients
-├── prisma-gui/          # Cross-platform GUI (Tauri 2 + React + TypeScript)
-├── prisma-console/      # Web console (Next.js + shadcn/ui)
-├── prisma-docs/         # Documentation site (Docusaurus)
+├── crates/
+│   ├── prisma-core/     # Shared library: crypto, protocol, config, DNS, routing, GeoIP
+│   ├── prisma-server/   # Proxy server (TCP, QUIC, CDN inbound)
+│   ├── prisma-client/   # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
+│   ├── prisma-mgmt/     # Management API (REST + WebSocket via axum)
+│   ├── prisma-cli/      # CLI with key/cert generation, init, validate
+│   └── prisma-ffi/      # C FFI library for GUI clients
+├── apps/
+│   ├── prisma-gui/      # Cross-platform GUI (Tauri 2 + React + TypeScript)
+│   └── prisma-console/  # Web console (Next.js + shadcn/ui)
+├── docs/                # Documentation site (Docusaurus)
+├── tools/
+│   └── prisma-mcp/      # MCP development server
 └── scripts/             # Install scripts and benchmarks
 ```
 
@@ -116,13 +120,13 @@ cargo clippy --workspace -- -D warnings
 cargo build --release -p prisma-ffi
 
 # Build GUI (requires Node.js)
-cd prisma-gui && npm install && npm run tauri build
+cd apps/prisma-gui && npm install && npm run tauri build
 
 # Build console
-cd prisma-console && npm ci && npm run build
+cd apps/prisma-console && npm ci && npm run build
 
 # Build docs
-cd prisma-docs && npm install && npm start
+cd docs && npm install && npm start
 ```
 
 ## License

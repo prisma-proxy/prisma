@@ -72,15 +72,19 @@ cargo build --release
 
 ```
 prisma/
-├── prisma-core/         # 共享库：加密、协议、配置、DNS、路由、GeoIP
-├── prisma-server/       # 代理服务端（TCP、QUIC、CDN 入站）
-├── prisma-client/       # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
-├── prisma-mgmt/         # 管理 API（基于 axum 的 REST + WebSocket）
-├── prisma-cli/          # CLI 工具：密钥/证书生成、初始化、校验
-├── prisma-ffi/          # C FFI 库，供 GUI 客户端调用
-├── prisma-gui/          # 跨平台 GUI（Tauri 2 + React + TypeScript）
-├── prisma-console/      # Web 管理控制台（Next.js + shadcn/ui）
-├── prisma-docs/         # 文档站点（Docusaurus）
+├── crates/
+│   ├── prisma-core/     # 共享库：加密、协议、配置、DNS、路由、GeoIP
+│   ├── prisma-server/   # 代理服务端（TCP、QUIC、CDN 入站）
+│   ├── prisma-client/   # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
+│   ├── prisma-mgmt/     # 管理 API（基于 axum 的 REST + WebSocket）
+│   ├── prisma-cli/      # CLI 工具：密钥/证书生成、初始化、校验
+│   └── prisma-ffi/      # C FFI 库，供 GUI 客户端调用
+├── apps/
+│   ├── prisma-gui/      # 跨平台 GUI（Tauri 2 + React + TypeScript）
+│   └── prisma-console/  # Web 管理控制台（Next.js + shadcn/ui）
+├── docs/                # 文档站点（Docusaurus）
+├── tools/
+│   └── prisma-mcp/      # MCP 开发服务器
 └── scripts/             # 安装脚本和基准测试
 ```
 
@@ -116,13 +120,13 @@ cargo clippy --workspace -- -D warnings
 cargo build --release -p prisma-ffi
 
 # 构建 GUI（需要 Node.js）
-cd prisma-gui && npm install && npm run tauri build
+cd apps/prisma-gui && npm install && npm run tauri build
 
 # 构建控制台
-cd prisma-console && npm ci && npm run build
+cd apps/prisma-console && npm ci && npm run build
 
 # 构建文档
-cd prisma-docs && npm install && npm start
+cd docs && npm install && npm start
 ```
 
 ## 许可证

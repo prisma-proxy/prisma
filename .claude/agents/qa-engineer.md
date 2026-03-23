@@ -23,9 +23,9 @@ Run quality gates per `.claude/skills/prisma-workflow.md`. Read `.claude/skills/
 ## Test Locations
 
 - Inline: `#[cfg(test)] mod tests` in each source file
-- Integration: `prisma-core/tests/`
-- Fixtures: `prisma-core/tests/fixtures/`
-- Snapshots: `prisma-core/tests/snapshots/`
+- Integration: `crates/prisma-core/tests/`
+- Fixtures: `crates/prisma-core/tests/fixtures/`
+- Snapshots: `crates/prisma-core/tests/snapshots/`
 
 ## For Every Change
 

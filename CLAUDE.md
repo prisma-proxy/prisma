@@ -4,24 +4,26 @@ Encrypted proxy system built in Rust. Workspace version 1.7.0, edition 2021.
 
 ## Workspace Layout
 
+All Rust workspace crates live under `crates/`:
+
 | Crate | Role |
 |-------|------|
-| `prisma-core` | Shared library: crypto (PrismaVeil v5), protocol, config, types, bandwidth, DNS, routing |
-| `prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta + multi-protocol inbounds), relay, auth, camouflage |
-| `prisma-client` | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool |
-| `prisma-cli` | CLI binary (clap 4): server/client runners, management commands |
-| `prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |
-| `prisma-ffi` | C FFI shared library for GUI/mobile: lifecycle, profiles, QR, system proxy, auto-update |
+| `crates/prisma-core` | Shared library: crypto (PrismaVeil v5), protocol, config, types, bandwidth, DNS, routing |
+| `crates/prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta + multi-protocol inbounds), relay, auth, camouflage |
+| `crates/prisma-client` | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool |
+| `crates/prisma-cli` | CLI binary (clap 4): server/client runners, management commands |
+| `crates/prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |
+| `crates/prisma-ffi` | C FFI shared library for GUI/mobile: lifecycle, profiles, QR, system proxy, auto-update |
 
 Other packages (not Cargo workspace members):
 | Package | Role |
 |---------|------|
-| `prisma-gui` | Tauri 2 + React 19 desktop app |
-| `prisma-console` | Next.js dashboard (independent version) |
-| `prisma-docs` | Docusaurus documentation site (EN + CN) |
-| `prisma-mcp` | MCP development server for AI agents |
+| `apps/prisma-gui` | Tauri 2 + React 19 desktop app |
+| `apps/prisma-console` | Next.js dashboard (independent version) |
+| `docs/` | Docusaurus documentation site (EN + CN) |
+| `tools/prisma-mcp` | MCP development server for AI agents |
 
-Mobile: `prisma-gui` uses Tauri 2 mobile targets (iOS/Android) — no separate native apps.
+Mobile: `apps/prisma-gui` uses Tauri 2 mobile targets (iOS/Android) — no separate native apps.
 
 ## Key Commands
 
@@ -61,11 +63,11 @@ Use `prisma-orchestrator` for any project work — it plans, executes, tests, ve
 
 ## MCP Server (prisma-dev)
 
-A local MCP server at `prisma-mcp/` provides persistent workspace intelligence to AI agents.
+A local MCP server at `tools/prisma-mcp/` provides persistent workspace intelligence to AI agents.
 
 ### Setup
 ```bash
-cd prisma-mcp && npm install && npm run build
+cd tools/prisma-mcp && npm install && npm run build
 ```
 
 Configured in `.claude/settings.local.json` as `prisma-dev` MCP server.

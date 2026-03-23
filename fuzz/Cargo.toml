@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-prisma-core = { path = "../prisma-core" }
+prisma-core = { path = "../crates/prisma-core" }
 arbitrary = { version = "1", features = ["derive"] }
 bytes = "1"
 toml = "0.8"

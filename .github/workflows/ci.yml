@@ -4,40 +4,40 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'prisma-*/src/**'
-      - 'prisma-*/Cargo.toml'
-      - 'prisma-*/benches/**'
+      - 'crates/*/src/**'
+      - 'crates/*/Cargo.toml'
+      - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'prisma-gui/src/**'
-      - 'prisma-gui/src-tauri/**'
-      - 'prisma-gui/package.json'
-      - 'prisma-gui/package-lock.json'
-      - 'prisma-console/src/**'
-      - 'prisma-console/package.json'
-      - 'prisma-console/package-lock.json'
-      - 'prisma-mcp/src/**'
-      - 'prisma-mcp/package.json'
-      - 'prisma-mcp/tsconfig.json'
-      - 'prisma-docs/**'
+      - 'apps/prisma-gui/src/**'
+      - 'apps/prisma-gui/src-tauri/**'
+      - 'apps/prisma-gui/package.json'
+      - 'apps/prisma-gui/package-lock.json'
+      - 'apps/prisma-console/src/**'
+      - 'apps/prisma-console/package.json'
+      - 'apps/prisma-console/package-lock.json'
+      - 'tools/prisma-mcp/src/**'
+      - 'tools/prisma-mcp/package.json'
+      - 'tools/prisma-mcp/tsconfig.json'
+      - 'docs/**'
   pull_request:
     paths:
-      - 'prisma-*/src/**'
-      - 'prisma-*/Cargo.toml'
-      - 'prisma-*/benches/**'
+      - 'crates/*/src/**'
+      - 'crates/*/Cargo.toml'
+      - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'prisma-gui/src/**'
-      - 'prisma-gui/src-tauri/**'
-      - 'prisma-gui/package.json'
-      - 'prisma-gui/package-lock.json'
-      - 'prisma-console/src/**'
-      - 'prisma-console/package.json'
-      - 'prisma-console/package-lock.json'
-      - 'prisma-mcp/src/**'
-      - 'prisma-mcp/package.json'
-      - 'prisma-mcp/tsconfig.json'
-      - 'prisma-docs/**'
+      - 'apps/prisma-gui/src/**'
+      - 'apps/prisma-gui/src-tauri/**'
+      - 'apps/prisma-gui/package.json'
+      - 'apps/prisma-gui/package-lock.json'
+      - 'apps/prisma-console/src/**'
+      - 'apps/prisma-console/package.json'
+      - 'apps/prisma-console/package-lock.json'
+      - 'tools/prisma-mcp/src/**'
+      - 'tools/prisma-mcp/package.json'
+      - 'tools/prisma-mcp/tsconfig.json'
+      - 'docs/**'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -142,15 +142,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: prisma-gui/package-lock.json
+          cache-dependency-path: apps/prisma-gui/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
-        working-directory: prisma-gui
+        working-directory: apps/prisma-gui
 
       - name: TypeScript check
         run: npx tsc --noEmit
-        working-directory: prisma-gui
+        working-directory: apps/prisma-gui
 
       # Verify the Tauri Rust side compiles (check only, no full build)
       - uses: dtolnay/rust-toolchain@master
@@ -160,7 +160,7 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: prisma-gui/src-tauri
+          workspaces: apps/prisma-gui/src-tauri
 
       - name: Install Linux system dependencies
         run: |
@@ -173,7 +173,7 @@ jobs:
 
       - name: Cargo check (Tauri backend)
         run: cargo check
-        working-directory: prisma-gui/src-tauri
+        working-directory: apps/prisma-gui/src-tauri
 
   # ---------------------------------------------------------------------------
   # Console: build the Next.js static export
@@ -188,19 +188,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: prisma-console/package-lock.json
+          cache-dependency-path: apps/prisma-console/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: prisma-console
+        working-directory: apps/prisma-console
 
       - name: Lint
         run: npm run lint
-        working-directory: prisma-console
+        working-directory: apps/prisma-console
 
       - name: Build
         run: npm run build
-        working-directory: prisma-console
+        working-directory: apps/prisma-console
 
   # ---------------------------------------------------------------------------
   # MCP Server: TypeScript type check
@@ -215,15 +215,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: prisma-mcp/package-lock.json
+          cache-dependency-path: tools/prisma-mcp/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: prisma-mcp
+        working-directory: tools/prisma-mcp
 
       - name: TypeScript check
         run: npx tsc --noEmit
-        working-directory: prisma-mcp
+        working-directory: tools/prisma-mcp
 
   # ---------------------------------------------------------------------------
   # Docs: build Docusaurus site
@@ -238,15 +238,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: prisma-docs/package-lock.json
+          cache-dependency-path: docs/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: prisma-docs
+        working-directory: docs
 
       - name: Build
         run: npm run build
-        working-directory: prisma-docs
+        working-directory: docs
 
   # ---------------------------------------------------------------------------
   # Summary gate — single status check for branch protection

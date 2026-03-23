@@ -1,0 +1,472 @@
+---
+sidebar_position: 1
+---
+
+# 服务端配置
+
+服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
+
+:::info 版本
+此页面反映 Prisma **v1.5.1**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+:::
+
+## 顶级字段
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `listen_addr` | string | `"0.0.0.0:8443"` | TCP 监听地址，用于直连和 TLS 包裹连接 |
+| `quic_listen_addr` | string | `"0.0.0.0:8443"` | QUIC/UDP 监听地址 |
+| `dns_upstream` | string | `"8.8.8.8:53"` | `CMD_DNS_QUERY` 转发的上游 DNS 服务器 |
+| `protocol_version` | string | `"v5"` | 协议版本（只读，1.5.1 中始终为 `"v5"`） |
+| `allow_transport_only_cipher` | bool | `false` | 允许客户端使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。 |
+| `config_watch` | bool | `false` | 监视配置文件变化并在运行时自动重载 |
+| `shutdown_drain_timeout_secs` | u64 | `30` | 优雅关闭时等待进行中连接的秒数 |
+| `ticket_rotation_hours` | u64 | `6` | 会话票据加密密钥轮换间隔（小时）。旧密钥保留 3 个轮换周期以允许优雅恢复。 |
+
+## `[tls]` -- TLS 证书
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `cert_path` | string | -- | TLS 证书 PEM 文件路径 |
+| `key_path` | string | -- | TLS 私钥 PEM 文件路径 |
+
+QUIC 传输和 `camouflage.tls_on_tcp = true` **要求** TLS。
+
+为开发环境生成自签名证书：
+
+```bash
+prisma gen-cert --output /etc/prisma --cn prisma-server
+```
+
+生产环境请使用受信任 CA 或 Let's Encrypt 颁发的证书。
+
+## `[[authorized_clients]]` -- 客户端凭证
+
+每个条目定义一个授权客户端。至少需要一个。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `id` | string | -- | 客户端 UUID（使用 `prisma gen-key` 生成） |
+| `name` | string? | -- | 可选的人类可读客户端标签 |
+| `auth_secret` | string | -- | 64 个十六进制字符（32 字节）共享密钥 |
+| `bandwidth_up` | string? | -- | 单客户端上传速率限制（如 `"100mbps"`） |
+| `bandwidth_down` | string? | -- | 单客户端下载速率限制（如 `"500mbps"`） |
+| `quota` | string? | -- | 单客户端流量配额（如 `"100GB"`） |
+| `quota_period` | string? | -- | 配额重置周期：`"daily"` / `"weekly"` / `"monthly"` |
+
+多客户端示例：
+
+```toml
+[[authorized_clients]]
+id = "client-uuid-1"
+auth_secret = "hex-secret-1"
+name = "laptop"
+bandwidth_up = "100mbps"
+bandwidth_down = "500mbps"
+quota = "500GB"
+quota_period = "monthly"
+
+[[authorized_clients]]
+id = "client-uuid-2"
+auth_secret = "hex-secret-2"
+name = "phone"
+```
+
+客户端也可以通过[管理 API](/docs/features/management-api)或[控制台](/docs/features/console)在运行时管理，无需重启服务器。
+
+## `[management_api]` -- REST/WebSocket API
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用管理 REST/WS API |
+| `listen_addr` | string | `"127.0.0.1:9090"` | 管理 API 绑定地址 |
+| `auth_token` | string | `""` | API 认证的 Bearer 令牌 |
+| `cors_origins` | string[] | `[]` | 允许的 CORS 来源（用于外部控制台开发） |
+| `console_dir` | string? | -- | 已构建控制台静态文件路径 |
+| `tls_enabled` | bool | `false` | 启用管理 API 的 TLS |
+| `tls.cert_path` | string? | -- | TLS 证书路径（未设置时继承顶级 `[tls]` 配置） |
+| `tls.key_path` | string? | -- | TLS 私钥路径（未设置时继承顶级 `[tls]` 配置） |
+
+:::warning
+`auth_token` 保护所有管理 API 端点。生产环境请使用强随机令牌。
+:::
+
+**绑定地址**：默认 API 监听 `127.0.0.1:9090`（仅本地）。要暴露到网络，请更改 `listen_addr`——但请确保有适当的网络级别访问控制。
+
+**控制台**：将 `console_dir` 设置为包含已构建控制台静态文件的路径。服务器将在管理 API 地址提供控制台服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd apps/prisma-console && npm ci && npm run build` 从源码构建。
+
+**CORS 来源**：仅在控制台开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中控制台由服务器自身提供时不需要。
+
+## `[port_forwarding]` -- 反向代理
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用端口转发/反向代理 |
+| `port_range_start` | u16 | `1024` | 允许转发的最小端口号 |
+| `port_range_end` | u16 | `65535` | 允许转发的最大端口号 |
+| `max_forwards_per_client` | u32? | `10` | 每客户端最大端口转发数 |
+| `max_connections_per_forward` | u32? | `100` | 每个转发的最大并发连接数 |
+| `default_idle_timeout_secs` | u64? | `300` | 空闲转发连接关闭时间（0 = 禁用） |
+| `allowed_ports` | u16[] | `[]` | 范围外的额外允许端口 |
+| `denied_ports` | u16[] | `[]` | 明确拒绝的端口（覆盖范围和允许列表） |
+| `allowed_bind_addrs` | string[] | `[]` | 客户端可请求的绑定地址（空 = 仅通配符） |
+| `global_bandwidth_up` | string? | -- | 所有转发的全局上传带宽限制（如 `"1gbps"`） |
+| `global_bandwidth_down` | string? | -- | 所有转发的全局下载带宽限制 |
+| `require_name` | bool | `false` | 要求客户端为转发命名 |
+| `log_connections` | bool | `true` | 记录每个转发连接 |
+| `allowed_ips` | string[] | `[]` | 允许连接到转发端口的 IP CIDR（空 = 允许所有） |
+
+端口解析：当转发启用且端口**不**在 `denied_ports` 中，且端口在配置范围内或在 `allowed_ports` 中时，该端口被允许。
+
+## `[routing]` -- 服务端路由规则
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `geoip_path` | string? | -- | v2fly `geoip.dat` 文件路径，用于 GeoIP 路由 |
+| `rules` | array | `[]` | 有序的路由规则列表 |
+
+每个 `[[routing.rules]]`：
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `type` | string | 规则类型：`domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
+| `value` | string | 匹配值（`geoip` 类型使用国家代码，如 `"cn"`、`"private"`） |
+| `action` | string | 动作：`"allow"` / `"block"`（或 `"proxy"` / `"direct"` 映射为 allow） |
+
+## `[padding]` -- 每帧填充
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `min` | u16 | `0` | 每帧最小随机填充字节数 |
+| `max` | u16 | `256` | 每帧最大随机填充字节数 |
+
+## `[performance]` -- 连接限制
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `max_connections` | u32 | `1024` | 最大并发连接数 |
+| `connection_timeout_secs` | u64 | `300` | 空闲连接超时时间（秒） |
+
+## `[camouflage]` -- 抗主动探测
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用伪装 |
+| `tls_on_tcp` | bool | `false` | 在 TCP 传输外包裹 TLS（需要 `[tls]` 配置） |
+| `fallback_addr` | string? | -- | 非 Prisma 连接的诱饵服务器地址（如 `"example.com:443"`） |
+| `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS/QUIC ALPN 协议 |
+| `h3_cover_site` | string? | -- | HTTP/3 伪装上游 URL |
+| `h3_static_dir` | string? | -- | HTTP/3 伪装本地静态文件目录（`h3_cover_site` 未设置时的回退） |
+| `salamander_password` | string? | -- | Salamander UDP 混淆密码（仅 QUIC） |
+
+## `[shadow_tls]` -- ShadowTLS v3
+
+ShadowTLS 使用真实 TLS 握手与合法掩护服务器作为伪装。代理数据在 TLS 应用数据帧中多路复用并使用 HMAC 认证。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 ShadowTLS 监听器 |
+| `listen_addr` | string | `"0.0.0.0:8444"` | ShadowTLS 监听地址 |
+| `handshake_server` | string? | -- | 转发握手的合法 TLS 服务器（如 `"www.microsoft.com:443"`） |
+| `password` | string | `""` | 用于派生帧认证 HMAC 密钥的预共享密码 |
+| `sni` | string? | -- | 期望来自客户端的 SNI（用于验证） |
+
+## `[ssh]` -- SSH 传输
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 SSH 传输监听器 |
+| `listen_addr` | string | `"0.0.0.0:2222"` | SSH 监听地址 |
+| `host_key_path` | string? | -- | SSH 主机密钥文件路径（未设置时自动生成） |
+| `password` | string? | -- | SSH 密码认证凭证 |
+| `allowed_users` | string[] | `[]` | 允许的 SSH 用户名（空 = 允许所有） |
+| `authorized_keys_path` | string? | -- | 公钥认证的 `authorized_keys` 文件路径 |
+| `fake_shell` | bool | `false` | 对交互式会话响应虚假 shell 提示符（进一步伪装） |
+| `banner` | string | `"SSH-2.0-OpenSSH_9.6"` | SSH 版本横幅字符串 |
+
+## `[wireguard]` -- WireGuard 兼容 UDP 传输
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 WireGuard 传输 |
+| `listen_addr` | string | `"0.0.0.0:51820"` | WireGuard UDP 监听地址 |
+| `session_timeout_secs` | u64 | `180` | 对等会话超时（秒） |
+
+## `[acls]` -- 每客户端访问控制列表
+
+ACL 提供每客户端的细粒度目标控制。键是客户端标识符，值是 ACL 对象：
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `client_id` | string | -- | 此 ACL 适用的客户端 ID |
+| `rules` | array | `[]` | 有序的 ACL 规则列表（首个匹配生效） |
+| `default_policy` | string | `"allow"` | 无规则匹配时的默认策略：`"allow"` / `"deny"` |
+| `enabled` | bool | `true` | 此 ACL 是否激活 |
+
+每条规则的 `rules`：
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `action` | string | `"allow"` / `"deny"` |
+| `matcher.type` | string | `"domain"` / `"domain-suffix"` / `"domain-keyword"` / `"ip-cidr"` / `"port"` |
+| `matcher.value` | string | 匹配值 |
+| `description` | string? | 可选的人类可读描述 |
+
+示例：
+
+```toml
+[acls.client-uuid-1]
+client_id = "client-uuid-1"
+default_policy = "allow"
+enabled = true
+
+[[acls.client-uuid-1.rules]]
+action = "deny"
+description = "屏蔽 torrent 追踪器"
+[acls.client-uuid-1.rules.matcher]
+type = "domain-keyword"
+value = "torrent"
+
+[[acls.client-uuid-1.rules]]
+action = "deny"
+description = "屏蔽私有网络"
+[acls.client-uuid-1.rules.matcher]
+type = "ip-cidr"
+value = "10.0.0.0/8"
+```
+
+## `[[inbounds]]` -- 多协议入站监听器
+
+每个条目定义一个协议特定的入站监听器。Prisma 除了原生 PrismaVeil 客户端外，还可接受来自 VMess、VLESS、Shadowsocks 和 Trojan 客户端的连接。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `protocol` | string | -- | 入站协议：`"vmess"` / `"vless"` / `"shadowsocks"` / `"trojan"` |
+| `listen_addr` | string | -- | 此入站的监听地址（如 `"0.0.0.0:8444"`） |
+| `enabled` | bool | `true` | 启用/禁用此入站 |
+| `settings` | table | -- | 协议特定设置（用户、密码、加密方法等） |
+
+示例：
+
+```toml
+[[inbounds]]
+protocol = "vmess"
+listen_addr = "0.0.0.0:10086"
+enabled = true
+
+[[inbounds.settings.clients]]
+id = "b831381d-6324-4d53-ad4f-8cda48b30811"
+alter_id = 0
+
+[[inbounds]]
+protocol = "shadowsocks"
+listen_addr = "0.0.0.0:8388"
+enabled = true
+
+[inbounds.settings]
+method = "aes-256-gcm"
+password = "your-password"
+
+[[inbounds]]
+protocol = "trojan"
+listen_addr = "0.0.0.0:443"
+enabled = true
+
+[inbounds.settings]
+password = "your-trojan-password"
+```
+
+## `[logging]` -- 日志输出
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `level` | string | `"info"` | 日志级别：`trace` / `debug` / `info` / `warn` / `error` |
+| `format` | string | `"pretty"` | 日志格式：`pretty` / `json` |
+
+## `[prisma_tls]` -- PrismaTLS（替代 REALITY）
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 PrismaTLS |
+| `auth_secret` | string | `""` | 认证密钥（十六进制编码，32 字节） |
+| `auth_rotation_hours` | u64 | `1` | 认证密钥轮换间隔（小时） |
+| `mask_servers` | array | `[]` | 掩护服务器池 |
+
+每个 `[[prisma_tls.mask_servers]]`：
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `addr` | string | 掩护服务器地址（如 `"www.microsoft.com:443"`） |
+| `names` | string[] | 允许的 SNI 名称 |
+
+## `[traffic_shaping]` -- 抗指纹识别
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `padding_mode` | string | `"none"` | `"none"` / `"random"` / `"bucket"` |
+| `bucket_sizes` | u16[] | `[128,256,512,1024,2048,4096,8192,16384]` | 桶填充模式的桶大小 |
+| `timing_jitter_ms` | u32 | `0` | 握手帧的最大时序抖动（毫秒） |
+| `chaff_interval_ms` | u32 | `0` | 杂音注入间隔（毫秒），0 = 禁用 |
+| `coalesce_window_ms` | u32 | `0` | 帧合并窗口（毫秒），0 = 禁用 |
+
+## `[anti_rtt]` -- RTT 归一化
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用跨层 RTT 归一化 |
+| `normalization_ms` | u32 | `150` | 将传输 ACK 归一化到的目标 RTT（毫秒） |
+
+## `[congestion]` -- QUIC 拥塞控制
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` |
+| `target_bandwidth` | string? | -- | brutal/adaptive 模式的目标带宽（如 `"100mbps"`） |
+
+## `[port_hopping]` -- QUIC 端口跳变
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 QUIC 端口跳变 |
+| `base_port` | u16 | `10000` | 端口范围起始值 |
+| `port_range` | u16 | `50000` | 端口范围数量 |
+| `interval_secs` | u64 | `60` | 端口跳变间隔（秒） |
+| `grace_period_secs` | u64 | `10` | 跳变后旧端口保留时间（秒） |
+
+## `[cdn]` -- CDN 传输监听器
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 CDN 传输监听器（WS、gRPC、XHTTP） |
+| `listen_addr` | string | `"0.0.0.0:443"` | CDN 监听绑定地址 |
+| `tls.cert_path` | string? | -- | CDN TLS 证书（如 Cloudflare Origin 证书） |
+| `tls.key_path` | string? | -- | CDN TLS 私钥 |
+| `ws_tunnel_path` | string | `"/ws-tunnel"` | WebSocket 隧道端点路径 |
+| `grpc_tunnel_path` | string | `"/tunnel.PrismaTunnel"` | gRPC 隧道服务路径 |
+| `cover_upstream` | string? | -- | 伪装流量的反向代理上游 URL |
+| `cover_static_dir` | string? | -- | 伪装流量的静态文件目录 |
+| `trusted_proxies` | string[] | `[]` | 受信任的代理 IP 范围（如 Cloudflare CIDR） |
+| `expose_management_api` | bool | `false` | 通过 CDN 端点暴露管理 API |
+| `management_api_path` | string | `"/prisma-mgmt"` | CDN 上的管理 API 子路径 |
+| `xhttp_upload_path` | string | `"/api/v1/upload"` | XHTTP packet-up 上传端点 |
+| `xhttp_download_path` | string | `"/api/v1/pull"` | XHTTP packet-up 下载端点 |
+| `xhttp_stream_path` | string | `"/api/v1/stream"` | XHTTP stream-one/stream-up 端点 |
+| `xhttp_mode` | string? | -- | XHTTP 模式：`"packet-up"` / `"stream-up"` / `"stream-one"` |
+| `xhttp_nosse` | bool | `false` | 禁用 XHTTP 下载的 SSE 包装 |
+| `xhttp_extra_headers` | \[\[k,v\]\] | `[]` | 额外的伪装响应头 |
+| `response_server_header` | string? | -- | 覆盖 HTTP `Server` 响应头 |
+| `padding_header` | bool | `true` | 添加 `X-Padding` 响应头 |
+| `enable_sse_disguise` | bool | `false` | 以 SSE 格式包装下载流 |
+
+### `[cdn.xporta]` -- XPorta 传输
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 启用 XPorta 传输 |
+| `session_path` | string | `"/api/auth"` | XPorta 会话端点 |
+| `data_paths` | string[] | `["/api/v1/data", "/api/v1/sync", "/api/v1/update"]` | XPorta 上传路径 |
+| `poll_paths` | string[] | `["/api/v1/notifications", "/api/v1/feed", "/api/v1/events"]` | XPorta 长轮询下载路径 |
+| `session_timeout_secs` | u64 | `300` | 会话空闲超时（秒） |
+| `max_sessions_per_client` | u16 | `8` | 每客户端最大并发会话数 |
+| `cookie_name` | string | `"_sess"` | 会话 Cookie 名称 |
+| `encoding` | string | `"json"` | 编码方式：`"json"` / `"binary"` |
+
+## 完整示例
+
+```toml title="server.toml"
+listen_addr = "0.0.0.0:8443"
+quic_listen_addr = "0.0.0.0:8443"
+dns_upstream = "8.8.8.8:53"
+config_watch = true
+shutdown_drain_timeout_secs = 30
+ticket_rotation_hours = 6
+
+[tls]
+cert_path = "prisma-cert.pem"
+key_path = "prisma-key.pem"
+
+# 使用以下命令生成密钥：prisma gen-key
+[[authorized_clients]]
+id = "00000000-0000-0000-0000-000000000001"
+auth_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+name = "my-client"
+bandwidth_up = "100mbps"
+bandwidth_down = "500mbps"
+quota = "500GB"
+quota_period = "monthly"
+
+[logging]
+level = "info"       # trace | debug | info | warn | error
+format = "pretty"    # pretty | json
+
+[performance]
+max_connections = 1024        # 最大并发连接数
+connection_timeout_secs = 300 # 空闲超时时间（秒）
+
+# 端口转发（反向代理）— 允许客户端暴露本地服务
+[port_forwarding]
+enabled = true
+port_range_start = 10000
+port_range_end = 20000
+max_forwards_per_client = 10
+max_connections_per_forward = 100
+default_idle_timeout_secs = 300
+require_name = false
+log_connections = true
+
+# 管理 API + 控制台
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+console_dir = "/opt/prisma/console"
+
+# 每帧填充
+[padding]
+min = 0
+max = 256
+
+# 伪装（抗主动探测）
+[camouflage]
+enabled = true
+tls_on_tcp = true
+fallback_addr = "example.com:443"
+alpn_protocols = ["h2", "http/1.1"]
+
+# 每客户端 ACL
+# [acls.client-uuid-1]
+# client_id = "client-uuid-1"
+# default_policy = "allow"
+# enabled = true
+# [[acls.client-uuid-1.rules]]
+# action = "deny"
+# description = "屏蔽 torrent 站点"
+# [acls.client-uuid-1.rules.matcher]
+# type = "domain-keyword"
+# value = "torrent"
+
+# 多协议入站
+# [[inbounds]]
+# protocol = "vmess"
+# listen_addr = "0.0.0.0:10086"
+# enabled = true
+# [[inbounds.settings.clients]]
+# id = "vmess-client-uuid"
+# alter_id = 0
+```
+
+## 验证规则
+
+服务端配置在启动时进行验证，以下规则将被强制执行：
+
+- `listen_addr` 不能为空
+- `authorized_clients` 中至少需要一个条目
+- 每个 `authorized_clients[].id` 不能为空
+- 每个 `authorized_clients[].auth_secret` 不能为空且必须是有效的十六进制字符串
+- `logging.level` 必须是以下之一：`trace`、`debug`、`info`、`warn`、`error`
+- `logging.format` 必须是以下之一：`pretty`、`json`
+- `camouflage.tls_on_tcp = true` 需要设置 `tls.cert_path` 和 `tls.key_path`
+- `shadow_tls.enabled = true` 需要设置 `shadow_tls.handshake_server` 和 `shadow_tls.password`
+- `ssh.enabled = true` 需要至少设置 `ssh.password` 或 `ssh.authorized_keys_path` 之一
+- `ticket_rotation_hours` 必须 > 0
+- `shutdown_drain_timeout_secs` 必须 > 0

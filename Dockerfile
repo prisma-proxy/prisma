@@ -1,8 +1,8 @@
 FROM node:22-slim AS console
 WORKDIR /console
-COPY prisma-console/package.json prisma-console/package-lock.json ./
+COPY apps/prisma-console/package.json apps/prisma-console/package-lock.json ./
 RUN npm ci
-COPY prisma-console/ ./
+COPY apps/prisma-console/ ./
 RUN npm run build
 
 FROM rust:1-bookworm AS builder
@@ -10,20 +10,20 @@ WORKDIR /src
 
 # Stage 1: cache dependencies
 COPY Cargo.toml Cargo.lock ./
-COPY prisma-core/Cargo.toml prisma-core/
-COPY prisma-server/Cargo.toml prisma-server/
-COPY prisma-client/Cargo.toml prisma-client/
-COPY prisma-cli/Cargo.toml prisma-cli/
-COPY prisma-mgmt/Cargo.toml prisma-mgmt/
-COPY prisma-ffi/Cargo.toml prisma-ffi/
-RUN mkdir -p prisma-core/src prisma-server/src prisma-client/src \
-             prisma-mgmt/src prisma-ffi/src \
-    && echo "fn main(){}" > prisma-cli/src/main.rs \
-    && echo "fn main(){}" > prisma-server/src/main.rs \
-    && echo "fn main(){}" > prisma-client/src/main.rs \
-    && touch prisma-core/src/lib.rs prisma-server/src/lib.rs \
-             prisma-client/src/lib.rs prisma-mgmt/src/lib.rs \
-             prisma-ffi/src/lib.rs \
+COPY crates/prisma-core/Cargo.toml crates/prisma-core/
+COPY crates/prisma-server/Cargo.toml crates/prisma-server/
+COPY crates/prisma-client/Cargo.toml crates/prisma-client/
+COPY crates/prisma-cli/Cargo.toml crates/prisma-cli/
+COPY crates/prisma-mgmt/Cargo.toml crates/prisma-mgmt/
+COPY crates/prisma-ffi/Cargo.toml crates/prisma-ffi/
+RUN mkdir -p crates/prisma-core/src crates/prisma-server/src crates/prisma-client/src \
+             crates/prisma-mgmt/src crates/prisma-ffi/src \
+    && echo "fn main(){}" > crates/prisma-cli/src/main.rs \
+    && echo "fn main(){}" > crates/prisma-server/src/main.rs \
+    && echo "fn main(){}" > crates/prisma-client/src/main.rs \
+    && touch crates/prisma-core/src/lib.rs crates/prisma-server/src/lib.rs \
+             crates/prisma-client/src/lib.rs crates/prisma-mgmt/src/lib.rs \
+             crates/prisma-ffi/src/lib.rs \
     && cargo build --release -p prisma-cli 2>/dev/null || true
 
 # Stage 2: build actual code (deps are cached)

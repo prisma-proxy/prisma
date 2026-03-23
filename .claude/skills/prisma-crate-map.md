@@ -1,14 +1,14 @@
 ---
 description: "Module reference for all 6 Prisma Rust crates with file paths, key types, and extension recipes"
 globs:
-  - "prisma-core/**/*.rs"
-  - "prisma-server/**/*.rs"
-  - "prisma-client/**/*.rs"
-  - "prisma-cli/**/*.rs"
-  - "prisma-mgmt/**/*.rs"
-  - "prisma-ffi/**/*.rs"
+  - "crates/prisma-core/**/*.rs"
+  - "crates/prisma-server/**/*.rs"
+  - "crates/prisma-client/**/*.rs"
+  - "crates/prisma-cli/**/*.rs"
+  - "crates/prisma-mgmt/**/*.rs"
+  - "crates/prisma-ffi/**/*.rs"
   - "Cargo.toml"
-  - "*/Cargo.toml"
+  - "crates/*/Cargo.toml"
 ---
 
 # Prisma Crate Map (v1.7.0)
@@ -117,26 +117,26 @@ Endpoints: `GET/POST/PUT/DELETE /api/{health,metrics,connections,clients,bandwid
 ## Extension Recipes
 
 ### Add a New Transport
-1. Add variant to `TransportType` in `prisma-client/src/transport_selector.rs`
-2. Create stream wrapper in `prisma-client/src/` implementing `AsyncRead + AsyncWrite`
-3. Add to `TransportStream` enum in `prisma-client/src/connector.rs`
-4. Create connect function in `prisma-client/src/connector.rs`
-5. Add server listener in `prisma-server/src/listener/`
+1. Add variant to `TransportType` in `crates/prisma-client/src/transport_selector.rs`
+2. Create stream wrapper in `crates/prisma-client/src/` implementing `AsyncRead + AsyncWrite`
+3. Add to `TransportStream` enum in `crates/prisma-client/src/connector.rs`
+4. Create connect function in `crates/prisma-client/src/connector.rs`
+5. Add server listener in `crates/prisma-server/src/listener/`
 6. Add config fields to `ClientConfig` and `ServerConfig`
 
 ### Add a New CLI Command
-1. Add variant to `Commands` enum in `prisma-cli/src/main.rs`
-2. Create handler in `prisma-cli/src/`
+1. Add variant to `Commands` enum in `crates/prisma-cli/src/main.rs`
+2. Create handler in `crates/prisma-cli/src/`
 3. Wire match arm in main
 
 ### Add a Management API Endpoint
-1. Create handler in `prisma-mgmt/src/handlers/`
-2. Add route in `prisma-mgmt/src/router.rs` `build_router()`
+1. Create handler in `crates/prisma-mgmt/src/handlers/`
+2. Add route in `crates/prisma-mgmt/src/router.rs` `build_router()`
 3. Apply auth middleware if needed
 
 ### Add a New Protocol Command
-1. Assign byte constant in `prisma-core/src/protocol/types.rs`
+1. Assign byte constant in `crates/prisma-core/src/protocol/types.rs`
 2. Add variant to `Command` enum
-3. Encode in `prisma-core/src/protocol/codec.rs`
-4. Decode in `prisma-core/src/protocol/codec.rs`
-5. Handle in `prisma-server/src/relay.rs` and/or `prisma-client/src/relay.rs`
+3. Encode in `crates/prisma-core/src/protocol/codec.rs`
+4. Decode in `crates/prisma-core/src/protocol/codec.rs`
+5. Handle in `crates/prisma-server/src/relay.rs` and/or `crates/prisma-client/src/relay.rs`

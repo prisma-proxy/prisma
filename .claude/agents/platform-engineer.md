@@ -40,7 +40,7 @@ Read `.claude/skills/prisma-crate-map.md` for FFI module paths. Run quality gate
 
 Same `prisma-gui` codebase for desktop and mobile. No separate native projects.
 
-- iOS: generates Xcode project in `prisma-gui/src-tauri/gen/apple/`
-- Android: generates Gradle project in `prisma-gui/src-tauri/gen/android/`
+- iOS: generates Xcode project in `apps/prisma-gui/src-tauri/gen/apple/`
+- Android: generates Gradle project in `apps/prisma-gui/src-tauri/gen/android/`
 - Platform-specific Rust: `#[cfg(target_os = "...")]`
 - Mobile releases: no debug symbols

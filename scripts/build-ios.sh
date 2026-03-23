@@ -64,8 +64,8 @@ if [ "$SIMULATOR" = true ]; then
     XCFRAMEWORK_DIR="target/PrismaFFI.xcframework"
     rm -rf "$XCFRAMEWORK_DIR"
     xcodebuild -create-xcframework \
-        -library "$DEVICE_LIB" -headers prisma-ffi/include \
-        -library "$SIM_LIB" -headers prisma-ffi/include \
+        -library "$DEVICE_LIB" -headers crates/prisma-ffi/include \
+        -library "$SIM_LIB" -headers crates/prisma-ffi/include \
         -output "$XCFRAMEWORK_DIR"
     echo "  -> $XCFRAMEWORK_DIR"
 else
@@ -75,7 +75,7 @@ fi
 
 echo ""
 echo "=== Copying header ==="
-cp prisma-ffi/include/prisma_ffi.h target/prisma_ffi.h
+cp crates/prisma-ffi/include/prisma_ffi.h target/prisma_ffi.h
 echo "  -> target/prisma_ffi.h"
 
 echo ""

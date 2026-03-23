@@ -1,0 +1,241 @@
+---
+sidebar_position: 5
+---
+
+# 控制台
+
+Prisma 控制台是用于监控和管理代理服务器的实时 Web 界面。它使用 Next.js 16、shadcn/ui、Recharts 和 TanStack Query 构建为静态站点，由 Prisma 服务器直接提供服务。
+
+## 前提条件
+
+- 一个已启用[管理 API](/docs/features/management-api)的运行中的 Prisma 服务器
+- 控制台静态文件（预构建或从源代码构建）
+
+## 设置
+
+### 使用预构建文件
+
+从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载 `prisma-console.tar.gz` 并解压：
+
+```bash
+mkdir -p /opt/prisma/console
+tar -xzf prisma-console.tar.gz -C /opt/prisma/console
+```
+
+### 从源代码构建
+
+```bash
+cd apps/prisma-console
+npm ci
+npm run build
+```
+
+静态文件输出到 `apps/prisma-console/out/`。
+
+### 服务端配置
+
+在 `server.toml` 中将服务器指向控制台文件：
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "0.0.0.0:9090"
+auth_token = "your-secure-token-here"
+console_dir = "/opt/prisma/console"  # 或 "./apps/prisma-console/out"
+```
+
+启动服务器后访问 `https://your-server:9090/` 即可打开控制台。
+
+### 使用 CLI（`prisma console`）
+
+`prisma console` 命令可自动下载并启动控制台，无需手动设置。
+
+#### 基本用法
+
+```bash
+prisma console --mgmt-url https://127.0.0.1:9090 --token your-secure-token
+```
+
+该命令会从 GitHub Releases 下载最新控制台并缓存到本地，启动本地服务器将 API 请求代理到管理 API。桌面系统会自动打开浏览器。
+
+#### 所有参数
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `--mgmt-url` | 自动检测 | 管理 API URL（省略时从 `server.toml` 自动检测） |
+| `--token` | -- | 认证的 Bearer 令牌（省略时从 `server.toml` 读取 `management_api.auth_token`） |
+| `--config` / `-c` | `./server.toml` | 用于自动检测 `--mgmt-url` 和 `--token` 的 `server.toml` 路径 |
+| `--listen` / `-l` | `127.0.0.1:9091` | 控制台服务器的本地地址 |
+| `--no-open` | `false` | 不自动打开浏览器 |
+| `--daemon` / `-d` | `false` | 作为守护进程在后台运行 |
+| `--console-dir` | `~/.prisma/console` | 缓存控制台静态文件的路径 |
+
+#### 从 server.toml 自动检测
+
+当省略 `--mgmt-url` 和 `--token` 时，CLI 会读取 `server.toml`（从当前目录或 `--config` 指定的路径）并自动提取 `management_api.listen_addr` 和 `management_api.auth_token`：
+
+```bash
+# 从当前目录的 server.toml 自动检测所有配置
+prisma console
+
+# 从指定配置文件自动检测
+prisma console -c /etc/prisma/server.toml
+```
+
+#### 守护进程模式
+
+在后台运行控制台服务器：
+
+```bash
+# 以守护进程启动
+prisma console -d
+
+# 检查守护进程状态
+prisma console status
+
+# 停止守护进程
+prisma console stop
+```
+
+守护进程将 PID 写入 `~/.prisma/console.pid`，日志写入 `~/.prisma/console.log`。
+
+#### 架构：静态文件服务 + 反向代理
+
+通过 `prisma console` 启动时，CLI 启动一个轻量级 HTTP 服务器，它：
+
+1. **提供静态文件** -- 来自缓存目录的预构建控制台 SPA
+2. **反向代理 API 请求** -- 所有 `/api/*` 和 `/api/ws/*` 请求转发到管理 API URL
+3. **注入认证** -- `--token` 自动添加到代理请求中
+
+```
+浏览器 → prisma console（本地 :9091）→ 静态文件（控制台 SPA）
+                                      → /api/* → 代理 → prisma-server:9090
+                                      → /api/ws/* → WebSocket 代理 → prisma-server:9090
+```
+
+这允许在不配置 CORS 和不直接暴露管理 API 的情况下访问控制台。
+
+## 认证
+
+控制台使用基于令牌的认证。在登录页面输入服务器配置中的 `management_api.auth_token`。令牌存储在浏览器的会话存储中，并以 `Bearer` 令牌的形式随每个 API 请求发送。
+
+所有 `/console/*` 路由都受保护——未认证用户将被重定向到 `/login`。
+
+## 架构
+
+控制台构建为静态单页应用程序（SPA），由 Prisma 服务器的管理 API（axum）提供服务。生产环境无需单独的 Node.js 进程。
+
+```
+浏览器 → prisma-server:9090 → 静态文件（控制台）
+                              → /api/*（REST + WebSocket）
+```
+
+控制台的 API 调用直接发送到同源管理 API 端点。WebSocket 连接使用 `?token=` 查询参数进行认证（因为浏览器 WebSocket API 无法发送自定义头部）。
+
+## 页面
+
+### 概览
+
+主控制台页面显示：
+- **指标卡片** -- 活跃连接数、总上传/下载字节数、运行时间
+- **流量图表** -- 实时字节/秒，支持时间范围选择（实时/1H/6H/24H/7D）和 Mbps 切换
+- **传输类型饼图** -- 按传输类型分组的连接分布
+- **连接时长直方图** -- 连接持续时间分布
+- **连接表格** -- 活跃连接的对端地址、传输类型、模式、字节计数和断开按钮
+
+数据源：WebSocket 推送（每秒指标）+ REST 轮询（每 5 秒连接状态）。
+
+### 服务器
+
+服务器信息：
+- 健康状态、版本和运行时间
+- 服务器配置详情（监听地址、最大连接数、超时时间）
+- TLS 证书信息
+
+### 系统
+
+系统监控：
+- **系统卡片** -- 版本、平台、PID、CPU 和内存使用率仪表
+- **证书到期** -- 倒计时，颜色编码（绿色 &gt;30 天、黄色 7-30 天、红色 &lt;7 天）
+- **活跃监听** -- 所有监听地址和协议的表格
+
+### 客户端
+
+客户端管理：
+- **客户端列表** -- 显示所有授权客户端的名称、状态（启用/禁用），点击可进入详情页
+- **客户端详情** -- 每客户端带宽限制（可编辑）、配额利用率进度条、流量图表、过滤后的连接表格
+- **添加客户端** -- 生成新的 UUID + 认证密钥对，密钥仅显示一次
+- **编辑客户端** -- 更新名称、切换启用/禁用、配置带宽/配额限制
+- **删除客户端** -- 从认证存储中移除客户端
+
+更改立即生效——无需重启服务器。
+
+### 路由
+
+可视化路由规则编辑器：
+- **规则列表** -- 所有规则按优先级排序，显示条件、操作和启用状态
+- **规则编辑器** -- 用于创建新规则的对话框表单，包含条件类型、值和操作
+- **切换/删除** -- 内联启用、禁用或删除规则
+
+详见[路由规则](/docs/features/routing-rules)了解规则类型。
+
+### 日志
+
+实时日志流：
+- **日志查看器** -- 可滚动的等宽字体日志输出，带有彩色级别标签
+- **过滤器** -- 按日志级别（ERROR、WARN、INFO、DEBUG、TRACE）、目标字符串和消息正则搜索过滤
+- **自动滚动** -- 自动跟随新日志条目，除非用户向上滚动
+- **清除** -- 清除日志缓冲区
+
+数据源：WebSocket 推送（实时日志条目）。
+
+### 设置
+
+带选项卡的服务器配置编辑器：
+- **通用** -- 日志级别、日志格式、最大连接数、端口转发开关
+- **伪装与 CDN** -- 伪装和 CDN 配置（只读）
+- **流量与性能** -- 流量整形、拥塞控制、端口跳跃、DNS、反 RTT 设置
+- **TLS 与安全** -- 证书信息、仅传输层加密、协议版本、PrismaTLS 状态
+- **告警** -- 配置告警阈值（证书到期、配额警告、握手失败峰值）
+
+### 配置备份
+
+配置备份与恢复：
+- **备份列表** -- 带时间戳的备份，显示名称、大小和操作
+- **创建备份** -- 手动创建当前配置的快照
+- **恢复** -- 从先前的备份恢复配置（恢复前自动备份当前配置）
+- **差异查看器** -- 并排彩色显示备份与当前配置的差异
+- **删除** -- 删除旧备份
+
+### 流量整形
+
+流量整形可视化：
+- **桶大小图表** -- 显示填充桶大小分布的柱状图
+- **配置卡片** -- 填充模式、抖动、杂音状态、合并窗口
+
+## 附加功能
+
+- **国际化** -- 完整的英文和简体中文翻译，可从顶栏切换
+- **主题** -- 深色、浅色和系统模式，可从顶栏切换
+- **全局搜索** -- Ctrl+K 命令面板搜索页面、客户端和配置键
+- **数据导出** -- 将表格导出为 CSV/JSON，图表导出为 PNG
+- **告警标记** -- 顶栏中的铃铛图标显示活跃告警及严重级别
+- **响应式侧边栏** -- 可折叠侧边栏（图标模式），移动端抽屉
+
+## 开发
+
+本地开发时，可以运行 Next.js 开发服务器：
+
+```bash
+cd apps/prisma-console
+npm install
+npm run dev
+# → http://localhost:3000
+```
+
+开发服务器要求 Prisma 管理 API 运行在同源或已启用 CORS 的地址上。如果使用不同端口，在服务器配置中配置 `cors_origins`：
+
+```toml
+[management_api]
+cors_origins = ["http://localhost:3000"]
+```

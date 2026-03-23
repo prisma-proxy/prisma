@@ -30,11 +30,11 @@ Threat model: passive DPI, active probing, traffic analysis.
 - Zero `unsafe` unless proven necessary and documented
 - All random values from `OsRng` or `SystemRandom`
 
-Key files: `prisma-core/src/protocol/`, `prisma-core/src/crypto/`, `prisma-core/src/salamander.rs`, `prisma-server/src/camouflage.rs`, `prisma-server/src/auth.rs`
+Key files: `crates/prisma-core/src/protocol/`, `crates/prisma-core/src/crypto/`, `crates/prisma-core/src/salamander.rs`, `crates/prisma-server/src/camouflage.rs`, `crates/prisma-server/src/auth.rs`
 
 ## Performance Rules
 
-Hot path: `encrypt -> send -> recv -> decrypt` (relay loop in `prisma-server/src/relay.rs` and `prisma-client/src/relay.rs`)
+Hot path: `encrypt -> send -> recv -> decrypt` (relay loop in `crates/prisma-server/src/relay.rs` and `crates/prisma-client/src/relay.rs`)
 
 - Avoid allocations — use `FrameEncoder` (pre-allocated buffers)
 - `AtomicNonceCounter` with `Ordering::Relaxed` for lock-free nonces
