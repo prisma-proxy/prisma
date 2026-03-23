@@ -142,7 +142,12 @@ pub async fn packet_download_handler(
 
     // Atomically take download_rx from the session (no remove+reinsert race).
     let download_rx = match state.sessions.get(&session_id) {
-        Some(entry) => match entry.download_rx.lock().unwrap().take() {
+        Some(entry) => match entry
+            .download_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             Some(rx) => rx,
             None => return StatusCode::CONFLICT.into_response(), // already consumed
         },
@@ -177,7 +182,7 @@ pub async fn packet_download_handler(
         .header("connection", "keep-alive")
         .header("x-accel-buffering", "no") // Prevent CDN/reverse-proxy buffering
         .body(Body::from_stream(stream))
-        .unwrap()
+        .expect("static headers")
         .into_response()
 }
 
@@ -249,7 +254,7 @@ pub async fn stream_handler(
         .header("cache-control", "no-cache")
         .header("x-accel-buffering", "no") // Prevent CDN/reverse-proxy buffering
         .body(Body::from_stream(stream))
-        .unwrap()
+        .expect("static headers")
         .into_response()
 }
 

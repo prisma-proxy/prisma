@@ -51,9 +51,6 @@ prisma-mcp/node_modules/
 prisma-mcp/dist/
 prisma-mcp/.prisma-mcp.db
 
-# Tauri 2 mobile generated projects
-prisma-gui/src-tauri/gen/
-
 # Claude agent memory
 .claude/agent-memory/
 **/.claude/agent-memory/

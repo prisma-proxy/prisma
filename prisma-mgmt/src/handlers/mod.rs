@@ -2,6 +2,7 @@ pub mod acls;
 pub mod alerts;
 pub mod backup;
 pub mod bandwidth;
+pub mod client_metrics;
 pub mod clients;
 pub mod config;
 pub mod connections;

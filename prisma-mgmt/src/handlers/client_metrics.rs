@@ -6,8 +6,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use serde::{Deserialize, Serialize};
-use std::sync::atomic::Ordering;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use prisma_core::state::{ClientMetrics, ClientMetricsHistoryPoint};
@@ -24,10 +23,7 @@ pub async fn list_client_metrics(State(state): State<MgmtState>) -> Json<Vec<Cli
     for entry in state.state.per_client_metrics.iter() {
         let client_id = *entry.key();
         let acc = entry.value();
-        let name = auth
-            .clients
-            .get(&client_id)
-            .and_then(|e| e.name.clone());
+        let name = auth.clients.get(&client_id).and_then(|e| e.name.clone());
         result.push(acc.snapshot(client_id, name).await);
     }
 

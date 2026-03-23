@@ -242,7 +242,8 @@ pub async fn relay_udp(
                                         warn!("FEC shard too short");
                                         continue;
                                     }
-                                    let header: [u8; 4] = payload[..4].try_into().unwrap();
+                                    let header: [u8; 4] =
+                                        [payload[0], payload[1], payload[2], payload[3]];
                                     let (group_id, shard_index, _total) =
                                         decode_fec_header(&header);
                                     let shard_data = &payload[4..];
@@ -268,7 +269,9 @@ pub async fn relay_udp(
                                 if let Some(ref decoder) = fec_decoder {
                                     let mut seq = recv_seq.lock().await;
                                     let shard_index = *seq;
-                                    let fec_cfg = fec_config.as_ref().unwrap();
+                                    let fec_cfg = fec_config
+                                        .as_ref()
+                                        .expect("fec_decoder implies fec_config is Some");
                                     let _fec_total =
                                         (fec_cfg.data_shards + fec_cfg.parity_shards) as u8;
                                     // Compute group_id from sequence

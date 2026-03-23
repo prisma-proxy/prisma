@@ -98,7 +98,7 @@ fn average_snapshots(snapshots: &[&MetricsSnapshot]) -> MetricsSnapshot {
         "average_snapshots called with empty slice"
     );
     let len = snapshots.len() as u64;
-    let last = snapshots.last().unwrap();
+    let last = snapshots.last().expect("caller guarantees non-empty");
     MetricsSnapshot {
         timestamp: last.timestamp,
         uptime_secs: last.uptime_secs,

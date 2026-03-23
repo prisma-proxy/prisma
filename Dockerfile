@@ -15,10 +15,15 @@ COPY prisma-server/Cargo.toml prisma-server/
 COPY prisma-client/Cargo.toml prisma-client/
 COPY prisma-cli/Cargo.toml prisma-cli/
 COPY prisma-mgmt/Cargo.toml prisma-mgmt/
-RUN mkdir -p prisma-core/src prisma-server/src prisma-client/src prisma-mgmt/src \
+COPY prisma-ffi/Cargo.toml prisma-ffi/
+RUN mkdir -p prisma-core/src prisma-server/src prisma-client/src \
+             prisma-mgmt/src prisma-ffi/src \
     && echo "fn main(){}" > prisma-cli/src/main.rs \
+    && echo "fn main(){}" > prisma-server/src/main.rs \
+    && echo "fn main(){}" > prisma-client/src/main.rs \
     && touch prisma-core/src/lib.rs prisma-server/src/lib.rs \
-              prisma-client/src/lib.rs prisma-mgmt/src/lib.rs \
+             prisma-client/src/lib.rs prisma-mgmt/src/lib.rs \
+             prisma-ffi/src/lib.rs \
     && cargo build --release -p prisma-cli 2>/dev/null || true
 
 # Stage 2: build actual code (deps are cached)

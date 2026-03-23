@@ -338,7 +338,8 @@ pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> 
                 "transport = \"xhttp\" requires xhttp_mode".into(),
             ));
         }
-        let mode = config.xhttp_mode.as_deref().unwrap();
+        // SAFETY: is_none() is checked above and returns early.
+        let mode = config.xhttp_mode.as_deref().expect("checked above");
         let valid_modes = ["packet-up", "stream-up", "stream-one"];
         if !valid_modes.contains(&mode) {
             return Err(ConfigError::ValidationFailed(format!(

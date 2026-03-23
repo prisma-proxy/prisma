@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::extract::Request;
+use axum::http::HeaderValue;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{any, get, post};
@@ -197,7 +198,7 @@ fn build_cdn_router(
                     "server",
                     server_val
                         .parse()
-                        .unwrap_or_else(|_| "nginx".parse().unwrap()),
+                        .unwrap_or_else(|_| HeaderValue::from_static("nginx")),
                 );
             }
 

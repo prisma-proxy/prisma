@@ -222,7 +222,7 @@ async fn dispatch_frame<W: AsyncWrite + Unpin + Send + 'static>(
                         warn!("FEC shard too short");
                         return Ok(());
                     }
-                    let header: [u8; 4] = payload[..4].try_into().unwrap();
+                    let header: [u8; 4] = [payload[0], payload[1], payload[2], payload[3]];
                     let (group_id, shard_index, _total) = decode_fec_header(&header);
                     let shard_data = &payload[4..];
 

@@ -93,7 +93,10 @@ pub async fn run(config_path: &str) -> Result<()> {
             .rsplit_once(':')
             .and_then(|(_, p)| p.parse().ok())
             .unwrap_or(8443);
-        vec![SocketAddr::new(server_host.parse().unwrap(), port)]
+        vec![SocketAddr::new(
+            server_host.parse().expect("validated as IP above"),
+            port,
+        )]
     } else {
         let lookup_addr = if config.server_addr.contains(':') {
             config.server_addr.clone()

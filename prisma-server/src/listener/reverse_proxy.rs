@@ -22,6 +22,14 @@ pub struct ProxyState {
     pub upstream: String,
 }
 
+/// Build a simple error response without panicking.
+fn bad_gateway() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::BAD_GATEWAY)
+        .body(Body::from("Bad Gateway"))
+        .expect("static response")
+}
+
 pub async fn reverse_proxy(State(proxy): State<ProxyState>, req: Request<Body>) -> Response<Body> {
     let upstream = &proxy.upstream;
 
@@ -38,10 +46,7 @@ pub async fn reverse_proxy(State(proxy): State<ProxyState>, req: Request<Body>) 
         Ok(u) => u,
         Err(e) => {
             warn!(error = %e, "Failed to parse upstream URI");
-            return Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(Body::from("Bad Gateway"))
-                .unwrap();
+            return bad_gateway();
         }
     };
 
@@ -76,10 +81,7 @@ pub async fn reverse_proxy(State(proxy): State<ProxyState>, req: Request<Body>) 
         }
         Err(e) => {
             warn!(error = %e, upstream = %upstream, "Reverse proxy error");
-            Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(Body::from("Bad Gateway"))
-                .unwrap()
+            bad_gateway()
         }
     }
 }

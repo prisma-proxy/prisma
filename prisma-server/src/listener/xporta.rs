@@ -148,7 +148,7 @@ pub async fn session_init_handler(
                     .status(StatusCode::BAD_REQUEST)
                     .header("content-type", "application/json")
                     .body(Body::from(encode_error("invalid request", 400)))
-                    .unwrap()
+                    .expect("static response")
                     .into_response();
             }
         };
@@ -191,7 +191,7 @@ pub async fn session_init_handler(
             .status(StatusCode::UNAUTHORIZED)
             .header("content-type", "application/json")
             .body(Body::from(encode_error("unauthorized", 401)))
-            .unwrap()
+            .expect("static response")
             .into_response();
     }
 

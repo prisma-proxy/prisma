@@ -158,7 +158,11 @@ pub async fn get_inbound(
                 method: ib.settings.method.clone(),
             };
 
-            (StatusCode::OK, Json(serde_json::to_value(detail).unwrap())).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::to_value(&detail).unwrap_or_default()),
+            )
+                .into_response()
         }
         None => (
             StatusCode::NOT_FOUND,

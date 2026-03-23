@@ -242,7 +242,9 @@ where
                         CMD_CLOSE => break,
                         CMD_PING => {
                             if payload.len() >= 4 {
-                                let seq = u32::from_be_bytes(payload[..4].try_into().unwrap());
+                                let seq = u32::from_be_bytes([
+                                    payload[0], payload[1], payload[2], payload[3],
+                                ]);
                                 let nonce = server_nonce_ping.next_nonce();
                                 if let Some(wire) =
                                     build_pong_wire(seq, cipher_t2d.as_ref(), &nonce)
@@ -335,7 +337,10 @@ where
 /// Extract the 8-byte counter from a 12-byte nonce.
 /// Nonce format: [direction:1][0:3][counter:8]
 fn nonce_to_counter(nonce: &[u8; 12]) -> u64 {
-    u64::from_be_bytes(nonce[4..12].try_into().unwrap())
+    let bytes: [u8; 8] = [
+        nonce[4], nonce[5], nonce[6], nonce[7], nonce[8], nonce[9], nonce[10], nonce[11],
+    ];
+    u64::from_be_bytes(bytes)
 }
 
 /// Returns `true` if the splice(2) zero-copy relay path should be used.

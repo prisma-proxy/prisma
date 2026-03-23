@@ -648,7 +648,10 @@ async fn main() -> anyhow::Result<()> {
                         if global_verbose {
                             eprintln!("[verbose] Starting server with config: {}", path.display());
                         }
-                        prisma_server::run(path.to_str().unwrap()).await?;
+                        let path_str = path
+                            .to_str()
+                            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+                        prisma_server::run(path_str).await?;
                     }
                 }
             }
@@ -675,7 +678,10 @@ async fn main() -> anyhow::Result<()> {
                     if global_verbose {
                         eprintln!("[verbose] Starting client with config: {}", path.display());
                     }
-                    prisma_client::run(path.to_str().unwrap()).await?;
+                    let path_str = path
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+                    prisma_client::run(path_str).await?;
                 }
             }
         },
@@ -938,15 +944,24 @@ async fn main() -> anyhow::Result<()> {
             interval,
         } => {
             let path = resolve_config(&config, "client.toml");
-            diagnostics::ping(path.to_str().unwrap(), server.as_deref(), count, interval).await?;
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+            diagnostics::ping(path_str, server.as_deref(), count, interval).await?;
         }
         Commands::TestTransport { config } => {
             let path = resolve_config(&config, "client.toml");
-            diagnostics::test_transport(path.to_str().unwrap()).await?;
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+            diagnostics::test_transport(path_str).await?;
         }
         Commands::Diagnose { config } => {
             let path = resolve_config(&config, "client.toml");
-            diagnose::run(path.to_str().unwrap()).await?;
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+            diagnose::run(path_str).await?;
         }
         Commands::Subscription(cmd) => match cmd {
             SubscriptionCmd::Add { url, name } => subscription::add(&url, &name).await?,
@@ -1381,7 +1396,10 @@ fn print_version(json: bool) {
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
         });
-        println!("{}", serde_json::to_string_pretty(&version_info).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&version_info).expect("static JSON")
+        );
         return;
     }
 

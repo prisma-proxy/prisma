@@ -12,8 +12,8 @@ use prisma_core::config::server::ManagementApiConfig;
 
 use crate::auth::{auth_middleware, AuthToken};
 use crate::handlers::{
-    acls, alerts, backup, bandwidth, clients, config, connections, forwards, health, inbounds,
-    permissions, prometheus_export, reload, routes, system,
+    acls, alerts, backup, bandwidth, client_metrics, clients, config, connections, forwards,
+    health, inbounds, permissions, prometheus_export, reload, routes, system,
 };
 use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
@@ -65,6 +65,19 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route(
             "/api/bandwidth/summary",
             get(bandwidth::get_bandwidth_summary),
+        )
+        // Client metrics
+        .route(
+            "/api/metrics/clients",
+            get(client_metrics::list_client_metrics),
+        )
+        .route(
+            "/api/metrics/clients/{id}",
+            get(client_metrics::get_client_metrics),
+        )
+        .route(
+            "/api/metrics/clients/{id}/history",
+            get(client_metrics::get_client_metrics_history),
         )
         // Config
         .route("/api/config", get(config::get_config))
