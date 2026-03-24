@@ -302,11 +302,10 @@ export function mergeSettingsIntoConfig(
     delete config.port_forwards;
   }
 
-  // Connection pool — only include if explicitly enabled
-  if (settings.connectionPoolEnabled) {
+  // Connection pool — respect profile config; only override if settings explicitly enables
+  // and profile doesn't already have it set
+  if (!config.connection_pool && settings.connectionPoolEnabled) {
     config.connection_pool = { enabled: true };
-  } else {
-    delete config.connection_pool;
   }
 
   // Routing rules + geo paths
@@ -425,12 +424,37 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     config.fallback_order = fo;
   }
 
-  // QUIC-specific (only for QUIC transport)
+  // QUIC-specific fields (only for QUIC transport)
   if (w.transport === "quic") {
     if (w.quicVersion !== "auto") config.quic_version = w.quicVersion;
     if (w.sniSlicing) config.sni_slicing = true;
     if (w.salamanderPassword) config.salamander_password = w.salamanderPassword;
     if (w.entropyCamouflage) config.entropy_camouflage = true;
+    // Congestion control (QUIC-only, omit if default bbr with no target)
+    if (w.congestion !== "bbr" || w.targetBandwidth) {
+      config.congestion = {
+        mode: w.congestion,
+        ...(w.targetBandwidth ? { target_bandwidth: w.targetBandwidth } : {}),
+      };
+    }
+    // Port hopping (QUIC-only)
+    if (w.portHopping) {
+      config.port_hopping = {
+        enabled: true,
+        base_port: w.portHopBase,
+        port_range: w.portHopRange,
+        interval_secs: w.portHopInterval,
+        grace_period_secs: w.portHopGracePeriod,
+      };
+    }
+    // UDP FEC (QUIC-only)
+    if (w.fecEnabled) {
+      config.udp_fec = {
+        enabled: true,
+        data_shards: w.fecDataShards,
+        parity_shards: w.fecParityShards,
+      };
+    }
   }
 
   // WebSocket URL scheme:
@@ -509,24 +533,7 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     };
   }
 
-  // Congestion — nested CongestionConfig
-  config.congestion = {
-    mode: w.congestion,
-    ...(w.targetBandwidth ? { target_bandwidth: w.targetBandwidth } : {}),
-  };
-
-  // Port hopping — nested PortHoppingConfig
-  if (w.portHopping) {
-    config.port_hopping = {
-      enabled: true,
-      base_port: w.portHopBase,
-      port_range: w.portHopRange,
-      interval_secs: w.portHopInterval,
-      grace_period_secs: w.portHopGracePeriod,
-    };
-  }
-
-  // Traffic shaping
+  // Traffic shaping (all transports)
   if (
     w.trafficPaddingMode !== "none" ||
     w.trafficTimingJitter > 0 ||
@@ -538,15 +545,6 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
       timing_jitter_ms: w.trafficTimingJitter,
       chaff_interval_ms: w.trafficChaffInterval,
       coalesce_window_ms: w.trafficCoalesceWindow,
-    };
-  }
-
-  // UDP FEC
-  if (w.fecEnabled) {
-    config.udp_fec = {
-      enabled: true,
-      data_shards: w.fecDataShards,
-      parity_shards: w.fecParityShards,
     };
   }
 
