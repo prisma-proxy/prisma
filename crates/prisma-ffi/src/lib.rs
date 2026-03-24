@@ -325,6 +325,9 @@ pub unsafe extern "C" fn prisma_disconnect(handle: *mut PrismaClient) -> c_int {
         }
 
         conn.disconnect();
+        // Fire immediately for instant GUI feedback. The spawned task also fires
+        // this event on completion (for crash/error cases). The GUI handler is
+        // idempotent so duplicates are harmless.
         client.fire_event(r#"{"type":"status_changed","status":"disconnected"}"#);
         PRISMA_OK
     })

@@ -379,5 +379,20 @@
   "auth.connectionError": "无法连接到服务器，请重试。",
   "search.groupPages": "页面",
   "search.groupClients": "客户端",
-  "search.groupConfig": "配置"
+  "search.groupConfig": "配置",
+  "toast.clientCreated": "客户端创建成功。",
+  "toast.clientCreateError": "创建客户端失败。",
+  "toast.clientSaved": "客户端保存成功。",
+  "toast.clientSaveError": "保存客户端失败。",
+  "toast.clientDeleted": "客户端已删除。",
+  "toast.clientDeleteError": "删除客户端失败。",
+  "toast.ruleCreated": "路由规则已创建。",
+  "toast.ruleSaved": "路由规则已保存。",
+  "toast.ruleDeleted": "路由规则已删除。",
+  "routing.editRuleDescription": "修改路由规则设置。",
+  "routing.saveRule": "保存规则",
+  "routing.actionProxy": "代理",
+  "routing.actionDirect": "直连",
+  "routing.actionBlock": "拦截",
+  "routing.actionReject": "拒绝"
 }

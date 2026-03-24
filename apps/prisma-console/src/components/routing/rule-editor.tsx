@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,26 +26,71 @@ import type { RoutingRule, RuleCondition } from "@/lib/types";
 interface RuleEditorProps {
   onSubmit: (rule: Omit<RoutingRule, "id">) => Promise<void>;
   isLoading: boolean;
+  /** When set, the dialog opens in edit mode pre-filled with this rule. */
+  editingRule?: RoutingRule | null;
+  /** Called when the dialog is closed (used to clear editingRule in parent). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const conditionTypes = [
   "DomainMatch",
   "DomainExact",
+  "DomainSuffix",
+  "DomainKeyword",
   "IpCidr",
+  "GeoIp",
   "PortRange",
   "All",
 ] as const;
 
 type ConditionType = (typeof conditionTypes)[number];
 
-export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
+const actionTypes = ["Allow", "Direct", "Block", "Reject"] as const;
+type ActionType = (typeof actionTypes)[number];
+
+function extractConditionType(condition: RuleCondition): ConditionType {
+  return condition.type as ConditionType;
+}
+
+function extractConditionValue(condition: RuleCondition): string {
+  if (condition.type === "All") return "";
+  if (condition.type === "PortRange") {
+    const val = condition.value as [number, number];
+    return `${val[0]}-${val[1]}`;
+  }
+  return condition.value as string;
+}
+
+/** Map legacy "Allow"/"Block" to expanded action set for display purposes. */
+function normalizeAction(action: string): ActionType {
+  if (action === "Allow" || action === "Direct" || action === "Block" || action === "Reject") {
+    return action as ActionType;
+  }
+  return "Allow";
+}
+
+export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: RuleEditorProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
   const [conditionType, setConditionType] = useState<ConditionType>("All");
   const [conditionValue, setConditionValue] = useState("");
-  const [action, setAction] = useState<"Allow" | "Block">("Allow");
+  const [action, setAction] = useState<ActionType>("Allow");
+
+  const isEditing = !!editingRule;
+
+  // When editingRule changes, populate form and open dialog
+  useEffect(() => {
+    if (editingRule) {
+      setName(editingRule.name);
+      setPriority(editingRule.priority);
+      setConditionType(extractConditionType(editingRule.condition));
+      setConditionValue(extractConditionValue(editingRule.condition));
+      setAction(normalizeAction(editingRule.action));
+      setOpen(true);
+    }
+  }, [editingRule]);
 
   function resetForm() {
     setName("");
@@ -55,20 +100,79 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
     setAction("Allow");
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      resetForm();
+      onOpenChange?.(false);
+    }
+  }
+
   function buildCondition(): RuleCondition {
     switch (conditionType) {
       case "DomainMatch":
         return { type: "DomainMatch", value: conditionValue };
       case "DomainExact":
         return { type: "DomainExact", value: conditionValue };
+      case "DomainSuffix":
+        return { type: "DomainSuffix", value: conditionValue };
+      case "DomainKeyword":
+        return { type: "DomainKeyword", value: conditionValue };
       case "IpCidr":
         return { type: "IpCidr", value: conditionValue };
+      case "GeoIp":
+        return { type: "GeoIp", value: conditionValue };
       case "PortRange": {
         const parts = conditionValue.split("-").map(Number);
         return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
       }
       case "All":
         return { type: "All", value: null };
+    }
+  }
+
+  function conditionLabel(ct: ConditionType): string {
+    const labels: Record<ConditionType, string> = {
+      DomainMatch: "DOMAIN",
+      DomainExact: "DOMAIN-EXACT",
+      DomainSuffix: "DOMAIN-SUFFIX",
+      DomainKeyword: "DOMAIN-KEYWORD",
+      IpCidr: "IP-CIDR",
+      GeoIp: "GEOIP",
+      PortRange: "PORT-RANGE",
+      All: "FINAL (All)",
+    };
+    return labels[ct];
+  }
+
+  function actionLabel(a: ActionType): string {
+    const labels: Record<ActionType, string> = {
+      Allow: t("routing.actionProxy"),
+      Direct: t("routing.actionDirect"),
+      Block: t("routing.actionBlock"),
+      Reject: t("routing.actionReject"),
+    };
+    return labels[a];
+  }
+
+  function conditionPlaceholder(): string {
+    switch (conditionType) {
+      case "PortRange":
+        return "e.g. 8000-9000";
+      case "IpCidr":
+        return "e.g. 192.168.1.0/24";
+      case "GeoIp":
+        return "e.g. CN, US, JP";
+      case "DomainSuffix":
+        return "e.g. google.com";
+      case "DomainKeyword":
+        return "e.g. facebook";
+      case "DomainMatch":
+        return "e.g. *.example.com";
+      case "DomainExact":
+        return "e.g. www.example.com";
+      default:
+        return "";
     }
   }
 
@@ -80,23 +184,30 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
         priority,
         condition: buildCondition(),
         action,
-        enabled: true,
+        enabled: editingRule?.enabled ?? true,
       });
       resetForm();
       setOpen(false);
+      onOpenChange?.(false);
     } catch {
       // Keep form open on failure so the user can retry
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>{t("routing.addRule")}</DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {!isEditing && (
+        <DialogTrigger render={<Button />}>{t("routing.addRule")}</DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("routing.createRule")}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? t("routing.editRule") : t("routing.createRule")}
+          </DialogTitle>
           <DialogDescription>
-            {t("routing.createRuleDescription")}
+            {isEditing
+              ? t("routing.editRuleDescription")
+              : t("routing.createRuleDescription")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -138,7 +249,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
               <SelectContent>
                 {conditionTypes.map((ct) => (
                   <SelectItem key={ct} value={ct}>
-                    {ct}
+                    {conditionLabel(ct)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -151,13 +262,7 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
               <Input
                 id="rule-condition-value"
                 type="text"
-                placeholder={
-                  conditionType === "PortRange"
-                    ? "e.g. 8000-9000"
-                    : conditionType === "IpCidr"
-                      ? "e.g. 192.168.1.0/24"
-                      : "e.g. *.example.com"
-                }
+                placeholder={conditionPlaceholder()}
                 value={conditionValue}
                 onChange={(e) => setConditionValue(e.target.value)}
                 required
@@ -169,21 +274,28 @@ export function RuleEditor({ onSubmit, isLoading }: RuleEditorProps) {
             <Label>{t("routing.action")}</Label>
             <Select
               value={action}
-              onValueChange={(val) => setAction(val as "Allow" | "Block")}
+              onValueChange={(val) => setAction(val as ActionType)}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Allow">{t("routing.allow")}</SelectItem>
-                <SelectItem value="Block">{t("routing.block")}</SelectItem>
+                {actionTypes.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {actionLabel(a)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <DialogFooter>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? t("routing.creatingRule") : t("routing.createRule")}
+              {isLoading
+                ? t("routing.creatingRule")
+                : isEditing
+                  ? t("routing.saveRule")
+                  : t("routing.createRule")}
             </Button>
           </DialogFooter>
         </form>

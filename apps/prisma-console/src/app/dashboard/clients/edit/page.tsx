@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
 import { LoadingPlaceholder } from "@/components/ui/loading-placeholder";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ export default function ClientEditPage() {
 
 function ClientEditInner() {
   const { t } = useI18n();
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const id = searchParams.get("id") ?? "";
   const router = useRouter();
@@ -80,6 +82,10 @@ function ClientEditInner() {
         onSuccess: () => {
           setName(null);
           setEnabled(null);
+          toast(t("toast.clientSaved"), "success");
+        },
+        onError: (error: Error) => {
+          toast(error.message || t("toast.clientSaveError"), "error");
         },
       }
     );
@@ -92,7 +98,11 @@ function ClientEditInner() {
     }
     deleteClient.mutate(id, {
       onSuccess: () => {
+        toast(t("toast.clientDeleted"), "success");
         router.push("/dashboard/clients/");
+      },
+      onError: (error: Error) => {
+        toast(error.message || t("toast.clientDeleteError"), "error");
       },
     });
   }

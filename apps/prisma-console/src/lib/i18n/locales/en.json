@@ -379,5 +379,20 @@
   "auth.connectionError": "Could not connect to server. Please try again.",
   "search.groupPages": "Pages",
   "search.groupClients": "Clients",
-  "search.groupConfig": "Config"
+  "search.groupConfig": "Config",
+  "toast.clientCreated": "Client created successfully.",
+  "toast.clientCreateError": "Failed to create client.",
+  "toast.clientSaved": "Client saved successfully.",
+  "toast.clientSaveError": "Failed to save client.",
+  "toast.clientDeleted": "Client deleted.",
+  "toast.clientDeleteError": "Failed to delete client.",
+  "toast.ruleCreated": "Routing rule created.",
+  "toast.ruleSaved": "Routing rule saved.",
+  "toast.ruleDeleted": "Routing rule deleted.",
+  "routing.editRuleDescription": "Modify the routing rule settings.",
+  "routing.saveRule": "Save Rule",
+  "routing.actionProxy": "PROXY",
+  "routing.actionDirect": "DIRECT",
+  "routing.actionBlock": "BLOCK",
+  "routing.actionReject": "REJECT"
 }

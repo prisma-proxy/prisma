@@ -6,7 +6,6 @@ import { Sidebar, MobileSidebarContent } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { CommandPalette } from "@/components/layout/command-palette";
-import { ToastProvider } from "@/lib/toast-context";
 import { MetricsProvider } from "@/contexts/metrics-context";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -53,7 +52,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <MetricsProvider>
-    <ToastProvider>
       <div className="flex h-screen">
         {/* Desktop sidebar */}
         <div className="hidden md:block">
@@ -105,7 +103,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <CommandPalette />
       </div>
-    </ToastProvider>
     </MetricsProvider>
   );
 }

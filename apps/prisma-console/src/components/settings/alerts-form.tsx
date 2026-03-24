@@ -7,16 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
 
 export function AlertsForm() {
   const { t } = useI18n();
+  const { toast } = useToast();
   const { data: alertConfig, isLoading } = useAlertConfig();
   const updateConfig = useUpdateAlertConfig();
 
   const [certDays, setCertDays] = useState<number | null>(null);
   const [quotaPercent, setQuotaPercent] = useState<number | null>(null);
   const [handshakeThreshold, setHandshakeThreshold] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Use local state if set, otherwise fall back to server data
   const effectiveCertDays = certDays ?? alertConfig?.cert_expiry_days ?? 30;
@@ -33,12 +34,10 @@ export function AlertsForm() {
       },
       {
         onSuccess: () => {
-          setFeedback({ type: "success", message: t("settings.alertsSaved") });
-          setTimeout(() => setFeedback(null), 3000);
+          toast(t("settings.alertsSaved"), "success");
         },
         onError: (error: Error) => {
-          setFeedback({ type: "error", message: error.message });
-          setTimeout(() => setFeedback(null), 5000);
+          toast(error.message, "error");
         },
       }
     );
@@ -54,18 +53,6 @@ export function AlertsForm() {
 
   return (
     <div className="space-y-6">
-      {feedback && (
-        <div
-          className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-            feedback.type === "success"
-              ? "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400"
-              : "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-400"
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.alerts")}</CardTitle>

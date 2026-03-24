@@ -186,8 +186,10 @@
 
 /* Font fallback for CJK */
 .font-sans {
-  font-family: var(--font-sans), "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+  font-family: var(--font-sans), "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-optical-sizing: auto;
 }
 .font-mono {
   font-family: var(--font-mono), "Cascadia Code", "Fira Code", monospace;
+  font-optical-sizing: auto;
 }

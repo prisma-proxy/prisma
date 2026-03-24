@@ -179,14 +179,17 @@ export interface RoutingRule {
   name: string;
   priority: number;
   condition: RuleCondition;
-  action: "Allow" | "Block";
+  action: "Allow" | "Block" | "Direct" | "Reject";
   enabled: boolean;
 }
 
 export type RuleCondition =
   | { type: "DomainMatch"; value: string }
   | { type: "DomainExact"; value: string }
+  | { type: "DomainSuffix"; value: string }
+  | { type: "DomainKeyword"; value: string }
   | { type: "IpCidr"; value: string }
+  | { type: "GeoIp"; value: string }
   | { type: "PortRange"; value: [number, number] }
   | { type: "All"; value?: null };
 

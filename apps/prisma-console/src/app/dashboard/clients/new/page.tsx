@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useCreateClient } from "@/hooks/use-clients";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
 import { ClientForm } from "@/components/clients/client-form";
 import { KeyDisplay } from "@/components/clients/key-display";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import type { CreateClientResponse } from "@/lib/types";
 
 export default function NewClientPage() {
   const { t } = useI18n();
+  const { toast } = useToast();
   const createClient = useCreateClient();
   const [result, setResult] = useState<CreateClientResponse | null>(null);
 
@@ -19,6 +21,10 @@ export default function NewClientPage() {
     createClient.mutate(name || undefined, {
       onSuccess: (data) => {
         setResult(data);
+        toast(t("toast.clientCreated"), "success");
+      },
+      onError: (error: Error) => {
+        toast(error.message || t("toast.clientCreateError"), "error");
       },
     });
   }

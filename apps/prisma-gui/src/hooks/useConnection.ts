@@ -48,19 +48,12 @@ export function useConnection() {
       setManualDisconnect(true);
       await api.disconnect();
     } catch (e) {
-      // Even if the backend reports an error (e.g. already disconnected,
-      // mutex poisoned), we should still clean up the frontend state.
-      // Only log the error; do NOT return early.
       notify.error(String(e));
-    } finally {
-      // Always update UI — don't rely solely on the status_changed event
-      // which may arrive asynchronously (or not at all if the backend was
-      // already disconnected).
-      setConnected(false);
-      api.clearSystemProxy().catch(() => {});
-      api.setActiveProfileId("").catch(() => {});
     }
-  }, [setManualDisconnect, setConnected]);
+    // Don't update UI state here — the backend fires "status_changed:disconnected"
+    // AFTER the client fully shuts down (services stopped, system proxy cleared).
+    // usePrismaEvents handles all cleanup when that event arrives.
+  }, [setManualDisconnect]);
 
   const switchTo = useCallback(async (profile: Profile, modes: number) => {
     try {

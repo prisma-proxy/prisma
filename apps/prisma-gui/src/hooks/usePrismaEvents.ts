@@ -116,6 +116,7 @@ export function usePrismaEvents() {
           break;
 
         case "stats": {
+          if (!store.connected) break; // Ignore stats after disconnect
           pendingStats = data as unknown as Stats;
           if (statsRafId === null) {
             statsRafId = requestAnimationFrame(() => {
@@ -158,6 +159,7 @@ export function usePrismaEvents() {
         }
 
         case "log": {
+          if (!store.connected) break; // Ignore logs after disconnect
           const logMsg = data.msg ?? "";
           store.addLog({
             level: (data.level ?? "INFO") as LogEntry["level"],

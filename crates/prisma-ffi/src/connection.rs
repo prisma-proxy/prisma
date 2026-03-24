@@ -193,6 +193,10 @@ impl ConnectionManager {
 
             // Clean up config file after disconnect
             let _ = tokio::fs::remove_file(&config_path).await;
+
+            // Fire "disconnected" event only after everything is fully shut down
+            // (services stopped, system proxy cleared, config removed).
+            on_event(r#"{"type":"status_changed","status":"disconnected"}"#.to_string());
         });
 
         self.status = PRISMA_STATUS_CONNECTED;

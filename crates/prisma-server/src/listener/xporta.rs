@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -42,7 +42,7 @@ pub struct XPortaState {
 pub struct XPortaSession {
     pub client_id: Uuid,
     /// Sends reassembled upload data to the XPortaServerStream reader.
-    pub upload_tx: mpsc::Sender<Bytes>,
+    pub upload_tx: Arc<Mutex<mpsc::Sender<Bytes>>>,
     /// Receives download data from XPortaServerStream writer.
     pub download_rx: Arc<Mutex<mpsc::Receiver<Bytes>>>,
     /// Parked poll waiters — each gets notified when download data is available.
@@ -53,6 +53,8 @@ pub struct XPortaSession {
     pub download_seq: AtomicU32,
     /// Unix timestamp of last activity.
     pub last_activity: AtomicU64,
+    /// Whether a handler task is actively processing this session.
+    pub handler_active: Arc<AtomicBool>,
 }
 
 use super::extract_peer_ip;
@@ -233,22 +235,27 @@ pub async fn session_init_handler(
     let (download_tx, download_rx) = mpsc::channel::<Bytes>(256);
 
     let poll_notify = Arc::new(Notify::new());
+    let handler_active = Arc::new(AtomicBool::new(true));
 
     let session = XPortaSession {
         client_id: client_uuid,
-        upload_tx,
+        upload_tx: Arc::new(Mutex::new(upload_tx)),
         download_rx: Arc::new(Mutex::new(download_rx)),
         poll_notify: poll_notify.clone(),
         upload_reassembler: Arc::new(Mutex::new(Reassembler::new())),
         download_seq: AtomicU32::new(0),
         last_activity: AtomicU64::new(now_secs()),
+        handler_active: handler_active.clone(),
     };
 
     state.sessions.insert(session_id, session);
 
-    // Spawn the PrismaVeil protocol handler with XPortaServerStream.
-    // Pass poll_notify so the stream wakes the poll handler when download data arrives.
-    let xporta_stream = XPortaServerStream::new_with_notify(upload_rx, download_tx, poll_notify);
+    // Spawn the PrismaVeil protocol handler. The handler loops to support
+    // multiple relays within the same XPorta session — when one relay ends
+    // (e.g., browser connection closes), it waits for the next upload data
+    // and spawns a new handshake+relay cycle.
+    let mut xporta_stream =
+        XPortaServerStream::new_with_notify(upload_rx, download_tx, poll_notify.clone());
     let cdn = state.cdn.clone();
     let sessions = state.sessions.clone();
     let sid = session_id;
@@ -267,20 +274,61 @@ pub async fn session_init_handler(
 
         info!(peer = %peer_ip, session = ?util::hex_encode(&sid), "XPorta session started");
 
-        let fwd = cdn.config.port_forwarding.clone();
-        let result = handler::handle_tcp_connection_camouflaged(
-            xporta_stream,
-            cdn.auth.clone(),
-            cdn.dns.clone(),
-            fwd,
-            cdn.ctx.clone(),
-            peer_ip.clone(),
-            None,
-        )
-        .await;
+        loop {
+            let fwd = cdn.config.port_forwarding.clone();
+            let result = handler::handle_tcp_connection_camouflaged(
+                xporta_stream,
+                cdn.auth.clone(),
+                cdn.dns.clone(),
+                fwd,
+                cdn.ctx.clone(),
+                peer_ip.clone(),
+                None,
+            )
+            .await;
 
-        if let Err(e) = result {
-            warn!(peer = %peer_ip, session = ?util::hex_encode(&sid), error = %e, "XPorta session error");
+            if let Err(e) = &result {
+                warn!(peer = %peer_ip, session = ?util::hex_encode(&sid), error = %e, "XPorta relay ended");
+            } else {
+                info!(peer = %peer_ip, session = ?util::hex_encode(&sid), "XPorta relay ended cleanly");
+            }
+
+            // Mark handler inactive and wait for new upload data
+            handler_active.store(false, Ordering::Relaxed);
+
+            let wait_result = tokio::time::timeout(
+                tokio::time::Duration::from_secs(60),
+                poll_notify.notified(),
+            )
+            .await;
+
+            if wait_result.is_err() {
+                // 60s timeout with no new data — session done
+                info!(session = ?util::hex_encode(&sid), "XPorta session idle timeout, closing");
+                break;
+            }
+
+            // New data arrived — create fresh channels for next relay
+            let Some(session) = sessions.get(&sid) else {
+                break;
+            };
+
+            let (new_upload_tx, new_upload_rx) = mpsc::channel::<Bytes>(256);
+            let (new_download_tx, new_download_rx) = mpsc::channel::<Bytes>(256);
+
+            // Replace session channels atomically
+            *session.upload_tx.lock().await = new_upload_tx;
+            *session.download_rx.lock().await = new_download_rx;
+            handler_active.store(true, Ordering::Relaxed);
+            drop(session);
+
+            xporta_stream = XPortaServerStream::new_with_notify(
+                new_upload_rx,
+                new_download_tx,
+                poll_notify.clone(),
+            );
+
+            info!(session = ?util::hex_encode(&sid), "XPorta handler restarted for new relay");
         }
 
         cdn.ctx
@@ -370,10 +418,18 @@ pub async fn upload_handler(
         }
 
         // Drain in-order data and send to upload channel
+        let tx = upload_tx.lock().await;
         for chunk in reassembler.drain() {
-            if upload_tx.send(Bytes::from(chunk)).await.is_err() {
+            if tx.send(Bytes::from(chunk)).await.is_err() {
                 return StatusCode::GONE.into_response();
             }
+        }
+    }
+
+    // If handler is inactive (relay ended, waiting for new data), notify it
+    if let Some(session) = state.sessions.get(&session_id) {
+        if !session.handler_active.load(Ordering::Relaxed) {
+            session.poll_notify.notify_one();
         }
     }
 
