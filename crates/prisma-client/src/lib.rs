@@ -240,13 +240,28 @@ async fn run_inner(
         dns_config: config.dns.clone(),
         dns_resolver: DnsResolver::new(&config.dns),
         router: Arc::new({
-            let has_geoip_rules = config
-                .routing
-                .rules
+            let mut all_rules = config.routing.rules.clone();
+
+            // Load rules from rule providers (remote rule lists)
+            if !config.routing.rule_providers.is_empty() {
+                let cache_dir = std::env::temp_dir().join("prisma-rule-providers");
+                let mgr = prisma_core::rule_provider::RuleProviderManager::new(
+                    config.routing.rule_providers.clone(),
+                    cache_dir,
+                );
+                mgr.load_all().await;
+                let provider_rules = mgr.all_rules().await;
+                if !provider_rules.is_empty() {
+                    info!(count = provider_rules.len(), "Loaded rules from providers");
+                    all_rules.extend(provider_rules);
+                }
+            }
+
+            let has_geoip_rules = all_rules
                 .iter()
                 .any(|r| matches!(r.condition, prisma_core::router::RuleCondition::GeoIp(_)));
             let geoip = load_geoip_matcher(config.routing.geoip_path.as_deref(), has_geoip_rules);
-            Router::with_geoip(config.routing.rules.clone(), geoip)
+            Router::with_geoip(all_rules, geoip)
         }),
         fingerprint: config.fingerprint.clone(),
         quic_version: config.quic_version.clone(),
