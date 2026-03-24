@@ -70,7 +70,9 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
 
         {/* Theme Toggle */}
         <DropdownMenu>
-          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}>
+          <DropdownMenuTrigger
+            render={<button type="button" className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))} />}
+          >
             {themeIcon}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
@@ -101,7 +103,9 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
 
         {/* Locale Switcher */}
         <DropdownMenu>
-          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}>
+          <DropdownMenuTrigger
+            render={<button type="button" className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))} />}
+          >
             <Globe className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
