@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -106,6 +106,31 @@ function conditionTypeBadge(type: string) {
 export function RuleList({ rules, onDelete, onToggle, onEdit }: RuleListProps) {
   const { t } = useI18n();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) =>
+      prev.size === rules.length
+        ? new Set()
+        : new Set(rules.map((r) => r.id))
+    );
+  }
+
+  function handleBatchDelete() {
+    selected.forEach((id) => onDelete(id));
+    setSelected(new Set());
+    setBatchConfirmOpen(false);
+  }
 
   if (rules.length === 0) {
     return (
@@ -116,64 +141,114 @@ export function RuleList({ rules, onDelete, onToggle, onEdit }: RuleListProps) {
   }
 
   const sorted = [...rules].sort((a, b) => a.priority - b.priority);
+  const allSelected = selected.size === rules.length;
 
   return (
     <>
-    <div className="space-y-2">
-      {sorted.map((rule) => (
-        <div
-          key={rule.id}
-          className="flex items-center gap-4 rounded-lg border px-4 py-3"
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold">
-            {rule.priority}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium truncate">{rule.name}</p>
-              {conditionTypeBadge(rule.condition.type)}
+      {/* Select-all / batch action toolbar */}
+      <div className="flex items-center gap-3 mb-2 px-1 min-h-[32px]">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={toggleSelectAll}
+          className="rounded"
+          aria-label="Select all rules"
+        />
+        {selected.size > 0 ? (
+          <>
+            <span className="text-sm text-muted-foreground">
+              {t("common.selectedCount", { count: selected.size })}
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBatchConfirmOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" data-icon="inline-start" />
+              {t("common.deleteSelected", { count: selected.size })}
+            </Button>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">Select all</span>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {sorted.map((rule) => (
+          <div
+            key={rule.id}
+            className={`flex items-center gap-4 rounded-lg border px-4 py-3 ${selected.has(rule.id) ? "bg-muted/50" : ""}`}
+          >
+            <input
+              type="checkbox"
+              checked={selected.has(rule.id)}
+              onChange={() => toggleSelect(rule.id)}
+              className="rounded"
+              aria-label={`Select rule ${rule.name}`}
+            />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold">
+              {rule.priority}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium truncate">{rule.name}</p>
+                {conditionTypeBadge(rule.condition.type)}
+              </div>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {formatCondition(rule)}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
-              {formatCondition(rule)}
-            </p>
+            {actionBadge(rule.action, t)}
+            <Switch
+              checked={rule.enabled}
+              onCheckedChange={(checked: boolean) => onToggle(rule.id, checked)}
+              size="sm"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(rule)}
+              aria-label={t("routing.editRule")}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteId(rule.id)}
+            >
+              {t("common.delete")}
+            </Button>
           </div>
-          {actionBadge(rule.action, t)}
-          <Switch
-            checked={rule.enabled}
-            onCheckedChange={(checked: boolean) => onToggle(rule.id, checked)}
-            size="sm"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(rule)}
-            aria-label={t("routing.editRule")}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteId(rule.id)}
-          >
-            {t("common.delete")}
-          </Button>
-        </div>
-      ))}
-    </div>
-    <ConfirmDialog
-      open={deleteId !== null}
-      onOpenChange={(open) => { if (!open) setDeleteId(null); }}
-      title={t("common.delete")}
-      description={t("routing.deleteConfirm")}
-      confirmLabel={t("common.delete")}
-      cancelLabel={t("common.cancel")}
-      variant="destructive"
-      onConfirm={() => {
-        if (deleteId) onDelete(deleteId);
-        setDeleteId(null);
-      }}
-    />
+        ))}
+      </div>
+
+      {/* Single-item delete confirmation */}
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        title={t("common.delete")}
+        description={t("routing.deleteConfirm")}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteId) onDelete(deleteId);
+          setDeleteId(null);
+        }}
+      />
+
+      {/* Batch delete confirmation */}
+      <ConfirmDialog
+        open={batchConfirmOpen}
+        onOpenChange={(open) => { if (!open) setBatchConfirmOpen(false); }}
+        title={t("common.delete")}
+        description={t("routing.deleteBatchConfirm", { count: selected.size })}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        variant="destructive"
+        onConfirm={handleBatchDelete}
+      />
     </>
   );
 }

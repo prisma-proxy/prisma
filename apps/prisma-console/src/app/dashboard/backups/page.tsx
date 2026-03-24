@@ -57,6 +57,10 @@ export default function BackupsPage() {
     }
   };
 
+  const handleBatchDelete = (names: string[]) => {
+    names.forEach((name) => deleteBackup.mutate(name));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -99,6 +103,7 @@ export default function BackupsPage() {
               onRestore={handleRestore}
               onDiff={(name) => setDiffName(name)}
               onDelete={handleDelete}
+              onBatchDelete={handleBatchDelete}
               deletingName={deletingName}
             />
           )}
