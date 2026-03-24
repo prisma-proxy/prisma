@@ -246,7 +246,10 @@ where
                     match cmd {
                         CMD_DATA => {
                             if first_upload {
-                                info!(bytes = payload.len(), "Server relay: first upload frame received");
+                                info!(
+                                    bytes = payload.len(),
+                                    "Server relay: first upload frame received"
+                                );
                                 first_upload = false;
                             }
                             if out_write.write_all(payload).await.is_err() {
@@ -260,9 +263,12 @@ where
                                     payload[0], payload[1], payload[2], payload[3],
                                 ]);
                                 let nonce = server_nonce_ping.next_nonce();
-                                if let Some(wire) =
-                                    build_pong_wire(seq, cipher_t2d.as_ref(), &nonce, header_key_up.as_ref())
-                                {
+                                if let Some(wire) = build_pong_wire(
+                                    seq,
+                                    cipher_t2d.as_ref(),
+                                    &nonce,
+                                    header_key_up.as_ref(),
+                                ) {
                                     let _ = pong_tx.send(wire).await;
                                 }
                             }

@@ -120,21 +120,18 @@ async fn handle_connect(
     info!(dest = %destination, "HTTP CONNECT");
 
     // Establish tunnel to remote Prisma server (with timeout)
-    let tunnel_conn = match tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        async {
-            let tunnel_stream = ctx.connect().await?;
-            tunnel::establish_tunnel(
-                tunnel_stream,
-                ctx.client_id,
-                ctx.auth_secret,
-                ctx.cipher_suite,
-                &destination,
-                ctx.server_key_pin.as_deref(),
-            )
-            .await
-        },
-    )
+    let tunnel_conn = match tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let tunnel_stream = ctx.connect().await?;
+        tunnel::establish_tunnel(
+            tunnel_stream,
+            ctx.client_id,
+            ctx.auth_secret,
+            ctx.cipher_suite,
+            &destination,
+            ctx.server_key_pin.as_deref(),
+        )
+        .await
+    })
     .await
     {
         Ok(Ok(conn)) => conn,
@@ -146,7 +143,10 @@ async fn handle_connect(
         Err(_) => {
             let mut stream = buf_reader.into_inner();
             let _ = send_http_error(&mut stream, 504, "Gateway Timeout").await;
-            return Err(anyhow::anyhow!("Tunnel establishment timed out for {}", destination));
+            return Err(anyhow::anyhow!(
+                "Tunnel establishment timed out for {}",
+                destination
+            ));
         }
     };
 
@@ -252,21 +252,18 @@ async fn handle_http_forward(
     info!(dest = %destination, method, "HTTP forward via proxy");
 
     // Establish tunnel to remote Prisma server (with timeout)
-    let mut tunnel_conn = match tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        async {
-            let tunnel_stream = ctx.connect().await?;
-            tunnel::establish_tunnel(
-                tunnel_stream,
-                ctx.client_id,
-                ctx.auth_secret,
-                ctx.cipher_suite,
-                &destination,
-                ctx.server_key_pin.as_deref(),
-            )
-            .await
-        },
-    )
+    let mut tunnel_conn = match tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let tunnel_stream = ctx.connect().await?;
+        tunnel::establish_tunnel(
+            tunnel_stream,
+            ctx.client_id,
+            ctx.auth_secret,
+            ctx.cipher_suite,
+            &destination,
+            ctx.server_key_pin.as_deref(),
+        )
+        .await
+    })
     .await
     {
         Ok(Ok(conn)) => conn,
@@ -278,7 +275,10 @@ async fn handle_http_forward(
         Err(_) => {
             let mut stream = stream;
             let _ = send_http_error(&mut stream, 504, "Gateway Timeout").await;
-            return Err(anyhow::anyhow!("Tunnel establishment timed out for {}", destination));
+            return Err(anyhow::anyhow!(
+                "Tunnel establishment timed out for {}",
+                destination
+            ));
         }
     };
 
@@ -367,7 +367,9 @@ fn parse_http_url(url: &str) -> Result<(&str, u16, &str)> {
 }
 
 /// Extract domain/IP parts from a ProxyDestination for routing.
-fn extract_address_parts(destination: &ProxyDestination) -> (Option<&str>, Option<std::net::IpAddr>) {
+fn extract_address_parts(
+    destination: &ProxyDestination,
+) -> (Option<&str>, Option<std::net::IpAddr>) {
     let domain = match &destination.address {
         ProxyAddress::Domain(d) => Some(d.as_str()),
         _ => None,
@@ -389,7 +391,10 @@ async fn resolve_for_routing(domain: Option<&str>, ctx: &ProxyContext) -> Option
                 Some(std::net::IpAddr::V4(addrs[0]))
             }
             Ok(_) => {
-                debug!(domain = d, "DNS resolution returned no addresses for routing");
+                debug!(
+                    domain = d,
+                    "DNS resolution returned no addresses for routing"
+                );
                 None
             }
             Err(e) => {

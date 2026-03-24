@@ -115,7 +115,10 @@ pub async fn relay(
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
                         if first_download {
-                            info!(bytes = payload.len(), "Client relay: first download frame received");
+                            info!(
+                                bytes = payload.len(),
+                                "Client relay: first download frame received"
+                            );
                             first_download = false;
                         }
                         metrics.add_down(payload.len() as u64);
