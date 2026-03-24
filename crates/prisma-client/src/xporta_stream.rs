@@ -10,7 +10,7 @@ use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{mpsc, Mutex, Semaphore};
 use tokio::time::Duration;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use prisma_core::util;
 use prisma_core::xporta::encoding::{
@@ -455,6 +455,11 @@ async fn upload_dispatcher(
                     let resp_data = body_bytes.to_bytes();
                     if let Some((dl_seq, dl_data)) = decode_response(&resp_data, encoding) {
                         if let (Some(seq), Some(data)) = (dl_seq, dl_data) {
+                            info!(
+                                seq,
+                                bytes = data.len(),
+                                "XPorta upload: received piggybacked download"
+                            );
                             let mut reassembler = dl_reassembler.lock().await;
                             let _ = reassembler.insert(seq, data);
                             for chunk in reassembler.drain() {
@@ -523,10 +528,20 @@ async fn poll_loop(
 
         match sender.send_request(req).await {
             Ok(response) => {
+                let status = response.status();
                 if let Ok(body_bytes) = http_body_util::BodyExt::collect(response.into_body()).await
                 {
                     let resp_data = body_bytes.to_bytes();
                     if let Some(items) = decode_poll_response(&resp_data) {
+                        if !items.is_empty() {
+                            let total_bytes: usize = items.iter().map(|(_, d)| d.len()).sum();
+                            info!(
+                                status = %status,
+                                count = items.len(),
+                                total_bytes,
+                                "XPorta poll: received download items"
+                            );
+                        }
                         let mut reassembler = dl_reassembler.lock().await;
                         for (seq, data) in items {
                             if seq >= last_dl_seq {
@@ -539,6 +554,12 @@ async fn poll_loop(
                                 return;
                             }
                         }
+                    } else {
+                        warn!(
+                            status = %status,
+                            body_len = resp_data.len(),
+                            "XPorta poll: failed to decode response"
+                        );
                     }
                 }
             }

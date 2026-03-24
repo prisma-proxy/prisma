@@ -357,6 +357,11 @@ pub async fn upload_handler(
             // Re-check session for sequence counter
             if let Some(session) = state.sessions.get(&session_id) {
                 let s = session.download_seq.fetch_add(1, Ordering::Relaxed);
+                info!(
+                    seq = s,
+                    bytes = data.len(),
+                    "XPorta upload: piggybacking download data"
+                );
                 dl_seq = Some(s);
                 dl_data = Some(data);
             }
@@ -461,6 +466,14 @@ pub async fn poll_handler(
                 }
             }
         }
+    }
+
+    if !items.is_empty() {
+        let total_bytes: usize = items.iter().map(|(_, d)| d.len()).sum();
+        info!(
+            count = items.len(),
+            total_bytes, "XPorta poll: sending download items"
+        );
     }
 
     let items_refs: Vec<(u32, &[u8])> = items.iter().map(|(s, d)| (*s, d.as_ref())).collect();
