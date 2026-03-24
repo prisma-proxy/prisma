@@ -65,7 +65,7 @@ pub async fn listen(
                 // Check blocked IPs BEFORE acquiring a semaphore permit
                 if let Some(ref guard) = tls_probe_guard {
                     if guard.is_blocked(&peer_addr.ip()) {
-                        debug!(peer = %peer_addr, "Dropping connection from blocked IP");
+                        warn!(peer = %peer_addr, "Dropping connection from blocked IP (probe guard)");
                         ctx.state
                             .metrics
                             .tls_blocked_connections

@@ -419,13 +419,13 @@ impl Default for TlsProbeGuardConfig {
 }
 
 fn default_tls_probe_max_failures() -> u32 {
-    5
+    20
 }
 fn default_tls_probe_failure_window() -> u64 {
-    60
+    120
 }
 fn default_tls_probe_block_duration() -> u64 {
-    300
+    120
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
