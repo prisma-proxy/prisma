@@ -385,3 +385,50 @@ pub fn proxy_group_test(group_name: String) -> Result<serde_json::Value, String>
         Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
     }
 }
+
+// ── rule providers ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn update_rule_provider(
+    id: String,
+    url: String,
+    behavior: String,
+    action: String,
+) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let content = resp.text().await.map_err(|e| e.to_string())?;
+
+    // Count lines that are actual rules (not comments/blanks)
+    let rule_count = content
+        .lines()
+        .filter(|l| {
+            let t = l.trim();
+            !t.is_empty() && !t.starts_with('#') && !t.starts_with("//")
+        })
+        .count();
+
+    let now_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    Ok(serde_json::json!({
+        "id": id,
+        "rule_count": rule_count,
+        "updated_at_epoch": now_epoch,
+    }))
+}
+
+#[tauri::command]
+pub fn list_rule_providers() -> Result<serde_json::Value, String> {
+    // Provider state is managed on the frontend via Zustand persist.
+    // This command exists for future backend integration.
+    Ok(serde_json::Value::Array(vec![]))
+}

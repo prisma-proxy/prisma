@@ -132,4 +132,13 @@ export const api = {
 
   onMemoryWarning: () =>
     invoke<void>("on_memory_warning"),
+
+  // ── Rule providers ─────────────────────────────────────────────────
+  updateRuleProvider: (id: string, url: string, behavior: string, action: string) =>
+    invoke<{ id: string; rule_count: number; updated_at_epoch: number }>(
+      "update_rule_provider", { id, url, behavior, action }
+    ),
+
+  listRuleProviders: () =>
+    invoke<unknown[]>("list_rule_providers"),
 };

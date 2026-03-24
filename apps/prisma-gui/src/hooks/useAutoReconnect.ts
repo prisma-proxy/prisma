@@ -3,6 +3,7 @@ import { notify } from "../store/notifications";
 import { useStore } from "../store";
 import { useSettings } from "../store/settings";
 import { useRules } from "../store/rules";
+import { useRuleProviders } from "../store/ruleProviders";
 import { api } from "../lib/commands";
 import { mergeSettingsIntoConfig } from "../lib/buildConfig";
 
@@ -32,10 +33,14 @@ export function useAutoReconnect() {
       if (!profile) return;
       try {
         notify.info(`Auto-reconnecting… (attempt ${attemptsRef.current})`);
+        const enabledProviders = useRuleProviders.getState().providers
+          .filter((p) => p.enabled)
+          .map((p) => ({ name: p.name, url: p.url, behavior: p.behavior, action: p.action }));
         const config = mergeSettingsIntoConfig(
           profile.config as Record<string, unknown>,
           useSettings.getState(),
           useRules.getState().rules,
+          enabledProviders.length > 0 ? enabledProviders : undefined,
         );
         useStore.getState().setConnectStartTime(Date.now());
         await api.connect(JSON.stringify(config), proxyModes);

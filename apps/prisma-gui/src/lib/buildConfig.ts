@@ -212,11 +212,15 @@ export function parsePortForwards(text: string): { name: string; local_addr: str
 /**
  * Merge global settings + GUI routing rules into a raw profile config,
  * producing a complete ClientConfig-shaped object ready for the backend.
+ *
+ * @param ruleProviders - Enabled rule providers whose rules should be sent
+ *   to the backend as provider configurations.
  */
 export function mergeSettingsIntoConfig(
   profileConfig: Record<string, unknown>,
   settings: import("@/store/settings").AppSettings,
   guiRules: { type: string; match: string; action: string }[],
+  ruleProviders?: { name: string; url: string; behavior: string; action: string }[],
 ): Record<string, unknown> {
   const config = { ...profileConfig };
 
@@ -283,6 +287,18 @@ export function mergeSettingsIntoConfig(
   if (settings.routingGeositePath && !routing.geosite_path) {
     routing.geosite_path = settings.routingGeositePath;
   }
+  // Rule providers
+  if (ruleProviders && ruleProviders.length > 0) {
+    routing.rule_providers = ruleProviders.map((p) => ({
+      name: p.name,
+      url: p.url,
+      behavior: p.behavior,
+      action: p.action.toLowerCase(),
+      format: "text",
+      update_interval_secs: 86400,
+    }));
+  }
+
   if (Object.keys(routing).length > 0) {
     config.routing = routing;
   }

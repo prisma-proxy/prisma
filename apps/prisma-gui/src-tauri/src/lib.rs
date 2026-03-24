@@ -115,6 +115,9 @@ pub fn run() {
             commands::proxy_groups_list,
             commands::proxy_group_select,
             commands::proxy_group_test,
+            // ── Rule provider commands ────────────────────────────────
+            commands::update_rule_provider,
+            commands::list_rule_providers,
             // ── Mobile commands (compile on all targets) ──────────────
             mobile::check_vpn_permission,
             mobile::request_vpn_permission,

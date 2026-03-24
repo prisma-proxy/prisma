@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2, Info, Download, Upload, Layers } from "lucide-react";
+import {
+  Plus, Trash2, Info, Download, Upload, Layers,
+  ChevronDown, ChevronRight, Check, RefreshCw, Globe,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,30 +11,82 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { useRules } from "@/store/rules";
 import type { Rule } from "@/store/rules";
+import { useRuleProviders, SUGGESTED_PROVIDERS } from "@/store/ruleProviders";
+import type { RuleProvider } from "@/store/ruleProviders";
 import { notify } from "@/store/notifications";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
-import { RULE_PRESETS } from "@/lib/rulePresets";
+import {
+  RULE_PRESETS, PRESET_CATEGORY_ORDER, PRESET_CATEGORY_KEYS,
+} from "@/lib/rulePresets";
+import type { PresetCategory, RulePreset } from "@/lib/rulePresets";
+import { api } from "@/lib/commands";
 
 const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "GEOIP", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Build a set of "type|match|action" keys for all rules in a category */
+function categoryRuleKeys(category: PresetCategory): Set<string> {
+  const keys = new Set<string>();
+  for (const preset of RULE_PRESETS) {
+    if (preset.category === category) {
+      for (const r of preset.rules) {
+        keys.add(`${r.type}|${r.match}|${r.action}`);
+      }
+    }
+  }
+  return keys;
+}
+
+/** Check whether all rules from a preset are already present */
+function isPresetFullyApplied(preset: RulePreset, currentRules: Rule[]): boolean {
+  const existing = new Set(currentRules.map((r) => `${r.type}|${r.match}|${r.action}`));
+  return preset.rules.every((r) => existing.has(`${r.type}|${r.match}|${r.action}`));
+}
+
+// ── Main Component ───────────────────────────────────────────────────────
 
 export default function Rules() {
   const { t } = useTranslation();
   const rules = useRules((s) => s.rules);
   const addRule = useRules((s) => s.add);
   const addMany = useRules((s) => s.addMany);
+  const replaceCategory = useRules((s) => s.replaceCategory);
   const removeRule = useRules((s) => s.remove);
 
-  const [open,   setOpen]   = useState(false);
+  const providers = useRuleProviders((s) => s.providers);
+  const addProvider = useRuleProviders((s) => s.add);
+  const removeProvider = useRuleProviders((s) => s.remove);
+  const toggleProvider = useRuleProviders((s) => s.toggle);
+  const updateProviderStatus = useRuleProviders((s) => s.updateProviderStatus);
+
+  const [open, setOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
-  const [type,   setType]   = useState<Rule["type"]>("DOMAIN");
-  const [match,  setMatch]  = useState("");
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const [type, setType] = useState<Rule["type"]>("DOMAIN");
+  const [match, setMatch] = useState("");
   const [action, setAction] = useState<Rule["action"]>("PROXY");
+
+  // Preset expansion state
+  const [expandedPresets, setExpandedPresets] = useState<Set<string>>(new Set());
+
+  // Provider form state
+  const [providerName, setProviderName] = useState("");
+  const [providerUrl, setProviderUrl] = useState("");
+  const [providerBehavior, setProviderBehavior] = useState<RuleProvider["behavior"]>("domain");
+  const [providerAction, setProviderAction] = useState<RuleProvider["action"]>("PROXY");
+
+  // Provider update state
+  const [updatingProviders, setUpdatingProviders] = useState<Set<string>>(new Set());
 
   function handleAdd() {
     addRule({ id: crypto.randomUUID(), type, match, action });
@@ -72,6 +127,98 @@ export default function Rules() {
     }
   }
 
+  function togglePresetExpand(id: string) {
+    setExpandedPresets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function handleApplyPreset(preset: RulePreset, mode: "add" | "replace") {
+    let count: number;
+    if (mode === "replace") {
+      const keys = categoryRuleKeys(preset.category);
+      count = replaceCategory(keys, preset.rules);
+    } else {
+      count = addMany(preset.rules);
+    }
+    notify.success(t("rules.presetApplied", { count, name: t(preset.nameKey) }));
+  }
+
+  function handleAddProvider() {
+    if (!providerName.trim() || !providerUrl.trim()) return;
+    addProvider({
+      name: providerName.trim(),
+      url: providerUrl.trim(),
+      behavior: providerBehavior,
+      action: providerAction,
+      enabled: true,
+    });
+    notify.success(t("rules.providerAdded", { name: providerName.trim() }));
+    setProviderName("");
+    setProviderUrl("");
+    setProviderBehavior("domain");
+    setProviderAction("PROXY");
+    setProviderDialogOpen(false);
+  }
+
+  function handleAddSuggested(suggestion: typeof SUGGESTED_PROVIDERS[number]) {
+    addProvider({
+      name: suggestion.name,
+      url: suggestion.url,
+      behavior: suggestion.behavior,
+      action: suggestion.action,
+      enabled: true,
+    });
+    notify.success(t("rules.providerAdded", { name: suggestion.name }));
+  }
+
+  async function handleUpdateProvider(provider: RuleProvider) {
+    setUpdatingProviders((prev) => new Set(prev).add(provider.id));
+    try {
+      const result = await api.updateRuleProvider(
+        provider.id, provider.url, provider.behavior, provider.action
+      );
+      const updatedAt = new Date(result.updated_at_epoch * 1000).toISOString();
+      updateProviderStatus(provider.id, result.rule_count, updatedAt);
+      notify.success(t("rules.providerUpdated", { name: provider.name }));
+    } catch (e) {
+      notify.error(t("rules.providerUpdateFailed", { name: provider.name, error: String(e) }));
+    } finally {
+      setUpdatingProviders((prev) => {
+        const next = new Set(prev);
+        next.delete(provider.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleUpdateAllProviders() {
+    const enabled = providers.filter((p) => p.enabled);
+    for (const p of enabled) {
+      handleUpdateProvider(p);
+    }
+  }
+
+  // Group presets by category
+  const presetsByCategory = useMemo(() => {
+    const map = new Map<PresetCategory, RulePreset[]>();
+    for (const preset of RULE_PRESETS) {
+      const list = map.get(preset.category) ?? [];
+      list.push(preset);
+      map.set(preset.category, list);
+    }
+    return map;
+  }, []);
+
+  // Check which suggested providers are already added (by URL)
+  const addedProviderUrls = useMemo(
+    () => new Set(providers.map((p) => p.url)),
+    [providers]
+  );
+
   return (
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
@@ -99,47 +246,188 @@ export default function Rules() {
         </AlertDescription>
       </Alert>
 
-      <ScrollArea className="flex-1 h-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("rules.type")}</TableHead>
-              <TableHead>{t("rules.match")}</TableHead>
-              <TableHead>{t("rules.action")}</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rules.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  {t("rules.noRules")}
-                </TableCell>
-              </TableRow>
-            )}
-            {rules.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-mono text-xs">{r.type}</TableCell>
-                <TableCell className="text-sm">{r.match || "—"}</TableCell>
-                <TableCell>
-                  <span className={
-                    r.action === "PROXY"  ? "text-green-400" :
-                    r.action === "REJECT" ? "text-red-400"   : "text-muted-foreground"
-                  }>
-                    {r.action}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Button size="icon" variant="ghost" onClick={() => removeRule(r.id)}>
-                    <Trash2 size={14} className="text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </ScrollArea>
+      <Tabs defaultValue="rules" className="flex-1 flex flex-col h-0">
+        <TabsList className="w-fit">
+          <TabsTrigger value="rules">{t("rules.title")}</TabsTrigger>
+          <TabsTrigger value="providers">{t("rules.providers")}</TabsTrigger>
+        </TabsList>
 
+        {/* ── Rules Tab ──────────────────────────────────────────── */}
+        <TabsContent value="rules" className="flex-1 h-0">
+          <ScrollArea className="h-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("rules.type")}</TableHead>
+                  <TableHead>{t("rules.match")}</TableHead>
+                  <TableHead>{t("rules.action")}</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rules.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      {t("rules.noRules")}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {rules.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-mono text-xs">{r.type}</TableCell>
+                    <TableCell className="text-sm">{r.match || "\u2014"}</TableCell>
+                    <TableCell>
+                      <span className={
+                        r.action === "PROXY"  ? "text-green-400" :
+                        r.action === "REJECT" ? "text-red-400"   : "text-muted-foreground"
+                      }>
+                        {r.action}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="icon" variant="ghost" onClick={() => removeRule(r.id)}>
+                        <Trash2 size={14} className="text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* ── Providers Tab ──────────────────────────────────────── */}
+        <TabsContent value="providers" className="flex-1 h-0">
+          <ScrollArea className="h-full">
+            <div className="space-y-3 pb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {t("rules.providersDesc")}
+                </p>
+                <div className="flex gap-1">
+                  {providers.some((p) => p.enabled) && (
+                    <Button size="sm" variant="ghost" onClick={handleUpdateAllProviders}>
+                      <RefreshCw size={14} /> {t("rules.updateAll")}
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => setProviderDialogOpen(true)}>
+                    <Plus size={14} /> {t("rules.addProvider")}
+                  </Button>
+                </div>
+              </div>
+
+              {providers.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  {t("rules.noProviders")}
+                </div>
+              )}
+
+              {providers.map((provider) => (
+                <div
+                  key={provider.id}
+                  className="flex items-center justify-between rounded-md border p-3 gap-3"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Switch
+                      checked={provider.enabled}
+                      onCheckedChange={() => toggleProvider(provider.id)}
+                      aria-label={t("rules.toggleProvider")}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{provider.name}</span>
+                        <Badge variant="outline" className="text-[10px] shrink-0">
+                          {provider.behavior}
+                        </Badge>
+                        <Badge
+                          variant={
+                            provider.action === "PROXY" ? "success" :
+                            provider.action === "REJECT" ? "destructive" : "secondary"
+                          }
+                          className="text-[10px] shrink-0"
+                        >
+                          {provider.action}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{provider.url}</div>
+                      {provider.lastUpdated && (
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          {t("rules.providerLastUpdated", {
+                            time: new Date(provider.lastUpdated).toLocaleString(),
+                          })}
+                          {provider.ruleCount > 0 && ` \u00b7 ${t("rules.providerRuleCount", { count: provider.ruleCount })}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleUpdateProvider(provider)}
+                      disabled={updatingProviders.has(provider.id)}
+                      title={t("rules.updateProvider")}
+                    >
+                      <RefreshCw
+                        size={14}
+                        className={updatingProviders.has(provider.id) ? "animate-spin" : ""}
+                      />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeProvider(provider.id)}
+                      title={t("rules.removeProvider")}
+                    >
+                      <Trash2 size={14} className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Suggested providers */}
+              {SUGGESTED_PROVIDERS.some((s) => !addedProviderUrls.has(s.url)) && (
+                <div className="pt-2">
+                  <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                    {t("rules.suggestedProviders")}
+                  </h3>
+                  <div className="space-y-2">
+                    {SUGGESTED_PROVIDERS.filter((s) => !addedProviderUrls.has(s.url)).map((suggestion) => (
+                      <div
+                        key={suggestion.url}
+                        className="flex items-center justify-between rounded-md border border-dashed p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Globe size={12} className="text-muted-foreground shrink-0" />
+                            <span className="text-sm truncate">{suggestion.name}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {suggestion.behavior}
+                            </Badge>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                            {suggestion.url}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAddSuggested(suggestion)}
+                          className="shrink-0 ml-2"
+                        >
+                          <Plus size={12} /> {t("rules.addProvider")}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Add Rule Dialog ────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t("rules.addRule")}</DialogTitle></DialogHeader>
@@ -173,29 +461,153 @@ export default function Rules() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Presets Dialog ─────────────────────────────────────── */}
       <Dialog open={presetsOpen} onOpenChange={setPresetsOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[80vh]">
           <DialogHeader><DialogTitle>{t("rules.presets")}</DialogTitle></DialogHeader>
-          <div className="space-y-2">
-            {RULE_PRESETS.map((preset) => (
-              <div key={preset.id} className="flex items-center justify-between rounded-md border p-3">
-                <div>
-                  <div className="font-medium text-sm">{t(preset.nameKey)}</div>
-                  <div className="text-xs text-muted-foreground">{t(preset.descKey)}</div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const count = addMany(preset.rules);
-                    notify.success(t("rules.presetApplied", { count, name: t(preset.nameKey) }));
-                  }}
-                >
-                  {t("rules.applyPreset")}
-                </Button>
-              </div>
-            ))}
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <div className="space-y-4">
+              {PRESET_CATEGORY_ORDER.map((category) => {
+                const presets = presetsByCategory.get(category);
+                if (!presets || presets.length === 0) return null;
+
+                return (
+                  <div key={category}>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      {t(PRESET_CATEGORY_KEYS[category])}
+                    </h3>
+                    <div className="space-y-2">
+                      {presets.map((preset) => {
+                        const isExpanded = expandedPresets.has(preset.id);
+                        const isApplied = isPresetFullyApplied(preset, rules);
+
+                        return (
+                          <div key={preset.id} className="rounded-md border">
+                            <div className="flex items-center justify-between p-3">
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 text-left flex-1 min-w-0"
+                                onClick={() => togglePresetExpand(preset.id)}
+                                aria-expanded={isExpanded}
+                                aria-label={t(preset.nameKey)}
+                              >
+                                {isExpanded
+                                  ? <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                                  : <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+                                }
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm">{t(preset.nameKey)}</span>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {t("rules.ruleCount", { count: preset.rules.length })}
+                                    </Badge>
+                                    {isApplied && (
+                                      <Check size={14} className="text-green-500 shrink-0" />
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{t(preset.descKey)}</div>
+                                </div>
+                              </button>
+                              <div className="flex gap-1 shrink-0 ml-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleApplyPreset(preset, "add")}
+                                  title={t("rules.applyModeAdd")}
+                                >
+                                  {t("rules.applyAdd")}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleApplyPreset(preset, "replace")}
+                                  title={t("rules.applyModeReplace")}
+                                >
+                                  {t("rules.applyReplace")}
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Expanded rule preview */}
+                            {isExpanded && (
+                              <div className="border-t px-3 py-2 bg-muted/30">
+                                <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                                  {preset.rules.map((r, i) => (
+                                    <div key={i} className="flex items-center gap-2 text-xs font-mono">
+                                      <span className="text-muted-foreground w-28 shrink-0">{r.type}</span>
+                                      <span className="truncate flex-1">{r.match || "\u2014"}</span>
+                                      <span className={
+                                        r.action === "PROXY"  ? "text-green-400" :
+                                        r.action === "REJECT" ? "text-red-400"   : "text-muted-foreground"
+                                      }>
+                                        {r.action}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Provider Dialog ────────────────────────────────── */}
+      <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("rules.addProvider")}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>{t("rules.providerName")}</Label>
+              <Input
+                value={providerName}
+                onChange={(e) => setProviderName(e.target.value)}
+                placeholder={t("rules.providerNamePlaceholder")}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t("rules.providerUrl")}</Label>
+              <Input
+                value={providerUrl}
+                onChange={(e) => setProviderUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t("rules.providerBehavior")}</Label>
+              <Select value={providerBehavior} onValueChange={(v) => setProviderBehavior(v as RuleProvider["behavior"])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="domain">{t("rules.behaviorDomain")}</SelectItem>
+                  <SelectItem value="ipcidr">{t("rules.behaviorIpCidr")}</SelectItem>
+                  <SelectItem value="classical">{t("rules.behaviorClassical")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>{t("rules.action")}</Label>
+              <Select value={providerAction} onValueChange={(v) => setProviderAction(v as RuleProvider["action"])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RULE_ACTIONS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
+            <Button onClick={handleAddProvider} disabled={!providerName.trim() || !providerUrl.trim()}>
+              {t("rules.addProvider")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
