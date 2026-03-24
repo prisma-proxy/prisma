@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
-import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut, RefreshCw } from "lucide-react";
-import { api } from "@/lib/api";
-import { useToast } from "@/lib/toast-context";
+import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -27,20 +24,6 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { locale, setLocale, t } = useI18n();
-  const { toast } = useToast();
-  const [reloading, setReloading] = useState(false);
-
-  const handleReload = async () => {
-    setReloading(true);
-    try {
-      await api.reloadConfig();
-      toast(t("toast.reloadSuccess"), "success");
-    } catch {
-      toast(t("toast.reloadFailed"), "error");
-    } finally {
-      setReloading(false);
-    }
-  };
 
   const themeIcon =
     theme === "light" ? (
@@ -68,7 +51,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1.5">
-        {/* Command palette hint */}
+        {/* Search (opens command palette) */}
         <button
           type="button"
           onClick={() => {
@@ -76,24 +59,10 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
               new KeyboardEvent("keydown", { key: "k", metaKey: true })
             );
           }}
-          className="hidden sm:flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Search className="h-3.5 w-3.5" />
-          <span>{t("common.search")}</span>
-          <kbd className="ml-2 inline-flex h-5 items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-            <span className="text-xs">&#8984;</span>K
-          </kbd>
-        </button>
-
-        {/* Reload config */}
-        <button
-          type="button"
-          onClick={handleReload}
-          disabled={reloading}
           className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
-          title={t("settings.reloadConfig")}
+          title={`${t("common.search")} (⌘K)`}
         >
-          <RefreshCw className={cn("h-4 w-4", reloading && "animate-spin")} />
+          <Search className="h-4 w-4" />
         </button>
 
         {/* Alerts indicator */}

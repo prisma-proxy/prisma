@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -23,9 +23,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>
