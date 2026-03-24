@@ -13,7 +13,7 @@ interface Props {
   onChange: (patch: Partial<WizardState>) => void;
 }
 
-export default function Step5Review({ state, onChange }: Props) {
+export default function ReviewTab({ state, onChange }: Props) {
   const { t } = useTranslation();
   const [tagInput, setTagInput] = useState("");
   const errors = validateWizard(state);

@@ -19,7 +19,7 @@ export interface WizardState {
   serverKeyPin: string;
 
   // Step 3 — Transport + sub-fields
-  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp" | "wireguard";
+  transport: "quic" | "ws" | "grpc" | "xhttp" | "xporta" | "tcp" | "wireguard" | "prisma-tls";
   cipher: string;
   fingerprint: string;
   quicVersion: string;
@@ -36,6 +36,15 @@ export interface WizardState {
   xportaBaseUrl: string;
   xportaEncoding: string;
   xportaPollTimeout: number;
+  // XPorta advanced fields
+  xportaSessionPath: string;
+  xportaDataPaths: string;
+  xportaPollPaths: string;
+  xportaPollConcurrency: number;
+  xportaUploadConcurrency: number;
+  xportaMaxPayloadSize: number;
+  xportaCookieName: string;
+  xportaExtraHeaders: string;
   congestion: "bbr" | "brutal" | "adaptive";
   targetBandwidth: string;
   portHopping: boolean;
@@ -80,6 +89,13 @@ export interface WizardState {
   fallbackMaxAttempts: number;
   fallbackConnectTimeout: number;
 
+  // Connection pool
+  connectionPoolEnabled: boolean;
+
+  // PrismaTLS
+  prismaTlsFingerprint: string;
+  prismaTlsAuthSecret: string;
+
   // Step 4
   tags: string[];
 }
@@ -102,18 +118,26 @@ export const DEFAULT_WIZARD: WizardState = {
   fingerprint: "chrome",
   quicVersion: "auto",
   sniSlicing: false,
-  wsUrl: "/ws",
+  wsUrl: "/ws-tunnel",
   wsHost: "",
   wsExtraHeaders: "",
-  grpcUrl: "/prisma.Proxy/Relay",
+  grpcUrl: "/tunnel.PrismaTunnel",
   xhttpMode: "auto",
-  xhttpUploadUrl: "/up",
-  xhttpDownloadUrl: "/down",
-  xhttpStreamUrl: "/stream",
+  xhttpUploadUrl: "/api/v1/upload",
+  xhttpDownloadUrl: "/api/v1/pull",
+  xhttpStreamUrl: "/api/v1/stream",
   xhttpExtraHeaders: "",
   xportaBaseUrl: "",
   xportaEncoding: "json",
   xportaPollTimeout: 55,
+  xportaSessionPath: "/api/auth",
+  xportaDataPaths: "/api/v1/data\n/api/v1/sync\n/api/v1/update",
+  xportaPollPaths: "/api/v1/notifications\n/api/v1/feed\n/api/v1/events",
+  xportaPollConcurrency: 3,
+  xportaUploadConcurrency: 4,
+  xportaMaxPayloadSize: 65536,
+  xportaCookieName: "_sess",
+  xportaExtraHeaders: "",
   congestion: "bbr",
   targetBandwidth: "",
   portHopping: false,
@@ -148,6 +172,9 @@ export const DEFAULT_WIZARD: WizardState = {
   fallbackUseServerFallback: false,
   fallbackMaxAttempts: 3,
   fallbackConnectTimeout: 10,
+  connectionPoolEnabled: false,
+  prismaTlsFingerprint: "chrome",
+  prismaTlsAuthSecret: "",
   tags: [],
 };
 
@@ -310,6 +337,26 @@ export function mergeSettingsIntoConfig(
   return config;
 }
 
+/** Build a full URL from a path and the server host/port.
+ *  If the value is already a full URL (http/https/ws/wss), return as-is. */
+function toFullUrl(pathOrUrl: string, host: string, port: number, scheme: string): string {
+  if (/^(https?|wss?):\/\//i.test(pathOrUrl)) return pathOrUrl;
+  const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `${scheme}://${host}:${port}${path}`;
+}
+
+/** Extract the path portion from a URL for display in the form.
+ *  If it's already a path, return as-is. */
+function extractPath(urlOrPath: string, defaultPath: string): string {
+  if (!urlOrPath) return defaultPath;
+  if (urlOrPath.startsWith("/")) return urlOrPath;
+  try {
+    return new URL(urlOrPath).pathname;
+  } catch {
+    return urlOrPath;
+  }
+}
+
 /** Parse "Key: Value" lines into [key, value] tuples */
 function parseHeaderLines(text: string): [string, string][] {
   return text
@@ -375,27 +422,32 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     if (w.entropyCamouflage) config.entropy_camouflage = true;
   }
 
-  // WebSocket nested config
+  // WebSocket nested config — Rust client expects full URL (wss://host:port/path)
   if (w.transport === "ws") {
-    const ws: Record<string, unknown> = { url: w.wsUrl };
+    const scheme = w.tlsOnTcp ? "wss" : "ws";
+    const ws: Record<string, unknown> = {
+      url: toFullUrl(w.wsUrl, w.serverHost, w.serverPort, scheme),
+    };
     if (w.wsHost) ws.host = w.wsHost;
     const wsHeaders = parseHeaderLines(w.wsExtraHeaders);
     if (wsHeaders.length > 0) ws.extra_headers = wsHeaders;
     config.ws = ws;
   }
 
-  // gRPC nested config
+  // gRPC nested config — Rust client expects full URL (https://host:port/path)
   if (w.transport === "grpc") {
-    config.grpc = { url: w.grpcUrl };
+    const scheme = w.tlsOnTcp ? "https" : "http";
+    config.grpc = { url: toFullUrl(w.grpcUrl, w.serverHost, w.serverPort, scheme) };
   }
 
-  // XHTTP nested config
+  // XHTTP nested config — Rust client expects full URLs
   if (w.transport === "xhttp") {
+    const base = (path: string) => toFullUrl(path, w.serverHost, w.serverPort, "https");
     const xhttp: Record<string, unknown> = {
       mode: w.xhttpMode,
-      upload_url: w.xhttpUploadUrl,
-      download_url: w.xhttpDownloadUrl,
-      stream_url: w.xhttpStreamUrl,
+      upload_url: base(w.xhttpUploadUrl),
+      download_url: base(w.xhttpDownloadUrl),
+      stream_url: base(w.xhttpStreamUrl),
     };
     const xhttpHeaders = parseHeaderLines(w.xhttpExtraHeaders);
     if (xhttpHeaders.length > 0) xhttp.extra_headers = xhttpHeaders;
@@ -404,11 +456,25 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
 
   // XPorta — nested object matching XPortaClientConfig
   if (w.transport === "xporta") {
-    config.xporta = {
+    const xporta: Record<string, unknown> = {
       base_url: w.xportaBaseUrl,
       encoding: w.xportaEncoding,
       poll_timeout_secs: w.xportaPollTimeout,
     };
+    if (w.xportaSessionPath && w.xportaSessionPath !== "/api/auth") {
+      xporta.session_path = w.xportaSessionPath;
+    }
+    const dataPaths = w.xportaDataPaths.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (dataPaths.length > 0) xporta.data_paths = dataPaths;
+    const pollPaths = w.xportaPollPaths.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (pollPaths.length > 0) xporta.poll_paths = pollPaths;
+    if (w.xportaPollConcurrency !== 3) xporta.poll_concurrency = w.xportaPollConcurrency;
+    if (w.xportaUploadConcurrency !== 4) xporta.upload_concurrency = w.xportaUploadConcurrency;
+    if (w.xportaMaxPayloadSize !== 65536) xporta.max_payload_size = w.xportaMaxPayloadSize;
+    if (w.xportaCookieName && w.xportaCookieName !== "_sess") xporta.cookie_name = w.xportaCookieName;
+    const xportaHeaders = parseHeaderLines(w.xportaExtraHeaders);
+    if (xportaHeaders.length > 0) xporta.extra_headers = xportaHeaders;
+    config.xporta = xporta;
   }
 
   // Header obfuscation
@@ -497,6 +563,17 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     };
   }
 
+  // Connection pool (profile-level)
+  if (w.connectionPoolEnabled) {
+    config.connection_pool = { enabled: true };
+  }
+
+  // PrismaTLS transport
+  if (w.transport === "prisma-tls") {
+    if (w.prismaTlsFingerprint) config.fingerprint = w.prismaTlsFingerprint;
+    if (w.prismaTlsAuthSecret) config.prisma_auth_secret = w.prismaTlsAuthSecret;
+  }
+
   return config;
 }
 
@@ -558,18 +635,32 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fingerprint: String(c.fingerprint ?? "chrome"),
     quicVersion: String(c.quic_version ?? "auto"),
     sniSlicing: Boolean(c.sni_slicing),
-    wsUrl: String(ws.url ?? "/ws"),
+    wsUrl: extractPath(String(ws.url ?? ""), "/ws-tunnel"),
     wsHost: String(ws.host ?? ""),
     wsExtraHeaders: wsHeaders,
-    grpcUrl: String(grpc.url ?? "/prisma.Proxy/Relay"),
+    grpcUrl: extractPath(String(grpc.url ?? ""), "/tunnel.PrismaTunnel"),
     xhttpMode: String(xhttp.mode ?? "auto"),
-    xhttpUploadUrl: String(xhttp.upload_url ?? "/up"),
-    xhttpDownloadUrl: String(xhttp.download_url ?? "/down"),
-    xhttpStreamUrl: String(xhttp.stream_url ?? "/stream"),
+    xhttpUploadUrl: extractPath(String(xhttp.upload_url ?? ""), "/api/v1/upload"),
+    xhttpDownloadUrl: extractPath(String(xhttp.download_url ?? ""), "/api/v1/pull"),
+    xhttpStreamUrl: extractPath(String(xhttp.stream_url ?? ""), "/api/v1/stream"),
     xhttpExtraHeaders: xhttpHeaders,
     xportaBaseUrl: String(xporta.base_url ?? ""),
     xportaEncoding: String(xporta.encoding ?? "json"),
     xportaPollTimeout: Number(xporta.poll_timeout_secs ?? 55),
+    xportaSessionPath: String(xporta.session_path ?? "/api/auth"),
+    xportaDataPaths: Array.isArray(xporta.data_paths)
+      ? (xporta.data_paths as string[]).join("\n")
+      : "/api/v1/data\n/api/v1/sync\n/api/v1/update",
+    xportaPollPaths: Array.isArray(xporta.poll_paths)
+      ? (xporta.poll_paths as string[]).join("\n")
+      : "/api/v1/notifications\n/api/v1/feed\n/api/v1/events",
+    xportaPollConcurrency: Number(xporta.poll_concurrency ?? 3),
+    xportaUploadConcurrency: Number(xporta.upload_concurrency ?? 4),
+    xportaMaxPayloadSize: Number(xporta.max_payload_size ?? 65536),
+    xportaCookieName: String(xporta.cookie_name ?? "_sess"),
+    xportaExtraHeaders: Array.isArray(xporta.extra_headers)
+      ? (xporta.extra_headers as [string, string][]).map(([k, v]) => `${k}: ${v}`).join("\n")
+      : "",
     congestion: (congestion.mode as WizardState["congestion"]) ?? "bbr",
     targetBandwidth: String(congestion.target_bandwidth ?? ""),
     portHopping: Boolean(ph.enabled),
@@ -604,6 +695,9 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fallbackUseServerFallback: Boolean(fb.use_server_fallback),
     fallbackMaxAttempts: Number(fb.max_fallback_attempts ?? 3),
     fallbackConnectTimeout: Number(fb.connect_timeout_secs ?? 10),
+    connectionPoolEnabled: Boolean((c.connection_pool as Record<string, unknown> | undefined)?.enabled),
+    prismaTlsFingerprint: String(c.fingerprint ?? "chrome"),
+    prismaTlsAuthSecret: String(c.prisma_auth_secret ?? ""),
     tags: tags ?? [],
   };
 }

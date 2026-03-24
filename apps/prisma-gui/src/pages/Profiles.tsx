@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import QrDisplay from "@/components/QrDisplay";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import ProfileWizard from "@/components/ProfileWizard";
+import ProfileDialog from "@/components/ProfileDialog";
 import { useStore } from "@/store";
 import { useProfileMetrics } from "@/store/profileMetrics";
 import { useConnection } from "@/hooks/useConnection";
@@ -645,8 +645,8 @@ export default function Profiles() {
         </div>
       </ScrollArea>
 
-      {/* Profile wizard */}
-      <ProfileWizard
+      {/* Profile dialog */}
+      <ProfileDialog
         open={wizardOpen}
         onOpenChange={(v) => { setWizardOpen(v); if (!v) { setEditInitial(undefined); setEditingId(null); setEditingCreatedAt(""); setEditingProfile(null); } }}
         initial={editInitial}
