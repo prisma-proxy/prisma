@@ -629,6 +629,10 @@ jobs:
             echo "CARGO_TARGET_${UPPER}_LINKER=${CC}" >> "$GITHUB_ENV"
           done
 
+      - name: Initialize Tauri Android project
+        run: npx tauri android init
+        working-directory: apps/prisma-gui
+
       - name: Build Android APK
         run: npm run tauri:android:build
         working-directory: apps/prisma-gui
