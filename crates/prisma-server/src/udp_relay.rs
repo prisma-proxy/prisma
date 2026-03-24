@@ -9,6 +9,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 use tracing::{debug, info, trace, warn};
 
+use prisma_core::cache::DnsCache;
 use prisma_core::crypto::aead::AeadCipher;
 use prisma_core::fec::{decode_fec_header, encode_fec_header, FecConfig, FecDecoder, FecEncoder};
 use prisma_core::protocol::codec::*;
@@ -35,6 +36,7 @@ struct UdpRelayCtx<W> {
     fec_config: Option<FecConfig>,
     /// Sequence counter for tracking data shard indices on the receive side.
     recv_seq: Arc<Mutex<u8>>,
+    dns_cache: DnsCache,
 }
 
 impl<W> Clone for UdpRelayCtx<W> {
@@ -52,6 +54,7 @@ impl<W> Clone for UdpRelayCtx<W> {
             fec_decoder: self.fec_decoder.clone(),
             fec_config: self.fec_config.clone(),
             recv_seq: self.recv_seq.clone(),
+            dns_cache: self.dns_cache.clone(),
         }
     }
 }
@@ -68,6 +71,7 @@ pub async fn run_udp_relay_session<R, W>(
     bytes_up: Arc<AtomicU64>,
     bytes_down: Arc<AtomicU64>,
     fec_config: Option<FecConfig>,
+    dns_cache: DnsCache,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -99,6 +103,7 @@ where
         fec_decoder,
         fec_config,
         recv_seq: Arc::new(Mutex::new(0)),
+        dns_cache,
     };
 
     // Process the first UdpAssociate frame
@@ -256,7 +261,8 @@ async fn dispatch_frame<W: AsyncWrite + Unpin + Send + 'static>(
                 let socket = ctx.associations.lock().await.get(&assoc_id).cloned();
                 if let Some(socket) = socket {
                     // Resolve destination address
-                    let dest = resolve_udp_dest(addr_type, &dest_addr, dest_port);
+                    let dest =
+                        resolve_udp_dest(addr_type, &dest_addr, dest_port, &ctx.dns_cache).await;
                     match dest {
                         Ok(addr) => {
                             if let Err(e) = socket.send_to(&payload, addr).await {
@@ -361,7 +367,15 @@ async fn udp_recv_loop<W: AsyncWrite + Unpin + Send + 'static>(
 }
 
 /// Resolve a UDP destination from address type and raw bytes.
-fn resolve_udp_dest(addr_type: u8, addr: &[u8], port: u16) -> Result<SocketAddr> {
+///
+/// For domain names, uses the async `DnsCache` (backed by `tokio::net::lookup_host`)
+/// instead of the blocking `std::net::ToSocketAddrs` to avoid stalling the tokio executor.
+async fn resolve_udp_dest(
+    addr_type: u8,
+    addr: &[u8],
+    port: u16,
+    dns_cache: &DnsCache,
+) -> Result<SocketAddr> {
     match addr_type {
         0x01 => {
             // IPv4
@@ -372,18 +386,18 @@ fn resolve_udp_dest(addr_type: u8, addr: &[u8], port: u16) -> Result<SocketAddr>
             Ok(SocketAddr::new(ip.into(), port))
         }
         0x03 => {
-            // Domain — resolve synchronously via blocking task
+            // Domain — resolve asynchronously via DNS cache
             let domain = String::from_utf8(addr.to_vec())
                 .map_err(|_| anyhow::anyhow!("Invalid domain encoding"))?;
-            let addr_str = format!("{}:{}", domain, port);
-            // Use std::net for sync DNS resolution (in async context, acceptable for UDP)
-            use std::net::ToSocketAddrs;
-            let resolved = addr_str
-                .to_socket_addrs()
-                .map_err(|e| anyhow::anyhow!("DNS resolution failed for {}: {}", domain, e))?
+            let addrs = dns_cache
+                .resolve(&domain)
+                .await
+                .map_err(|e| anyhow::anyhow!("DNS resolution failed for {}: {}", domain, e))?;
+            let ip = addrs
+                .into_iter()
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("No addresses resolved for {}", domain))?;
-            Ok(resolved)
+            Ok(SocketAddr::new(ip, port))
         }
         0x04 => {
             // IPv6
@@ -435,4 +449,114 @@ async fn send_frame_with_flags<W: AsyncWrite + Unpin>(
     tw.write_all(&len).await?;
     tw.write_all(&encrypted).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prisma_core::cache::DnsCache;
+    use prisma_core::fec::{decode_fec_header, encode_fec_header};
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_ipv4() {
+        let cache = DnsCache::default();
+        let addr = resolve_udp_dest(0x01, &[127, 0, 0, 1], 8080, &cache)
+            .await
+            .unwrap();
+        assert_eq!(addr, "127.0.0.1:8080".parse::<SocketAddr>().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_ipv4_invalid_len() {
+        let cache = DnsCache::default();
+        let result = resolve_udp_dest(0x01, &[127, 0, 0], 8080, &cache).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid IPv4"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_ipv6() {
+        let cache = DnsCache::default();
+        let ipv6_bytes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; // ::1
+        let addr = resolve_udp_dest(0x04, &ipv6_bytes, 9090, &cache)
+            .await
+            .unwrap();
+        assert_eq!(addr, "[::1]:9090".parse::<SocketAddr>().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_ipv6_invalid_len() {
+        let cache = DnsCache::default();
+        let result = resolve_udp_dest(0x04, &[0; 8], 9090, &cache).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid IPv6"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_domain() {
+        let cache = DnsCache::default();
+        let domain = b"localhost";
+        let result = resolve_udp_dest(0x03, domain, 80, &cache).await;
+        assert!(result.is_ok(), "localhost should resolve: {:?}", result);
+        let addr = result.unwrap();
+        assert_eq!(addr.port(), 80);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_domain_uses_cache() {
+        let cache = DnsCache::default();
+        // Pre-populate cache
+        cache
+            .insert(
+                "cached.test".into(),
+                vec![std::net::IpAddr::V4(std::net::Ipv4Addr::new(
+                    10, 20, 30, 40,
+                ))],
+            )
+            .await;
+        let addr = resolve_udp_dest(0x03, b"cached.test", 443, &cache)
+            .await
+            .unwrap();
+        assert_eq!(addr, "10.20.30.40:443".parse::<SocketAddr>().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_unsupported_type() {
+        let cache = DnsCache::default();
+        let result = resolve_udp_dest(0x99, &[1, 2, 3, 4], 80, &cache).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unsupported"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_udp_dest_domain_invalid_utf8() {
+        let cache = DnsCache::default();
+        let result = resolve_udp_dest(0x03, &[0xFF, 0xFE], 80, &cache).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid domain"));
+    }
+
+    #[test]
+    fn test_fec_header_round_trip() {
+        let header = encode_fec_header(0xABCD, 7, 13);
+        let (group, index, total) = decode_fec_header(&header);
+        assert_eq!(group, 0xABCD);
+        assert_eq!(index, 7);
+        assert_eq!(total, 13);
+    }
+
+    #[test]
+    fn test_fec_header_boundary_values() {
+        let header = encode_fec_header(0, 0, 0);
+        let (group, index, total) = decode_fec_header(&header);
+        assert_eq!(group, 0);
+        assert_eq!(index, 0);
+        assert_eq!(total, 0);
+
+        let header = encode_fec_header(u16::MAX, u8::MAX, u8::MAX);
+        let (group, index, total) = decode_fec_header(&header);
+        assert_eq!(group, u16::MAX);
+        assert_eq!(index, u8::MAX);
+        assert_eq!(total, u8::MAX);
+    }
 }

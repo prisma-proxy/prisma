@@ -13,6 +13,7 @@ pub mod relay;
 pub mod relay_uring;
 pub mod reload;
 pub mod state;
+pub mod tls_probe_guard;
 pub mod udp_relay;
 pub mod ws_stream;
 pub mod xhttp_stream;
@@ -282,13 +283,41 @@ pub async fn run(config_path: &str) -> Result<()> {
         info!(addr = %config.cdn.listen_addr, "CDN HTTPS listener spawned");
     }
 
+    // Construct TLS probe guard if TLS-on-TCP camouflage with guard enabled
+    let tls_probe_guard =
+        if config.camouflage.tls_on_tcp && config.camouflage.tls_probe_guard.enabled {
+            let cfg = &config.camouflage.tls_probe_guard;
+            Some(Arc::new(tls_probe_guard::TlsProbeGuard::new(
+                cfg.max_failures,
+                cfg.failure_window_secs,
+                cfg.block_duration_secs,
+            )))
+        } else {
+            None
+        };
+
+    // Spawn periodic cleanup task for the probe guard
+    if let Some(ref guard) = tls_probe_guard {
+        let g = guard.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                g.cleanup();
+            }
+        });
+    }
+
     // Start TCP and QUIC listeners concurrently
     let tcp_config = config.clone();
     let tcp_auth = auth_store.clone();
     let tcp_dns = dns_cache.clone();
     let tcp_ctx = ctx.clone();
+    let tcp_guard = tls_probe_guard.clone();
     let tcp_handle = tokio::spawn(async move {
-        if let Err(e) = listener::tcp::listen(&tcp_config, tcp_auth, tcp_dns, tcp_ctx).await {
+        if let Err(e) =
+            listener::tcp::listen(&tcp_config, tcp_auth, tcp_dns, tcp_ctx, tcp_guard).await
+        {
             tracing::error!("TCP listener error: {}", e);
         }
     });

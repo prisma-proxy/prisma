@@ -49,7 +49,13 @@ pub fn log_file_path(service: &str, log_file: Option<&str>) -> PathBuf {
 pub fn write_pid_file(path: &Path) -> Result<()> {
     let pid = std::process::id();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).ok();
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!(
+                "Warning: failed to create PID directory {}: {}",
+                parent.display(),
+                e
+            );
+        }
     }
     fs::write(path, pid.to_string())
         .with_context(|| format!("Failed to write PID file: {}", path.display()))?;
@@ -185,7 +191,13 @@ pub fn daemonize(
 
     // Ensure log directory exists
     if let Some(parent) = log_path.parent() {
-        fs::create_dir_all(parent).ok();
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!(
+                "Warning: failed to create log directory {}: {}",
+                parent.display(),
+                e
+            );
+        }
     }
 
     // Open log file for stdout/stderr redirection

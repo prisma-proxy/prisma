@@ -511,8 +511,9 @@ mod splice_relay {
                 }
                 Ok(n) => n,
                 Err(nix::errno::Errno::EAGAIN) => {
-                    // Non-blocking source has no data; sleep briefly to avoid busy-spin.
-                    std::thread::sleep(std::time::Duration::from_micros(100));
+                    // Non-blocking source has no data; poll for readability to avoid busy-spin.
+                    let mut poll_fd = [nix::poll::PollFd::new(src, nix::poll::PollFlags::POLLIN)];
+                    let _ = nix::poll::poll(&mut poll_fd, nix::poll::PollTimeout::from(100u16));
                     continue;
                 }
                 Err(e) => {
@@ -542,7 +543,10 @@ mod splice_relay {
                         remaining -= written;
                     }
                     Err(nix::errno::Errno::EAGAIN) => {
-                        std::thread::sleep(std::time::Duration::from_micros(100));
+                        // Poll for writability on the destination fd before retrying.
+                        let mut poll_fd =
+                            [nix::poll::PollFd::new(dst, nix::poll::PollFlags::POLLOUT)];
+                        let _ = nix::poll::poll(&mut poll_fd, nix::poll::PollTimeout::from(100u16));
                     }
                     Err(e) => {
                         warn!("splice pipe->dst error: {}", e);

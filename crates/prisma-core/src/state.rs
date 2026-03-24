@@ -320,6 +320,12 @@ pub struct ServerMetrics {
     pub total_bytes_down: AtomicU64,
     pub active_connections: AtomicUsize,
     pub handshake_failures: AtomicU64,
+    /// TLS handshake failures (eof, protocol error, etc.) — distinct from Prisma protocol failures.
+    pub tls_handshake_failures: AtomicU64,
+    /// TLS handshake timeouts (peer stalling / slow handshake attack).
+    pub tls_handshake_timeouts: AtomicU64,
+    /// Connections dropped because the peer IP was rate-limited by TlsProbeGuard.
+    pub tls_blocked_connections: AtomicU64,
 }
 
 impl ServerMetrics {
@@ -331,6 +337,9 @@ impl ServerMetrics {
             total_bytes_down: AtomicU64::new(0),
             active_connections: AtomicUsize::new(0),
             handshake_failures: AtomicU64::new(0),
+            tls_handshake_failures: AtomicU64::new(0),
+            tls_handshake_timeouts: AtomicU64::new(0),
+            tls_blocked_connections: AtomicU64::new(0),
         }
     }
 }
@@ -537,6 +546,7 @@ pub fn new_forward_registry() -> ForwardRegistry {
 }
 
 /// Count how many forwards a given client owns in the registry.
+#[allow(dead_code)]
 pub async fn count_client_forwards(registry: &ForwardRegistry, client_id: Uuid) -> usize {
     let map = registry.read().await;
     map.values()
@@ -742,5 +752,162 @@ impl FallbackManager {
     pub async fn advertised_transports(&self) -> Vec<String> {
         let chain = self.chain.read().await;
         chain.iter().map(|e| e.name.clone()).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_metrics_new() {
+        let m = ServerMetrics::new();
+        assert_eq!(m.total_connections.load(Ordering::Relaxed), 0);
+        assert_eq!(m.total_bytes_up.load(Ordering::Relaxed), 0);
+        assert_eq!(m.total_bytes_down.load(Ordering::Relaxed), 0);
+        assert_eq!(m.active_connections.load(Ordering::Relaxed), 0);
+        assert_eq!(m.handshake_failures.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_server_metrics_default() {
+        let m = ServerMetrics::default();
+        assert_eq!(m.total_connections.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_transport_display() {
+        // Verify transports serialize correctly
+        let t = Transport::Tcp;
+        let json = serde_json::to_string(&t).unwrap();
+        assert_eq!(json, r#""Tcp""#);
+
+        let t = Transport::Quic;
+        let json = serde_json::to_string(&t).unwrap();
+        assert_eq!(json, r#""Quic""#);
+    }
+
+    #[test]
+    fn test_session_mode_variants() {
+        assert_ne!(SessionMode::Unknown, SessionMode::Proxy);
+        assert_ne!(SessionMode::Proxy, SessionMode::Forward);
+        assert_ne!(SessionMode::Forward, SessionMode::UdpRelay);
+    }
+
+    #[test]
+    fn test_transport_status_variants() {
+        assert_ne!(TransportStatus::Active, TransportStatus::Failed);
+        assert_ne!(TransportStatus::Starting, TransportStatus::Stopped);
+        assert_ne!(TransportStatus::Recovering, TransportStatus::Active);
+    }
+
+    #[test]
+    fn test_transport_fallback_entry_new() {
+        let entry = TransportFallbackEntry::new("tcp".into());
+        assert_eq!(entry.name, "tcp");
+        assert_eq!(entry.get_status(), TransportStatus::Stopped);
+        assert_eq!(entry.consecutive_failures.load(Ordering::Relaxed), 0);
+        assert_eq!(entry.total_connections.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_transport_fallback_record_success() {
+        let entry = TransportFallbackEntry::new("tcp".into());
+        entry.consecutive_failures.store(5, Ordering::Relaxed);
+        entry.record_success();
+        assert_eq!(entry.consecutive_failures.load(Ordering::Relaxed), 0);
+        assert_eq!(entry.total_connections.load(Ordering::Relaxed), 1);
+        // record_success on the entry resets failures but doesn't set status;
+        // that's done by FallbackManager::record_transport_success.
+        assert_eq!(entry.get_status(), TransportStatus::Stopped);
+    }
+
+    #[test]
+    fn test_transport_fallback_record_failure() {
+        let entry = TransportFallbackEntry::new("quic".into());
+        let count = entry.record_failure();
+        assert_eq!(count, 1);
+        let count = entry.record_failure();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_transport_fallback_entry_snapshot() {
+        let entry = TransportFallbackEntry::new("ws".into());
+        entry.set_status(TransportStatus::Active);
+        entry.record_success();
+        entry.record_success();
+
+        let snap = entry.snapshot();
+        assert_eq!(snap.name, "ws");
+        assert_eq!(snap.status, TransportStatus::Active);
+        assert_eq!(snap.total_connections, 2);
+        assert_eq!(snap.consecutive_failures, 0);
+    }
+
+    #[test]
+    fn test_client_metrics_accumulator_new() {
+        let acc = ClientMetricsAccumulator::new();
+        assert_eq!(acc.bytes_up.load(Ordering::Relaxed), 0);
+        assert_eq!(acc.bytes_down.load(Ordering::Relaxed), 0);
+        assert_eq!(acc.connection_count.load(Ordering::Relaxed), 0);
+        assert_eq!(acc.active_connections.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_client_metrics_accumulator_record_connection() {
+        let acc = ClientMetricsAccumulator::new();
+        acc.record_connection();
+        assert_eq!(acc.connection_count.load(Ordering::Relaxed), 1);
+        assert_eq!(acc.active_connections.load(Ordering::Relaxed), 1);
+        acc.record_disconnect();
+        assert_eq!(acc.active_connections.load(Ordering::Relaxed), 0);
+        assert_eq!(acc.connection_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_client_metrics_accumulator_add_bytes() {
+        let acc = ClientMetricsAccumulator::new();
+        acc.add_bytes_up(100);
+        acc.add_bytes_down(200);
+        assert_eq!(acc.bytes_up.load(Ordering::Relaxed), 100);
+        assert_eq!(acc.bytes_down.load(Ordering::Relaxed), 200);
+    }
+
+    #[tokio::test]
+    async fn test_client_metrics_accumulator_latency() {
+        let acc = ClientMetricsAccumulator::new();
+        for i in 0..10 {
+            acc.add_latency_sample(i * 1000).await;
+        }
+        let snap = acc.snapshot(Uuid::new_v4(), Some("test".into())).await;
+        assert!(snap.latency_p50_ms.is_some());
+        assert!(snap.latency_p95_ms.is_some());
+        assert!(snap.latency_p99_ms.is_some());
+    }
+
+    #[test]
+    fn test_forward_entry_new() {
+        let entry = ForwardEntry::new(8080, "web".into(), None, "0.0.0.0:8080".into(), vec![]);
+        assert_eq!(entry.remote_port, 8080);
+        assert_eq!(entry.name, "web");
+        assert_eq!(entry.protocol, "tcp");
+    }
+
+    #[test]
+    fn test_metrics_snapshot_serialization() {
+        let snap = MetricsSnapshot {
+            timestamp: Utc::now(),
+            uptime_secs: 100,
+            total_connections: 5,
+            active_connections: 2,
+            total_bytes_up: 1000,
+            total_bytes_down: 2000,
+            handshake_failures: 0,
+        };
+        let json = serde_json::to_string(&snap).unwrap();
+        assert!(json.contains("\"uptime_secs\":100"));
+        let deserialized: MetricsSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.total_connections, 5);
     }
 }

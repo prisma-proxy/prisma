@@ -793,6 +793,7 @@ where
                 bytes_up,
                 bytes_down,
                 None, // FEC config: negotiated out-of-band or from server config
+                dns_cache,
             )
             .await
         }

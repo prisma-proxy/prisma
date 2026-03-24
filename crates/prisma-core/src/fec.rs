@@ -109,15 +109,12 @@ impl FecEncoder {
                 data_shards: self.data_shards as u8,
                 parity_shards: self.parity_shards as u8,
                 shard_size: self.shard_size,
-                shards: self.buffer.iter().map(|s| s.clone().unwrap()).collect(),
+                shards: self.buffer.iter_mut().map(|s| s.take().unwrap()).collect(),
             };
 
-            // Reset for next group
+            // Reset for next group (buffer slots already None from take())
             self.group_id = self.group_id.wrapping_add(1);
             self.count = 0;
-            for s in self.buffer.iter_mut() {
-                *s = None;
-            }
 
             Some(group)
         } else {
@@ -138,16 +135,13 @@ impl FecEncoder {
             parity_shards: 0,
             shard_size: self.shard_size,
             shards: self.buffer[..self.count]
-                .iter()
-                .filter_map(|s| s.clone())
+                .iter_mut()
+                .filter_map(|s| s.take())
                 .collect(),
         };
 
         self.group_id = self.group_id.wrapping_add(1);
         self.count = 0;
-        for s in self.buffer.iter_mut() {
-            *s = None;
-        }
 
         Some(group)
     }
@@ -241,11 +235,11 @@ impl FecDecoder {
 
             // Attempt reconstruction
             if self.rs.reconstruct(&mut buf.shards).is_ok() {
-                let data: Vec<Vec<u8>> = buf.shards[..self.data_shards]
-                    .iter()
-                    .map(|s| s.clone().unwrap())
+                let mut group = self.groups.remove(&group_id).unwrap();
+                let data: Vec<Vec<u8>> = group.shards[..self.data_shards]
+                    .iter_mut()
+                    .map(|s| s.take().unwrap())
                     .collect();
-                self.groups.remove(&group_id);
                 return Some(data);
             }
         }

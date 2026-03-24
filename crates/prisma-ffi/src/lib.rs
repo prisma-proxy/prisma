@@ -226,10 +226,14 @@ pub unsafe extern "C" fn prisma_connect(
                 Ok(c) => c,
                 Err(e) => {
                     tracing::error!("Invalid config JSON: {}", e);
-                    client.fire_event(&format!(
-                        r#"{{"type":"error","code":"invalid_config","msg":{}}}"#,
-                        serde_json::to_string(&e.to_string()).unwrap_or_default()
-                    ));
+                    client.fire_event(
+                        &serde_json::json!({
+                            "type": "error",
+                            "code": "invalid_config",
+                            "msg": e.to_string(),
+                        })
+                        .to_string(),
+                    );
                     return PRISMA_ERR_INVALID_CONFIG;
                 }
             };
@@ -277,10 +281,14 @@ pub unsafe extern "C" fn prisma_connect(
                 PRISMA_OK
             }
             Err(e) => {
-                client.fire_event(&format!(
-                    r#"{{"type":"error","code":"connect_failed","msg":{}}}"#,
-                    serde_json::to_string(&e.to_string()).unwrap_or_default()
-                ));
+                client.fire_event(
+                    &serde_json::json!({
+                        "type": "error",
+                        "code": "connect_failed",
+                        "msg": e.to_string(),
+                    })
+                    .to_string(),
+                );
                 PRISMA_ERR_INTERNAL
             }
         }

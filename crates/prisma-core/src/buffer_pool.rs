@@ -90,13 +90,17 @@ impl Deref for PooledBuffer {
     type Target = Vec<u8>;
 
     fn deref(&self) -> &Vec<u8> {
-        self.buf.as_ref().unwrap()
+        self.buf
+            .as_ref()
+            .expect("PooledBuffer used after return to pool")
     }
 }
 
 impl DerefMut for PooledBuffer {
     fn deref_mut(&mut self) -> &mut Vec<u8> {
-        self.buf.as_mut().unwrap()
+        self.buf
+            .as_mut()
+            .expect("PooledBuffer used after return to pool")
     }
 }
 
@@ -114,13 +118,17 @@ impl Drop for PooledBuffer {
 
 impl AsRef<[u8]> for PooledBuffer {
     fn as_ref(&self) -> &[u8] {
-        self.buf.as_ref().unwrap()
+        self.buf
+            .as_ref()
+            .expect("PooledBuffer used after return to pool")
     }
 }
 
 impl AsMut<[u8]> for PooledBuffer {
     fn as_mut(&mut self) -> &mut [u8] {
-        self.buf.as_mut().unwrap()
+        self.buf
+            .as_mut()
+            .expect("PooledBuffer used after return to pool")
     }
 }
 

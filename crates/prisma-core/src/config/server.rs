@@ -362,6 +362,12 @@ pub struct CamouflageConfig {
     /// Used as fallback when `h3_cover_site` is not set.
     #[serde(default)]
     pub h3_static_dir: Option<String>,
+    /// TLS handshake timeout in seconds (default: 10).
+    #[serde(default = "default_tls_handshake_timeout")]
+    pub tls_handshake_timeout_secs: u64,
+    /// Per-IP TLS probe rate limiting.
+    #[serde(default)]
+    pub tls_probe_guard: TlsProbeGuardConfig,
 }
 
 impl Default for CamouflageConfig {
@@ -374,8 +380,52 @@ impl Default for CamouflageConfig {
             salamander_password: None,
             h3_cover_site: None,
             h3_static_dir: None,
+            tls_handshake_timeout_secs: default_tls_handshake_timeout(),
+            tls_probe_guard: TlsProbeGuardConfig::default(),
         }
     }
+}
+
+fn default_tls_handshake_timeout() -> u64 {
+    10
+}
+
+/// Per-IP TLS probe rate limiting configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsProbeGuardConfig {
+    /// Enable TLS probe rate limiting (default: true).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Max TLS handshake failures per IP within the window before blocking (default: 5).
+    #[serde(default = "default_tls_probe_max_failures")]
+    pub max_failures: u32,
+    /// Sliding window in seconds for counting failures (default: 60).
+    #[serde(default = "default_tls_probe_failure_window")]
+    pub failure_window_secs: u64,
+    /// Duration in seconds to block an IP after exceeding the threshold (default: 300).
+    #[serde(default = "default_tls_probe_block_duration")]
+    pub block_duration_secs: u64,
+}
+
+impl Default for TlsProbeGuardConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_failures: default_tls_probe_max_failures(),
+            failure_window_secs: default_tls_probe_failure_window(),
+            block_duration_secs: default_tls_probe_block_duration(),
+        }
+    }
+}
+
+fn default_tls_probe_max_failures() -> u32 {
+    5
+}
+fn default_tls_probe_failure_window() -> u64 {
+    60
+}
+fn default_tls_probe_block_duration() -> u64 {
+    300
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

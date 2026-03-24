@@ -46,8 +46,21 @@ pub fn build_tcp_tls_acceptor(config: &ServerConfig) -> Result<tokio_rustls::Tls
 
     let certs: Vec<rustls::pki_types::CertificateDer> =
         rustls_pemfile::certs(&mut cert_pem.as_slice())
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(cert) => Some(cert),
+                Err(e) => {
+                    warn!("Skipping invalid certificate in {}: {}", tls.cert_path, e);
+                    None
+                }
+            })
             .collect();
+
+    if certs.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No valid certificates found in {}",
+            tls.cert_path
+        ));
+    }
 
     let key = rustls_pemfile::private_key(&mut key_pem.as_slice())?
         .ok_or_else(|| anyhow::anyhow!("No private key found in {}", tls.key_path))?;
