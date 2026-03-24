@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap } from "lucide-react";
+import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap, ImagePlus } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,6 +94,7 @@ export default function Profiles() {
   const [qrImportOpen, setQrImportOpen] = useState(false);
   const [qrImportText, setQrImportText] = useState("");
   const [qrImportErr,  setQrImportErr]  = useState("");
+  const [qrImageDecoding, setQrImageDecoding] = useState(false);
 
   // Subscription import
   const [subImportOpen, setSubImportOpen] = useState(false);
@@ -360,6 +362,31 @@ export default function Profiles() {
       setEditInitial(initial);
       setWizardOpen(true);
     } catch (e) {
+      setQrImportErr(String(e));
+    }
+  }
+
+  async function handleQrImageImport() {
+    setQrImportErr("");
+    try {
+      const selected = await openFileDialog({
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp"] }],
+        multiple: false,
+      });
+      if (!selected) return; // user cancelled
+      setQrImageDecoding(true);
+      const content = await api.decodeQrImage(selected);
+      // Feed the decoded QR content into the existing profile-from-QR flow
+      const json = await api.profileFromQr(content);
+      const parsed = JSON.parse(json);
+      setQrImportOpen(false);
+      setQrImportText("");
+      setQrImageDecoding(false);
+      const initial = parseProfileToWizard(parsed.name ?? "", parsed.config ?? parsed, parsed.tags);
+      setEditInitial(initial);
+      setWizardOpen(true);
+    } catch (e) {
+      setQrImageDecoding(false);
       setQrImportErr(String(e));
     }
   }
@@ -707,10 +734,26 @@ export default function Profiles() {
       </Dialog>
 
       {/* QR import dialog */}
-      <Dialog open={qrImportOpen} onOpenChange={(v) => { setQrImportOpen(v); setQrImportErr(""); }}>
+      <Dialog open={qrImportOpen} onOpenChange={(v) => { setQrImportOpen(v); setQrImportErr(""); setQrImageDecoding(false); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t("profiles.importQrTitle")}</DialogTitle></DialogHeader>
           <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleQrImageImport}
+              disabled={qrImageDecoding}
+            >
+              {qrImageDecoding
+                ? <><Loader2 size={14} className="mr-1.5 animate-spin" /> {t("profiles.decodingImage")}</>
+                : <><ImagePlus size={14} className="mr-1.5" /> {t("profiles.importQrFromImage")}</>
+              }
+            </Button>
+            <div className="relative flex items-center py-1">
+              <div className="flex-1 border-t" />
+              <span className="px-2 text-xs text-muted-foreground">{t("common.or", "or")}</span>
+              <div className="flex-1 border-t" />
+            </div>
             <Label>{t("profiles.importQrLabel")}</Label>
             <Textarea
               rows={4}
@@ -723,7 +766,7 @@ export default function Profiles() {
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
-            <Button onClick={handleQrImport} disabled={!qrImportText.trim()}>{t("profiles.importQr")}</Button>
+            <Button onClick={handleQrImport} disabled={!qrImportText.trim() || qrImageDecoding}>{t("profiles.importQr")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

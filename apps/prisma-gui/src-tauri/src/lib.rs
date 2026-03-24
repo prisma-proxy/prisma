@@ -89,6 +89,7 @@ pub fn run() {
             commands::delete_profile,
             commands::profile_to_qr,
             commands::profile_from_qr,
+            commands::decode_qr_image,
             commands::profile_to_uri,
             commands::profile_config_to_toml,
             commands::check_update,

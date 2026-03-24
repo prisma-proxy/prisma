@@ -36,3 +36,19 @@ pub fn profile_config_to_toml(config_json: &str) -> Result<String> {
         serde_json::from_str(config_json).context("invalid client config JSON")?;
     toml::to_string_pretty(&config).context("TOML serialization failed")
 }
+
+/// Decode a QR code from an image file on disk.
+/// Returns the raw string content of the QR code.
+pub fn decode_qr_from_image(path: &str) -> Result<String> {
+    let img = image::open(path)
+        .context("failed to open image")?
+        .to_luma8();
+    let mut prepared = rqrr::PreparedImage::prepare(img);
+    let grids = prepared.detect_grids();
+    let grid = grids
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("no QR code found in image"))?;
+    let (_meta, content) = grid.decode().context("failed to decode QR code")?;
+    Ok(content)
+}
