@@ -422,9 +422,10 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     if (w.entropyCamouflage) config.entropy_camouflage = true;
   }
 
-  // WebSocket nested config — Rust client expects full URL (wss://host:port/path)
+  // WebSocket nested config — always ws:// because TLS is handled by the
+  // outer tls_on_tcp layer, not by the WebSocket protocol itself.
   if (w.transport === "ws") {
-    const scheme = w.tlsOnTcp ? "wss" : "ws";
+    const scheme = "ws";
     const ws: Record<string, unknown> = {
       url: toFullUrl(w.wsUrl, w.serverHost, w.serverPort, scheme),
     };
