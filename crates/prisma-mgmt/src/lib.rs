@@ -126,7 +126,10 @@ fn spawn_periodic_backup(state: MgmtState) {
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                 continue;
             }
-            tokio::time::sleep(std::time::Duration::from_secs(u64::from(interval_mins) * 60)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(
+                u64::from(interval_mins) * 60,
+            ))
+            .await;
             if state.config_path.is_some() {
                 if let Err(e) = handlers::backup::auto_backup(&state).await {
                     tracing::warn!(error = ?e, "Periodic auto-backup failed");

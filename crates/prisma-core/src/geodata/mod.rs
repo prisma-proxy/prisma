@@ -75,7 +75,10 @@ impl GeoIPMatcher {
     pub fn lookup(&self, ip: Ipv4Addr) -> Option<&str> {
         let ip_u32 = u32::from(ip);
         for (code, cidrs) in &self.entries {
-            if cidrs.iter().any(|(network, mask)| (ip_u32 & mask) == *network) {
+            if cidrs
+                .iter()
+                .any(|(network, mask)| (ip_u32 & mask) == *network)
+            {
                 return Some(code.as_str());
             }
         }
