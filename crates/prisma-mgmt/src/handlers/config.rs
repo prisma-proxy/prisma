@@ -422,6 +422,9 @@ pub async fn patch_config(
         cfg.management_api.enabled = enabled;
     }
 
+    drop(cfg); // Release write lock before disk I/O
+    state.persist_config().await;
+
     Ok(StatusCode::OK)
 }
 

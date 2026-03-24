@@ -66,6 +66,10 @@ pub async fn create(
 
     state.auth_store.write().await.clients.insert(id, entry);
 
+    // Persist to config file
+    state.sync_clients_to_config().await;
+    state.persist_config().await;
+
     Ok(Json(CreateClientResponse {
         id,
         name: req.name,
@@ -78,24 +82,40 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateClientRequest>,
 ) -> StatusCode {
-    let mut store = state.auth_store.write().await;
-    match store.clients.get_mut(&id) {
-        Some(entry) => {
-            if let Some(name) = req.name {
-                entry.name = Some(name);
+    let result = {
+        let mut store = state.auth_store.write().await;
+        match store.clients.get_mut(&id) {
+            Some(entry) => {
+                if let Some(name) = req.name {
+                    entry.name = Some(name);
+                }
+                if let Some(enabled) = req.enabled {
+                    entry.enabled = enabled;
+                }
+                true
             }
-            if let Some(enabled) = req.enabled {
-                entry.enabled = enabled;
-            }
-            StatusCode::OK
+            None => false,
         }
-        None => StatusCode::NOT_FOUND,
+    };
+
+    if result {
+        state.sync_clients_to_config().await;
+        state.persist_config().await;
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
     }
 }
 
 pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> StatusCode {
-    let mut store = state.auth_store.write().await;
-    if store.clients.remove(&id).is_some() {
+    let removed = {
+        let mut store = state.auth_store.write().await;
+        store.clients.remove(&id).is_some()
+    };
+
+    if removed {
+        state.sync_clients_to_config().await;
+        state.persist_config().await;
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

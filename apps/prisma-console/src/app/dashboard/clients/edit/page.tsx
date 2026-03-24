@@ -38,7 +38,7 @@ function ClientEditInner() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const currentName = name ?? client?.name ?? "";
-  const currentEnabled = enabled ?? client?.enabled ?? true;
+  const currentEnabled = enabled ?? client?.enabled ?? false;
 
   if (!id) {
     return (

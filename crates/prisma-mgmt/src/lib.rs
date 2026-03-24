@@ -49,6 +49,64 @@ impl Deref for MgmtState {
     }
 }
 
+impl MgmtState {
+    /// Persist the current in-memory ServerConfig to the TOML file.
+    /// No-op if `config_path` is not set (e.g., running without a config file).
+    pub async fn persist_config(&self) {
+        let Some(ref path) = self.config_path else {
+            return;
+        };
+        let cfg = self.state.config.read().await;
+        let toml_str = match toml::to_string_pretty(&*cfg) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to serialize config for persistence");
+                return;
+            }
+        };
+        drop(cfg);
+        // Atomic write: .tmp then rename for crash safety
+        let tmp = path.with_extension("toml.tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &toml_str).await {
+            tracing::warn!(error = %e, "Failed to write config temp file");
+            return;
+        }
+        if let Err(e) = tokio::fs::rename(&tmp, path).await {
+            tracing::warn!(error = %e, "Failed to rename config file");
+        }
+    }
+
+    /// Sync the in-memory `auth_store` back to `ServerConfig.authorized_clients`.
+    /// Preserves bandwidth/quota/permissions fields that only exist in the config.
+    pub async fn sync_clients_to_config(&self) {
+        let store = self.state.auth_store.read().await;
+        let mut cfg = self.state.config.write().await;
+
+        // Build a lookup of existing config entries to preserve bandwidth/quota fields
+        let existing: std::collections::HashMap<String, &prisma_core::config::server::AuthorizedClient> =
+            cfg.authorized_clients.iter().map(|c| (c.id.clone(), c)).collect();
+
+        cfg.authorized_clients = store
+            .clients
+            .iter()
+            .map(|(id, entry)| {
+                let id_str = id.to_string();
+                let base = existing.get(&id_str);
+                prisma_core::config::server::AuthorizedClient {
+                    id: id_str,
+                    auth_secret: prisma_core::util::hex_encode(&entry.auth_secret),
+                    name: entry.name.clone(),
+                    bandwidth_up: base.and_then(|b| b.bandwidth_up.clone()),
+                    bandwidth_down: base.and_then(|b| b.bandwidth_down.clone()),
+                    quota: base.and_then(|b| b.quota.clone()),
+                    quota_period: base.and_then(|b| b.quota_period.clone()),
+                    permissions: base.and_then(|b| b.permissions.clone()),
+                }
+            })
+            .collect();
+    }
+}
+
 /// Start the management API server (HTTPS when TLS is configured, HTTP otherwise).
 pub async fn serve(config: ManagementApiConfig, state: MgmtState) -> Result<()> {
     let app = router::build_router(config.clone(), state);
