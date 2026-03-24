@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { UserPlus, Archive, ScrollText, Settings } from "lucide-react";
 import { useMetricsContext } from "@/contexts/metrics-context";
@@ -24,17 +24,14 @@ export default function OverviewPage() {
   const disconnect = useDisconnect();
   const { data: clients } = useClients();
 
-  const [showWizard, setShowWizard] = useState(false);
+  const [wizardDismissed, setWizardDismissed] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem("prisma-setup-complete") === "true"
+  );
 
-  useEffect(() => {
-    const setupComplete = localStorage.getItem("prisma-setup-complete") === "true";
-    if (!setupComplete && clients !== undefined && clients.length === 0) {
-      setShowWizard(true);
-    }
-  }, [clients]);
+  const showWizard = !wizardDismissed && clients !== undefined && clients.length === 0;
 
   if (showWizard) {
-    return <SetupWizard onDismiss={() => setShowWizard(false)} />;
+    return <SetupWizard onDismiss={() => setWizardDismissed(true)} />;
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -72,26 +72,19 @@ function normalizeAction(action: string): ActionType {
 
 export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: RuleEditorProps) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [priority, setPriority] = useState(0);
-  const [conditionType, setConditionType] = useState<ConditionType>("All");
-  const [conditionValue, setConditionValue] = useState("");
-  const [action, setAction] = useState<ActionType>("Allow");
-
   const isEditing = !!editingRule;
-
-  // When editingRule changes, populate form and open dialog
-  useEffect(() => {
-    if (editingRule) {
-      setName(editingRule.name);
-      setPriority(editingRule.priority);
-      setConditionType(extractConditionType(editingRule.condition));
-      setConditionValue(extractConditionValue(editingRule.condition));
-      setAction(normalizeAction(editingRule.action));
-      setOpen(true);
-    }
-  }, [editingRule]);
+  const [open, setOpen] = useState(isEditing);
+  const [name, setName] = useState(editingRule?.name ?? "");
+  const [priority, setPriority] = useState(editingRule?.priority ?? 0);
+  const [conditionType, setConditionType] = useState<ConditionType>(
+    editingRule ? extractConditionType(editingRule.condition) : "All"
+  );
+  const [conditionValue, setConditionValue] = useState(
+    editingRule ? extractConditionValue(editingRule.condition) : ""
+  );
+  const [action, setAction] = useState<ActionType>(
+    editingRule ? normalizeAction(editingRule.action) : "Allow"
+  );
 
   function resetForm() {
     setName("");

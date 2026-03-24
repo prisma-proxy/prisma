@@ -60,6 +60,7 @@ export default function RoutingPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("routing.routingRules")}</h2>
         <RuleEditor
+          key={editingRule?.id ?? "new"}
           onSubmit={editingRule ? handleEdit : handleCreate}
           isLoading={editingRule ? updateRoute.isPending : createRoute.isPending}
           editingRule={editingRule}

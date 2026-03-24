@@ -9,11 +9,6 @@ on:
         description: 'Release tag (e.g. v0.9.0)'
         required: true
         type: string
-      skip_ffi:
-        description: 'Skip FFI builds (Android/iOS)'
-        required: false
-        default: false
-        type: boolean
       skip_gui:
         description: 'Skip GUI builds'
         required: false
@@ -363,198 +358,7 @@ jobs:
           retention-days: 5
 
   # ---------------------------------------------------------------------------
-  # Job 4: Build prisma-ffi shared libraries
-  # ---------------------------------------------------------------------------
-  build-ffi:
-    name: FFI / ${{ matrix.label }}
-    if: ${{ !inputs.skip_ffi }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ---- Desktop ----
-          - label: Linux x86_64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: libprisma_ffi.so
-            output_name: libprisma_ffi-linux-amd64.so
-          - label: Linux aarch64
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            artifact_name: libprisma_ffi.so
-            output_name: libprisma_ffi-linux-arm64.so
-          - label: macOS x86_64
-            os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: libprisma_ffi.dylib
-            output_name: libprisma_ffi-darwin-amd64.dylib
-          - label: macOS aarch64
-            os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: libprisma_ffi.dylib
-            output_name: libprisma_ffi-darwin-arm64.dylib
-          - label: Windows x86_64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: prisma_ffi.dll
-            output_name: prisma_ffi-windows-amd64.dll
-          # ---- Android (NDK cross-compilation) ----
-          - label: Android aarch64
-            os: ubuntu-latest
-            target: aarch64-linux-android
-            artifact_name: libprisma_ffi.so
-            output_name: libprisma_ffi-android-arm64.so
-            android: true
-            features: android
-          - label: Android armv7
-            os: ubuntu-latest
-            target: armv7-linux-androideabi
-            artifact_name: libprisma_ffi.so
-            output_name: libprisma_ffi-android-armv7.so
-            android: true
-            features: android
-          - label: Android x86_64
-            os: ubuntu-latest
-            target: x86_64-linux-android
-            artifact_name: libprisma_ffi.so
-            output_name: libprisma_ffi-android-amd64.so
-            android: true
-            features: android
-          # ---- iOS (static library) ----
-          - label: iOS aarch64
-            os: macos-latest
-            target: aarch64-apple-ios
-            artifact_name: libprisma_ffi.a
-            output_name: libprisma_ffi-ios-arm64.a
-            ios: true
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: ${{ matrix.target }}
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ffi-${{ matrix.target }}
-
-      # Android NDK setup
-      - name: Set up Android NDK
-        if: matrix.android
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27c
-
-      - name: Configure Android NDK environment
-        if: matrix.android
-        run: |
-          NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
-          TOOLCHAIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
-
-          # Export NDK home for build scripts that search for it (e.g. ring)
-          echo "ANDROID_NDK_HOME=${NDK_HOME}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=${NDK_HOME}" >> "$GITHUB_ENV"
-
-          # Map Rust target triples to NDK compiler prefixes
-          case "${{ matrix.target }}" in
-            aarch64-linux-android)
-              CC="${TOOLCHAIN}/bin/aarch64-linux-android24-clang"
-              AR="${TOOLCHAIN}/bin/llvm-ar"
-              LINKER="${CC}"
-              ;;
-            armv7-linux-androideabi)
-              CC="${TOOLCHAIN}/bin/armv7a-linux-androideabi24-clang"
-              AR="${TOOLCHAIN}/bin/llvm-ar"
-              LINKER="${CC}"
-              ;;
-            x86_64-linux-android)
-              CC="${TOOLCHAIN}/bin/x86_64-linux-android24-clang"
-              AR="${TOOLCHAIN}/bin/llvm-ar"
-              LINKER="${CC}"
-              ;;
-          esac
-
-          # cc crate looks for CC_<target> with dashes replaced by underscores (preserving case)
-          LOWER_TARGET=$(echo "${{ matrix.target }}" | tr '-' '_')
-          # Cargo looks for CARGO_TARGET_<UPPER_TARGET>_LINKER (all uppercase)
-          UPPER_TARGET=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
-
-          echo "CC_${LOWER_TARGET}=${CC}" >> "$GITHUB_ENV"
-          echo "AR_${LOWER_TARGET}=${AR}" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_${UPPER_TARGET}_LINKER=${LINKER}" >> "$GITHUB_ENV"
-
-      # Build FFI library
-      - name: Build FFI (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          FEATURES_FLAG=""
-          if [ -n "${{ matrix.features }}" ]; then
-            FEATURES_FLAG="--features ${{ matrix.features }}"
-          fi
-          cargo build --release --target ${{ matrix.target }} -p prisma-ffi $FEATURES_FLAG
-
-      - name: Build FFI (Windows)
-        if: runner.os == 'Windows'
-        run: cargo build --release --target ${{ matrix.target }} -p prisma-ffi
-
-      # Package output
-      - name: Package library (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.output_name }}"
-
-      - name: Package library (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.output_name }}"
-          # Also copy the .lib import library
-          $lib = "target/${{ matrix.target }}/release/prisma_ffi.dll.lib"
-          if (Test-Path $lib) {
-            Copy-Item $lib "prisma_ffi-windows-amd64.lib"
-          }
-
-      # Copy C header alongside the library
-      - name: Copy FFI header
-        run: |
-          cp crates/prisma-ffi/include/prisma_ffi.h prisma_ffi.h 2>/dev/null || true
-        shell: bash
-
-      - name: Checksum (Unix)
-        if: runner.os != 'Windows'
-        run: sha256sum "${{ matrix.output_name }}" > "${{ matrix.output_name }}.sha256"
-
-      - name: Checksum (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $hash = (Get-FileHash "${{ matrix.output_name }}" -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${{ matrix.output_name }}" | Out-File -Encoding ascii "${{ matrix.output_name }}.sha256"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ffi-${{ matrix.label }}
-          path: |
-            ${{ matrix.output_name }}
-            ${{ matrix.output_name }}.sha256
-            prisma_ffi.h
-            prisma_ffi-windows-amd64.lib
-          retention-days: 5
-
-  # ---------------------------------------------------------------------------
-  # Job 5: Build Tauri Android APK
+  # Job 4: Build Tauri Android APK
   # ---------------------------------------------------------------------------
   build-android:
     name: Android APK
@@ -661,8 +465,8 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build-server, build-gui, build-console, build-ffi, build-android]
-    # Run even if optional jobs (gui, ffi, android) were skipped or failed
+    needs: [build-server, build-gui, build-console, build-android]
+    # Run even if optional jobs (gui, android) were skipped or failed
     if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
     runs-on: ubuntu-latest
 
@@ -702,11 +506,6 @@ jobs:
 
           # Console archive
           find artifacts -type f -name 'prisma-console.tar.gz' -exec cp {} release/ \;
-
-          # FFI libraries
-          find artifacts -type f -name 'libprisma_ffi*' -exec cp {} release/ \;
-          find artifacts -type f -name 'prisma_ffi*' -exec cp {} release/ \;
-          find artifacts -type f -name 'prisma_ffi.h' -exec cp {} release/ \; 2>/dev/null || true
 
           # Android APK
           find artifacts -type f -name '*.apk' -exec cp {} release/ \; 2>/dev/null || true
@@ -862,20 +661,6 @@ jobs:
             echo "### Web Console"
             echo ""
             echo "[prisma-console.tar.gz](${BASE_URL}/prisma-console.tar.gz) — static web dashboard (extract and serve)"
-            echo ""
-            echo "### FFI Libraries"
-            echo ""
-            echo "| Platform | Library |"
-            echo "|----------|---------|"
-            echo "| Linux x86\_64 | [libprisma\_ffi-linux-amd64.so](${BASE_URL}/libprisma_ffi-linux-amd64.so) |"
-            echo "| Linux ARM64 | [libprisma\_ffi-linux-arm64.so](${BASE_URL}/libprisma_ffi-linux-arm64.so) |"
-            echo "| macOS x86\_64 | [libprisma\_ffi-darwin-amd64.dylib](${BASE_URL}/libprisma_ffi-darwin-amd64.dylib) |"
-            echo "| macOS ARM64 | [libprisma\_ffi-darwin-arm64.dylib](${BASE_URL}/libprisma_ffi-darwin-arm64.dylib) |"
-            echo "| Windows x86\_64 | [prisma\_ffi-windows-amd64.dll](${BASE_URL}/prisma_ffi-windows-amd64.dll) |"
-            echo "| Android ARM64 | [libprisma\_ffi-android-arm64.so](${BASE_URL}/libprisma_ffi-android-arm64.so) |"
-            echo "| Android ARMv7 | [libprisma\_ffi-android-armv7.so](${BASE_URL}/libprisma_ffi-android-armv7.so) |"
-            echo "| Android x86\_64 | [libprisma\_ffi-android-amd64.so](${BASE_URL}/libprisma_ffi-android-amd64.so) |"
-            echo "| iOS ARM64 | [libprisma\_ffi-ios-arm64.a](${BASE_URL}/libprisma_ffi-ios-arm64.a) |"
             echo ""
             echo "> Verify downloads: \`sha256sum -c checksums-sha256.txt\`"
             echo ""
