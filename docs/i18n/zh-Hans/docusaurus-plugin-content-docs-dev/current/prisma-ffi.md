@@ -151,9 +151,137 @@
 
 ---
 
+---
+
+## 新模块 (v2.0.0)
+
+### 连接管理器
+
+`connection` 模块管理 FFI 层代理连接的生命周期：
+
+| 状态码 | 值 | 含义 |
+|--------|-----|------|
+| `STATUS_DISCONNECTED` | `0` | 未连接 |
+| `STATUS_CONNECTING` | `1` | 连接进行中 |
+| `STATUS_CONNECTED` | `2` | 已连接并中继 |
+
+**核心方法：**
+
+- `begin_connect(socks5_addr)` -- 转换为 CONNECTING 状态，重置计数器，返回停止接收器
+- `mark_connected()` -- 转换为 CONNECTED 状态
+- `disconnect()` -- 发送停止信号，转换为 DISCONNECTED 状态
+- `add_bytes_up(n)` / `add_bytes_down(n)` -- 线程安全的原子字节计数器
+- `get_stats_json()` -- 返回包含字节数、速度（自上次调用以来的增量）和运行时间的 JSON
+
+**统计 JSON 格式：**
+
+```json
+{
+  "type": "stats",
+  "bytes_up": 102400,
+  "bytes_down": 204800,
+  "speed_up_bps": 8192,
+  "speed_down_bps": 16384,
+  "uptime_secs": 60
+}
+```
+
+速度以自上次调用以来的字节增量计算，转换为 bits/sec。设计为由统计轮询器每秒轮询一次。
+
+### 统计轮询器
+
+`stats_poller` 模块运行后台 tokio 任务，每秒轮询连接管理器并通过 C 回调发送统计 JSON：
+
+```rust
+pub type StatsCallback = unsafe extern "C" fn(
+    event_json: *const c_char,
+    userdata: *mut c_void,
+);
+
+StatsPoller::start(connection, callback, userdata) -> StatsPoller
+```
+
+轮询器在 drop 时或调用 `stop()` 时自动停止。`userdata` 指针原样传递给回调。
+
+### 自动更新
+
+`auto_update` 模块通过 GitHub Releases API 检查更新：
+
+- **`check()`** -- 返回 `Option<UpdateInfo>`，包含版本、下载 URL 和更新日志
+- **`apply(download_url, expected_sha256)`** -- 下载二进制文件，验证 SHA-256 哈希，保存到临时目录
+
+平台检测自动进行：模块为 Windows、macOS、Linux、Android 和 iOS 选择正确的资产后缀。
+
+### GeoIP 模块
+
+`geo` 模块提供 IP 到国家的解析，用于 GUI 服务器位置显示：
+
+- **`init(db_path)`** -- 加载 MaxMind GeoLite2-Country 数据库文件
+- **`lookup_country(ip)`** -- 返回 `CountryInfo { code, name, cidrs }`
+- **`lookup_country_code(ip)`** -- 便捷函数，仅返回 ISO alpha-2 国家代码
+- **`country_cidrs(country_code)`** -- 返回指定国家的 CIDR 块
+- **`is_initialized()`** -- 检查数据库是否已加载
+
+### 运行时模块
+
+`runtime` 模块为 FFI 消费者提供托管的 tokio 运行时：
+
+```rust
+let rt = PrismaRuntime::new()?;  // 多线程，线程名 "prisma-ffi"
+rt.spawn(async { ... });          // 非阻塞派生
+rt.block_on(async { ... });       // 阻塞式（用于 FFI 入口点）
+rt.handle();                      // 获取 Handle 用于从其他上下文派生
+```
+
+在移动端，宿主应用创建 `PrismaRuntime` 来运行异步操作，不干扰 UI 线程。
+
+### iOS 绑定
+
+`ios` 模块提供 iOS 特定的 C 函数用于 Swift 互操作：
+
+| 函数 | 描述 |
+|------|------|
+| `prisma_ios_prepare_tunnel_config(json)` | 为 VPN 隧道配置填充默认值（MTU、DNS、路由） |
+| `prisma_ios_get_tun_fd()` | 获取 TUN 文件描述符 |
+| `prisma_ios_set_tun_fd(fd)` | 从 NEPacketTunnelProvider 设置 TUN fd |
+| `prisma_ios_get_data_dir()` | 获取 `~/Documents/Prisma` 路径 |
+| `prisma_ios_vpn_permission_status()` | 获取缓存的 VPN 权限状态（1=已授权，0=已拒绝，-1=未知） |
+| `prisma_ios_set_vpn_permission(granted)` | 从 Swift 缓存 VPN 权限状态 |
+| `prisma_ios_get_info()` | 获取 iOS 配置 JSON（端口、tun_fd、vpn_permission、version） |
+
+### Android JNI 绑定
+
+`android` 模块为 `com.prisma.core.PrismaCore` 提供 JNI 入口点：
+
+| JNI 方法 | 映射到 |
+|----------|--------|
+| `nativeInit(configJson)` | `prisma_init()` |
+| `nativeStart()` | `prisma_start()` |
+| `nativeStop()` | `prisma_stop()` |
+| `nativeDestroy()` | `prisma_destroy()` |
+| `nativeGetStatus()` | `prisma_get_status()` |
+| `nativeProfilesList()` | `prisma_list_profiles()` |
+| `nativeProfileSave(json)` | `prisma_save_profile()` |
+| `nativeProfileDelete(id)` | `prisma_delete_profile()` |
+| `nativeImportProfile(url)` | `prisma_import_profile()` |
+| `nativeOnNetworkChange(type)` | 网络类型更新（0=断开，1=WiFi，2=蜂窝，3=以太网） |
+| `nativeOnMemoryWarning()` | 低内存时释放缓存 |
+| `nativeOnBackground()` | 应用进入后台 |
+| `nativeOnForeground()` | 应用回到前台 |
+| `nativeSetSystemProxy(host, port)` | `prisma_set_system_proxy()` |
+| `nativeClearSystemProxy()` | `prisma_clear_system_proxy()` |
+| `nativeVersion()` | 获取版本字符串 |
+| `nativeProfileToQr(json)` | 生成 QR SVG |
+| `nativeCheckUpdate()` | 检查更新 |
+
+**v2.0.0 架构说明：** Android 模块使用全局单例（通过 `prisma_init` / `prisma_start` / `prisma_stop`），而非逐句柄的指针方式。JNI 方法直接委托给全局 FFI 函数。
+
+---
+
 ## 线程安全说明
 
-- `PrismaClient` 使用内部 `Arc<Mutex<...>>` 保护所有可变状态
+- 使用内部 `OnceLock<Mutex<...>>` 保护所有可变状态
 - 回调从任意 Tokio 工作线程调用
-- `ffi_catch!` 宏包装每个 `extern "C"` 函数以防止 panic 越过 FFI 边界
-- 全局静态变量使用 `once_cell::sync::Lazy` 进行线程安全初始化
+- `std::panic::catch_unwind` 包装每个 `extern "C"` 函数以捕获 panic
+- 全局静态变量使用 `OnceLock` 进行线程安全初始化
+- iOS 原子变量使用 `AtomicI32` 配合 `SeqCst` 排序确保跨线程可见性

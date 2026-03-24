@@ -145,12 +145,30 @@ The main overview dashboard showing:
 
 Data sources: WebSocket push (metrics every 1s) + REST polling (connections every 5s).
 
+### Bandwidth
+
+Per-client bandwidth monitoring and quota management:
+- **Summary table** -- all clients with upload/download rate limits, quota allocation, quota used, and usage percentage with color-coded progress bars (green < 70%, yellow 70-90%, red > 90%)
+- **Quota overview chart** -- stacked bar chart (Recharts) showing used vs remaining quota per client
+- Data is auto-refreshed every 5 seconds
+
+### Speed Test
+
+Run throughput tests through the proxy connection:
+- **Test runner** -- multi-stream download (4 parallel streams to Cloudflare) and upload speed measurement
+- **Live progress** -- real-time download/upload Mbps display during the test with progress bar
+- **Results** -- download speed, upload speed, and latency displayed in cards after completion
+- **History** -- persistent test history (up to 50 entries) stored in localStorage, shown as a list with timestamps
+- Test can be started and stopped mid-run
+
 ### Server
 
 Server information:
-- Health status, version, and uptime
-- Server configuration details (listen addresses, max connections, timeouts)
-- TLS certificate info
+- **Health status** -- server status badge, version, and uptime with auto-refresh every 10 seconds
+- **Configuration** -- listen address, QUIC listen address, protocol version, DNS upstream, max connections, timeout, logging level/format, routing rules count
+- **Feature badges** -- port forwarding, camouflage, CDN, and port hopping status (ON/OFF)
+- **TLS information** -- TLS enabled/disabled status, certificate and key file paths
+- **Port forwards table** -- active port forwards with port, protocol, bind address, active connections, and traffic counters
 
 ### System
 
@@ -211,9 +229,11 @@ Config backup and restore:
 
 ### Traffic Shaping
 
-Traffic shaping visualization:
-- **Bucket size chart** — bar chart showing padding bucket size distribution
-- **Config cards** — padding mode, jitter, chaff status, coalescing window
+Traffic shaping and anti-analysis visualization:
+- **Configuration cards** -- padding mode, padding range (bytes), timing jitter (ms), chaff interval, coalescing window, congestion control mode, target bandwidth
+- **Anti-RTT** -- round-trip time normalization status and normalization value
+- **Bucket size distribution chart** -- bar chart (Recharts) showing padding bucket size distribution
+- **Port hopping** -- status (enabled/disabled), base port, range, and interval
 
 ## Additional Features
 
