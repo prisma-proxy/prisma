@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -12,11 +13,28 @@ import { AlertsForm } from "@/components/settings/alerts-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SkeletonCard } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { PresetSelector } from "@/components/settings/preset-selector";
 
 export default function SettingsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [reloading, setReloading] = React.useState(false);
+
+  const handleReload = async () => {
+    setReloading(true);
+    try {
+      await api.reloadConfig();
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      toast(t("toast.reloadSuccess"), "success");
+    } catch {
+      toast(t("toast.reloadFailed"), "error");
+    } finally {
+      setReloading(false);
+    }
+  };
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["config"],
@@ -51,6 +69,21 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">{t("sidebar.settings")}</h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleReload}
+          disabled={reloading}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${reloading ? "animate-spin" : ""}`} />
+          {reloading ? t("settings.reloading") : t("settings.reloadConfig")}
+        </Button>
+      </div>
+
+      <PresetSelector />
+
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">{t("settings.general")}</TabsTrigger>

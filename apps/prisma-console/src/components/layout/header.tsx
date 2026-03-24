@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
-import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut } from "lucide-react";
+import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut, RefreshCw } from "lucide-react";
+import { api } from "@/lib/api";
+import { useToast } from "@/lib/toast-context";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +27,20 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { locale, setLocale, t } = useI18n();
+  const { toast } = useToast();
+  const [reloading, setReloading] = useState(false);
+
+  const handleReload = async () => {
+    setReloading(true);
+    try {
+      await api.reloadConfig();
+      toast(t("toast.reloadSuccess"), "success");
+    } catch {
+      toast(t("toast.reloadFailed"), "error");
+    } finally {
+      setReloading(false);
+    }
+  };
 
   const themeIcon =
     theme === "light" ? (
@@ -66,6 +83,17 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
           <kbd className="ml-2 inline-flex h-5 items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
             <span className="text-xs">&#8984;</span>K
           </kbd>
+        </button>
+
+        {/* Reload config */}
+        <button
+          type="button"
+          onClick={handleReload}
+          disabled={reloading}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+          title={t("settings.reloadConfig")}
+        >
+          <RefreshCw className={cn("h-4 w-4", reloading && "animate-spin")} />
         </button>
 
         {/* Alerts indicator */}

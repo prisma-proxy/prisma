@@ -7,6 +7,7 @@ import { useToast } from "@/lib/toast-context";
 import { useRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute } from "@/hooks/use-routes";
 import { RuleList } from "@/components/routing/rule-list";
 import { RuleEditor } from "@/components/routing/rule-editor";
+import { TemplateSelector } from "@/components/routing/template-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SkeletonTable } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/loading-placeholder";
@@ -65,6 +66,8 @@ export default function RoutingPage() {
           onOpenChange={(open) => { if (!open) setEditingRule(null); }}
         />
       </div>
+
+      <TemplateSelector />
 
       <Card>
         <CardHeader>

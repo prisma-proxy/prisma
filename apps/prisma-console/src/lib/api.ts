@@ -89,6 +89,10 @@ export const api = {
   deleteRoute: (id: string) =>
     apiFetch<void>(`/api/routes/${id}`, { method: "DELETE" }),
 
+  // Reload
+  reloadConfig: () =>
+    apiFetch<{ success: boolean; message: string; changes: string[] }>("/api/reload", { method: "POST" }),
+
   // System
   getSystemInfo: () =>
     apiFetch<import("./types").SystemInfoResponse>("/api/system/info"),

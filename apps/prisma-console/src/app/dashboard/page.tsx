@@ -1,15 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { UserPlus, Archive, ScrollText, Settings } from "lucide-react";
 import { useMetricsContext } from "@/contexts/metrics-context";
 import { useConnections, useDisconnect } from "@/hooks/use-connections";
+import { useClients } from "@/hooks/use-clients";
 import { MetricsCards } from "@/components/dashboard/metrics-cards";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
 import { ConnectionTable } from "@/components/dashboard/connection-table";
 import { TransportPie } from "@/components/dashboard/transport-pie";
 import { ConnectionHistogram } from "@/components/dashboard/connection-histogram";
 import { HistoricalCharts } from "@/components/dashboard/historical-charts";
+import { SetupWizard } from "@/components/onboarding/setup-wizard";
 import { Button } from "@/components/ui/button";
 import { SkeletonMetrics, SkeletonChart, SkeletonTable } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
@@ -19,6 +22,20 @@ export default function OverviewPage() {
   const { current, history, connected } = useMetricsContext();
   const { data: connections, isLoading: connectionsLoading } = useConnections();
   const disconnect = useDisconnect();
+  const { data: clients } = useClients();
+
+  const [showWizard, setShowWizard] = useState(false);
+
+  useEffect(() => {
+    const setupComplete = localStorage.getItem("prisma-setup-complete") === "true";
+    if (!setupComplete && clients !== undefined && clients.length === 0) {
+      setShowWizard(true);
+    }
+  }, [clients]);
+
+  if (showWizard) {
+    return <SetupWizard onDismiss={() => setShowWizard(false)} />;
+  }
 
   return (
     <div className="space-y-6">
