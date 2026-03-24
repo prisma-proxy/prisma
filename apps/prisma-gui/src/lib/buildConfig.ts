@@ -263,12 +263,14 @@ export function mergeSettingsIntoConfig(
     delete config.http_listen_addr;
   }
 
-  // DNS
-  config.dns = {
-    mode: settings.dnsMode,
-    upstream: settings.dnsUpstream,
-    ...(settings.dnsMode === "fake" ? { fake_ip_range: settings.fakeIpRange } : {}),
-  };
+  // DNS — only include if non-default
+  if (settings.dnsMode !== "direct" || settings.dnsUpstream !== "8.8.8.8:53") {
+    config.dns = {
+      mode: settings.dnsMode,
+      upstream: settings.dnsUpstream,
+      ...(settings.dnsMode === "fake" ? { fake_ip_range: settings.fakeIpRange } : {}),
+    };
+  }
 
   // Logging
   if (settings.logLevel !== "info" || settings.logFormat !== "pretty") {
@@ -300,10 +302,12 @@ export function mergeSettingsIntoConfig(
     delete config.port_forwards;
   }
 
-  // Connection pool
-  config.connection_pool = {
-    enabled: settings.connectionPoolEnabled ?? true,
-  };
+  // Connection pool — only include if explicitly enabled
+  if (settings.connectionPoolEnabled) {
+    config.connection_pool = { enabled: true };
+  } else {
+    delete config.connection_pool;
+  }
 
   // Routing rules + geo paths
   const routing = { ...((config.routing ?? {}) as Record<string, unknown>) };
@@ -567,9 +571,7 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
   }
 
   // Connection pool (profile-level)
-  if (w.connectionPoolEnabled) {
-    config.connection_pool = { enabled: true };
-  }
+  config.connection_pool = { enabled: w.connectionPoolEnabled };
 
   // PrismaTLS transport
   if (w.transport === "prisma-tls") {

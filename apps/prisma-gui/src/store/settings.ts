@@ -57,7 +57,7 @@ export const useSettings = create<SettingsStore>()(
       portForwards: "",
       routingGeoipPath: "",
       routingGeositePath: "",
-      connectionPoolEnabled: true,
+      connectionPoolEnabled: false,
       connectionMode: "proxy",
       patch: (values) => set(values),
     }),
