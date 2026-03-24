@@ -89,7 +89,10 @@ fn validate_session(state: &XPortaState, headers: &HeaderMap) -> Option<[u8; 16]
     let token = match extract_cookie(headers, &state.cookie_name) {
         Some(t) => t,
         None => {
-            warn!("XPorta: no session cookie '{}' found in request", state.cookie_name);
+            warn!(
+                "XPorta: no session cookie '{}' found in request",
+                state.cookie_name
+            );
             return None;
         }
     };
@@ -296,11 +299,9 @@ pub async fn session_init_handler(
             // Mark handler inactive and wait for new upload data
             handler_active.store(false, Ordering::Relaxed);
 
-            let wait_result = tokio::time::timeout(
-                tokio::time::Duration::from_secs(60),
-                poll_notify.notified(),
-            )
-            .await;
+            let wait_result =
+                tokio::time::timeout(tokio::time::Duration::from_secs(60), poll_notify.notified())
+                    .await;
 
             if wait_result.is_err() {
                 // 60s timeout with no new data — session done

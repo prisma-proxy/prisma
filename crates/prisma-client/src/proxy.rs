@@ -81,8 +81,7 @@ impl ProxyContext {
                 Ok(stream) => return Ok(stream),
                 Err(e) => {
                     if attempt < MAX_RETRIES {
-                        let backoff =
-                            std::time::Duration::from_millis(1000 * 2u64.pow(attempt));
+                        let backoff = std::time::Duration::from_millis(1000 * 2u64.pow(attempt));
                         warn!(
                             attempt = attempt + 1,
                             max = MAX_RETRIES + 1,

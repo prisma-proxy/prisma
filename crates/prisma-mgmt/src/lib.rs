@@ -83,8 +83,14 @@ impl MgmtState {
         let mut cfg = self.state.config.write().await;
 
         // Build a lookup of existing config entries to preserve bandwidth/quota fields
-        let existing: std::collections::HashMap<String, &prisma_core::config::server::AuthorizedClient> =
-            cfg.authorized_clients.iter().map(|c| (c.id.clone(), c)).collect();
+        let existing: std::collections::HashMap<
+            String,
+            &prisma_core::config::server::AuthorizedClient,
+        > = cfg
+            .authorized_clients
+            .iter()
+            .map(|c| (c.id.clone(), c))
+            .collect();
 
         cfg.authorized_clients = store
             .clients

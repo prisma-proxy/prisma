@@ -1142,9 +1142,7 @@ pub unsafe extern "C" fn prisma_set_tun_fd(handle: *mut PrismaClient, fd: c_int)
         // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
         let client = unsafe { &*handle };
 
-        let prev = client
-            .tun_fd
-            .swap(fd, std::sync::atomic::Ordering::Relaxed);
+        let prev = client.tun_fd.swap(fd, std::sync::atomic::Ordering::Relaxed);
 
         tracing::info!(previous = prev, current = fd, "TUN fd updated");
 
