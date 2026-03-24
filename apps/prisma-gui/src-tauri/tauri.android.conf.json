@@ -1,8 +1,7 @@
 {
   "bundle": {
     "android": {
-      "minSdkVersion": 26,
-      "targetSdkVersion": 34
+    
     }
   },
   "app": {
