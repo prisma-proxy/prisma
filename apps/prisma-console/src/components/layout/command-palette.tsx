@@ -11,14 +11,33 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
 import type { ClientInfo, ConfigResponse } from "@/lib/types";
 
 interface SearchResult {
   id: string;
-  type: "page" | "client" | "config";
+  type: "page" | "client" | "config" | "action";
   label: string;
   description?: string;
   href?: string;
+  action?: () => void;
+}
+
+function generateHexSecret(): string {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function generateUuidV4(): string {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  // Set version 4 (0100) in bits 12-15 of time_hi_and_version
+  buf[6] = (buf[6] & 0x0f) | 0x40;
+  // Set variant 10xx in bits 6-7 of clock_seq_hi_and_reserved
+  buf[8] = (buf[8] & 0x3f) | 0x80;
+  const hex = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 const PAGES: { label: string; href: string; i18nKey: string }[] = [
@@ -49,6 +68,7 @@ const CONFIG_KEYS: { key: string; label: string; accessor: (c: ConfigResponse) =
 
 export function CommandPalette() {
   const { t } = useI18n();
+  const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -73,66 +93,108 @@ export function CommandPalette() {
 
   const results = useMemo<SearchResult[]>(() => {
     const q = query.toLowerCase().trim();
-    if (!q) return [];
-
     const matches: SearchResult[] = [];
 
-    for (const page of PAGES) {
-      const localizedLabel = t(page.i18nKey);
+    if (q) {
+      for (const page of PAGES) {
+        const localizedLabel = t(page.i18nKey);
+        if (
+          page.label.toLowerCase().includes(q) ||
+          localizedLabel.toLowerCase().includes(q) ||
+          page.href.toLowerCase().includes(q)
+        ) {
+          matches.push({
+            id: `page-${page.href}`,
+            type: "page",
+            label: localizedLabel,
+            description: page.href,
+            href: page.href,
+          });
+        }
+      }
+
+      const clients = queryClient.getQueryData<ClientInfo[]>(["clients"]);
+      if (clients) {
+        for (const client of clients) {
+          const name = client.name ?? client.id;
+          if (
+            name.toLowerCase().includes(q) ||
+            client.id.toLowerCase().includes(q)
+          ) {
+            matches.push({
+              id: `client-${client.id}`,
+              type: "client",
+              label: name,
+              description: client.id,
+              href: "/dashboard/clients",
+            });
+          }
+        }
+      }
+
+      const config = queryClient.getQueryData<ConfigResponse>(["config"]);
+      if (config) {
+        for (const { key, label, accessor } of CONFIG_KEYS) {
+          if (
+            key.toLowerCase().includes(q) ||
+            label.toLowerCase().includes(q)
+          ) {
+            matches.push({
+              id: `config-${key}`,
+              type: "config",
+              label: label,
+              description: accessor(config),
+              href: "/dashboard/settings",
+            });
+          }
+        }
+      }
+    }
+
+    // Action items: Generate tools
+    const actionItems: { id: string; labelKey: string; fallback: string; action: () => void }[] = [
+      {
+        id: "action-generate-secret",
+        labelKey: "tools.generateSecret",
+        fallback: "Generate Secret (32 bytes hex)",
+        action: () => {
+          const secret = generateHexSecret();
+          navigator.clipboard.writeText(secret);
+          toast(t("tools.secretCopied"), "success");
+        },
+      },
+      {
+        id: "action-generate-uuid",
+        labelKey: "tools.generateUuid",
+        fallback: "Generate UUID",
+        action: () => {
+          const uuid = generateUuidV4();
+          navigator.clipboard.writeText(uuid);
+          toast(t("tools.uuidCopied"), "success");
+        },
+      },
+    ];
+
+    for (const item of actionItems) {
+      const localizedLabel = t(item.labelKey);
       if (
-        page.label.toLowerCase().includes(q) ||
+        !q ||
+        item.fallback.toLowerCase().includes(q) ||
         localizedLabel.toLowerCase().includes(q) ||
-        page.href.toLowerCase().includes(q)
+        "generate".includes(q) ||
+        "tools".includes(q)
       ) {
         matches.push({
-          id: `page-${page.href}`,
-          type: "page",
+          id: item.id,
+          type: "action",
           label: localizedLabel,
-          description: page.href,
-          href: page.href,
+          action: item.action,
         });
       }
     }
 
-    const clients = queryClient.getQueryData<ClientInfo[]>(["clients"]);
-    if (clients) {
-      for (const client of clients) {
-        const name = client.name ?? client.id;
-        if (
-          name.toLowerCase().includes(q) ||
-          client.id.toLowerCase().includes(q)
-        ) {
-          matches.push({
-            id: `client-${client.id}`,
-            type: "client",
-            label: name,
-            description: client.id,
-            href: "/dashboard/clients",
-          });
-        }
-      }
-    }
-
-    const config = queryClient.getQueryData<ConfigResponse>(["config"]);
-    if (config) {
-      for (const { key, label, accessor } of CONFIG_KEYS) {
-        if (
-          key.toLowerCase().includes(q) ||
-          label.toLowerCase().includes(q)
-        ) {
-          matches.push({
-            id: `config-${key}`,
-            type: "config",
-            label: label,
-            description: accessor(config),
-            href: "/dashboard/settings",
-          });
-        }
-      }
-    }
-
     return matches.slice(0, 20);
-  }, [query, t, queryClient]);
+  }, [query, t, queryClient, toast]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, SearchResult[]> = {};
@@ -141,7 +203,9 @@ export function CommandPalette() {
         ? t("search.groupPages")
         : result.type === "client"
           ? t("search.groupClients")
-          : t("search.groupConfig");
+          : result.type === "action"
+            ? t("search.groupGenerate")
+            : t("search.groupConfig");
       if (!groups[key]) groups[key] = [];
       groups[key].push(result);
     }
@@ -149,7 +213,9 @@ export function CommandPalette() {
   }, [results, t]);
 
   function handleSelect(result: SearchResult) {
-    if (result.href) {
+    if (result.action) {
+      result.action();
+    } else if (result.href) {
       router.push(result.href);
     }
     setOpen(false);
@@ -173,7 +239,7 @@ export function CommandPalette() {
           </kbd>
         </div>
         <div className="max-h-80 overflow-y-auto p-2">
-          {query && results.length === 0 && (
+          {query.trim() && results.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
               {t("search.noResults")}
             </p>

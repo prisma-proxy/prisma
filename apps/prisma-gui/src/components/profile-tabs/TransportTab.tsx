@@ -1,12 +1,15 @@
 import { useTranslation } from "react-i18next";
+import { Dices } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
+import { generateHexSecret } from "@/lib/crypto";
 
 interface Props {
   state: WizardState;
@@ -322,11 +325,17 @@ export default function TransportTab({ state, onChange }: Props) {
           </div>
           <div className="space-y-1">
             <Label>{t("wizard.prismaTlsAuthSecret")} <span className="text-muted-foreground text-xs">({t("wizard.optional")})</span></Label>
-            <Input
-              type="password"
-              value={state.prismaTlsAuthSecret}
-              onChange={(e) => onChange({ prismaTlsAuthSecret: e.target.value })}
-            />
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={state.prismaTlsAuthSecret}
+                onChange={(e) => onChange({ prismaTlsAuthSecret: e.target.value })}
+                className="flex-1"
+              />
+              <Button type="button" variant="outline" size="icon" onClick={() => onChange({ prismaTlsAuthSecret: generateHexSecret() })} title={t("wizard.generate")}>
+                <Dices className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}

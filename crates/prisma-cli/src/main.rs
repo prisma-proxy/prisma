@@ -146,6 +146,11 @@ enum Commands {
 
     /// Generate a new client key (UUID + auth secret)
     GenKey,
+    /// Generate cryptographic values (secret, uuid)
+    Generate {
+        #[command(subcommand)]
+        what: GenerateCommand,
+    },
     /// Generate a self-signed TLS certificate for development
     GenCert {
         /// Output directory for cert and key files
@@ -370,6 +375,14 @@ enum SubscriptionCmd {
         #[arg(short, long)]
         url: String,
     },
+}
+
+#[derive(Subcommand)]
+enum GenerateCommand {
+    /// Generate a random hex-encoded 32-byte secret (for PrismaTLS auth)
+    Secret,
+    /// Generate a random UUID v4 (for client IDs)
+    Uuid,
 }
 
 #[derive(Subcommand)]
@@ -743,6 +756,16 @@ async fn main() -> anyhow::Result<()> {
         Commands::GenKey => {
             gen_key(global_json);
         }
+        Commands::Generate { what } => match what {
+            GenerateCommand::Secret => {
+                let mut buf = [0u8; 32];
+                rand::Rng::fill(&mut rand::thread_rng(), &mut buf);
+                println!("{}", prisma_core::util::hex_encode(&buf));
+            }
+            GenerateCommand::Uuid => {
+                println!("{}", uuid::Uuid::new_v4());
+            }
+        },
         Commands::GenCert { output, cn } => {
             gen_cert(&output, &cn)?;
         }

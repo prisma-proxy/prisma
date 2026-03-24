@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Eye, EyeOff } from "lucide-react";
+import { RefreshCw, Eye, EyeOff, Dices } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
 import { PROFILE_PRESETS, applyPreset } from "@/lib/presets";
+import { generateUuid } from "@/lib/crypto";
 
 interface Props {
   state: WizardState;
@@ -128,12 +129,18 @@ export default function BasicTab({ state, onChange, onApplyPreset }: Props) {
 
         <div className="space-y-1">
           <Label htmlFor="pd-clientid">{t("wizard.clientId")}</Label>
-          <Input
-            id="pd-clientid"
-            value={state.clientId}
-            onChange={(e) => onChange({ clientId: e.target.value })}
-            placeholder="your-client-id"
-          />
+          <div className="flex gap-2">
+            <Input
+              id="pd-clientid"
+              value={state.clientId}
+              onChange={(e) => onChange({ clientId: e.target.value })}
+              placeholder="your-client-id"
+              className="flex-1"
+            />
+            <Button type="button" variant="outline" size="icon" onClick={() => onChange({ clientId: generateUuid() })} title={t("wizard.generate")}>
+              <Dices className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-1">

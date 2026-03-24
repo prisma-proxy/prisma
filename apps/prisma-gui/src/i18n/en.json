@@ -402,6 +402,7 @@
     "authSecret": "Auth secret",
     "authSecretHint": "64 hex chars",
     "authSecretError": "Must be exactly 64 lowercase hex characters",
+    "generate": "Generate",
     "generateSecret": "Generate random secret",
     "prismaAuthSecret": "Prisma auth secret",
     "prismaAuthHint": "optional, PrismaTLS auth",

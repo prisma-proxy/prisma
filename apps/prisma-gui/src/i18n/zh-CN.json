@@ -402,6 +402,7 @@
     "authSecret": "认证密钥",
     "authSecretHint": "64 位十六进制字符",
     "authSecretError": "必须是 64 个小写十六进制字符",
+    "generate": "生成",
     "generateSecret": "生成随机密钥",
     "prismaAuthSecret": "Prisma 认证密钥",
     "prismaAuthHint": "可选，PrismaTLS 认证",

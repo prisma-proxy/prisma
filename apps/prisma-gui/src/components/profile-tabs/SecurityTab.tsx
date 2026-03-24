@@ -1,12 +1,15 @@
 import { useTranslation } from "react-i18next";
+import { Dices } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import HelpTip from "@/components/wizard/HelpTip";
 import type { WizardState } from "@/lib/buildConfig";
+import { generateHexSecret } from "@/lib/crypto";
 
 interface Props {
   state: WizardState;
@@ -119,11 +122,17 @@ export default function SecurityTab({ state, onChange }: Props) {
       {/* Prisma auth secret */}
       <div className="space-y-1">
         <Label>{t("wizard.prismaAuthSecret")} <span className="text-muted-foreground text-xs">({t("wizard.prismaAuthHint")})</span></Label>
-        <Input
-          type="password"
-          value={state.prismaAuthSecret}
-          onChange={(e) => onChange({ prismaAuthSecret: e.target.value })}
-        />
+        <div className="flex gap-2">
+          <Input
+            type="password"
+            value={state.prismaAuthSecret}
+            onChange={(e) => onChange({ prismaAuthSecret: e.target.value })}
+            className="flex-1"
+          />
+          <Button type="button" variant="outline" size="icon" onClick={() => onChange({ prismaAuthSecret: generateHexSecret() })} title={t("wizard.generate")}>
+            <Dices className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Traffic shaping */}
