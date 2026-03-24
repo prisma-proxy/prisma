@@ -18,6 +18,8 @@ interface MetricsState {
   current: MetricsSnapshot | null;
   history: MetricsSnapshot[];
   connected: boolean;
+  /** True during the initial grace period (first 3s) to suppress error banner. */
+  loading: boolean;
 }
 
 const MetricsContext = createContext<MetricsState | null>(null);
@@ -27,48 +29,49 @@ export function MetricsProvider({ children }: { children: ReactNode }) {
     current: null,
     history: [],
     connected: false,
+    loading: true,
   });
   const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    let wsConnected = false;
+    // Grace period: suppress error banner for first 3 seconds
+    const graceTimer = setTimeout(() => {
+      setState((prev) => ({ ...prev, loading: false }));
+    }, 3000);
 
+    // Start REST polling immediately as a fallback safety net.
+    // If the WebSocket connects, this polling is stopped.
+    pollRef.current = setInterval(async () => {
+      try {
+        const snapshot = await api.getMetrics();
+        setState((prev) => {
+          const history = [...prev.history.slice(-(MAX_HISTORY - 1)), snapshot];
+          return { current: snapshot, history, connected: true, loading: false };
+        });
+      } catch {
+        // API unavailable — stay in current state
+      }
+    }, 2000);
+
+    // WebSocket for real-time metrics (preferred over REST polling)
     wsRef.current = createWebSocket<MetricsSnapshot>(
       "/api/ws/metrics",
       (snapshot) => {
-        wsConnected = true;
-        // Stop REST fallback polling once WebSocket is working
+        // WS is working — stop REST polling
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
         setState((prev) => {
           const history = [...prev.history.slice(-(MAX_HISTORY - 1)), snapshot];
-          return { current: snapshot, history, connected: true };
+          return { current: snapshot, history, connected: true, loading: false };
         });
-      },
-      () => {
-        // WebSocket error — start REST fallback polling if not already running
-        wsConnected = false;
-        setState((prev) => ({ ...prev, connected: false }));
-        if (!pollRef.current) {
-          pollRef.current = setInterval(async () => {
-            try {
-              const snapshot = await api.getMetrics();
-              setState((prev) => {
-                const history = [...prev.history.slice(-(MAX_HISTORY - 1)), snapshot];
-                return { current: snapshot, history, connected: true };
-              });
-            } catch {
-              // API also unavailable — stay in disconnected state
-            }
-          }, 2000);
-        }
       }
     );
 
     return () => {
+      clearTimeout(graceTimer);
       wsRef.current?.close();
       if (pollRef.current) {
         clearInterval(pollRef.current);

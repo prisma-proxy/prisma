@@ -19,7 +19,7 @@ import { useI18n } from "@/lib/i18n";
 
 export default function OverviewPage() {
   const { t } = useI18n();
-  const { current, history, connected } = useMetricsContext();
+  const { current, history, connected, loading } = useMetricsContext();
   const { data: connections, isLoading: connectionsLoading } = useConnections();
   const disconnect = useDisconnect();
   const { data: clients } = useClients();
@@ -39,8 +39,8 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Connection error banner */}
-      {!connected && !current && (
+      {/* Connection error banner — only show after 3s grace period */}
+      {!connected && !current && !loading && (
         <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
           {t("dashboard.connectionError")}
         </div>
