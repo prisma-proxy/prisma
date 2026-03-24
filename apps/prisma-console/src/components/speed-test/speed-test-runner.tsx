@@ -12,7 +12,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { TEST_SERVERS, type useSpeedTest } from "@/hooks/use-speed-test";
 import { useI18n } from "@/lib/i18n";
@@ -52,7 +51,7 @@ export function SpeedTestRunner({ speedTest }: SpeedTestRunnerProps) {
           <Label>{t("speedTest.server")}</Label>
           <Select value={serverIdx} onValueChange={(v) => v && setServerIdx(v)}>
             <SelectTrigger>
-              <SelectValue />
+              <span className="flex flex-1 text-left">{TEST_SERVERS[parseInt(serverIdx)]?.label}</span>
             </SelectTrigger>
             <SelectContent>
               {TEST_SERVERS.map((s, i) => (

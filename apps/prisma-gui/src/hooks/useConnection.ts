@@ -16,7 +16,7 @@ export function useConnection() {
   const setConnected = useStore((s) => s.setConnected);
   const setProxyModes = useStore((s) => s.setProxyModes);
 
-  const connectTo = useCallback(async (profile: Profile, modes: number) => {
+  const connectTo = useCallback(async (profile: Profile, modes: number): Promise<boolean> => {
     const profiles = useStore.getState().profiles;
     const idx = profiles.findIndex((p) => p.id === profile.id);
     if (idx >= 0) setActiveProfileIdx(idx);
@@ -34,12 +34,14 @@ export function useConnection() {
 
       await api.connect(JSON.stringify(config), modes);
       api.setActiveProfileId(profile.id).catch(() => {});
+      return true;
     } catch (e) {
       notify.error(String(e));
       setConnectStartTime(null);
       // Clear connecting state so the UI isn't stuck on "Connecting..."
       // when the backend rejects the connect call.
       setConnected(false);
+      return false;
     }
   }, [setActiveProfileIdx, setConnectStartTime, setConnected]);
 
@@ -63,7 +65,12 @@ export function useConnection() {
       // Continue even if disconnect fails
     }
     setManualDisconnect(false);
-    await connectTo(profile, modes);
+    const ok = await connectTo(profile, modes);
+    if (!ok) {
+      // Connect failed (possibly old service still lingering) — force-kill and retry
+      try { await api.disconnect(); } catch {}
+      await connectTo(profile, modes);
+    }
   }, [connectTo, setManualDisconnect]);
 
   const toggle = useCallback(async () => {

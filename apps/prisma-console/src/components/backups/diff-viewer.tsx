@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Copy } from "lucide-react";
 import {
   Dialog,
@@ -48,28 +48,41 @@ export function DiffViewer({
     toast(t("common.copied"), "success");
   }, [diff, toast, t]);
 
-  let lineNum = 0;
+  const summary = useMemo(() => {
+    if (!diff) return null;
+    const added = diff.changes.filter((c) => c.tag === "insert").length;
+    const removed = diff.changes.filter((c) => c.tag === "delete").length;
+    const total = diff.changes.filter((c) => c.tag !== "equal").length;
+    return { total, added, removed };
+  }, [diff]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh]">
-        <DialogHeader className="flex-row items-center justify-between gap-2">
+        <DialogHeader>
           <DialogTitle className="truncate">
             {t("backups.diffTitle")}: {backupName}
           </DialogTitle>
-          {diff && diff.changes.length > 0 && (
-            <Button variant="ghost" size="icon-sm" onClick={handleCopy} title={t("common.copy")}>
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-          )}
         </DialogHeader>
+
+        {/* Diff summary */}
+        {summary && summary.total > 0 && (
+          <p className="text-xs text-muted-foreground px-1">
+            {summary.total} {t("backups.diffSummary")}
+            {" ("}
+            <span className="text-green-600 dark:text-green-400">+{summary.added} {t("backups.added")}</span>
+            {", "}
+            <span className="text-red-600 dark:text-red-400">-{summary.removed} {t("backups.removed")}</span>
+            {")"}
+          </p>
+        )}
+
         <div className="overflow-y-auto max-h-[60vh] rounded-lg border bg-muted/20">
           {isLoading ? (
             <p className="p-4 text-sm text-muted-foreground">{t("common.loading")}</p>
           ) : diff && diff.changes.length > 0 ? (
             <div className="font-mono text-xs leading-5">
               {diff.changes.map((change, idx) => {
-                lineNum++;
                 const content = change.tag === "insert" ? change.new_value ?? "" : change.old_value ?? "";
                 const prefix = change.tag === "delete" ? "−" : change.tag === "insert" ? "+" : " ";
 
@@ -84,7 +97,7 @@ export function DiffViewer({
                   >
                     {/* Line number gutter */}
                     <span className="w-9 shrink-0 select-none text-right pr-2 py-px text-muted-foreground/40 border-r border-border/30">
-                      {lineNum}
+                      {idx + 1}
                     </span>
                     {/* Diff indicator */}
                     <span
@@ -109,7 +122,14 @@ export function DiffViewer({
             <p className="p-4 text-sm text-muted-foreground">{t("common.noData")}</p>
           )}
         </div>
-        <DialogFooter>
+
+        <DialogFooter className="flex sm:flex-row sm:justify-between gap-2">
+          {diff && diff.changes.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              <Copy className="h-3.5 w-3.5 mr-1.5" />
+              {t("common.copy")}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("common.close")}
           </Button>

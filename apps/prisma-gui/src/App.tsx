@@ -4,6 +4,7 @@ import { usePrismaEvents } from "./hooks/usePrismaEvents";
 import { usePlatform } from "./hooks/usePlatform";
 import { useWindowEvents } from "./hooks/useWindowEvents";
 import { useAutoReconnect } from "./hooks/useAutoReconnect";
+import { useConfigReload } from "./hooks/useConfigReload";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useClipboardImport } from "./hooks/useClipboardImport";
 import { useMobileLifecycle } from "./hooks/useMobileLifecycle";
@@ -27,6 +28,7 @@ export default function App() {
   usePrismaEvents();
   useWindowEvents();
   useAutoReconnect();
+  useConfigReload();
   useKeyboardShortcuts();
   useClipboardImport();
   useMobileLifecycle();

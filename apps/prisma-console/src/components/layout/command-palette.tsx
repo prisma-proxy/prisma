@@ -23,8 +23,8 @@ interface SearchResult {
   action?: () => void;
 }
 
-function generateHexSecret(): string {
-  const buf = new Uint8Array(32);
+function generateHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -32,12 +32,16 @@ function generateHexSecret(): string {
 function generateUuidV4(): string {
   const buf = new Uint8Array(16);
   crypto.getRandomValues(buf);
-  // Set version 4 (0100) in bits 12-15 of time_hi_and_version
   buf[6] = (buf[6] & 0x0f) | 0x40;
-  // Set variant 10xx in bits 6-7 of clock_seq_hi_and_reserved
   buf[8] = (buf[8] & 0x3f) | 0x80;
   const hex = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function generateBase64Key(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return btoa(String.fromCharCode(...buf));
 }
 
 const PAGES: { label: string; href: string; i18nKey: string }[] = [
@@ -74,17 +78,21 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-      e.preventDefault();
-      setOpen((prev) => !prev);
-    }
-  }, []);
-
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setOpen((prev) => !prev);
+      }
+    };
+    const handleOpen = () => setOpen(true);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("open-command-palette", handleOpen);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("open-command-palette", handleOpen);
+    };
+  }, []);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -151,26 +159,61 @@ export function CommandPalette() {
       }
     }
 
-    // Action items: Generate tools
-    const actionItems: { id: string; labelKey: string; fallback: string; action: () => void }[] = [
+    // Action items: Generator tools
+    const actionItems: { id: string; labelKey: string; fallback: string; keywords: string[]; action: () => void }[] = [
       {
-        id: "action-generate-secret",
-        labelKey: "tools.generateSecret",
-        fallback: "Generate Secret (32 bytes hex)",
+        id: "action-generate-hex-32",
+        labelKey: "tools.generateHex32",
+        fallback: "Generate Hex (32 digits / 16 bytes)",
+        keywords: ["hex", "generate", "random", "32", "16"],
         action: () => {
-          const secret = generateHexSecret();
-          navigator.clipboard.writeText(secret);
-          toast(t("tools.secretCopied"), "success");
+          const hex = generateHex(16);
+          navigator.clipboard.writeText(hex);
+          toast(t("tools.hexCopied"), "success");
+        },
+      },
+      {
+        id: "action-generate-hex-64",
+        labelKey: "tools.generateHex64",
+        fallback: "Generate Hex (64 digits / 32 bytes)",
+        keywords: ["hex", "generate", "random", "secret", "64", "32"],
+        action: () => {
+          const hex = generateHex(32);
+          navigator.clipboard.writeText(hex);
+          toast(t("tools.hexCopied"), "success");
+        },
+      },
+      {
+        id: "action-generate-hex-128",
+        labelKey: "tools.generateHex128",
+        fallback: "Generate Hex (128 digits / 64 bytes)",
+        keywords: ["hex", "generate", "random", "128", "64"],
+        action: () => {
+          const hex = generateHex(64);
+          navigator.clipboard.writeText(hex);
+          toast(t("tools.hexCopied"), "success");
         },
       },
       {
         id: "action-generate-uuid",
         labelKey: "tools.generateUuid",
-        fallback: "Generate UUID",
+        fallback: "Generate UUID v4",
+        keywords: ["uuid", "generate", "random", "id"],
         action: () => {
           const uuid = generateUuidV4();
           navigator.clipboard.writeText(uuid);
           toast(t("tools.uuidCopied"), "success");
+        },
+      },
+      {
+        id: "action-generate-base64",
+        labelKey: "tools.generateBase64",
+        fallback: "Generate Base64 Key (32 bytes)",
+        keywords: ["base64", "generate", "random", "key"],
+        action: () => {
+          const key = generateBase64Key(32);
+          navigator.clipboard.writeText(key);
+          toast(t("tools.base64Copied"), "success");
         },
       },
     ];
@@ -181,8 +224,7 @@ export function CommandPalette() {
         !q ||
         item.fallback.toLowerCase().includes(q) ||
         localizedLabel.toLowerCase().includes(q) ||
-        "generate".includes(q) ||
-        "tools".includes(q)
+        item.keywords.some((kw) => kw.includes(q))
       ) {
         matches.push({
           id: item.id,

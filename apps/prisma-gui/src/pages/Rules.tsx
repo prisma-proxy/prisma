@@ -21,6 +21,8 @@ import { useRules } from "@/store/rules";
 import type { Rule } from "@/store/rules";
 import { useRuleProviders, SUGGESTED_PROVIDERS } from "@/store/ruleProviders";
 import type { RuleProvider } from "@/store/ruleProviders";
+import { useStore } from "@/store";
+import { useConnection } from "@/hooks/useConnection";
 import { notify } from "@/store/notifications";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
 import {
@@ -69,6 +71,18 @@ export default function Rules() {
   const toggleProvider = useRuleProviders((s) => s.toggle);
   const updateProviderStatus = useRuleProviders((s) => s.updateProviderStatus);
 
+  const connected = useStore((s) => s.connected);
+  const activeProfileIdx = useStore((s) => s.activeProfileIdx);
+  const storeProfiles = useStore((s) => s.profiles);
+  const proxyModes = useStore((s) => s.proxyModes);
+  const { switchTo } = useConnection();
+
+  function reconnectIfActive() {
+    if (!connected || activeProfileIdx === null) return;
+    const profile = storeProfiles[activeProfileIdx];
+    if (profile) switchTo(profile, proxyModes);
+  }
+
   const [open, setOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
@@ -92,6 +106,7 @@ export default function Rules() {
     addRule({ id: crypto.randomUUID(), type, match, action });
     setMatch("");
     setOpen(false);
+    reconnectIfActive();
   }
 
   async function handleExportRules() {
@@ -121,6 +136,7 @@ export default function Rules() {
         }
       }
       notify.success(t("rules.imported", { count }));
+      reconnectIfActive();
     } catch (e) {
       if (e instanceof Error && e.message === "No file selected") return;
       notify.error(`Import failed: ${String(e)}`);
@@ -145,6 +161,7 @@ export default function Rules() {
       count = addMany(preset.rules);
     }
     notify.success(t("rules.presetApplied", { count, name: t(preset.nameKey) }));
+    reconnectIfActive();
   }
 
   function handleAddProvider() {
@@ -162,6 +179,7 @@ export default function Rules() {
     setProviderBehavior("domain");
     setProviderAction("PROXY");
     setProviderDialogOpen(false);
+    reconnectIfActive();
   }
 
   function handleAddSuggested(suggestion: typeof SUGGESTED_PROVIDERS[number]) {
@@ -173,6 +191,7 @@ export default function Rules() {
       enabled: true,
     });
     notify.success(t("rules.providerAdded", { name: suggestion.name }));
+    reconnectIfActive();
   }
 
   async function handleUpdateProvider(provider: RuleProvider) {
@@ -285,7 +304,7 @@ export default function Rules() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" onClick={() => removeRule(r.id)}>
+                      <Button size="icon" variant="ghost" onClick={() => { removeRule(r.id); reconnectIfActive(); }}>
                         <Trash2 size={14} className="text-destructive" />
                       </Button>
                     </TableCell>
@@ -330,7 +349,7 @@ export default function Rules() {
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Switch
                       checked={provider.enabled}
-                      onCheckedChange={() => toggleProvider(provider.id)}
+                      onCheckedChange={() => { toggleProvider(provider.id); reconnectIfActive(); }}
                       aria-label={t("rules.toggleProvider")}
                     />
                     <div className="min-w-0 flex-1">
@@ -376,7 +395,7 @@ export default function Rules() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => removeProvider(provider.id)}
+                      onClick={() => { removeProvider(provider.id); reconnectIfActive(); }}
                       title={t("rules.removeProvider")}
                     >
                       <Trash2 size={14} className="text-destructive" />

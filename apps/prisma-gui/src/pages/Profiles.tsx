@@ -253,6 +253,10 @@ export default function Profiles() {
     await reload();
     await api.refreshTrayProfiles().catch(() => {});
     notify.success(t("profiles.saved"));
+    // Reconnect if we just saved the active profile while connected
+    if (connected && editingId && activeProfile?.id === editingId) {
+      switchTo(profile, proxyModes);
+    }
     setEditInitial(undefined);
     setEditingId(null);
     setEditingCreatedAt("");

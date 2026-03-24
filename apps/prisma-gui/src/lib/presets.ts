@@ -53,7 +53,6 @@ export const PROFILE_PRESETS: ProfilePreset[] = [
       fecEnabled: true,
       fecDataShards: 10,
       fecParityShards: 3,
-      connectionPoolEnabled: true,
     },
   },
   {

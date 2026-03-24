@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { LogEntry } from "@/lib/types";
 import { LOG_LEVEL_PRIORITY } from "@/lib/types";
-import { createWebSocket } from "@/lib/ws";
+import { createWebSocket, type WSStatus } from "@/lib/ws";
 
 const MAX_LOGS = 10000;
 
@@ -23,6 +23,7 @@ interface LogFilter {
 export function useLogs() {
   const [allLogs, setAllLogs] = useState<LogEntryWithId[]>([]);
   const [filter, setFilterState] = useState<LogFilter>({});
+  const [connectionStatus, setConnectionStatus] = useState<WSStatus>("connecting");
   const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
 
   const setFilter = useCallback((f: LogFilter) => {
@@ -47,7 +48,9 @@ export function useLogs() {
           }
           return [...prev, entryWithId];
         });
-      }
+      },
+      undefined,
+      setConnectionStatus,
     );
 
     return () => {
@@ -92,5 +95,5 @@ export function useLogs() {
     });
   }, [allLogs, filter]);
 
-  return { logs, setFilter, clearLogs };
+  return { logs, setFilter, clearLogs, connectionStatus };
 }

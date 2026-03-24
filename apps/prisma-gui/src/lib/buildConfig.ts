@@ -89,9 +89,6 @@ export interface WizardState {
   fallbackMaxAttempts: number;
   fallbackConnectTimeout: number;
 
-  // Connection pool
-  connectionPoolEnabled: boolean;
-
   // PrismaTLS
   prismaTlsFingerprint: string;
   prismaTlsAuthSecret: string;
@@ -172,7 +169,6 @@ export const DEFAULT_WIZARD: WizardState = {
   fallbackUseServerFallback: false,
   fallbackMaxAttempts: 3,
   fallbackConnectTimeout: 10,
-  connectionPoolEnabled: false,
   prismaTlsFingerprint: "chrome",
   prismaTlsAuthSecret: "",
   tags: [],
@@ -302,11 +298,8 @@ export function mergeSettingsIntoConfig(
     delete config.port_forwards;
   }
 
-  // Connection pool — respect profile config; only override if settings explicitly enables
-  // and profile doesn't already have it set
-  if (!config.connection_pool && settings.connectionPoolEnabled) {
-    config.connection_pool = { enabled: true };
-  }
+  // Connection pool — always apply from global settings (sole source of truth)
+  config.connection_pool = { enabled: settings.connectionPoolEnabled };
 
   // Routing rules + geo paths
   const routing = { ...((config.routing ?? {}) as Record<string, unknown>) };
@@ -586,9 +579,6 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     };
   }
 
-  // Connection pool (profile-level)
-  config.connection_pool = { enabled: w.connectionPoolEnabled };
-
   // PrismaTLS transport
   if (w.transport === "prisma-tls") {
     if (w.prismaTlsFingerprint) config.fingerprint = w.prismaTlsFingerprint;
@@ -716,7 +706,6 @@ export function parseProfileToWizard(name: string, config: unknown, tags?: strin
     fallbackUseServerFallback: Boolean(fb.use_server_fallback),
     fallbackMaxAttempts: Number(fb.max_fallback_attempts ?? 3),
     fallbackConnectTimeout: Number(fb.connect_timeout_secs ?? 10),
-    connectionPoolEnabled: Boolean((c.connection_pool as Record<string, unknown> | undefined)?.enabled),
     prismaTlsFingerprint: String(c.fingerprint ?? "chrome"),
     prismaTlsAuthSecret: String(c.prisma_auth_secret ?? ""),
     tags: tags ?? [],

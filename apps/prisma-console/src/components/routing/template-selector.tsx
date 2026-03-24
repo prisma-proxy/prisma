@@ -5,7 +5,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/lib/toast-context";
 import { useCreateRoute } from "@/hooks/use-routes";
-import { RULE_TEMPLATES, type RuleTemplate } from "@/lib/rule-templates";
+import {
+  RULE_TEMPLATES,
+  TEMPLATE_CATEGORY_ORDER,
+  TEMPLATE_CATEGORY_KEYS,
+  type RuleTemplate,
+} from "@/lib/rule-templates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { RuleCondition } from "@/lib/types";
@@ -17,19 +22,21 @@ function buildCondition(conditionType: string, conditionValue: string): RuleCond
     case "DomainExact":
       return { type: "DomainExact", value: conditionValue };
     case "DomainSuffix":
-      return { type: "DomainMatch", value: `*.${conditionValue}` };
+      return { type: "DomainSuffix", value: conditionValue };
     case "DomainKeyword":
-      return { type: "DomainMatch", value: `*${conditionValue}*` };
+      return { type: "DomainKeyword", value: conditionValue };
     case "IpCidr":
       return { type: "IpCidr", value: conditionValue };
     case "GeoIp":
-      return { type: "IpCidr", value: `geoip:${conditionValue}` };
+      return { type: "GeoIp", value: conditionValue };
     case "PortRange": {
       const parts = conditionValue.split("-").map(Number);
       return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
     }
-    default:
+    case "All":
       return { type: "All", value: null };
+    default:
+      return { type: "DomainMatch", value: conditionValue };
   }
 }
 
@@ -46,14 +53,11 @@ export function TemplateSelector() {
 
     try {
       for (const rule of template.rules) {
-        const action = rule.action === "Direct" ? "Allow"
-          : rule.action === "Reject" ? "Block"
-          : rule.action as "Allow" | "Block";
         await createRoute.mutateAsync({
           name: rule.name,
           priority: rule.priority,
           condition: buildCondition(rule.condition_type, rule.condition_value),
-          action,
+          action: rule.action as "Allow" | "Block" | "Direct" | "Reject",
           enabled: rule.enabled,
         });
         successCount++;
@@ -68,49 +72,69 @@ export function TemplateSelector() {
     }
   }
 
+  // Group templates by category
+  const templatesByCategory = new Map<string, RuleTemplate[]>();
+  for (const tmpl of RULE_TEMPLATES) {
+    const list = templatesByCategory.get(tmpl.category) ?? [];
+    list.push(tmpl);
+    templatesByCategory.set(tmpl.category, list);
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t("templates.title")}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="flex gap-4 overflow-x-auto pb-2">
-          {RULE_TEMPLATES.map((template) => {
-            const Icon = template.icon;
-            const isApplying = applyingId === template.id;
+      <CardContent className="space-y-5">
+        {TEMPLATE_CATEGORY_ORDER.map((category) => {
+          const templates = templatesByCategory.get(category);
+          if (!templates || templates.length === 0) return null;
 
-            return (
-              <div
-                key={template.id}
-                className="flex min-w-[220px] flex-col gap-3 rounded-lg border p-4"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <Icon className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{t(template.nameKey)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("templates.rulesCount", { count: String(template.rules.length) })}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {t(template.descKey)}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-auto"
-                  disabled={applyingId !== null}
-                  onClick={() => handleApply(template)}
-                >
-                  {isApplying ? t("templates.applying") : t("templates.apply")}
-                </Button>
+          return (
+            <div key={category}>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {t(TEMPLATE_CATEGORY_KEYS[category])}
+              </h3>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {templates.map((template) => {
+                  const Icon = template.icon;
+                  const isApplying = applyingId === template.id;
+
+                  return (
+                    <div
+                      key={template.id}
+                      className="flex min-w-[200px] max-w-[240px] flex-col gap-2.5 rounded-lg border p-3.5"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{t(template.nameKey)}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {t("templates.rulesCount", { count: String(template.rules.length) })}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {t(template.descKey)}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-auto"
+                        disabled={applyingId !== null}
+                        onClick={() => handleApply(template)}
+                      >
+                        {isApplying ? t("templates.applying") : t("templates.apply")}
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );

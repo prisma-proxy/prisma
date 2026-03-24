@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useI18n } from "@/lib/i18n";
 import { formatBytes } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
@@ -24,6 +25,18 @@ interface ClientTableProps {
   metrics?: ClientMetricsEntry[];
   onToggle: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
 export function ClientTable({ clients, metrics = [], onToggle, onDelete }: ClientTableProps) {
@@ -98,8 +111,10 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
             </TableHead>
             <TableHead>{t("clients.name")}</TableHead>
             <TableHead>{t("clients.status")}</TableHead>
-            <TableHead>Active</TableHead>
-            <TableHead>Traffic</TableHead>
+            <TableHead>{t("clients.activeConns")}</TableHead>
+            <TableHead>{t("clients.totalConns")}</TableHead>
+            <TableHead>{t("clients.traffic")}</TableHead>
+            <TableHead>{t("clients.lastSeen")}</TableHead>
             <TableHead className="text-right">{t("clients.actions")}</TableHead>
           </TableRow>
         </TableHeader>
@@ -118,12 +133,18 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                   />
                 </TableCell>
                 <TableCell className="font-medium">
-                  <Link
-                    href={`/dashboard/clients/detail/?id=${client.id}`}
-                    className="hover:underline text-primary"
-                  >
-                    {client.name || t("clients.unnamed")}
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/dashboard/clients/detail/?id=${client.id}`}
+                      className="hover:underline text-primary"
+                    >
+                      {client.name || t("clients.unnamed")}
+                    </Link>
+                    <CopyButton
+                      value={client.id}
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
+                  </div>
                 </TableCell>
                 <TableCell>
                   {client.enabled ? (
@@ -145,14 +166,21 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {m ? m.connection_count : "—"}
+                </TableCell>
                 <TableCell className="text-xs font-mono">
                   {m ? (
                     <span title={`↑${formatBytes(m.bytes_up)} ↓${formatBytes(m.bytes_down)}`}>
-                      ↑{formatBytes(m.bytes_up)} ↓{formatBytes(m.bytes_down)}
+                      <span className="text-muted-foreground">↑</span>{formatBytes(m.bytes_up)}{" "}
+                      <span className="text-muted-foreground">↓</span>{formatBytes(m.bytes_down)}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {m?.last_seen ? formatRelativeTime(m.last_seen) : "—"}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-3">

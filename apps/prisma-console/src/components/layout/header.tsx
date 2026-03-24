@@ -55,9 +55,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
         <button
           type="button"
           onClick={() => {
-            window.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "k", metaKey: true })
-            );
+            window.dispatchEvent(new Event("open-command-palette"));
           }}
           className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
           title={`${t("common.search")} (⌘K)`}

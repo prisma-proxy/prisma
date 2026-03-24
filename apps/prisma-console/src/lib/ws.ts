@@ -1,24 +1,31 @@
 import { getToken } from "./auth";
 
 export type WSCallback<T> = (data: T) => void;
+export type WSStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
 
 export function createWebSocket<T>(
   path: string,
   onMessage: WSCallback<T>,
-  onError?: (error: Event) => void
+  onError?: (error: Event) => void,
+  onStatusChange?: (status: WSStatus) => void,
 ): { close: () => void; send: (data: unknown) => void } {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   let ws: WebSocket | null = null;
   let shouldReconnect = true;
   let reconnectDelay = 1000;
+  let isFirstConnect = true;
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
   function connect() {
     const token = getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    onStatusChange?.(isFirstConnect ? "connecting" : "reconnecting");
+    isFirstConnect = false;
     ws = new WebSocket(`${protocol}//${window.location.host}${path}${tokenParam}`);
 
     ws.onopen = () => {
       reconnectDelay = 1000;
+      onStatusChange?.("connected");
     };
 
     ws.onmessage = (event) => {
@@ -40,8 +47,11 @@ export function createWebSocket<T>(
         shouldReconnect = false;
       }
       if (shouldReconnect) {
-        setTimeout(connect, reconnectDelay);
+        onStatusChange?.("reconnecting");
+        pendingTimer = setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      } else {
+        onStatusChange?.("disconnected");
       }
     };
   }
@@ -51,6 +61,7 @@ export function createWebSocket<T>(
   return {
     close: () => {
       shouldReconnect = false;
+      if (pendingTimer) clearTimeout(pendingTimer);
       ws?.close();
     },
     send: (data: unknown) => {
