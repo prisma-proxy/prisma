@@ -42,7 +42,7 @@ curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.1.4"}
+# {"status":"ok","uptime_secs":3600,"version":"2.2.0"}
 ```
 
 ### 连接
@@ -51,6 +51,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
 |------|------|------|
 | `GET` | `/api/connections` | 列出所有活跃连接及字节计数 |
 | `DELETE` | `/api/connections/:id` | 按 ID 强制断开会话 |
+| `GET` | `/api/connections/geo` | 活跃连接的 GeoIP 国家分布（需要配置 GeoIP） |
 
 ### 客户端
 
@@ -168,13 +169,15 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/api/metrics/clients` | 每客户端指标快照（字节数、连接数、延迟） |
+| `GET` | `/api/metrics/clients` | 所有客户端指标快照（字节数、连接数、延迟百分位数） |
+| `GET` | `/api/metrics/clients/:id` | 单客户端指标快照 |
+| `GET` | `/api/metrics/clients/:id/history` | 时间序列历史（参数：`period=1h\|6h\|24h`） |
 
 **示例：**
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
-# [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
+# [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"latency_p50_ms":38,"latency_p95_ms":72,"latency_p99_ms":105}]
 ```
 
 ### 客户端权限
@@ -298,15 +301,15 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.1.4）：
+所有端点一览（v2.2.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|
 | 健康与指标 | 3 REST + 1 WS | 服务器状态、快照、历史、实时流 |
-| 连接 | 2 REST + 1 WS | 列表、断开、实时事件 |
+| 连接 | 3 REST + 1 WS | 列表、断开、GeoIP 分布、实时事件 |
 | 客户端 | 4 REST | 授权客户端的 CRUD |
 | 客户端权限 | 4 REST | 权限、踢出、封禁 |
-| 客户端指标 | 1 REST | 每客户端指标快照 |
+| 客户端指标 | 3 REST | 所有客户端快照、单客户端快照、时序历史 |
 | 系统 | 1 REST | 平台和资源信息 |
 | 配置 | 4 REST + 1 WS | 配置读写、热重载、重载流 |
 | 配置备份 | 5 REST | 备份、恢复、差异对比 |

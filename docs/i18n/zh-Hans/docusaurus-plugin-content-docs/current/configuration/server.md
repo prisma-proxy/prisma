@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.1.4**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.2.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -122,6 +122,7 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `tls_enabled` | bool | `false` | 启用管理 API 的 TLS |
 | `tls.cert_path` | string? | -- | TLS 证书路径（未设置时继承顶级 `[tls]` 配置） |
 | `tls.key_path` | string? | -- | TLS 私钥路径（未设置时继承顶级 `[tls]` 配置） |
+| `auto_backup_interval_mins` | u32 | `0` | 每隔 N 分钟自动创建一次配置备份。`0` 表示禁用自动备份。 |
 
 :::warning
 `auth_token` 保护所有管理 API 端点。生产环境请使用强随机令牌。
@@ -132,6 +133,8 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 **控制台**：将 `console_dir` 设置为包含已构建控制台静态文件的路径。服务器将在管理 API 地址提供控制台服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd apps/prisma-console && npm ci && npm run build` 从源码构建。
 
 **CORS 来源**：仅在控制台开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中控制台由服务器自身提供时不需要。
+
+**自动备份**：将 `auto_backup_interval_mins` 设置为非零值，即可按固定间隔自动创建配置快照。备份任务在后台运行，不会影响活跃连接。备份与手动备份一同存储，可在控制台的"配置备份"页面查看或恢复。
 
 ## `[port_forwarding]` -- 反向代理
 

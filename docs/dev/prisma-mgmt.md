@@ -37,6 +37,7 @@ Authorization: Bearer your-secret-token
 |--------|------|-------------|
 | `GET` | `/api/connections` | List all active connections |
 | `DELETE` | `/api/connections/{id}` | Disconnect a connection |
+| `GET` | `/api/connections/geo` | GeoIP country distribution of active connections |
 
 ### Clients
 
@@ -56,6 +57,23 @@ Authorization: Bearer your-secret-token
 | `GET` | `/api/clients/{id}/quota` | Get traffic quota |
 | `PUT` | `/api/clients/{id}/quota` | Set traffic quota (body: `{quota_bytes}`) |
 | `GET` | `/api/bandwidth/summary` | Summary for all clients |
+
+### Client Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/metrics/clients` | All-client metrics snapshot (bytes, connections, latency percentiles) |
+| `GET` | `/api/metrics/clients/{id}` | Single-client metrics snapshot |
+| `GET` | `/api/metrics/clients/{id}/history` | Time-series history (param: `period=1h\|6h\|24h`) |
+
+### Client Permissions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/clients/{id}/permissions` | Get per-client permissions |
+| `PUT` | `/api/clients/{id}/permissions` | Update per-client permissions |
+| `POST` | `/api/clients/{id}/kick` | Force-disconnect all sessions for a client |
+| `POST` | `/api/clients/{id}/block` | Disconnect + block reconnection |
 
 ### Configuration
 
@@ -141,8 +159,21 @@ pub struct MgmtState {
 }
 
 pub struct AlertConfig {
-    pub cert_expiry_days: u32,       // default: 30
-    pub quota_warn_percent: u8,      // default: 80
+    pub cert_expiry_days: u32,          // default: 30
+    pub quota_warn_percent: u8,         // default: 80
     pub handshake_spike_threshold: u64, // default: 100
 }
 ```
+
+Key fields on `ServerState` used by `prisma-mgmt`:
+
+```rust
+// per_client_metrics: lock-free hot-path accumulator per client UUID
+pub per_client_metrics: Arc<DashMap<Uuid, Arc<ClientMetricsAccumulator>>>,
+// per_client_history: ring buffer of historical data points (snapshotted every 60s)
+pub per_client_history: Arc<RwLock<HashMap<Uuid, VecDeque<ClientMetricsHistoryPoint>>>>,
+```
+
+## Background Tasks
+
+`spawn_periodic_backup(state)` is called inside `serve()` and runs for the lifetime of the server. Each iteration it reads `management_api.auto_backup_interval_mins` from the live config, sleeps for that interval, then calls `handlers::backup::auto_backup()`. When `auto_backup_interval_mins = 0` the task sleeps for 60 s before rechecking, so enabling auto-backup at runtime takes effect within 60 s without a restart.

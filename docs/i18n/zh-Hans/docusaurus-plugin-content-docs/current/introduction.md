@@ -5,7 +5,7 @@ slug: /introduction
 
 # 简介
 
-Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、八种传输方式和高级抗审查特性。**2.1.4** 版本新增了连接池、密码套件自动选择、API 表面缩减、v5 AAD 中继激活、客户端权限、传输回退、守护进程模式、订阅管理、热重载配置、缓冲池等生产级特性。
+Prisma 是一个基于 Rust 构建的新一代加密代理基础设施套件。它实现了 **PrismaVeil v5** 线路协议——融合现代密码学（包括后量子混合密钥交换）、八种传输方式和高级抗审查特性。**2.2.0** 版本新增了 GeoIP 分析、按客户端指标 API、自动备份、QUIC 主机名支持、控制台仪表盘、GUI 传输模式及更多生产级特性。
 
 ## 功能特性
 
@@ -144,6 +144,16 @@ graph LR
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```
+
+## 2.2.0 新特性
+
+- **GeoIP 分析** — 新增 `GET /api/connections/geo` 接口，返回活跃连接的国家分布；控制台概览页新增实时 GeoIP 饼图
+- **按客户端指标 API** — 新增三个接口：`GET /api/metrics/clients`、`GET /api/metrics/clients/{id}`、`GET /api/metrics/clients/{id}/history`，返回流量、连接数、活跃连接、延迟 p50/p95/p99 及时序历史
+- **自动备份** — `[management_api]` 中新增 `auto_backup_interval_mins`，可启用后台定期配置快照（`0` = 禁用）
+- **QUIC 主机名支持** — 客户端现通过异步 DNS 解析 QUIC 连接主机名（修复 `hostname:port` 地址的"无效套接字地址语法"错误）
+- **RouteAction 别名** — 服务端路由动作现接受 `reject`、`REJECT`、`BLOCK` 作为 `Block` 的别名
+- **控制台改进** — 概览页新增 GeoIP 饼图；系统页新增实时 CPU/内存面积图；客户端页新增活跃连接数和流量列及延迟/历史图表；带宽页新增指标汇总卡片；测速页新增 4 个测试服务器、趋势图和扩展统计；实时流量窗口限制为 60 秒
+- **GUI 传输模式** — 配置文件传输选项现包含 XHTTP、XPorta、PrismaTLS 和 WireGuard；QUIC 专属设置（端口跳变、熵伪装、SNI 切片）仅在选择 QUIC 传输时显示
 
 ## 2.1.4 新特性
 

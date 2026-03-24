@@ -122,10 +122,13 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `tls_enabled` | bool | `false` | Enable TLS on management API |
 | `tls.cert_path` | string? | -- | TLS certificate path (inherits from top-level `[tls]` if omitted and `tls_enabled = true`) |
 | `tls.key_path` | string? | -- | TLS private key path (inherits from top-level `[tls]` if omitted and `tls_enabled = true`) |
+| `auto_backup_interval_mins` | u32 | `0` | Periodically create a config backup every N minutes. `0` disables auto-backup. |
 
 :::warning
 The `auth_token` protects all management API endpoints. Use a strong, random token in production.
 :::
+
+**Auto-backup**: Set `auto_backup_interval_mins` to a non-zero value to create automatic config snapshots on a fixed schedule. The backup task runs in the background and will not interfere with active connections. Backups are stored alongside manual backups and can be viewed or restored from the console Config Backups page.
 
 **Bind address**: By default the API listens on `127.0.0.1:9090` (localhost only). To expose it to the network, change `listen_addr` -- but ensure you have proper network-level access controls in place.
 

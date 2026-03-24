@@ -42,7 +42,7 @@ If `auth_token` is empty, authentication is disabled (development mode only).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.1.4"}
+# {"status":"ok","uptime_secs":3600,"version":"2.2.0"}
 ```
 
 ### Connections
@@ -51,6 +51,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
 |--------|------|-------------|
 | `GET` | `/api/connections` | List all active connections with byte counters |
 | `DELETE` | `/api/connections/:id` | Force-disconnect a session by ID |
+| `GET` | `/api/connections/geo` | Country distribution of active connections (requires `geoip_path` configured) |
 
 ### Clients
 
@@ -168,13 +169,17 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/metrics/clients` | Per-client metrics snapshot (bytes, connections, latency) |
+| `GET` | `/api/metrics/clients` | All clients: bytes, connections, latency percentiles |
+| `GET` | `/api/metrics/clients/:id` | Single client metrics snapshot |
+| `GET` | `/api/metrics/clients/:id/history` | Time-series history (`?period=1h\|6h\|24h`, default `1h`) |
 
 **Example:**
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
-# [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
+# [{"client_id":"uuid","client_name":"laptop","active_connections":3,"bytes_up":1048576,
+#   "bytes_down":5242880,"connection_count":42,"last_seen":"2026-03-24T12:00:00Z",
+#   "latency_p50_ms":12.5,"latency_p95_ms":38.2,"latency_p99_ms":71.0}]
 ```
 
 ### Client Permissions
@@ -298,15 +303,15 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.1.4):
+All endpoints at a glance (v2.2.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
 | Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
-| Connections | 2 REST + 1 WS | List, disconnect, real-time events |
+| Connections | 3 REST + 1 WS | List, disconnect, GeoIP distribution, real-time events |
 | Clients | 4 REST | CRUD for authorized clients |
 | Client Permissions | 4 REST | Permissions, kick, block |
-| Client Metrics | 1 REST | Per-client metrics snapshot |
+| Client Metrics | 3 REST | Per-client metrics snapshot, single-client, and history |
 | System | 1 REST | Platform and resource info |
 | Configuration | 4 REST + 1 WS | Config read/write, hot-reload, reload stream |
 | Config Backups | 5 REST | Backup, restore, diff |

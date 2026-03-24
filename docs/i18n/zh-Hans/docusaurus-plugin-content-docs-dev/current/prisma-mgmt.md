@@ -38,6 +38,7 @@ Authorization: Bearer your-secret-token
 |------|------|------|
 | `GET` | `/api/connections` | 列出所有活跃连接 |
 | `DELETE` | `/api/connections/{id}` | 强制断开连接 |
+| `GET` | `/api/connections/geo` | 活跃连接的 GeoIP 国家分布 |
 
 ### 客户端管理
 
@@ -47,6 +48,23 @@ Authorization: Bearer your-secret-token
 | `POST` | `/api/clients` | 创建新客户端 |
 | `PUT` | `/api/clients/{id}` | 更新客户端 |
 | `DELETE` | `/api/clients/{id}` | 删除客户端 |
+
+### 客户端指标
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| `GET` | `/api/metrics/clients` | 所有客户端指标快照（字节数、连接数、延迟百分位数） |
+| `GET` | `/api/metrics/clients/{id}` | 单客户端指标快照 |
+| `GET` | `/api/metrics/clients/{id}/history` | 时间序列历史（参数：`period=1h\|6h\|24h`） |
+
+### 客户端权限
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| `GET` | `/api/clients/{id}/permissions` | 获取客户端权限 |
+| `PUT` | `/api/clients/{id}/permissions` | 更新客户端权限 |
+| `POST` | `/api/clients/{id}/kick` | 强制断开客户端所有会话 |
+| `POST` | `/api/clients/{id}/block` | 断开客户端并阻止重连 |
 
 ### 带宽和配额
 
@@ -132,3 +150,36 @@ Authorization: Bearer your-secret-token
 | `/api/ws/logs` | 实时日志流 |
 | `/api/ws/connections` | 实时连接事件 |
 | `/api/ws/reload` | 重载事件通知 |
+
+---
+
+## 状态结构
+
+```rust
+pub struct MgmtState {
+    pub state: ServerState,
+    pub bandwidth: Option<Arc<BandwidthLimiterStore>>,
+    pub quotas: Option<Arc<QuotaStore>>,
+    pub config_path: Option<PathBuf>,
+    pub alert_config: Arc<RwLock<AlertConfig>>,
+}
+
+pub struct AlertConfig {
+    pub cert_expiry_days: u32,          // 默认：30
+    pub quota_warn_percent: u8,         // 默认：80
+    pub handshake_spike_threshold: u64, // 默认：100
+}
+```
+
+`ServerState` 中 `prisma-mgmt` 使用的关键字段：
+
+```rust
+// per_client_metrics：无锁热路径累加器，按客户端 UUID 存储
+pub per_client_metrics: Arc<DashMap<Uuid, Arc<ClientMetricsAccumulator>>>,
+// per_client_history：历史数据点的环形缓冲区（每 60 秒快照一次）
+pub per_client_history: Arc<RwLock<HashMap<Uuid, VecDeque<ClientMetricsHistoryPoint>>>>,
+```
+
+## 后台任务
+
+`spawn_periodic_backup(state)` 在 `serve()` 内部调用，在服务端生命周期内持续运行。每次迭代从运行时配置中读取 `management_api.auto_backup_interval_mins`，休眠该时长后调用 `handlers::backup::auto_backup()`。当 `auto_backup_interval_mins = 0` 时，任务休眠 60 秒后重新检查，因此在运行时启用自动备份无需重启，60 秒内即可生效。

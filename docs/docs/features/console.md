@@ -138,27 +138,32 @@ API calls from the console go directly to the same-origin management API endpoin
 
 The main overview dashboard showing:
 - **Metrics cards** — active connections, total bytes up/down, uptime
-- **Traffic chart** — real-time bytes/sec with time-range selector (Live/1H/6H/24H/7D) and Mbps toggle
+- **Traffic chart** — real-time bytes/sec with time-range selector (Live/1H/6H/24H/7D) and Mbps toggle. Live mode shows the last 60 seconds of data.
 - **Transport pie chart** — connections grouped by transport type
 - **Connection histogram** — connection duration distribution
-- **Connection table** — active connections with peer address, transport type, mode, byte counters, and a disconnect button
+- **GeoIP pie chart** — country distribution of active connections. Requires `geoip_path` configured in the server's routing section; shows a placeholder when GeoIP is not configured.
+- **Connection table** — active connections with peer IP (port stripped), transport type, mode, byte counters, and a disconnect button
 
 Data sources: WebSocket push (metrics every 1s) + REST polling (connections every 5s).
 
 ### Bandwidth
 
 Per-client bandwidth monitoring and quota management:
-- **Summary table** -- all clients with upload/download rate limits, quota allocation, quota used, and usage percentage with color-coded progress bars (green < 70%, yellow 70-90%, red > 90%)
-- **Quota overview chart** -- stacked bar chart (Recharts) showing used vs remaining quota per client
+- **Metrics summary** — total upload, total download, and total active connections aggregated across all clients (sourced from `/api/metrics/clients`)
+- **Summary table** — all clients with upload/download rate limits, quota allocation, quota used, and usage percentage with color-coded progress bars (green < 70%, yellow 70–90%, red > 90%)
+- **Quota overview chart** — stacked bar chart (Recharts) showing used vs remaining quota per client
 - Data is auto-refreshed every 5 seconds
 
 ### Speed Test
 
 Run throughput tests through the proxy connection:
-- **Test runner** -- multi-stream download (4 parallel streams to Cloudflare) and upload speed measurement
-- **Live progress** -- real-time download/upload Mbps display during the test with progress bar
-- **Results** -- download speed, upload speed, and latency displayed in cards after completion
-- **History** -- persistent test history (up to 50 entries) stored in localStorage, shown as a list with timestamps
+- **Test servers** — 4 servers: Cloudflare (25 MB), Cloudflare (100 MB), Hetzner, OVH
+- **Test runner** — multi-stream download (4 parallel streams) and upload speed measurement
+- **Live progress** — real-time download/upload Mbps display during the test with progress bar
+- **Results** — download speed, upload speed, and latency displayed in cards after completion
+- **Trend chart** — Recharts LineChart showing download/upload across all history entries (visible when 2+ tests recorded)
+- **Extended stats** — Min, Max, and Median for both download and upload across all history entries
+- **History** — persistent test history (up to 50 entries) stored in localStorage, shown as a list with timestamps and relative time
 - Test can be started and stopped mid-run
 
 ### Server
@@ -174,14 +179,15 @@ Server information:
 
 System monitoring:
 - **System cards** — version, platform, PID, CPU and memory usage gauges
+- **Real-time resource chart** — dual-axis area chart (CPU % left axis, memory % right axis) with a 60-point rolling window updated every 2 s. Shows current CPU and memory values below the chart.
 - **Certificate expiry** — countdown with color coding (green &gt;30d, yellow 7-30d, red &lt;7d)
 - **Active listeners** — table of all listening addresses and protocols
 
 ### Clients
 
 Client management:
-- **Client list** — shows all authorized clients with name, status (enabled/disabled), clickable links to detail page
-- **Client detail** — per-client bandwidth limits (editable), quota utilization bar, traffic chart, filtered connection table
+- **Client list** — shows all authorized clients with name, status (enabled/disabled), active connection count, total bytes (up + down), and clickable links to the detail page
+- **Client detail** — per-client bandwidth limits (editable), quota utilization bar, latency cards (p50/p95/p99), 1 h traffic history area chart (from `/api/metrics/clients/:id/history`), and a filtered connection table
 - **Add client** — generates a new UUID + auth secret pair and displays the key once
 - **Edit client** — update name, toggle enabled/disabled, configure bandwidth/quota limits
 - **Delete client** — remove a client from the auth store
