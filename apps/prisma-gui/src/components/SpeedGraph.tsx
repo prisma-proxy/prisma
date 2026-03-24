@@ -2,6 +2,13 @@ import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import { useStore } from "@/store";
 import { usePlatform } from "@/hooks/usePlatform";
 
+/** Format a speed value (in Mbps) to adaptive units for canvas text. */
+function formatSpeed(mbps: number): string {
+  if (mbps < 1) return `${(mbps * 1000).toFixed(0)} Kbps`;
+  if (mbps < 1000) return `${mbps.toFixed(1)} Mbps`;
+  return `${(mbps / 1000).toFixed(2)} Gbps`;
+}
+
 export default React.memo(function SpeedGraph() {
   const speedSamplesUp = useStore((s) => s.speedSamplesUp);
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
@@ -114,21 +121,40 @@ export default React.memo(function SpeedGraph() {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      const downVal = speedSamplesDown[tip.idx]?.toFixed(2) ?? "0";
-      const upVal = speedSamplesUp[tip.idx]?.toFixed(2) ?? "0";
-      const text = `↓${downVal} ↑${upVal} Mbps`;
-      ctx.fillStyle = "hsl(240 10% 3.9%)";
+      const downMbps = speedSamplesDown[tip.idx] ?? 0;
+      const upMbps = speedSamplesUp[tip.idx] ?? 0;
+      const downText = `\u2193 ${formatSpeed(downMbps)}`;
+      const upText = `\u2191 ${formatSpeed(upMbps)}`;
+
       ctx.font = "11px system-ui, sans-serif";
-      const tw = ctx.measureText(text).width + 12;
-      const tx = Math.min(x - tw / 2, w - pad.right - tw);
-      const ty = pad.top - 2;
+      const downW = ctx.measureText(downText).width;
+      const upW = ctx.measureText(upText).width;
+      const lineH = 16;
+      const boxPadX = 8;
+      const boxPadY = 4;
+      const tw = Math.max(downW, upW) + boxPadX * 2;
+      const th = lineH * 2 + boxPadY * 2;
+
+      // Clamp horizontal position to stay within plot area (both edges)
+      let tx = x - tw / 2;
+      tx = Math.max(pad.left, Math.min(tx, w - pad.right - tw));
+
+      const ty = pad.top - th - 4;
+
+      // Background
       ctx.fillStyle = "hsl(240 10% 3.9% / 0.85)";
       ctx.beginPath();
-      ctx.roundRect(Math.max(pad.left, tx), ty - 14, tw, 16, 4);
+      ctx.roundRect(tx, ty, tw, th, 4);
       ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.textAlign = "center";
-      ctx.fillText(text, Math.max(pad.left + tw / 2, x), ty - 3);
+
+      // Download value in green
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#22c55e";
+      ctx.fillText(downText, tx + boxPadX, ty + boxPadY + lineH - 4);
+
+      // Upload value in blue
+      ctx.fillStyle = "#3b82f6";
+      ctx.fillText(upText, tx + boxPadX, ty + boxPadY + lineH * 2 - 4);
     }
   }, [speedSamplesDown, speedSamplesUp, maxVal, height]);
 
