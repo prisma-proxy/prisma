@@ -50,7 +50,10 @@ pub async fn run(config_path: &str) -> Result<()> {
             info(&format!("Server:    {}", c.server_addr));
             info(&format!("Transport: {}", c.transport));
             info(&format!("Cipher:    {}", c.cipher_suite));
-            info(&format!("SOCKS5:    {}", c.socks5_listen_addr));
+            info(&format!(
+                "SOCKS5:    {}",
+                c.socks5_listen_addr.as_deref().unwrap_or("disabled")
+            ));
             if let Some(ref h) = c.http_listen_addr {
                 info(&format!("HTTP:      {}", h));
             }
@@ -267,13 +270,15 @@ pub async fn run(config_path: &str) -> Result<()> {
     // ── 6. Port Availability ───────────────────────────────────────────
     section("Port Availability");
 
-    check_port(
-        &config.socks5_listen_addr,
-        "SOCKS5",
-        &mut passes,
-        &mut fails,
-        &mut warnings,
-    );
+    if let Some(ref socks5_addr) = config.socks5_listen_addr {
+        check_port(
+            socks5_addr,
+            "SOCKS5",
+            &mut passes,
+            &mut fails,
+            &mut warnings,
+        );
+    }
     if let Some(ref http) = config.http_listen_addr {
         check_port(http, "HTTP", &mut passes, &mut fails, &mut warnings);
     }

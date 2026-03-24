@@ -76,8 +76,6 @@ pub fn load_server_config(path: &str) -> Result<server::ServerConfig, ConfigErro
 /// Load client config from file path with layered overrides.
 pub fn load_client_config(path: &str) -> Result<client::ClientConfig, ConfigError> {
     let builder = config::Config::builder()
-        .set_default("socks5_listen_addr", "127.0.0.1:1080")
-        .map_err(|e| ConfigError::Invalid(e.to_string()))?
         .set_default("cipher_suite", "chacha20-poly1305")
         .map_err(|e| ConfigError::Invalid(e.to_string()))?
         .set_default("logging.level", "info")

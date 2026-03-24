@@ -225,7 +225,11 @@ export function mergeSettingsIntoConfig(
   const config = { ...profileConfig };
 
   // Ports
-  config.socks5_listen_addr = `127.0.0.1:${settings.socks5Port || 1080}`;
+  if (settings.socks5Port > 0) {
+    config.socks5_listen_addr = `127.0.0.1:${settings.socks5Port}`;
+  } else {
+    delete config.socks5_listen_addr;
+  }
   if (settings.httpPort && settings.httpPort > 0) {
     config.http_listen_addr = `127.0.0.1:${settings.httpPort}`;
   } else {

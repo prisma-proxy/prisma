@@ -250,10 +250,12 @@ pub fn validate_server_config(config: &ServerConfig) -> Result<(), ConfigError> 
 }
 
 pub fn validate_client_config(config: &ClientConfig) -> Result<(), ConfigError> {
-    if config.socks5_listen_addr.is_empty() {
-        return Err(ConfigError::ValidationFailed(
-            "socks5_listen_addr must not be empty".into(),
-        ));
+    if let Some(ref addr) = config.socks5_listen_addr {
+        if addr.is_empty() {
+            return Err(ConfigError::ValidationFailed(
+                "socks5_listen_addr must not be empty when set".into(),
+            ));
+        }
     }
 
     if config.server_addr.is_empty() {

@@ -4,7 +4,8 @@ use super::LoggingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
-    pub socks5_listen_addr: String,
+    #[serde(default)]
+    pub socks5_listen_addr: Option<String>,
     #[serde(default)]
     pub http_listen_addr: Option<String>,
     /// PAC server port. Defaults to 8070 when not set.

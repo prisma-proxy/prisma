@@ -140,7 +140,11 @@ async fn run_inner(
     shutdown: Option<tokio::sync::oneshot::Receiver<()>>,
 ) -> Result<()> {
     info!("Prisma client starting");
-    info!(socks5 = %config.socks5_listen_addr, server = %config.server_addr);
+    if let Some(ref socks5_addr) = config.socks5_listen_addr {
+        info!(socks5 = %socks5_addr, server = %config.server_addr);
+    } else {
+        info!(server = %config.server_addr, "SOCKS5 disabled");
+    }
     if let Some(ref http_addr) = config.http_listen_addr {
         info!(http = %http_addr, "HTTP proxy enabled");
     }
@@ -259,14 +263,18 @@ async fn run_inner(
         info!(mode = ?config.dns.mode, "DNS mode configured");
     }
 
-    // Start SOCKS5 server
-    let socks5_addr = config.socks5_listen_addr.clone();
-    let socks5_ctx = ctx.clone();
-    let socks5_handle = tokio::spawn(async move {
-        if let Err(e) = socks5::server::run_socks5_server(&socks5_addr, socks5_ctx).await {
-            tracing::error!("SOCKS5 server error: {}", e);
-        }
-    });
+    // Optionally start SOCKS5 server
+    let socks5_handle = if let Some(ref socks5_addr) = config.socks5_listen_addr {
+        let socks5_addr = socks5_addr.clone();
+        let socks5_ctx = ctx.clone();
+        Some(tokio::spawn(async move {
+            if let Err(e) = socks5::server::run_socks5_server(&socks5_addr, socks5_ctx).await {
+                tracing::error!("SOCKS5 server error: {}", e);
+            }
+        }))
+    } else {
+        None
+    };
 
     // Optionally start HTTP proxy server
     let http_handle = if let Some(ref http_addr) = config.http_listen_addr {
@@ -309,7 +317,10 @@ async fn run_inner(
     // Optionally start PAC server (only when pac_port is configured)
     let pac_handle = if let Some(pac_port) = config.pac_port {
         let proxy_directive = pac::build_proxy_directive(
-            &config.socks5_listen_addr,
+            config
+                .socks5_listen_addr
+                .as_deref()
+                .unwrap_or("127.0.0.1:1080"),
             config.http_listen_addr.as_deref(),
         );
         let pac_content = pac::generate_pac(
@@ -359,7 +370,10 @@ async fn run_inner(
     // Collect all spawned task handles into the guard. When the guard is
     // dropped (either via shutdown signal or future cancellation), every
     // service task is aborted, preventing leaked background work.
-    let mut handles: Vec<tokio::task::JoinHandle<()>> = vec![socks5_handle];
+    let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    if let Some(h) = socks5_handle {
+        handles.push(h);
+    }
     if let Some(h) = http_handle {
         handles.push(h);
     }

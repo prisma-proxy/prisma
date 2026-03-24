@@ -20,7 +20,7 @@ fn test_load_valid_server_config() {
 #[test]
 fn test_load_valid_client_config() {
     let config = load_client_config(&fixture("valid_client")).unwrap();
-    assert_eq!(config.socks5_listen_addr, "127.0.0.1:1080");
+    assert_eq!(config.socks5_listen_addr.as_deref(), Some("127.0.0.1:1080"));
     assert_eq!(config.server_addr, "127.0.0.1:8443");
     assert_eq!(config.cipher_suite, "chacha20-poly1305");
     assert_eq!(config.transport, "tcp");

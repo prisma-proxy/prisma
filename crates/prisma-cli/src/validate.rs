@@ -88,7 +88,10 @@ fn validate_client(path: &str) -> Result<()> {
 
     println!("  OK - Config is valid");
     println!();
-    println!("  SOCKS5:    {}", config.socks5_listen_addr);
+    println!(
+        "  SOCKS5:    {}",
+        config.socks5_listen_addr.as_deref().unwrap_or("disabled")
+    );
     if let Some(ref http) = config.http_listen_addr {
         println!("  HTTP:      {}", http);
     }
