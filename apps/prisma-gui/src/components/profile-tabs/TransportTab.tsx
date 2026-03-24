@@ -35,7 +35,7 @@ export default function TransportTab({ state, onChange }: Props) {
           <Label>{t("wizard.transportProtocol")}</Label>
           <HelpTip content={t("wizard.help.transport")} />
         </div>
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {TRANSPORTS.map(({ value, label }) => (
             <button
               key={value}

@@ -169,7 +169,7 @@ export default function SpeedTest() {
       )}
 
       {speedTestResult && !speedTestRunning && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Card>
             <CardContent className="pt-4 pb-4 flex flex-col items-center gap-1">
               <ArrowDown className="text-green-400" size={24} />
@@ -197,7 +197,7 @@ export default function SpeedTest() {
       {/* Summary stats from history */}
       {history.length > 0 && !speedTestRunning && (
         <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border bg-card p-2">
               <p className="text-sm font-bold">{avgDown.toFixed(1)}</p>
               <p className="text-[10px] text-muted-foreground">{t("speedTest.avgDownload")}</p>

@@ -198,7 +198,7 @@ export default function Connections() {
   return (
     <div className="p-4 flex flex-col h-full gap-3">
       {/* Summary cards */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <Card>
           <CardContent className="py-2 px-3 text-center">
             <div className="flex items-center justify-center gap-1">
@@ -349,10 +349,10 @@ export default function Connections() {
                     <SortIcon field="action" />
                   </button>
                 </TableHead>
-                <TableHead className="w-[100px]">
+                <TableHead className="w-[100px] hidden sm:table-cell">
                   {t("connections.rule")}
                 </TableHead>
-                <TableHead className="w-[80px]">
+                <TableHead className="w-[80px] hidden sm:table-cell">
                   {t("connections.transport")}
                 </TableHead>
                 <TableHead className="w-[80px] text-right">
@@ -365,7 +365,7 @@ export default function Connections() {
                     {t("connections.download")}
                   </button>
                 </TableHead>
-                <TableHead className="w-[80px] text-right">
+                <TableHead className="w-[80px] text-right hidden sm:table-cell">
                   <button
                     type="button"
                     className="flex items-center gap-1 ml-auto"
@@ -426,16 +426,16 @@ export default function Connections() {
                       {t(`connections.${conn.action}`)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground">
+                  <TableCell className="py-1.5 text-muted-foreground hidden sm:table-cell">
                     {conn.rule}
                   </TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground">
+                  <TableCell className="py-1.5 text-muted-foreground hidden sm:table-cell">
                     {conn.transport}
                   </TableCell>
                   <TableCell className="py-1.5 text-right font-mono">
                     {fmtBytes(conn.bytesDown)}
                   </TableCell>
-                  <TableCell className="py-1.5 text-right font-mono">
+                  <TableCell className="py-1.5 text-right font-mono hidden sm:table-cell">
                     {fmtBytes(conn.bytesUp)}
                   </TableCell>
                   <TableCell className="py-1.5 text-right font-mono text-muted-foreground">

@@ -102,7 +102,7 @@ export default function Analytics() {
       <ScrollArea className="flex-1 h-0">
         <div className="space-y-4 pr-2">
           {/* Summary cards */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Card>
               <CardContent className="py-2 px-3 flex flex-col items-center">
                 <ArrowDown size={14} className="text-green-400 mb-0.5" />

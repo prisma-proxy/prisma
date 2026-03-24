@@ -154,33 +154,33 @@ export default function Home() {
 
       {/* Session stats */}
       {connected && stats && (
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <ArrowDown size={14} className="text-green-400 mb-0.5" />
               <p className="text-sm font-bold">{fmtSpeed(stats.speed_down_bps)}</p>
-              <p className="text-[10px] text-muted-foreground">{t("home.download")}</p>
+              <p className="text-[11px] sm:text-[10px] text-muted-foreground">{t("home.download")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <ArrowUp size={14} className="text-blue-400 mb-0.5" />
               <p className="text-sm font-bold">{fmtSpeed(stats.speed_up_bps)}</p>
-              <p className="text-[10px] text-muted-foreground">{t("home.upload")}</p>
+              <p className="text-[11px] sm:text-[10px] text-muted-foreground">{t("home.upload")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <Database size={14} className="text-purple-400 mb-0.5" />
               <p className="text-sm font-bold">{fmtBytes(stats.bytes_down + stats.bytes_up)}</p>
-              <p className="text-[10px] text-muted-foreground">{t("home.transferred")}</p>
+              <p className="text-[11px] sm:text-[10px] text-muted-foreground">{t("home.transferred")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-2 px-3 flex flex-col items-center">
               <Timer size={14} className="text-yellow-400 mb-0.5" />
               <p className="text-sm font-bold font-mono">{fmtUptime(stats.uptime_secs)}</p>
-              <p className="text-[10px] text-muted-foreground">{t("home.uptime")}</p>
+              <p className="text-[11px] sm:text-[10px] text-muted-foreground">{t("home.uptime")}</p>
             </CardContent>
           </Card>
           <Card>
@@ -189,7 +189,7 @@ export default function Home() {
               <p className={`text-sm font-bold ${latencyColor}`}>
                 {latency !== null ? `${latency}ms` : "—"}
               </p>
-              <p className="text-[10px] text-muted-foreground">{t("home.latency")}</p>
+              <p className="text-[11px] sm:text-[10px] text-muted-foreground">{t("home.latency")}</p>
             </CardContent>
           </Card>
         </div>

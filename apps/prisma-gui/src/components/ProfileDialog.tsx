@@ -77,7 +77,7 @@ export default function ProfileDialog({ open, onOpenChange, initial, onSave }: P
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-[calc(100vw-1.5rem)] sm:max-w-2xl max-h-[90vh] flex flex-col" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>
             {initial ? t("wizard.editProfile") : t("wizard.newProfile")}
@@ -85,7 +85,7 @@ export default function ProfileDialog({ open, onOpenChange, initial, onSave }: P
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="w-full justify-start">
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
             <TabsTrigger value="basic">{t("wizard.tabBasic")}</TabsTrigger>
             <TabsTrigger value="transport">{t("wizard.tabTransport")}</TabsTrigger>
             <TabsTrigger value="security">{t("wizard.tabSecurity")}</TabsTrigger>
