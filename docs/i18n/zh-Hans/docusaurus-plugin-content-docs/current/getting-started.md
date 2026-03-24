@@ -45,7 +45,7 @@ prisma version
 Prisma v2.0.0
 Protocol: PrismaVeil v5
 Ciphers:  ChaCha20-Poly1305, AES-256-GCM, Transport-Only
-Transports: QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS-v3, SSH, WireGuard
+Transports: QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard
 ```
 
 ## 方式 B：从源码构建

@@ -34,7 +34,7 @@ flowchart LR
 | # | 章节 | 内容 | 时间 |
 |---|------|------|------|
 | 1 | [理解基础概念](./basics.md) | 互联网工作原理、代理和加密 | ~15 分钟 |
-| 2 | [Prisma 的工作原理](./how-prisma-works.md) | 架构、PrismaVeil v5 协议、9 种传输、反检测 | ~20 分钟 |
+| 2 | [Prisma 的工作原理](./how-prisma-works.md) | 架构、PrismaVeil v5 协议、8 种传输、反检测 | ~20 分钟 |
 | 3 | [准备工作](./prepare.md) | 获取 VPS、SSH、域名和 TLS、防火墙 | ~15 分钟 |
 | 4 | [安装服务端](./install-server.md) | 一键脚本、Docker、源码编译 | ~10 分钟 |
 | 5 | [配置服务端](./configure-server.md) | TOML、凭证、TLS、高级选项 | ~20 分钟 |
@@ -82,6 +82,6 @@ graph LR
     style FW fill:#ef4444,color:#fff
 ```
 
-核心能力：**9 种传输** / **PrismaVeil v5** / **反检测** / **跨平台** / **后量子就绪**
+核心能力：**8 种传输** / **PrismaVeil v5** / **反检测** / **跨平台** / **后量子就绪**
 
 准备好了吗？让我们从[理解基础概念](./basics.md)开始。

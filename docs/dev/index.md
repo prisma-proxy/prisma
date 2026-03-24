@@ -46,7 +46,7 @@ graph TD
 | Crate | Role |
 |-------|------|
 | **prisma-core** | Shared library: crypto, protocol (PrismaVeil v5), config, types, bandwidth, DNS, routing, mux, ACL, proxy groups, subscriptions, import |
-| **prisma-server** | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta/SSH/WireGuard/ShadowTLS/CDN), relay, auth, camouflage, hot-reload |
+| **prisma-server** | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta/SSH/WireGuard/CDN), relay, auth, camouflage, hot-reload |
 | **prisma-client** | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool, DNS resolver/server, PAC, port forwarding |
 | **prisma-cli** | CLI binary (clap 4): server/client runners, management commands, daemon mode, web console, diagnostics |
 | **prisma-mgmt** | Management API (axum): REST + WebSocket endpoints, auth middleware, Prometheus export |

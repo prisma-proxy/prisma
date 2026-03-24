@@ -1,6 +1,6 @@
 # 线路协议参考
 
-PrismaVeil v5 线路协议的完整规范，包括握手、帧格式、命令字节、标志、nonce 构造、密钥派生、会话票据、XMUX 帧、ShadowTLS 帧和 WireGuard 数据包格式。
+PrismaVeil v5 线路协议的完整规范，包括握手、帧格式、命令字节、标志、nonce 构造、密钥派生、会话票据、XMUX 帧和 WireGuard 数据包格式。
 
 ---
 
@@ -184,17 +184,6 @@ graph LR
 | `0x02` | DATA | 流数据 |
 | `0x03` | FIN | 正常关闭 |
 | `0x04` | RST | 错误重置 |
-
----
-
-## ShadowTLS v3 帧格式
-
-ShadowTLS 将 Prisma 数据包装在合法的 TLS 记录层中：
-
-1. 客户端连接 ShadowTLS 监听器
-2. 监听器与伪装服务器（如 `www.microsoft.com`）进行真实 TLS 握手
-3. 握手后，Prisma 数据通过 HMAC 帧复用：
-   - `[TLS 记录头: 5 字节][HMAC 标签: 4 字节][数据: 可变]`
 
 ---
 

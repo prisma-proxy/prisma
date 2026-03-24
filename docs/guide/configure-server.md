@@ -19,7 +19,6 @@ graph TD
     ROOT --> MGMT["[management_api]\nlisten_addr, auth_token"]
     ROOT --> PF["[port_forwarding]\nenabled, allowed_ports"]
     ROOT --> CAM["[camouflage]\nserve_dir, fallback_domain"]
-    ROOT --> STLS["[shadow_tls]\ncover_server, password"]
     ROOT --> SSHT["[ssh_transport]\nlisten_addr, host_key_path"]
     ROOT --> WG["[wireguard_transport]\nlisten_addr, private_key"]
     ROOT --> WATCH["config_watch\n(hot reload)"]
@@ -99,16 +98,6 @@ prisma server -c /etc/prisma/server.toml
 You should see `Server ready!`. Press Ctrl+C to stop.
 
 ## Advanced server options
-
-### ShadowTLS v3
-
-```toml
-[shadow_tls]
-enabled = true
-listen_addr = "0.0.0.0:8444"
-cover_server = "www.google.com:443"
-password = "your-shadow-tls-password"
-```
 
 ### SSH transport
 

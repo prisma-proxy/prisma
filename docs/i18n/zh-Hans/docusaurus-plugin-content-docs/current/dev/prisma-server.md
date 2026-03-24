@@ -8,7 +8,7 @@ title: prisma-server 参考
 
 ## 监听器类型
 
-TCP、QUIC、CDN (WS/gRPC/XHTTP/XPorta)、ShadowTLS、SSH、WireGuard
+TCP、QUIC、CDN (WS/gRPC/XHTTP/XPorta)、SSH、WireGuard
 
 ## 热重载
 

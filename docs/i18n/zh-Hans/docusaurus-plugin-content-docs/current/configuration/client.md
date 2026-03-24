@@ -19,7 +19,7 @@ sidebar_position: 2
 | `http_listen_addr` | string? | -- | 本地 HTTP CONNECT 代理绑定地址（可选，省略则禁用） |
 | `pac_port` | u16? | `8070` | PAC（代理自动配置）服务器端口 |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `"chacha20-poly1305"` / `"aes-256-gcm"` / `"auto"`。当设为 `"auto"` 时，在支持 AES-NI/NEON 的硬件上选择 AES-256-GCM，否则选择 ChaCha20-Poly1305 |
-| `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"shadowtls"` / `"ssh"` / `"wireguard"` |
+| `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"ssh"` / `"wireguard"` |
 | `skip_cert_verify` | bool | `false` | 跳过 TLS 证书验证（仅限开发环境） |
 | `tls_on_tcp` | bool | `false` | 通过 TLS 包裹的 TCP 连接（须与服务端伪装设置匹配） |
 | `tls_server_name` | string? | -- | TLS SNI 服务器名称覆盖（默认使用 `server_addr` 的主机名） |
@@ -108,14 +108,6 @@ idle_timeout_secs = 600
 | `poll_timeout_secs` | u16 | `55` | 长轮询超时时间（10-90 秒） |
 | `extra_headers` | \[\[k,v\]\] | `[]` | 额外的 XPorta 请求头 |
 | `cookie_name` | string | `"_sess"` | 会话 Cookie 名称（须与服务端配置匹配） |
-
-### `[shadow_tls]` -- ShadowTLS v3 传输
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `server_addr` | string | -- | ShadowTLS 服务器地址（如 `"proxy.example.com:8444"`） |
-| `password` | string | -- | 预共享密码（须与服务端匹配） |
-| `sni` | string | -- | 掩护服务器 TLS 握手的 SNI（如 `"www.microsoft.com"`） |
 
 ### `[wireguard]` -- WireGuard 传输
 
@@ -361,7 +353,7 @@ format = "pretty"
 - `identity.client_id` 不能为空
 - `identity.auth_secret` 必须是有效的十六进制字符串
 - `cipher_suite` 必须是以下之一：`chacha20-poly1305`、`aes-256-gcm`、`auto`
-- `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`、`shadowtls`、`ssh`、`wireguard`
+- `transport` 必须是以下之一：`quic`、`tcp`、`ws`、`grpc`、`xhttp`、`xporta`、`prisma-tls`、`ssh`、`wireguard`
 - `xhttp.mode`（当 transport 为 `xhttp` 时）必须是以下之一：`packet-up`、`stream-up`、`stream-one`
 - `xhttp.mode = "stream-one"` 需要设置 `xhttp.stream_url`
 - `xhttp.mode = "packet-up"` 或 `"stream-up"` 需要设置 `xhttp.upload_url` 和 `xhttp.download_url`
@@ -372,7 +364,6 @@ format = "pretty"
 - XPorta：`encoding` 必须是以下之一：`json`、`binary`、`auto`
 - XPorta：`poll_concurrency` 须为 1-8，`upload_concurrency` 须为 1-8
 - XPorta：`poll_timeout_secs` 须为 10-90
-- `transport = "shadowtls"` 需要设置 `shadow_tls.server_addr`、`shadow_tls.password` 和 `shadow_tls.sni`
 - `transport = "wireguard"` 需要设置 `wireguard.endpoint`
 - `logging.level` 必须是以下之一：`trace`、`debug`、`info`、`warn`、`error`
 - `logging.format` 必须是以下之一：`pretty`、`json`
@@ -390,7 +381,7 @@ flowchart TD
     C -->|Yes| F[XPorta - CDN+UDP]
     D -->|No| G{DPI concern?}
     D -->|Yes| H{Stealth needed?}
-    G -->|Yes| I[ShadowTLS v3]
+    G -->|Yes| I[PrismaTLS]
     G -->|No| J[TCP]
     H -->|Yes| K[XHTTP stream-one]
     H -->|No| L[WebSocket]
@@ -424,19 +415,6 @@ prisma_auth_secret = "hex-encoded-32-bytes"
 ```
 
 详见 [PrismaTLS](/docs/features/prisma-tls) 了解详细配置。
-
-### ShadowTLS v3
-
-使用真实的 TLS 握手与合法掩护服务器。握手后，代理数据以认证的 TLS 应用数据帧发送。
-
-```toml
-transport = "shadowtls"
-
-[shadow_tls]
-server_addr = "proxy.example.com:8444"
-password = "your-shared-password"
-sni = "www.microsoft.com"
-```
 
 ### SSH 传输
 

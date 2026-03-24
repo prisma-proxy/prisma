@@ -10,9 +10,9 @@ import styles from './index.module.css';
 function getFeatures() {
   return [
     {
-      title: translate({id: 'homepage.features.multiTransport.title', message: '9 Transports'}),
+      title: translate({id: 'homepage.features.multiTransport.title', message: '8 Transports'}),
       icon: '🔀',
-      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard — auto-fallback across transports when censors block one.'}),
+      description: translate({id: 'homepage.features.multiTransport.description', message: 'QUIC v2, TCP, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard — auto-fallback across transports when censors block one.'}),
     },
     {
       title: translate({id: 'homepage.features.prismaTls.title', message: 'PrismaTLS'}),
@@ -77,7 +77,7 @@ function getHighlights() {
     { label: translate({id: 'homepage.highlights.encryption', message: 'Encryption'}), value: 'ChaCha20-Poly1305 / AES-256-GCM / Transport-Only' },
     { label: translate({id: 'homepage.highlights.keyExchange', message: 'Key Exchange'}), value: 'X25519 + ML-KEM-768 Hybrid PQ / BLAKE3 KDF' },
     { label: translate({id: 'homepage.highlights.handshake', message: 'Handshake'}), value: '1 RTT (0-RTT with ticket resumption)' },
-    { label: translate({id: 'homepage.highlights.transports', message: 'Transports'}), value: '9 (QUIC, TCP, WS, gRPC, XHTTP, XPorta, ShadowTLS, SSH, WG)' },
+    { label: translate({id: 'homepage.highlights.transports', message: 'Transports'}), value: '8 (QUIC, TCP, WS, gRPC, XHTTP, XPorta, SSH, WG)' },
     { label: translate({id: 'homepage.highlights.udpRelay', message: 'UDP Relay'}), value: 'PrismaUDP + FEC Reed-Solomon' },
     { label: translate({id: 'homepage.highlights.congestion', message: 'Congestion'}), value: 'BBR / Brutal / Adaptive' },
     { label: translate({id: 'homepage.highlights.obfuscation', message: 'Obfuscation'}), value: 'Salamander v2 (nonce-based)' },

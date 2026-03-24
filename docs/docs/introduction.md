@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, and advanced anti-censorship features. Version **2.0.0** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.0.0** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
 
 ## Features
 
@@ -19,7 +19,7 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 
 ### Transports
 
-- **9 transports** with auto-fallback:
+- **8 transports** with auto-fallback:
 
 | Transport | Description |
 |-----------|-------------|
@@ -29,7 +29,6 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 | **gRPC** | gRPC streaming over HTTP/2, CDN-compatible |
 | **XHTTP** | Chunked HTTP transport for restrictive CDN environments |
 | **XPorta** | Next-gen CDN transport indistinguishable from normal REST API traffic |
-| **ShadowTLS v3** | Mimics a real TLS handshake to a cover server for protocol-level stealth |
 | **SSH** | Tunnels through standard SSH connections for maximum compatibility |
 | **WireGuard** | Uses WireGuard protocol for kernel-level performance |
 
@@ -93,7 +92,7 @@ prisma/
 ├── crates/
 │   ├── prisma-core/       # Shared library: crypto, protocol (PrismaVeil v5), config, DNS, routing,
 │   │                      #   GeoIP, bandwidth, buffer pool, traffic shaping, types
-│   ├── prisma-server/     # Proxy server: TCP/QUIC/WS/gRPC/XHTTP/XPorta/ShadowTLS/SSH/WireGuard
+│   ├── prisma-server/     # Proxy server: TCP/QUIC/WS/gRPC/XHTTP/XPorta/SSH/WireGuard
 │   │                      #   listeners, relay (standard + io_uring), auth, camouflage, hot-reload
 │   ├── prisma-client/     # Proxy client: SOCKS5/HTTP CONNECT/TUN inbound, transport selection,
 │   │                      #   connection pool, proxy groups, DNS resolver, metrics
@@ -115,7 +114,7 @@ prisma/
 
 ### Data flow — outbound proxy
 
-When used as an outbound proxy, applications connect to the local SOCKS5 or HTTP CONNECT interface. The client encrypts traffic with the PrismaVeil v5 protocol and sends it over one of nine transports to the server, which forwards it to the destination.
+When used as an outbound proxy, applications connect to the local SOCKS5 or HTTP CONNECT interface. The client encrypts traffic with the PrismaVeil v5 protocol and sends it over one of eight transports to the server, which forwards it to the destination.
 
 ```mermaid
 graph LR

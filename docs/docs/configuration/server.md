@@ -195,18 +195,6 @@ Each rule in `[[routing.rules]]`:
 | `h3_static_dir` | string? | -- | Local static files directory for H3 masquerade (fallback when `h3_cover_site` is not set) |
 | `salamander_password` | string? | -- | Salamander UDP obfuscation password (QUIC only) |
 
-## `[shadow_tls]` -- ShadowTLS v3
-
-ShadowTLS uses a real TLS handshake with a legitimate cover server as camouflage. Proxy data is multiplexed in TLS application data frames and authenticated using HMAC.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `false` | Enable ShadowTLS listener |
-| `listen_addr` | string | `"0.0.0.0:8444"` | ShadowTLS listen address |
-| `handshake_server` | string? | -- | Legitimate TLS server to forward handshakes to (e.g., `"www.microsoft.com:443"`) |
-| `password` | string | `""` | Pre-shared password used to derive the HMAC key for frame authentication |
-| `sni` | string? | -- | Expected SNI from clients (for validation) |
-
 ## `[ssh]` -- SSH transport
 
 | Field | Type | Default | Description |
@@ -461,14 +449,6 @@ alpn_protocols = ["h2", "http/1.1"]
 # h3_cover_site = "https://example.com"           # HTTP/3 masquerade cover site
 # h3_static_dir = "/var/www/html"                 # OR serve local static files for H3
 
-# ShadowTLS v3 (real TLS handshake camouflage)
-# [shadow_tls]
-# enabled = true
-# listen_addr = "0.0.0.0:8444"
-# handshake_server = "www.microsoft.com:443"
-# password = "your-shared-password"
-# sni = "www.microsoft.com"
-
 # SSH transport (disguise as SSH server)
 # [ssh]
 # enabled = true
@@ -591,7 +571,6 @@ The server config is validated at startup. The following rules are enforced:
 - `logging.level` must be one of: `trace`, `debug`, `info`, `warn`, `error`
 - `logging.format` must be one of: `pretty`, `json`
 - `camouflage.tls_on_tcp = true` requires `tls.cert_path` and `tls.key_path` to be set
-- `shadow_tls.enabled = true` requires `shadow_tls.handshake_server` and `shadow_tls.password` to be set
 - `ssh.enabled = true` requires at least one of `ssh.password` or `ssh.authorized_keys_path`
 - `ticket_rotation_hours` must be > 0
 - `shutdown_drain_timeout_secs` must be > 0

@@ -26,7 +26,6 @@ title: prisma-core Reference
 | `rule_provider` | `rule_provider.rs` | External rule provider manager |
 | `buffer_pool` | `buffer_pool.rs` | Pooled buffer allocator |
 | `state` | `state.rs` | Server state, metrics, connection tracking |
-| `shadow_tls` | `shadow_tls.rs` | ShadowTLS v3 protocol |
 | `wireguard` | `wireguard.rs` | WireGuard packet format |
 | `types` | `types.rs` | Protocol constants, CipherSuite, ClientId, ProxyAddress |
 | `bandwidth` | `bandwidth/` | Rate limiter, traffic quota |
@@ -223,7 +222,6 @@ See the dedicated [Protocol Reference](./protocol) for full wire format details.
 | `management_api` | `ManagementApiConfig` | disabled | Management API settings |
 | `camouflage` | `CamouflageConfig` | disabled | TLS camouflage |
 | `cdn` | `CdnConfig` | disabled | CDN/WS/gRPC/XHTTP listener |
-| `shadow_tls` | `ShadowTlsConfig` | disabled | ShadowTLS v3 |
 | `ssh` | `SshConfig` | disabled | SSH transport |
 | `wireguard` | `WireGuardConfig` | disabled | WireGuard UDP |
 | `prisma_tls` | `PrismaTlsConfig` | disabled | PrismaTLS |

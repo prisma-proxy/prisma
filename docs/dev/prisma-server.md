@@ -33,7 +33,7 @@ sequenceDiagram
     opt management_api.enabled
         Lib->>Mgmt: Spawn management API server
     end
-    Lib->>Listeners: Spawn TCP, QUIC, CDN, ShadowTLS, SSH, WireGuard listeners
+    Lib->>Listeners: Spawn TCP, QUIC, CDN, SSH, WireGuard listeners
     Lib->>Lib: tokio::select!(tcp_handle, quic_handle)
 ```
 
@@ -46,7 +46,6 @@ sequenceDiagram
 | `listener::tcp` | TCP listener: accept, TLS handshake, dispatch to handler |
 | `listener::quic` | QUIC listener: quinn-based, H3 ALPN masquerade |
 | `listener::cdn` | CDN HTTPS: WS/gRPC/XHTTP/XPorta multiplexing |
-| `listener::shadowtls` | ShadowTLS v3 listener |
 | `listener::ssh` | SSH transport listener |
 | `listener::wireguard` | WireGuard-compatible UDP listener |
 | `handler` | Main connection handler pipeline |
@@ -94,7 +93,6 @@ graph TD
 | TCP | Raw TCP, optional TLS, supports PrismaTLS |
 | QUIC | Quinn-based QUIC v1/v2, H3 ALPN |
 | CDN | HTTPS multi-protocol: WS, gRPC, XHTTP, XPorta. Falls back to reverse proxy |
-| ShadowTLS | ShadowTLS v3: real TLS handshake with cover server |
 | SSH | SSH channel tunnel |
 | WireGuard | WireGuard-compatible UDP |
 

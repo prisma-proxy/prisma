@@ -18,21 +18,19 @@ flowchart LR
     TS --> |gRPC| G[gRPC]
     TS --> |XHTTP| XH[XHTTP]
     TS --> |XPorta| XP[XPorta]
-    TS --> |ShadowTLS| ST[ShadowTLS v3]
     TS --> |WireGuard| WG[WireGuard]
     Q --> ENC[PrismaVeil v5 Encryption]
     WS --> ENC
     G --> ENC
     XH --> ENC
     XP --> ENC
-    ST --> ENC
     WG --> ENC
     ENC --> SRV[Prisma Server]
 ```
 
 ## 传输选择
 
-QUIC、PrismaTLS、WebSocket、gRPC、XHTTP、XPorta、ShadowTLS、SSH、WireGuard
+QUIC、PrismaTLS、WebSocket、gRPC、XHTTP、XPorta、SSH、WireGuard
 
 ## TUN 模式
 

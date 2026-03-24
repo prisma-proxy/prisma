@@ -66,7 +66,7 @@ irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1
 
 ## Option 3: Android App
 
-Download `prisma-android.apk` from [GitHub Releases](https://github.com/Yamimega/prisma/releases/latest). Features: all 9 transports, per-app proxy, TUN mode, subscription import, QR code.
+Download `prisma-android.apk` from [GitHub Releases](https://github.com/Yamimega/prisma/releases/latest). Features: all 8 transports, per-app proxy, TUN mode, subscription import, QR code.
 
 ## Option 4: iOS App
 

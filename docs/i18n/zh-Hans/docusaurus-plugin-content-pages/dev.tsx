@@ -61,7 +61,7 @@ export default function DevPage(): ReactNode {
               <thead><tr><th>Crate</th><th>类型</th><th>职责</th></tr></thead>
               <tbody>
                 <tr><td><code>prisma-core</code></td><td>库</td><td>共享库：加密、协议 (PrismaVeil v5)、配置、类型、带宽、DNS、路由、流量整形、多路复用、ACL、订阅、导入</td></tr>
-                <tr><td><code>prisma-server</code></td><td>库 + 二进制</td><td>服务器：监听器 (TCP / QUIC / WS / gRPC / XHTTP / XPorta / ShadowTLS / SSH / WireGuard)、处理器、中继、认证、伪装</td></tr>
+                <tr><td><code>prisma-server</code></td><td>库 + 二进制</td><td>服务器：监听器 (TCP / QUIC / WS / gRPC / XHTTP / XPorta / SSH / WireGuard)、处理器、中继、认证、伪装</td></tr>
                 <tr><td><code>prisma-client</code></td><td>库 + 二进制</td><td>客户端：SOCKS5 / HTTP 入站、传输选择器、隧道、TUN 模式、DNS 解析器、PAC、连接池、端口转发</td></tr>
                 <tr><td><code>prisma-cli</code></td><td>二进制</td><td>CLI (clap 4)：服务器 + 客户端启动、管理命令、诊断、Web 控制台</td></tr>
                 <tr><td><code>prisma-mgmt</code></td><td>库</td><td>管理 API (axum)：REST 端点、WebSocket 流、认证中间件、Prometheus 导出</td></tr>
@@ -182,7 +182,6 @@ export default function DevPage(): ReactNode {
                 <tr><td>gRPC</td><td>gRPC 双向流隧道。CDN 兼容。</td></tr>
                 <tr><td>XHTTP</td><td>HTTP 原生传输：分离的上传 (POST) 和下载 (SSE) 路径。CDN 兼容。</td></tr>
                 <tr><td>XPorta</td><td>REST API 模拟：会话初始化、JSON/二进制上传、长轮询下载。</td></tr>
-                <tr><td>ShadowTLS</td><td>ShadowTLS v3：与伪装服务器的真实 TLS 握手，HMAC 认证代理数据。</td></tr>
                 <tr><td>SSH</td><td>SSH 传输 via russh。可选虚假 shell。</td></tr>
                 <tr><td>WireGuard</td><td>WireGuard 兼容 UDP 传输。</td></tr>
               </tbody>
@@ -211,7 +210,7 @@ export default function DevPage(): ReactNode {
           <Heading as="h3">关键模块</Heading>
           <ul>
             <li><code>proxy.rs</code> — <code>ProxyContext</code> 中央上下文，<code>connect()</code> 建立到服务器的传输。</li>
-            <li><code>connector.rs</code> — <code>TransportStream</code> 枚举：Tcp、Quic、TcpTls、WebSocket、Grpc、Xhttp、XPorta、ShadowTls、WireGuard。</li>
+            <li><code>connector.rs</code> — <code>TransportStream</code> 枚举：Tcp、Quic、TcpTls、WebSocket、Grpc、Xhttp、XPorta、WireGuard。</li>
             <li><code>tunnel.rs</code> — PrismaVeil 隧道建立：握手 + 质询响应。</li>
             <li><code>socks5/</code>、<code>http/</code> — 入站代理服务器。</li>
             <li><code>tun/</code> — TUN 模式：设备创建、IP 包处理、用户空间 TCP (smoltcp)、按应用过滤。</li>

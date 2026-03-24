@@ -4,7 +4,7 @@ title: Wire Protocol Reference
 
 # Wire Protocol Reference
 
-Complete specification of the PrismaVeil v5 wire protocol: handshake, frame format, command bytes, flags, nonce construction, key derivation, session tickets, XMUX frames, ShadowTLS, and WireGuard.
+Complete specification of the PrismaVeil v5 wire protocol: handshake, frame format, command bytes, flags, nonce construction, key derivation, session tickets, XMUX frames, and WireGuard.
 
 ---
 
@@ -178,11 +178,6 @@ Types: SYN(0x01), DATA(0x02), FIN(0x03), RST(0x04). Max payload: 32768B.
 Encrypted with `ticket_key`. Rotated via `TicketKeyRing` (default: 6h, 3 retired keys).
 
 ---
-
-## ShadowTLS v3
-
-Real TLS handshake with cover server, then HMAC-framed data:
-`[TLS record header:5][HMAC tag:4][data:var]`
 
 ## WireGuard Packet Types
 

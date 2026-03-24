@@ -41,7 +41,7 @@ graph TD
 | Crate | 角色 |
 |-------|------|
 | **prisma-core** | 共享库：加密、协议 (PrismaVeil v5)、配置、类型、带宽、DNS、路由、多路复用、ACL、代理组、订阅、导入 |
-| **prisma-server** | 服务端二进制：监听器 (TCP/QUIC/WS/gRPC/XHTTP/XPorta/SSH/WireGuard/ShadowTLS/CDN)、中继、认证、伪装、热重载 |
+| **prisma-server** | 服务端二进制：监听器 (TCP/QUIC/WS/gRPC/XHTTP/XPorta/SSH/WireGuard/CDN)、中继、认证、伪装、热重载 |
 | **prisma-client** | 客户端库：SOCKS5/HTTP 入站、传输选择、TUN、连接池、DNS 解析/服务器、PAC、端口转发 |
 | **prisma-cli** | CLI 二进制 (clap 4)：服务端/客户端运行器、管理命令、守护进程模式、Web 控制台、诊断 |
 | **prisma-mgmt** | 管理 API (axum)：REST + WebSocket 端点、认证中间件、Prometheus 导出 |

@@ -159,8 +159,8 @@ graph TD
 | Coverage | Per-app or system-wide (TUN mode) | Usually all traffic |
 | Encryption | Application layer (PrismaVeil) | Tunnel layer (IPsec/WG) |
 | Speed | Generally faster | Can be slower |
-| Detection resistance | Very high (9 transports, anti-DPI) | Low (easily fingerprinted) |
-| Transport flexibility | 9 options | Usually 1 |
+| Detection resistance | Very high (8 transports, anti-DPI) | Low (easily fingerprinted) |
+| Transport flexibility | 8 options | Usually 1 |
 | CDN support | Full (WS, gRPC, XHTTP, XPorta) | Rare |
 
 Prisma is technically a proxy, but with TUN mode it captures all system traffic just like a VPN -- with the added benefit that its traffic is **much harder to detect and block**.

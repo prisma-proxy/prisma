@@ -63,14 +63,12 @@ flowchart LR
     TS --> |gRPC| G[gRPC]
     TS --> |XHTTP| XH[XHTTP]
     TS --> |XPorta| XP[XPorta]
-    TS --> |ShadowTLS| ST[ShadowTLS v3]
     TS --> |WireGuard| WG[WireGuard]
     Q --> ENC[PrismaVeil v5 Encryption]
     WS --> ENC
     G --> ENC
     XH --> ENC
     XP --> ENC
-    ST --> ENC
     WG --> ENC
     ENC --> SRV[Prisma Server]
 ```
@@ -87,7 +85,6 @@ flowchart LR
 | `grpc` | gRPC 双向流，CDN 兼容 |
 | `xhttp` | HTTP 原生分块传输，CDN 兼容 |
 | `xporta` | REST API 模拟，CDN 兼容 |
-| `shadow-tls` | ShadowTLS v3，真实 TLS 握手 |
 | `ssh` | SSH 通道隧道 |
 | `wireguard` | WireGuard 兼容 UDP 隧道 |
 

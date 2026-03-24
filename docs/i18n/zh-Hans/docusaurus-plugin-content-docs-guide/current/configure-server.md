@@ -15,7 +15,6 @@ graph TD
     ROOT --> PERF["[performance]\n性能"]
     ROOT --> PAD["[padding]\n填充"]
     ROOT --> MGMT["[management_api]\n管理 API"]
-    ROOT --> STLS["[shadow_tls]\nShadowTLS"]
     ROOT --> WATCH["config_watch\n热重载"]
 ```
 
@@ -67,15 +66,6 @@ prisma server -c /etc/prisma/server.toml
 ```
 
 ## 高级选项
-
-### ShadowTLS v3
-
-```toml
-[shadow_tls]
-enabled = true
-listen_addr = "0.0.0.0:8444"
-cover_server = "www.google.com:443"
-```
 
 ### SSH / WireGuard 传输、ACL、端口转发、伪装模式、热重载、管理 API
 

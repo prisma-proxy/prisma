@@ -216,7 +216,6 @@ As of v1.5.0, Prisma supports **9 distinct transport families** (12 configuratio
 | QUIC + Salamander | Highest | No | Yes (native) |
 | QUIC (standard) | High | No | Yes (native) |
 | PrismaTLS | Highest | No | TCP fallback |
-| ShadowTLS v3 | Highest | No | TCP fallback |
 | XPorta | Highest | Yes | TCP fallback |
 | XHTTP (stream-one) | High | Yes | TCP fallback |
 | WebSocket | Medium | Yes | TCP fallback |

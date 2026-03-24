@@ -57,7 +57,7 @@ graph TD
     Q2 -->|"No"| Q3{"Heavy DPI?"}
     Q2 -->|"Yes"| Q4{"Censorship\nlevel?"}
     Q3 -->|"No"| TCP["<b>TCP</b>\ntransport = tcp"]
-    Q3 -->|"Yes"| STLS["<b>ShadowTLS</b>\ntransport = shadow-tls"]
+    Q3 -->|"Yes"| PTLS["<b>PrismaTLS</b>\ntransport = prisma-tls"]
     Q4 -->|"Light"| WS["<b>WebSocket</b>\ntransport = ws"]
     Q4 -->|"Heavy"| XPORTA["<b>XPorta</b>\ntransport = xporta"]
 
@@ -65,7 +65,7 @@ graph TD
     style TCP fill:#3b82f6,color:#fff
     style WS fill:#f59e0b,color:#000
     style XPORTA fill:#ef4444,color:#fff
-    style STLS fill:#8b5cf6,color:#fff
+    style PTLS fill:#8b5cf6,color:#fff
 ```
 
 | Situation | Transport | Config |
@@ -76,7 +76,6 @@ graph TD
 | Enterprise (CDN) | gRPC | `transport = "grpc"` |
 | HTTP/2 stealth | XHTTP | `transport = "xhttp"` |
 | Maximum stealth | XPorta | `transport = "xporta"` |
-| TLS camouflage | ShadowTLS v3 | `transport = "shadow-tls"` |
 | Never blocked | SSH | `transport = "ssh"` |
 | Kernel perf | WireGuard | `transport = "wireguard"` |
 

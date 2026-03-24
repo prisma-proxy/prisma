@@ -38,7 +38,7 @@ flowchart LR
 | # | Chapter | What you will learn | Time |
 |---|---------|-------------------|------|
 | 1 | [Understanding the Basics](./basics.md) | How the internet works, what proxies and encryption are | ~15 min |
-| 2 | [How Prisma Works](./how-prisma-works.md) | Client/server architecture, PrismaVeil v5 protocol, 9 transports, anti-detection | ~20 min |
+| 2 | [How Prisma Works](./how-prisma-works.md) | Client/server architecture, PrismaVeil v5 protocol, 8 transports, anti-detection | ~20 min |
 | 3 | [Preparation](./prepare.md) | Getting a VPS, SSH access, domain & TLS considerations, firewall planning | ~15 min |
 | 4 | [Installing the Server](./install-server.md) | One-line script, Docker, direct download, build from source, daemon mode | ~10 min |
 | 5 | [Configuring the Server](./configure-server.md) | TOML crash course, credentials, TLS, authorized clients, advanced options | ~20 min |
@@ -101,7 +101,7 @@ graph LR
 
 Key capabilities:
 
-- **9 transport types** -- QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, ShadowTLS v3, SSH, WireGuard
+- **8 transport types** -- QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard
 - **PrismaVeil v5 protocol** -- 1-RTT handshake, 0-RTT resumption, ChaCha20-Poly1305 / AES-256-GCM, 1024-bit anti-replay
 - **Anti-detection** -- padding, timing jitter, chaff injection, entropy camouflage, active probe resistance
 - **Cross-platform** -- Windows, macOS, Linux, Android, iOS, FreeBSD

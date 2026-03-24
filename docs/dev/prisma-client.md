@@ -50,7 +50,6 @@ sequenceDiagram
 | `grpc_stream` | gRPC transport |
 | `xhttp_stream` | XHTTP transport |
 | `xporta_stream` | XPorta transport |
-| `shadow_tls_stream` | ShadowTLS v3 transport |
 | `ssh_stream` | SSH transport |
 | `wg_stream` | WireGuard transport |
 | `tun` | TUN device mode |
@@ -75,14 +74,12 @@ flowchart LR
     TS --> |gRPC| G[gRPC]
     TS --> |XHTTP| XH[XHTTP]
     TS --> |XPorta| XP[XPorta]
-    TS --> |ShadowTLS| ST[ShadowTLS v3]
     TS --> |WireGuard| WG[WireGuard]
     Q --> ENC[PrismaVeil v5 Encryption]
     WS --> ENC
     G --> ENC
     XH --> ENC
     XP --> ENC
-    ST --> ENC
     WG --> ENC
     ENC --> SRV[Prisma Server]
 ```
@@ -99,7 +96,6 @@ flowchart LR
 | `grpc` | gRPC bidirectional streaming. CDN-compatible |
 | `xhttp` | HTTP-native chunked transfer. CDN-compatible |
 | `xporta` | REST API simulation. CDN-compatible |
-| `shadow-tls` | ShadowTLS v3 |
 | `ssh` | SSH channel tunnel |
 | `wireguard` | WireGuard-compatible UDP |
 

@@ -43,7 +43,6 @@ sequenceDiagram
 | `listener::tcp` | TCP 监听器：接受、TLS 握手、分发到处理器 |
 | `listener::quic` | QUIC 监听器：基于 quinn，H3 ALPN 伪装 |
 | `listener::cdn` | CDN HTTPS 监听器：WS/gRPC/XHTTP/XPorta 多路复用 |
-| `listener::shadowtls` | ShadowTLS v3 监听器 |
 | `listener::ssh` | SSH 传输监听器 |
 | `listener::wireguard` | WireGuard 兼容 UDP 监听器 |
 | `handler` | 主连接处理器管道 |
@@ -78,7 +77,6 @@ graph TD
 | TCP | 原始 TCP，可选 TLS，支持 PrismaTLS |
 | QUIC | 基于 quinn 的 QUIC v1/v2，H3 ALPN |
 | CDN | HTTPS 多协议：WS、gRPC、XHTTP、XPorta |
-| ShadowTLS | ShadowTLS v3，真实 TLS 握手 |
 | SSH | SSH 通道隧道 |
 | WireGuard | WireGuard 兼容 UDP |
 

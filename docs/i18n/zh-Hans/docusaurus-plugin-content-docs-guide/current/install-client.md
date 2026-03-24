@@ -41,7 +41,7 @@ irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1
 
 ## 移动端
 
-- **Android:** 下载 APK，支持全部 9 种传输、分应用代理、TUN 模式、订阅导入
+- **Android:** 下载 APK，支持全部 8 种传输、分应用代理、TUN 模式、订阅导入
 - **iOS:** 从 TestFlight 下载，支持 Network Extension TUN 模式
 
 ## 验证

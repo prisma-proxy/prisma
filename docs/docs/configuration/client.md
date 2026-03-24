@@ -19,7 +19,7 @@ This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only
 | `http_listen_addr` | string? | -- | Local HTTP CONNECT proxy bind address (optional, omit to disable) |
 | `pac_port` | u16? | `8070` | PAC (Proxy Auto-Configuration) server port |
 | `cipher_suite` | string | `"chacha20-poly1305"` | `"chacha20-poly1305"` / `"aes-256-gcm"` / `"auto"`. When `"auto"`, selects AES-256-GCM on hardware with AES-NI/NEON, ChaCha20-Poly1305 otherwise |
-| `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"shadowtls"` / `"ssh"` / `"wireguard"` |
+| `transport` | string | `"quic"` | `"quic"` / `"tcp"` / `"ws"` / `"grpc"` / `"xhttp"` / `"xporta"` / `"prisma-tls"` / `"ssh"` / `"wireguard"` |
 | `skip_cert_verify` | bool | `false` | Skip TLS certificate verification (dev only) |
 | `tls_on_tcp` | bool | `false` | Connect via TLS-wrapped TCP (must match server camouflage) |
 | `tls_server_name` | string? | -- | TLS SNI server name override (defaults to `server_addr` hostname) |
@@ -108,14 +108,6 @@ Connection pooling is most beneficial when using transports with expensive hands
 | `poll_timeout_secs` | u16 | `55` | Long-poll timeout in seconds (10-90) |
 | `extra_headers` | \[\[k,v\]\] | `[]` | Extra XPorta request headers |
 | `cookie_name` | string | `"_sess"` | Session cookie name (must match server config) |
-
-### `[shadow_tls]` -- ShadowTLS v3 transport
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `server_addr` | string | -- | ShadowTLS server address (e.g., `"proxy.example.com:8444"`) |
-| `password` | string | -- | Pre-shared password (must match server) |
-| `sni` | string | -- | SNI for the cover server TLS handshake (e.g., `"www.microsoft.com"`) |
 
 ### `[wireguard]` -- WireGuard transport
 
@@ -361,7 +353,7 @@ The client config is validated at startup. The following rules are enforced:
 - `identity.client_id` must not be empty
 - `identity.auth_secret` must be valid hex
 - `cipher_suite` must be one of: `chacha20-poly1305`, `aes-256-gcm`, `auto`
-- `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`, `shadowtls`, `ssh`, `wireguard`
+- `transport` must be one of: `quic`, `tcp`, `ws`, `grpc`, `xhttp`, `xporta`, `prisma-tls`, `ssh`, `wireguard`
 - `xhttp.mode` (when transport is `xhttp`) must be one of: `packet-up`, `stream-up`, `stream-one`
 - `xhttp.mode = "stream-one"` requires `xhttp.stream_url`
 - `xhttp.mode = "packet-up"` or `"stream-up"` requires `xhttp.upload_url` and `xhttp.download_url`
@@ -372,7 +364,6 @@ The client config is validated at startup. The following rules are enforced:
 - XPorta: `encoding` must be one of: `json`, `binary`, `auto`
 - XPorta: `poll_concurrency` must be 1-8, `upload_concurrency` must be 1-8
 - XPorta: `poll_timeout_secs` must be 10-90
-- `transport = "shadowtls"` requires `shadow_tls.server_addr`, `shadow_tls.password`, and `shadow_tls.sni`
 - `transport = "wireguard"` requires `wireguard.endpoint`
 - `logging.level` must be one of: `trace`, `debug`, `info`, `warn`, `error`
 - `logging.format` must be one of: `pretty`, `json`
@@ -390,7 +381,7 @@ flowchart TD
     C -->|Yes| F[XPorta - CDN+UDP]
     D -->|No| G{DPI concern?}
     D -->|Yes| H{Stealth needed?}
-    G -->|Yes| I[ShadowTLS v3]
+    G -->|Yes| I[PrismaTLS]
     G -->|No| J[TCP]
     H -->|Yes| K[XHTTP stream-one]
     H -->|No| L[WebSocket]
@@ -424,19 +415,6 @@ prisma_auth_secret = "hex-encoded-32-bytes"
 ```
 
 See [PrismaTLS](/docs/features/prisma-tls) for detailed configuration.
-
-### ShadowTLS v3
-
-Uses a real TLS handshake with a legitimate cover server. After handshake, proxy data is sent as authenticated TLS application data frames.
-
-```toml
-transport = "shadowtls"
-
-[shadow_tls]
-server_addr = "proxy.example.com:8444"
-password = "your-shared-password"
-sni = "www.microsoft.com"
-```
 
 ### SSH transport
 

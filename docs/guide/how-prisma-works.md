@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # How Prisma Works
 
-Now that you understand the fundamentals, let's dive into Prisma's architecture. This chapter explains what happens behind the scenes when you browse through Prisma, how the PrismaVeil v5 protocol keeps your data safe, and how to choose among the nine available transports.
+Now that you understand the fundamentals, let's dive into Prisma's architecture. This chapter explains what happens behind the scenes when you browse through Prisma, how the PrismaVeil v5 protocol keeps your data safe, and how to choose among the eight available transports.
 
 ## The big picture: Client and Server
 
@@ -148,7 +148,7 @@ Every encrypted frame carries a unique nonce. The server maintains a **1024-bit 
 
 ## Transport types
 
-A **transport** is how encrypted data travels between client and server. Prisma supports nine transports, each with different trade-offs:
+A **transport** is how encrypted data travels between client and server. Prisma supports eight transports, each with different trade-offs:
 
 ### Transport comparison table
 
@@ -160,7 +160,6 @@ A **transport** is how encrypted data travels between client and server. Prisma 
 | **gRPC** | TCP (HTTP/2) | Yes | High | Good | Enterprise networks |
 | **XHTTP** | TCP (HTTP/2 POST) | Yes | High | Good | No upgrade headers |
 | **XPorta** | TCP (REST API) | Yes | Highest | Moderate | Maximum stealth |
-| **ShadowTLS v3** | TCP (TLS mimicry) | No | Highest | Fast | Protocol-level stealth |
 | **SSH** | TCP | No | Medium | Good | Almost never blocked |
 | **WireGuard** | UDP | No | Low | Fastest | Kernel-level performance |
 
@@ -181,7 +180,7 @@ graph TD
     Q3 -->|"Yes"| Q5{"Is censorship\nheavy?"}
 
     Q4 -->|"No"| TCP["Use <b>TCP</b>\nWorks everywhere"]
-    Q4 -->|"Yes"| STLS["Use <b>ShadowTLS v3</b>\nTLS camouflage"]
+    Q4 -->|"Yes"| PTLS["Use <b>PrismaTLS</b>\nActive probe resistance"]
 
     Q5 -->|"Moderate"| WS["Use <b>WebSocket</b>\nSimple CDN setup"]
     Q5 -->|"Heavy"| XPORTA["Use <b>XPorta</b>\nMaximum stealth"]
@@ -190,11 +189,11 @@ graph TD
     style TCP fill:#3b82f6,color:#fff
     style WS fill:#f59e0b,color:#000
     style XPORTA fill:#ef4444,color:#fff
-    style STLS fill:#8b5cf6,color:#fff
+    style PTLS fill:#8b5cf6,color:#fff
 ```
 
 :::tip Start simple
-Begin with **QUIC**. If it does not work, try **TCP**. If you need CDN protection, use **WebSocket**. Only upgrade to **XPorta** or **ShadowTLS v3** when other transports are being actively blocked.
+Begin with **QUIC**. If it does not work, try **TCP**. If you need CDN protection, use **WebSocket**. Only upgrade to **XPorta** or **PrismaTLS** when other transports are being actively blocked.
 :::
 
 ## XMUX multiplexing
@@ -256,7 +255,7 @@ graph TD
 |---------|---------------|-------------|--------|
 | Encryption | Yes | Sometimes | Always (double layer) |
 | Hard to detect | No (easily identified) | Somewhat | Yes (multi-layer anti-detection) |
-| Multiple transports | 1--2 | 1--2 | 9 with auto-fallback |
+| Multiple transports | 1--2 | 1--2 | 8 with auto-fallback |
 | CDN support | Rare | Some | Full (WS, gRPC, XHTTP, XPorta) |
 | Traffic shaping | No | No | Padding, jitter, chaff |
 | Active probe resistance | No | Some | Camouflage + PrismaTLS |

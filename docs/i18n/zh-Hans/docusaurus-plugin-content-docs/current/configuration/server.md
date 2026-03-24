@@ -195,18 +195,6 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `h3_static_dir` | string? | -- | HTTP/3 伪装本地静态文件目录（`h3_cover_site` 未设置时的回退） |
 | `salamander_password` | string? | -- | Salamander UDP 混淆密码（仅 QUIC） |
 
-## `[shadow_tls]` -- ShadowTLS v3
-
-ShadowTLS 使用真实 TLS 握手与合法掩护服务器作为伪装。代理数据在 TLS 应用数据帧中多路复用并使用 HMAC 认证。
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `enabled` | bool | `false` | 启用 ShadowTLS 监听器 |
-| `listen_addr` | string | `"0.0.0.0:8444"` | ShadowTLS 监听地址 |
-| `handshake_server` | string? | -- | 转发握手的合法 TLS 服务器（如 `"www.microsoft.com:443"`） |
-| `password` | string | `""` | 用于派生帧认证 HMAC 密钥的预共享密码 |
-| `sni` | string? | -- | 期望来自客户端的 SNI（用于验证） |
-
 ## `[ssh]` -- SSH 传输
 
 | 字段 | 类型 | 默认值 | 描述 |
@@ -486,7 +474,6 @@ alpn_protocols = ["h2", "http/1.1"]
 - `logging.level` 必须是以下之一：`trace`、`debug`、`info`、`warn`、`error`
 - `logging.format` 必须是以下之一：`pretty`、`json`
 - `camouflage.tls_on_tcp = true` 需要设置 `tls.cert_path` 和 `tls.key_path`
-- `shadow_tls.enabled = true` 需要设置 `shadow_tls.handshake_server` 和 `shadow_tls.password`
 - `ssh.enabled = true` 需要至少设置 `ssh.password` 或 `ssh.authorized_keys_path` 之一
 - `ticket_rotation_hours` 必须 > 0
 - `shutdown_drain_timeout_secs` 必须 > 0

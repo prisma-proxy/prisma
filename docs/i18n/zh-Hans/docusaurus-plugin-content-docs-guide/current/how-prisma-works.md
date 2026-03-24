@@ -75,7 +75,6 @@ graph TD
 | **gRPC** | TCP | 是 | 高 | 好 |
 | **XHTTP** | TCP | 是 | 高 | 好 |
 | **XPorta** | TCP | 是 | 最高 | 中等 |
-| **ShadowTLS v3** | TCP | 否 | 最高 | 快 |
 | **SSH** | TCP | 否 | 中 | 好 |
 | **WireGuard** | UDP | 否 | 低 | 最快 |
 
