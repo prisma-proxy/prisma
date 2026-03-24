@@ -13,8 +13,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { usePlatform } from "@/hooks/usePlatform";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -66,6 +67,7 @@ export default function Profiles() {
   const proxyModes = useStore((s) => s.proxyModes);
   const metrics = useProfileMetrics((s) => s.metrics);
   const { connectTo, disconnect, switchTo } = useConnection();
+  const { isMobile } = usePlatform();
 
   // Latency testing state
   const [latencyMap, setLatencyMap] = useState<Record<string, LatencyEntry>>({});
@@ -463,50 +465,93 @@ export default function Profiles() {
     <div className="p-4 sm:p-6 flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-lg">{t("profiles.title")}</h1>
-        <div className="flex gap-1">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1.5 mr-1">
-                  <Switch
-                    checked={autoSelect}
-                    onCheckedChange={toggleAutoSelect}
-                    className="scale-75"
-                  />
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    <Zap size={12} className="inline mr-0.5" />{t("profiles.autoSelect")}
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <p className="text-xs">{t("profiles.autoSelectEnabled")}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Button size="sm" variant="ghost" onClick={testAllProfiles} disabled={testingAll} title={t("profiles.testAll")}>
-            {testingAll ? <Loader2 size={14} className="animate-spin" /> : <Signal size={14} />}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleExportAll} title={t("profiles.exportAll")}>
-            <Download size={14} />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleImportFile} title={t("profiles.importFile")}>
-            <Upload size={14} />
-          </Button>
-          {hasSubscriptions && (
-            <Button size="sm" variant="ghost" onClick={handleRefreshSubscriptions} disabled={subRefreshing} title={t("profiles.refreshSub")}>
-              {subRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+        {isMobile ? (
+          <div className="flex gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost">
+                  <MoreHorizontal size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => { toggleAutoSelect(!autoSelect); }}>
+                  <Zap size={14} className="mr-2" />
+                  {t("profiles.autoSelect")} {autoSelect ? "✓" : ""}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={testAllProfiles} disabled={testingAll}>
+                  <Signal size={14} className="mr-2" /> {t("profiles.testAll")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleExportAll}>
+                  <Download size={14} className="mr-2" /> {t("profiles.exportAll")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleImportFile}>
+                  <Upload size={14} className="mr-2" /> {t("profiles.importFile")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setSubImportOpen(true)}>
+                  <Globe size={14} className="mr-2" /> {t("profiles.importSub")}
+                </DropdownMenuItem>
+                {hasSubscriptions && (
+                  <DropdownMenuItem onSelect={handleRefreshSubscriptions} disabled={subRefreshing}>
+                    <RefreshCw size={14} className="mr-2" /> {t("profiles.refreshSub")}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" variant="outline" onClick={() => setQrImportOpen(true)}>
+              <ScanLine size={14} />
             </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => setSubImportOpen(true)}>
-            <Globe size={14} /> {t("profiles.importSub")}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setQrImportOpen(true)}>
-            <ScanLine size={14} /> {t("profiles.importQr")}
-          </Button>
-          <Button size="sm" onClick={openAdd}>
-            <Plus /> {t("profiles.add")}
-          </Button>
-        </div>
+            <Button size="sm" onClick={openAdd}>
+              <Plus size={14} />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-1">
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 mr-1">
+                    <Switch
+                      checked={autoSelect}
+                      onCheckedChange={toggleAutoSelect}
+                      className="scale-75"
+                    />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      <Zap size={12} className="inline mr-0.5" />{t("profiles.autoSelect")}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">{t("profiles.autoSelectEnabled")}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button size="sm" variant="ghost" onClick={testAllProfiles} disabled={testingAll} title={t("profiles.testAll")}>
+              {testingAll ? <Loader2 size={14} className="animate-spin" /> : <Signal size={14} />}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleExportAll} title={t("profiles.exportAll")}>
+              <Download size={14} />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleImportFile} title={t("profiles.importFile")}>
+              <Upload size={14} />
+            </Button>
+            {hasSubscriptions && (
+              <Button size="sm" variant="ghost" onClick={handleRefreshSubscriptions} disabled={subRefreshing} title={t("profiles.refreshSub")}>
+                {subRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setSubImportOpen(true)}>
+              <Globe size={14} /> {t("profiles.importSub")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setQrImportOpen(true)}>
+              <ScanLine size={14} /> {t("profiles.importQr")}
+            </Button>
+            <Button size="sm" onClick={openAdd}>
+              <Plus /> {t("profiles.add")}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search & sort */}
