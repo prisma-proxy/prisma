@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useClients } from "@/hooks/use-clients";
 import { useClientBandwidth, useUpdateClientBandwidth, useClientQuota, useUpdateClientQuota } from "@/hooks/use-bandwidth";
+import { useClientMetrics, useClientMetricsHistory } from "@/hooks/use-client-metrics";
 import { useConnections } from "@/hooks/use-connections";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +17,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { BandwidthCard } from "@/components/clients/bandwidth-card";
 import { QuotaCard } from "@/components/clients/quota-card";
 import { ClientTrafficChart } from "@/components/clients/client-traffic-chart";
 import { formatBytes } from "@/lib/utils";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { ArrowLeft } from "lucide-react";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
@@ -30,6 +41,8 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const { data: bandwidth } = useClientBandwidth(id);
   const { data: quota } = useClientQuota(id);
   const { data: connections } = useConnections();
+  const { data: clientMetrics } = useClientMetrics(id);
+  const { data: metricsHistory } = useClientMetricsHistory(id, "1h");
   const updateBandwidth = useUpdateClientBandwidth();
   const updateQuota = useUpdateClientQuota();
 
@@ -100,6 +113,78 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
           isPending={updateQuota.isPending}
         />
       </div>
+
+      {/* Latency + connections metrics */}
+      {clientMetrics && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-lg font-bold">
+                {clientMetrics.latency_p50_ms != null
+                  ? `${clientMetrics.latency_p50_ms.toFixed(1)} ms`
+                  : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Latency p50</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-lg font-bold">
+                {clientMetrics.latency_p95_ms != null
+                  ? `${clientMetrics.latency_p95_ms.toFixed(1)} ms`
+                  : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Latency p95</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-lg font-bold">
+                {clientMetrics.latency_p99_ms != null
+                  ? `${clientMetrics.latency_p99_ms.toFixed(1)} ms`
+                  : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Latency p99</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-lg font-bold">{clientMetrics.active_connections}</p>
+              <p className="text-xs text-muted-foreground">
+                Active / {clientMetrics.connection_count} total connections
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Traffic history chart */}
+      {metricsHistory && metricsHistory.length >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Traffic History (1h)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={metricsHistory.map((p) => ({
+                time: new Date(p.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                bytes_up: p.bytes_up,
+                bytes_down: p.bytes_down,
+              }))}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" interval="preserveStartEnd" />
+                <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fontSize: 10 }} className="text-muted-foreground" width={70} />
+                <Tooltip
+                  formatter={(value, name) => [formatBytes(Number(value)), name === "bytes_up" ? "Upload" : "Download"]}
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                />
+                <Area type="monotone" dataKey="bytes_up" name="bytes_up" stroke="hsl(217, 91%, 60%)" fill="hsl(217, 91%, 60%)" fillOpacity={0.15} strokeWidth={2} />
+                <Area type="monotone" dataKey="bytes_down" name="bytes_down" stroke="hsl(142, 71%, 45%)" fill="hsl(142, 71%, 45%)" fillOpacity={0.15} strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <ClientTrafficChart
         connections={connections ?? []}

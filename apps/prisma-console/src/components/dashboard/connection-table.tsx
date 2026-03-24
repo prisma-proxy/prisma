@@ -25,6 +25,16 @@ import type { ConnectionInfo } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
+/** Extract IP from "IP:port" or "[IPv6]:port" address strings. */
+function stripPort(addr: string): string {
+  if (addr.startsWith("[")) {
+    const end = addr.indexOf("]");
+    return end > 0 ? addr.slice(1, end) : addr;
+  }
+  const last = addr.lastIndexOf(":");
+  return last > 0 ? addr.slice(0, last) : addr;
+}
+
 interface ConnectionTableProps {
   connections: ConnectionInfo[];
   onDisconnect: (sessionId: string) => void;
@@ -242,8 +252,8 @@ export function ConnectionTable({
                   </TableCell>
                   <TableCell className="font-mono text-xs">
                     <span className="flex items-center gap-1">
-                      {conn.peer_addr}
-                      <CopyButton value={conn.peer_addr} />
+                      {stripPort(conn.peer_addr)}
+                      <CopyButton value={stripPort(conn.peer_addr)} />
                     </span>
                   </TableCell>
                   <TableCell>{conn.transport}</TableCell>

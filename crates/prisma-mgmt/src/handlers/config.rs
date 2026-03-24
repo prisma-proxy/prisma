@@ -110,6 +110,7 @@ pub struct ConfigResponse {
     pub port_hopping: PortHoppingInfo,
     pub management_api: ManagementApiInfo,
     pub routing_rules_count: usize,
+    pub auto_backup_interval_mins: u32,
 }
 
 #[derive(Serialize)]
@@ -210,6 +211,7 @@ pub async fn get_config(State(state): State<MgmtState>) -> Json<ConfigResponse> 
             cors_origins: cfg.management_api.cors_origins.clone(),
         },
         routing_rules_count: routing_count,
+        auto_backup_interval_mins: cfg.management_api.auto_backup_interval_mins,
     })
 }
 
@@ -265,6 +267,8 @@ pub struct PatchConfigRequest {
     pub prisma_tls_auth_rotation_hours: Option<u64>,
     // Management API
     pub management_api_enabled: Option<bool>,
+    // Auto-backup interval
+    pub auto_backup_interval_mins: Option<u32>,
 }
 
 pub async fn patch_config(
@@ -299,8 +303,9 @@ pub async fn patch_config(
         cfg.allow_transport_only_cipher = allow;
     }
 
-    // Logging
+    // Logging — apply runtime filter change immediately
     if let Some(level) = req.logging_level {
+        prisma_core::logging::update_log_level(&level);
         cfg.logging.level = level;
     }
     if let Some(format) = req.logging_format {
@@ -420,6 +425,9 @@ pub async fn patch_config(
     // Management API
     if let Some(enabled) = req.management_api_enabled {
         cfg.management_api.enabled = enabled;
+    }
+    if let Some(interval) = req.auto_backup_interval_mins {
+        cfg.management_api.auto_backup_interval_mins = interval;
     }
 
     drop(cfg); // Release write lock before disk I/O

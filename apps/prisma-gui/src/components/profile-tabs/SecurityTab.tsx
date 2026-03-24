@@ -62,33 +62,35 @@ export default function SecurityTab({ state, onChange }: Props) {
         </div>
       </div>
 
-      {/* QUIC Security section */}
-      <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {t("wizard.quicSecurity")}
-        </p>
-        <div className="space-y-1">
-          <div className="flex items-center gap-1">
-            <Label>{t("wizard.salamanderPassword")} <span className="text-muted-foreground text-xs">({t("wizard.salamanderHint")})</span></Label>
-            <HelpTip content={t("wizard.help.salamander")} />
+      {/* QUIC Security section — only shown for QUIC transport */}
+      {state.transport === "quic" && (
+        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t("wizard.quicSecurity")}
+          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <Label>{t("wizard.salamanderPassword")} <span className="text-muted-foreground text-xs">({t("wizard.salamanderHint")})</span></Label>
+              <HelpTip content={t("wizard.help.salamander")} />
+            </div>
+            <Input type="password" value={state.salamanderPassword} onChange={(e) => onChange({ salamanderPassword: e.target.value })} />
           </div>
-          <Input type="password" value={state.salamanderPassword} onChange={(e) => onChange({ salamanderPassword: e.target.value })} />
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <Label>{t("wizard.sniSlicing")}</Label>
-            <HelpTip content={t("wizard.help.sniSlicing")} />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Label>{t("wizard.sniSlicing")}</Label>
+              <HelpTip content={t("wizard.help.sniSlicing")} />
+            </div>
+            <Switch checked={state.sniSlicing} onCheckedChange={(v) => onChange({ sniSlicing: v })} />
           </div>
-          <Switch checked={state.sniSlicing} onCheckedChange={(v) => onChange({ sniSlicing: v })} />
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <Label>{t("wizard.entropyCamouflage")}</Label>
-            <p className="text-xs text-muted-foreground">{t("wizard.entropyCamouflageDesc")}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>{t("wizard.entropyCamouflage")}</Label>
+              <p className="text-xs text-muted-foreground">{t("wizard.entropyCamouflageDesc")}</p>
+            </div>
+            <Switch checked={state.entropyCamouflage} onCheckedChange={(v) => onChange({ entropyCamouflage: v })} />
           </div>
-          <Switch checked={state.entropyCamouflage} onCheckedChange={(v) => onChange({ entropyCamouflage: v })} />
         </div>
-      </div>
+      )}
 
       {/* Obfuscation section */}
       <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">

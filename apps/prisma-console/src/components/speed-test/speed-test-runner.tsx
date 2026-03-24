@@ -139,7 +139,7 @@ export function SpeedTestRunner({ speedTest }: SpeedTestRunnerProps) {
           <Card>
             <CardContent className="pt-4 pb-4 flex flex-col items-center gap-1">
               <Activity className="text-yellow-500 dark:text-yellow-400" size={24} />
-              <p className="text-2xl font-bold">{result.latencyMs}</p>
+              <p className="text-2xl font-bold">{result.latencyMs.toFixed(0)}</p>
               <p className="text-xs text-muted-foreground">{t("speedTest.latency")}</p>
             </CardContent>
           </Card>

@@ -261,7 +261,10 @@ async fn connect_quic_attempt(
         quinn::Endpoint::new_with_abstract_socket(endpoint_config, None, socket, runtime)?;
     endpoint.set_default_client_config(client_config);
 
-    let addr = server_addr.parse()?;
+    let addr = tokio::net::lookup_host(server_addr)
+        .await?
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("DNS resolution failed for {}", server_addr))?;
     let connection = endpoint.connect(addr, server_name)?.await?;
     let (send, recv) = connection.open_bi().await?;
 

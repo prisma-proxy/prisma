@@ -260,6 +260,9 @@ pub struct ManagementApiConfig {
     /// Defaults to `false` so the API is accessible via HTTP out of the box.
     #[serde(default)]
     pub tls_enabled: bool,
+    /// Periodic auto-backup interval in minutes (0 = disabled, event-driven only).
+    #[serde(default)]
+    pub auto_backup_interval_mins: u32,
 }
 
 impl Default for ManagementApiConfig {
@@ -272,6 +275,7 @@ impl Default for ManagementApiConfig {
             console_dir: None,
             tls: None,
             tls_enabled: false,
+            auto_backup_interval_mins: 0,
         }
     }
 }

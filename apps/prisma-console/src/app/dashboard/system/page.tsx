@@ -4,6 +4,7 @@ import { useSystemInfo } from "@/hooks/use-system-info";
 import { useI18n } from "@/lib/i18n";
 import { SystemCards } from "@/components/system/system-cards";
 import { ListenersList } from "@/components/system/listeners-list";
+import { ResourceChart } from "@/components/system/resource-chart";
 import { SkeletonCard } from "@/components/ui/skeleton";
 
 export default function SystemPage() {
@@ -32,6 +33,7 @@ export default function SystemPage() {
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">{t("system.title")}</h2>
       <SystemCards info={info} />
+      <ResourceChart />
       <ListenersList listeners={info.listeners} />
     </div>
   );

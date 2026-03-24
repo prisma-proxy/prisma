@@ -47,6 +47,7 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/system/info", get(system::get_system_info))
         // Connections
         .route("/api/connections", get(connections::list))
+        .route("/api/connections/geo", get(connections::geo_summary))
         .route("/api/connections/{id}", delete(connections::disconnect))
         // Clients
         .route("/api/clients", get(clients::list))

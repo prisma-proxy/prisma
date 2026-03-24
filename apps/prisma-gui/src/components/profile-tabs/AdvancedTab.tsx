@@ -58,36 +58,38 @@ export default function AdvancedTab({ state, onChange }: Props) {
         )}
       </div>
 
-      {/* Port hopping */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <Label>{t("wizard.portHopping")}</Label>
-            <HelpTip content={t("wizard.help.portHopping")} />
+      {/* Port hopping — QUIC only */}
+      {state.transport === "quic" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Label>{t("wizard.portHopping")}</Label>
+              <HelpTip content={t("wizard.help.portHopping")} />
+            </div>
+            <Switch checked={state.portHopping} onCheckedChange={(v) => onChange({ portHopping: v })} />
           </div>
-          <Switch checked={state.portHopping} onCheckedChange={(v) => onChange({ portHopping: v })} />
+          {state.portHopping && (
+            <div className="flex gap-2 p-3 rounded-lg bg-muted/40 border flex-wrap">
+              <div className="flex-1 min-w-[80px] space-y-1">
+                <Label className="text-xs">{t("wizard.portHopBase")}</Label>
+                <Input type="number" value={state.portHopBase} onChange={(e) => onChange({ portHopBase: parseInt(e.target.value, 10) || 40000 })} />
+              </div>
+              <div className="flex-1 min-w-[80px] space-y-1">
+                <Label className="text-xs">{t("wizard.portHopRange")}</Label>
+                <Input type="number" value={state.portHopRange} onChange={(e) => onChange({ portHopRange: parseInt(e.target.value, 10) || 5000 })} />
+              </div>
+              <div className="flex-1 min-w-[80px] space-y-1">
+                <Label className="text-xs">{t("wizard.portHopInterval")}</Label>
+                <Input type="number" value={state.portHopInterval} onChange={(e) => onChange({ portHopInterval: parseInt(e.target.value, 10) || 30 })} />
+              </div>
+              <div className="flex-1 min-w-[80px] space-y-1">
+                <Label className="text-xs">{t("wizard.portHopGrace")}</Label>
+                <Input type="number" value={state.portHopGracePeriod} onChange={(e) => onChange({ portHopGracePeriod: parseInt(e.target.value, 10) || 5 })} />
+              </div>
+            </div>
+          )}
         </div>
-        {state.portHopping && (
-          <div className="flex gap-2 p-3 rounded-lg bg-muted/40 border flex-wrap">
-            <div className="flex-1 min-w-[80px] space-y-1">
-              <Label className="text-xs">{t("wizard.portHopBase")}</Label>
-              <Input type="number" value={state.portHopBase} onChange={(e) => onChange({ portHopBase: parseInt(e.target.value, 10) || 40000 })} />
-            </div>
-            <div className="flex-1 min-w-[80px] space-y-1">
-              <Label className="text-xs">{t("wizard.portHopRange")}</Label>
-              <Input type="number" value={state.portHopRange} onChange={(e) => onChange({ portHopRange: parseInt(e.target.value, 10) || 5000 })} />
-            </div>
-            <div className="flex-1 min-w-[80px] space-y-1">
-              <Label className="text-xs">{t("wizard.portHopInterval")}</Label>
-              <Input type="number" value={state.portHopInterval} onChange={(e) => onChange({ portHopInterval: parseInt(e.target.value, 10) || 30 })} />
-            </div>
-            <div className="flex-1 min-w-[80px] space-y-1">
-              <Label className="text-xs">{t("wizard.portHopGrace")}</Label>
-              <Input type="number" value={state.portHopGracePeriod} onChange={(e) => onChange({ portHopGracePeriod: parseInt(e.target.value, 10) || 5 })} />
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* UDP FEC */}
       <div className="space-y-3">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Users, UserPlus } from "lucide-react";
 import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
+import { useAllClientMetrics } from "@/hooks/use-client-metrics";
 import { useI18n } from "@/lib/i18n";
 import { ClientTable } from "@/components/clients/client-table";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { EmptyState } from "@/components/ui/loading-placeholder";
 export default function ClientsPage() {
   const { t } = useI18n();
   const { data: clients, isLoading } = useClients();
+  const { data: metrics } = useAllClientMetrics();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
 
@@ -52,6 +54,7 @@ export default function ClientsPage() {
           ) : (
             <ClientTable
               clients={clients ?? []}
+              metrics={metrics ?? []}
               onToggle={(id, enabled) =>
                 updateClient.mutate({ id, data: { enabled } })
               }

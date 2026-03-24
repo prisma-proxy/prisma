@@ -70,6 +70,18 @@ impl GeoIPMatcher {
         })
     }
 
+    /// Look up which country an IPv4 address belongs to.
+    /// Returns the first matching country code, or `None` if no match is found.
+    pub fn lookup(&self, ip: Ipv4Addr) -> Option<&str> {
+        let ip_u32 = u32::from(ip);
+        for (code, cidrs) in &self.entries {
+            if cidrs.iter().any(|(network, mask)| (ip_u32 & mask) == *network) {
+                return Some(code.as_str());
+            }
+        }
+        None
+    }
+
     /// Return all loaded country codes.
     pub fn country_codes(&self) -> Vec<&str> {
         self.entries.keys().map(|s| s.as_str()).collect()

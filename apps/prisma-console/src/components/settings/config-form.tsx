@@ -33,6 +33,9 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
   const [portForwardingEnabled, setPortForwardingEnabled] = useState(
     config.port_forwarding.enabled
   );
+  const [autoBackupInterval, setAutoBackupInterval] = useState(
+    config.auto_backup_interval_mins ?? 0
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +44,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
       logging_format: loggingFormat,
       max_connections: maxConnections,
       port_forwarding_enabled: portForwardingEnabled,
+      auto_backup_interval_mins: autoBackupInterval,
     });
   }
 
@@ -122,6 +126,21 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
             onCheckedChange={(checked: boolean) =>
               setPortForwardingEnabled(checked)
             }
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label htmlFor="auto-backup-interval">
+            {t("settings.autoBackupInterval")}{" "}
+            <span className="text-muted-foreground text-xs">({t("settings.autoBackupIntervalHint")})</span>
+          </Label>
+          <Input
+            id="auto-backup-interval"
+            type="number"
+            value={autoBackupInterval}
+            onChange={(e) => setAutoBackupInterval(parseInt(e.target.value, 10) || 0)}
+            min={0}
+            placeholder="0"
           />
         </div>
       </div>

@@ -10,6 +10,7 @@ import { MetricsCards } from "@/components/dashboard/metrics-cards";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
 import { ConnectionTable } from "@/components/dashboard/connection-table";
 import { TransportPie } from "@/components/dashboard/transport-pie";
+import { GeoIPPie } from "@/components/dashboard/geoip-pie";
 import { ConnectionHistogram } from "@/components/dashboard/connection-histogram";
 import { HistoricalCharts } from "@/components/dashboard/historical-charts";
 import { SetupWizard } from "@/components/onboarding/setup-wizard";
@@ -78,11 +79,11 @@ export default function OverviewPage() {
         </Link>
       </div>
 
-      {/* Traffic chart */}
+      {/* Traffic chart — live mode capped at last 60s */}
       {history.length === 0 ? (
         <SkeletonChart />
       ) : (
-        <TrafficChart history={history} />
+        <TrafficChart history={history.slice(-61)} />
       )}
 
       {/* Distribution charts */}
@@ -91,7 +92,11 @@ export default function OverviewPage() {
         <ConnectionHistogram connections={connections ?? []} />
       </div>
 
-      <HistoricalCharts />
+      {/* GeoIP + historical */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <GeoIPPie />
+        <HistoricalCharts />
+      </div>
 
       {/* Connections table */}
       {connectionsLoading ? (

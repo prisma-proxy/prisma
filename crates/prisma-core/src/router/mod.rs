@@ -16,8 +16,11 @@ use crate::geodata::GeoIPMatcher;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteAction {
+    #[serde(alias = "PROXY")]
     Proxy,
+    #[serde(alias = "DIRECT")]
     Direct,
+    #[serde(alias = "reject", alias = "REJECT", alias = "BLOCK")]
     Block,
 }
 

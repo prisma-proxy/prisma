@@ -67,7 +67,11 @@ export default function TransportTab({ state, onChange }: Props) {
               <SelectItem value="quic">QUIC only</SelectItem>
               <SelectItem value="ws">WebSocket only</SelectItem>
               <SelectItem value="grpc">gRPC only</SelectItem>
+              <SelectItem value="xhttp">XHTTP only</SelectItem>
+              <SelectItem value="xporta">XPorta only</SelectItem>
               <SelectItem value="tcp">TCP only</SelectItem>
+              <SelectItem value="prisma-tls">PrismaTLS only</SelectItem>
+              <SelectItem value="wireguard">WireGuard only</SelectItem>
             </SelectContent>
           </Select>
         </div>

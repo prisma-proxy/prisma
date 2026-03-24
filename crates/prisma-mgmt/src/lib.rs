@@ -113,9 +113,35 @@ impl MgmtState {
     }
 }
 
+/// Spawn a background task that creates periodic auto-backups when configured.
+fn spawn_periodic_backup(state: MgmtState) {
+    tokio::spawn(async move {
+        loop {
+            let interval_mins = {
+                let cfg = state.state.config.read().await;
+                cfg.management_api.auto_backup_interval_mins
+            };
+            if interval_mins == 0 {
+                // Disabled — check again in 60s in case it gets enabled via settings
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                continue;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(u64::from(interval_mins) * 60)).await;
+            if state.config_path.is_some() {
+                if let Err(e) = handlers::backup::auto_backup(&state).await {
+                    tracing::warn!(error = ?e, "Periodic auto-backup failed");
+                } else {
+                    tracing::debug!(interval_mins, "Periodic auto-backup created");
+                }
+            }
+        }
+    });
+}
+
 /// Start the management API server (HTTPS when TLS is configured, HTTP otherwise).
 pub async fn serve(config: ManagementApiConfig, state: MgmtState) -> Result<()> {
-    let app = router::build_router(config.clone(), state);
+    let app = router::build_router(config.clone(), state.clone());
+    spawn_periodic_backup(state);
 
     if let Some(ref tls) = config.tls {
         let rustls_config =

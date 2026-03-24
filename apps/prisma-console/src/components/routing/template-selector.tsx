@@ -17,13 +17,13 @@ function buildCondition(conditionType: string, conditionValue: string): RuleCond
     case "DomainExact":
       return { type: "DomainExact", value: conditionValue };
     case "DomainSuffix":
-      return { type: "DomainSuffix", value: conditionValue };
+      return { type: "DomainMatch", value: `*.${conditionValue}` };
     case "DomainKeyword":
-      return { type: "DomainKeyword", value: conditionValue };
+      return { type: "DomainMatch", value: `*${conditionValue}*` };
     case "IpCidr":
       return { type: "IpCidr", value: conditionValue };
     case "GeoIp":
-      return { type: "GeoIp", value: conditionValue };
+      return { type: "IpCidr", value: `geoip:${conditionValue}` };
     case "PortRange": {
       const parts = conditionValue.split("-").map(Number);
       return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
@@ -46,11 +46,14 @@ export function TemplateSelector() {
 
     try {
       for (const rule of template.rules) {
+        const action = rule.action === "Direct" ? "Allow"
+          : rule.action === "Reject" ? "Block"
+          : rule.action as "Allow" | "Block";
         await createRoute.mutateAsync({
           name: rule.name,
           priority: rule.priority,
           condition: buildCondition(rule.condition_type, rule.condition_value),
-          action: rule.action as "Allow" | "Block" | "Direct" | "Reject",
+          action,
           enabled: rule.enabled,
         });
         successCount++;

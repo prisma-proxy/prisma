@@ -34,9 +34,9 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     descKey: "templates.directLocalDesc",
     icon: Wifi,
     rules: [
-      { name: "Local 192.168.x.x", condition_type: "IpCidr", condition_value: "192.168.0.0/16", action: "Direct", priority: 200, enabled: true },
-      { name: "Local 10.x.x.x", condition_type: "IpCidr", condition_value: "10.0.0.0/8", action: "Direct", priority: 200, enabled: true },
-      { name: "Localhost", condition_type: "IpCidr", condition_value: "127.0.0.0/8", action: "Direct", priority: 200, enabled: true },
+      { name: "Local 192.168.x.x", condition_type: "IpCidr", condition_value: "192.168.0.0/16", action: "Allow", priority: 200, enabled: true },
+      { name: "Local 10.x.x.x", condition_type: "IpCidr", condition_value: "10.0.0.0/8", action: "Allow", priority: 200, enabled: true },
+      { name: "Localhost", condition_type: "IpCidr", condition_value: "127.0.0.0/8", action: "Allow", priority: 200, enabled: true },
     ],
   },
   {

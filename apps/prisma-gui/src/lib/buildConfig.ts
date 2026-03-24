@@ -323,14 +323,23 @@ export function mergeSettingsIntoConfig(
   }
   // Rule providers
   if (ruleProviders && ruleProviders.length > 0) {
-    routing.rule_providers = ruleProviders.map((p) => ({
-      name: p.name,
-      url: p.url,
-      behavior: p.behavior,
-      action: p.action.toLowerCase(),
-      format: "text",
-      update_interval_secs: 86400,
-    }));
+    routing.rule_providers = ruleProviders.map((p) => {
+      let action: string;
+      switch (p.action) {
+        case "DIRECT":  action = "direct"; break;
+        case "REJECT":  action = "block";  break;
+        case "PROXY":
+        default:        action = "proxy";  break;
+      }
+      return {
+        name: p.name,
+        url: p.url,
+        behavior: p.behavior,
+        action,
+        format: "text",
+        update_interval_secs: 86400,
+      };
+    });
   }
 
   if (Object.keys(routing).length > 0) {
@@ -424,19 +433,12 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     config.fallback_order = fo;
   }
 
-  // QUIC-specific fields (only for QUIC transport)
+  // QUIC-specific fields
   if (w.transport === "quic") {
     if (w.quicVersion !== "auto") config.quic_version = w.quicVersion;
     if (w.sniSlicing) config.sni_slicing = true;
     if (w.salamanderPassword) config.salamander_password = w.salamanderPassword;
     if (w.entropyCamouflage) config.entropy_camouflage = true;
-    // Congestion control (QUIC-only, omit if default bbr with no target)
-    if (w.congestion !== "bbr" || w.targetBandwidth) {
-      config.congestion = {
-        mode: w.congestion,
-        ...(w.targetBandwidth ? { target_bandwidth: w.targetBandwidth } : {}),
-      };
-    }
     // Port hopping (QUIC-only)
     if (w.portHopping) {
       config.port_hopping = {
@@ -447,14 +449,23 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
         grace_period_secs: w.portHopGracePeriod,
       };
     }
-    // UDP FEC (QUIC-only)
-    if (w.fecEnabled) {
-      config.udp_fec = {
-        enabled: true,
-        data_shards: w.fecDataShards,
-        parity_shards: w.fecParityShards,
-      };
-    }
+  }
+
+  // Congestion control (all transports — omit if default bbr with no target)
+  if (w.congestion !== "bbr" || w.targetBandwidth) {
+    config.congestion = {
+      mode: w.congestion,
+      ...(w.targetBandwidth ? { target_bandwidth: w.targetBandwidth } : {}),
+    };
+  }
+
+  // UDP FEC — applies to PrismaUDP relay on all transports
+  if (w.fecEnabled) {
+    config.udp_fec = {
+      enabled: true,
+      data_shards: w.fecDataShards,
+      parity_shards: w.fecParityShards,
+    };
   }
 
   // WebSocket URL scheme:

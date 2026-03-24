@@ -41,9 +41,7 @@ export function AlertBadge({ alerts: externalAlerts }: AlertBadgePropsExternal) 
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<button type="button" className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "relative")} />}
-      >
+      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "relative")}>
         <Bell className="h-4 w-4" />
         {alerts.length > 0 && (
           <span

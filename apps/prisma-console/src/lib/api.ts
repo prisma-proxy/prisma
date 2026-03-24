@@ -137,4 +137,20 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  // GeoIP / connection origins
+  getConnectionGeo: () =>
+    apiFetch<import("./types").GeoEntry[]>("/api/connections/geo"),
+
+  // Per-client metrics
+  getClientMetrics: () =>
+    apiFetch<import("./types").ClientMetricsEntry[]>("/api/metrics/clients"),
+  getSingleClientMetrics: (id: string) =>
+    apiFetch<import("./types").ClientMetricsEntry>(`/api/metrics/clients/${id}`),
+  getClientMetricsHistory: (id: string, period?: string) => {
+    const qs = period ? `?period=${period}` : "";
+    return apiFetch<import("./types").ClientMetricsHistoryEntry[]>(
+      `/api/metrics/clients/${id}/history${qs}`
+    );
+  },
 };

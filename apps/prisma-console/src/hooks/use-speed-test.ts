@@ -19,9 +19,24 @@ export interface SpeedResult {
 
 export const TEST_SERVERS = [
   {
-    label: "Cloudflare",
+    label: "Cloudflare (25MB)",
     download: "https://speed.cloudflare.com/__down?bytes=26214400",
     upload: "https://speed.cloudflare.com/__up",
+  },
+  {
+    label: "Cloudflare (100MB)",
+    download: "https://speed.cloudflare.com/__down?bytes=104857600",
+    upload: "https://speed.cloudflare.com/__up",
+  },
+  {
+    label: "Hetzner (EU)",
+    download: "https://speed.hetzner.de/100MB.bin",
+    upload: "",
+  },
+  {
+    label: "OVH (EU)",
+    download: "https://proof.ovh.net/files/10Mb.dat",
+    upload: "",
   },
 ];
 

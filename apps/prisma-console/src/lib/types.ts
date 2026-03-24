@@ -148,6 +148,7 @@ export interface ConfigResponse {
   port_hopping: PortHoppingInfo;
   management_api: ManagementApiInfo;
   routing_rules_count: number;
+  auto_backup_interval_mins: number;
 }
 
 export interface TlsInfoResponse {
@@ -271,5 +272,30 @@ export interface AlertConfig {
   cert_expiry_days: number;
   quota_warn_percent: number;
   handshake_spike_threshold: number;
+}
+
+export interface ClientMetricsEntry {
+  client_id: string;
+  client_name: string | null;
+  bytes_up: number;
+  bytes_down: number;
+  connection_count: number;
+  active_connections: number;
+  last_seen: string | null;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  latency_p99_ms: number | null;
+}
+
+export interface ClientMetricsHistoryEntry {
+  timestamp: string;
+  bytes_up: number;
+  bytes_down: number;
+  active_connections: number;
+}
+
+export interface GeoEntry {
+  country: string;
+  count: number;
 }
 

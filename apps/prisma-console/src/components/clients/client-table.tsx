@@ -15,17 +15,21 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useI18n } from "@/lib/i18n";
-import type { ClientInfo } from "@/lib/types";
+import { formatBytes } from "@/lib/utils";
+import type { ClientInfo, ClientMetricsEntry } from "@/lib/types";
 
 interface ClientTableProps {
   clients: ClientInfo[];
+  metrics?: ClientMetricsEntry[];
   onToggle: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
 }
 
-export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
+export function ClientTable({ clients, metrics = [], onToggle, onDelete }: ClientTableProps) {
   const { t } = useI18n();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const metricsMap = new Map(metrics.map((m) => [m.client_id, m]));
 
   if (clients.length === 0) {
     return (
@@ -42,51 +46,74 @@ export function ClientTable({ clients, onToggle, onDelete }: ClientTableProps) {
         <TableRow>
           <TableHead>{t("clients.name")}</TableHead>
           <TableHead>{t("clients.status")}</TableHead>
+          <TableHead>Active</TableHead>
+          <TableHead>Traffic</TableHead>
           <TableHead className="text-right">{t("clients.actions")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {clients.map((client) => (
-          <TableRow key={client.id}>
-            <TableCell className="font-medium">
-              <Link
-                href={`/dashboard/clients/detail/?id=${client.id}`}
-                className="hover:underline text-primary"
-              >
-                {client.name || t("clients.unnamed")}
-              </Link>
-            </TableCell>
-            <TableCell>
-              {client.enabled ? (
-                <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
-                  {t("clients.active")}
-                </Badge>
-              ) : (
-                <Badge className="bg-red-500/15 text-red-700 dark:text-red-400">
-                  {t("clients.disabled")}
-                </Badge>
-              )}
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-3">
-                <Switch
-                  checked={client.enabled}
-                  onCheckedChange={(checked: boolean) =>
-                    onToggle(client.id, checked)
-                  }
-                  size="sm"
-                />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setDeleteId(client.id)}
+        {clients.map((client) => {
+          const m = metricsMap.get(client.id);
+          return (
+            <TableRow key={client.id}>
+              <TableCell className="font-medium">
+                <Link
+                  href={`/dashboard/clients/detail/?id=${client.id}`}
+                  className="hover:underline text-primary"
                 >
-                  {t("common.delete")}
-                </Button>
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
+                  {client.name || t("clients.unnamed")}
+                </Link>
+              </TableCell>
+              <TableCell>
+                {client.enabled ? (
+                  <Badge className="bg-green-500/15 text-green-700 dark:text-green-400">
+                    {t("clients.active")}
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-500/15 text-red-700 dark:text-red-400">
+                    {t("clients.disabled")}
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-sm">
+                {m ? (
+                  <span className={m.active_connections > 0 ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}>
+                    {m.active_connections}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="text-xs font-mono">
+                {m ? (
+                  <span title={`↑${formatBytes(m.bytes_up)} ↓${formatBytes(m.bytes_down)}`}>
+                    ↑{formatBytes(m.bytes_up)} ↓{formatBytes(m.bytes_down)}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-3">
+                  <Switch
+                    checked={client.enabled}
+                    onCheckedChange={(checked: boolean) =>
+                      onToggle(client.id, checked)
+                    }
+                    size="sm"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteId(client.id)}
+                  >
+                    {t("common.delete")}
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
     <ConfirmDialog
