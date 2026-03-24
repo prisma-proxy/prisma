@@ -383,21 +383,21 @@ function parseHeaderLines(text: string): [string, string][] {
  * by useConnection.ts and do NOT appear here.
  */
 export function buildClientConfig(w: WizardState): Record<string, unknown> {
+  // Only required fields unconditionally; everything else only when non-default.
+  // Rust serde defaults fill in omitted fields, so the config stays minimal.
   const config: Record<string, unknown> = {
-    // Required fields
     server_addr: `${w.serverHost}:${w.serverPort}`,
     identity: {
       client_id: w.clientId,
       auth_secret: w.authSecret,
     },
-
-    // Transport — plain string, not an object
     transport: w.transport,
-    cipher_suite: w.cipher,
-    fingerprint: w.fingerprint,
-    quic_version: w.quicVersion,
-    transport_mode: w.transportMode,
   };
+
+  // Only include when different from Rust serde defaults
+  if (w.cipher !== "chacha20-poly1305") config.cipher_suite = w.cipher;
+  if (w.fingerprint !== "chrome") config.fingerprint = w.fingerprint;
+  if (w.transportMode !== "auto") config.transport_mode = w.transportMode;
 
   // TLS options
   if (w.skipCertVerify) config.skip_cert_verify = true;
@@ -405,22 +405,29 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
   if (w.tlsServerName) config.tls_server_name = w.tlsServerName;
   if (w.transportOnlyCipher) config.transport_only_cipher = true;
 
-  // ALPN
+  // ALPN — omit if matching default "h2,http/1.1"
   const alpn = w.alpnProtocols
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (alpn.length > 0) config.alpn_protocols = alpn;
+  const defaultAlpn = ["h2", "http/1.1"];
+  if (alpn.length > 0 && JSON.stringify(alpn) !== JSON.stringify(defaultAlpn)) {
+    config.alpn_protocols = alpn;
+  }
 
-  // Fallback order
+  // Fallback order — omit if matching default
   const fo = w.fallbackOrder
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (fo.length > 0) config.fallback_order = fo;
+  const defaultFo = ["quic-v2", "prisma-tls", "ws-cdn", "xporta"];
+  if (fo.length > 0 && JSON.stringify(fo) !== JSON.stringify(defaultFo)) {
+    config.fallback_order = fo;
+  }
 
-  // QUIC-specific
+  // QUIC-specific (only for QUIC transport)
   if (w.transport === "quic") {
+    if (w.quicVersion !== "auto") config.quic_version = w.quicVersion;
     if (w.sniSlicing) config.sni_slicing = true;
     if (w.salamanderPassword) config.salamander_password = w.salamanderPassword;
     if (w.entropyCamouflage) config.entropy_camouflage = true;
