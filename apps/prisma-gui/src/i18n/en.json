@@ -108,7 +108,10 @@
     "latencyGood": "Good",
     "latencyFair": "Fair",
     "latencyPoor": "Poor",
-    "latencyError": "Error"
+    "latencyError": "Error",
+    "importQrFromImage": "Import from Image File",
+    "noQrFound": "No QR code found in the image",
+    "decodingImage": "Decoding image…"
   },
   "rules": {
     "title": "Rules",
@@ -508,7 +511,8 @@
     "confirm": "Confirm",
     "loading": "Loading…",
     "none": "None",
-    "auto": "Auto"
+    "auto": "Auto",
+    "or": "or"
   },
   "history": {
     "recentActivity": "Recent Activity",

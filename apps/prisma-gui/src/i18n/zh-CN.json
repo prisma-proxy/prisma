@@ -108,7 +108,10 @@
     "latencyGood": "良好",
     "latencyFair": "一般",
     "latencyPoor": "较差",
-    "latencyError": "错误"
+    "latencyError": "错误",
+    "importQrFromImage": "从图片文件导入",
+    "noQrFound": "图片中未找到二维码",
+    "decodingImage": "正在解析图片…"
   },
   "rules": {
     "title": "规则",
@@ -508,7 +511,8 @@
     "confirm": "确认",
     "loading": "加载中…",
     "none": "无",
-    "auto": "自动"
+    "auto": "自动",
+    "or": "或"
   },
   "history": {
     "recentActivity": "最近活动",

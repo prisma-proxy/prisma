@@ -31,6 +31,9 @@ export const api = {
   profileFromQr:    (data: string) =>
     invoke<string>("profile_from_qr", { data }),
 
+  decodeQrImage:    (path: string) =>
+    invoke<string>("decode_qr_image", { path }),
+
   profileToUri:     (profileJson: string) =>
     invoke<string>("profile_to_uri", { profileJson }),
 

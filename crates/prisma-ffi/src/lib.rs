@@ -516,6 +516,36 @@ pub unsafe extern "C" fn prisma_profile_from_qr(
     }
 }
 
+/// Decode a QR code from an image file. Writes the decoded string content to `*out`.
+/// Caller must call `prisma_free_string` on the output.
+///
+/// # Safety
+/// `path` must be a valid non-null C string. `out` must be a valid non-null pointer.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_decode_qr_image(
+    path: *const c_char,
+    out: *mut *mut c_char,
+) -> c_int {
+    if path.is_null() || out.is_null() {
+        return PRISMA_ERR_NULL_POINTER;
+    }
+    let path_str = match unsafe { CStr::from_ptr(path) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return PRISMA_ERR_INVALID_CONFIG,
+    };
+    let content = match qr::decode_qr_from_image(path_str) {
+        Ok(c) => c,
+        Err(_) => return PRISMA_ERR_INTERNAL,
+    };
+    match CString::new(content) {
+        Ok(s) => {
+            unsafe { *out = s.into_raw() };
+            PRISMA_OK
+        }
+        Err(_) => PRISMA_ERR_INTERNAL,
+    }
+}
+
 // ── Profile sharing ──────────────────────────────────────────────────────
 
 /// Generate a `prisma://` URI from profile JSON. Caller must call `prisma_free_string`.

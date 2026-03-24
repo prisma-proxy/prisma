@@ -103,6 +103,18 @@ pub fn profile_from_qr(data: String) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+pub fn decode_qr_image(path: String) -> Result<String, String> {
+    let cstr = CString::new(path).map_err(|e| e.to_string())?;
+    let mut out: *mut c_char = std::ptr::null_mut();
+    let rc = unsafe { prisma_ffi::prisma_decode_qr_image(cstr.as_ptr(), &mut out) };
+    if rc == PRISMA_OK {
+        unsafe { read_owned_cstr(out) }.ok_or_else(|| "QR image decode returned null".into())
+    } else {
+        Err(format!("prisma_decode_qr_image error {rc}"))
+    }
+}
+
 // ── profile sharing ───────────────────────────────────────────────────────
 
 #[tauri::command]

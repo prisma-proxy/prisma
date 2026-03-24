@@ -21,6 +21,8 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 sha2 = { workspace = true }
 qrcode = { workspace = true }
+image = { workspace = true }
+rqrr = { workspace = true }
 toml = { workspace = true }
 ureq = { workspace = true }
 reqwest = { workspace = true }
