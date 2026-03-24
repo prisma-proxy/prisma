@@ -433,6 +433,8 @@ pub async fn update_rule_provider(
 
     Ok(serde_json::json!({
         "id": id,
+        "behavior": behavior,
+        "action": action,
         "rule_count": rule_count,
         "updated_at_epoch": now_epoch,
     }))

@@ -30,7 +30,7 @@ hickory-proto = "0.24"
 smoltcp = { version = "0.12", default-features = false, features = ["alloc", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp"] }
 wintun = "0.5"
 libc = "0.2"
-nix = { version = "0.29", features = ["fs", "zerocopy"] }
+nix = { version = "0.29", features = ["fs", "poll", "zerocopy"] }
 
 # Bandwidth management
 governor = "0.8"
