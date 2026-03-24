@@ -217,11 +217,12 @@ pub fn daemonize(
         .collect();
 
     let mut cmd = std::process::Command::new(&exe);
-    cmd.args(&filtered_args);
+    // Place daemon-internal flags BEFORE the subcommand — clap 4 only
+    // parses top-level args before the subcommand name.
     cmd.arg("--daemon-child");
     cmd.arg("--pid-file");
-    // Pass PID file path to child. Use OsStr so non-UTF-8 paths still work.
     cmd.arg(&pid_path);
+    cmd.args(&filtered_args);
     cmd.stdout(log);
     cmd.stderr(log_err);
 

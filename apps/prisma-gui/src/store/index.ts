@@ -80,24 +80,28 @@ export const useStore = create<PrismaStore>((set) => ({
   setConnectStartTime:  (t)    => set({ connectStartTime: t }),
 
   setStats: (s) =>
-    set((state) => ({
-      stats: s,
-      speedSamplesUp: [
-        ...state.speedSamplesUp.slice(-(MAX_SPEED_SAMPLES - 1)),
-        s.speed_up_bps / 1e6,
-      ],
-      speedSamplesDown: [
-        ...state.speedSamplesDown.slice(-(MAX_SPEED_SAMPLES - 1)),
-        s.speed_down_bps / 1e6,
-      ],
-    })),
+    set((state) => {
+      const up = state.speedSamplesUp.length >= MAX_SPEED_SAMPLES
+        ? state.speedSamplesUp.slice(1)
+        : [...state.speedSamplesUp];
+      up.push(s.speed_up_bps / 1e6);
+      const down = state.speedSamplesDown.length >= MAX_SPEED_SAMPLES
+        ? state.speedSamplesDown.slice(1)
+        : [...state.speedSamplesDown];
+      down.push(s.speed_down_bps / 1e6);
+      return { stats: s, speedSamplesUp: up, speedSamplesDown: down };
+    }),
 
   setProfiles: (p) => set({ profiles: p }),
 
   addLog: (entry) =>
-    set((state) => ({
-      logs: [...state.logs.slice(-(MAX_LOGS - 1)), entry],
-    })),
+    set((state) => {
+      const logs = state.logs.length >= MAX_LOGS
+        ? state.logs.slice(1)
+        : [...state.logs];
+      logs.push(entry);
+      return { logs };
+    }),
 
   clearLogs: () => set({ logs: [] }),
 

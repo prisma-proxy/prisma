@@ -68,8 +68,40 @@ pub struct ProxyContext {
 }
 
 impl ProxyContext {
-    /// Connect to the remote Prisma server using the configured transport.
+    /// Connect to the remote Prisma server with retry and exponential backoff.
+    ///
+    /// Retries up to 3 times (500ms, 1s backoff) to handle transient failures
+    /// such as TLS handshake EOF or connection resets.
     pub async fn connect(&self) -> Result<TransportStream> {
+        const MAX_RETRIES: u32 = 2;
+        let mut last_err = None;
+
+        for attempt in 0..=MAX_RETRIES {
+            match self.connect_once().await {
+                Ok(stream) => return Ok(stream),
+                Err(e) => {
+                    if attempt < MAX_RETRIES {
+                        let backoff =
+                            std::time::Duration::from_millis(500 * 2u64.pow(attempt));
+                        warn!(
+                            attempt = attempt + 1,
+                            max = MAX_RETRIES + 1,
+                            backoff_ms = backoff.as_millis() as u64,
+                            error = %e,
+                            "Server connection failed, retrying"
+                        );
+                        tokio::time::sleep(backoff).await;
+                    }
+                    last_err = Some(e);
+                }
+            }
+        }
+
+        Err(last_err.unwrap())
+    }
+
+    /// Single connection attempt using the configured transport.
+    async fn connect_once(&self) -> Result<TransportStream> {
         let prefer_quic_v2 = self.quic_version == "v2" || self.quic_version == "auto";
 
         let transport = if self.use_wireguard {

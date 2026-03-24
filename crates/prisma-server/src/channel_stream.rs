@@ -1,10 +1,11 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytes::{Buf, Bytes, BytesMut};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 
 type ReserveFut<T> =
     Pin<Box<dyn Future<Output = Result<mpsc::OwnedPermit<T>, mpsc::error::SendError<()>>> + Send>>;
@@ -20,6 +21,9 @@ pub struct ChannelStream {
     read_buf: BytesMut,
     /// In-flight reservation future, kept across polls so the waker stays registered.
     write_reserve: Option<ReserveFut<Bytes>>,
+    /// Optional notifier triggered after each successful write, used by XPorta
+    /// to wake the poll handler when download data arrives.
+    write_notify: Option<Arc<Notify>>,
 }
 
 impl ChannelStream {
@@ -29,6 +33,21 @@ impl ChannelStream {
             write_tx,
             read_buf: BytesMut::new(),
             write_reserve: None,
+            write_notify: None,
+        }
+    }
+
+    pub fn new_with_notify(
+        read_rx: mpsc::Receiver<Bytes>,
+        write_tx: mpsc::Sender<Bytes>,
+        notify: Arc<Notify>,
+    ) -> Self {
+        Self {
+            read_rx,
+            write_tx,
+            read_buf: BytesMut::new(),
+            write_reserve: None,
+            write_notify: Some(notify),
         }
     }
 }
@@ -80,6 +99,9 @@ impl AsyncWrite for ChannelStream {
         match fut.as_mut().poll(cx) {
             Poll::Ready(Ok(permit)) => {
                 permit.send(Bytes::copy_from_slice(buf));
+                if let Some(ref n) = this.write_notify {
+                    n.notify_one();
+                }
                 Poll::Ready(Ok(buf.len()))
             }
             Poll::Ready(Err(_)) => Poll::Ready(Err(std::io::Error::new(

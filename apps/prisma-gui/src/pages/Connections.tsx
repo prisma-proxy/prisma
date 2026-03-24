@@ -86,7 +86,7 @@ export default function Connections() {
   useEffect(() => {
     const hasActive = connections.some((c) => c.status === "active");
     if (!hasActive) return;
-    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    const timer = setInterval(() => setTick((t) => t + 1), 3000);
     return () => clearInterval(timer);
   }, [connections]);
 

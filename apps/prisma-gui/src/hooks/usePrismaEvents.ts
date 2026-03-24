@@ -33,6 +33,12 @@ interface PrismaEvent {
   code?: string;
 }
 
+// Throttle stats processing to at most once per animation frame.
+// When the backend sends stats faster than the display can render,
+// intermediate updates are dropped — only the latest matters.
+let pendingStats: Stats | null = null;
+let statsRafId: number | null = null;
+
 export function usePrismaEvents() {
   useEffect(() => {
     const unlisten = listen<string>("prisma://event", (event) => {
@@ -110,39 +116,43 @@ export function usePrismaEvents() {
           break;
 
         case "stats": {
-          const s = data as unknown as Stats;
-          const prevStats = store.stats;
-          store.setStats(s);
-          // Track peak speeds for the active profile
-          const { activeProfileIdx: aidx, profiles: profs } = store;
-          const activeProf = aidx !== null ? profs[aidx] : profs[0];
-          if (activeProf) {
-            useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
-          }
-          // Track data usage deltas
-          if (prevStats) {
-            const deltaUp = Math.max(0, s.bytes_up - prevStats.bytes_up);
-            const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
-            if (deltaUp > 0 || deltaDown > 0) {
-              useDataUsage.getState().recordUsage(deltaUp, deltaDown);
-              // Distribute traffic deltas to active connections for analytics.
-              // If no active connections are tracked (log parsing didn't capture
-              // them or they closed too quickly), attribute to "unknown" so that
-              // daily totals and summary stats still accumulate.
-              const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
-              const analytics = useAnalytics.getState();
-              if (activeConns.length > 0) {
-                const perUp = Math.floor(deltaUp / activeConns.length);
-                const perDown = Math.floor(deltaDown / activeConns.length);
-                for (const conn of activeConns) {
-                  const domain = conn.destination.replace(/:\d+$/, "");
-                  analytics.addTraffic(domain, perUp, perDown, conn.rule);
-                }
-              } else {
-                // Fallback: record unattributed traffic so totals are accurate
-                analytics.addTraffic("(unattributed)", deltaUp, deltaDown);
+          pendingStats = data as unknown as Stats;
+          if (statsRafId === null) {
+            statsRafId = requestAnimationFrame(() => {
+              statsRafId = null;
+              if (!pendingStats) return;
+              const s = pendingStats;
+              pendingStats = null;
+              const st = useStore.getState();
+              const prevStats = st.stats;
+              st.setStats(s);
+              // Track peak speeds for the active profile
+              const { activeProfileIdx: aidx, profiles: profs } = st;
+              const activeProf = aidx !== null ? profs[aidx] : profs[0];
+              if (activeProf) {
+                useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
               }
-            }
+              // Track data usage deltas
+              if (prevStats) {
+                const deltaUp = Math.max(0, s.bytes_up - prevStats.bytes_up);
+                const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
+                if (deltaUp > 0 || deltaDown > 0) {
+                  useDataUsage.getState().recordUsage(deltaUp, deltaDown);
+                  const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
+                  const analytics = useAnalytics.getState();
+                  if (activeConns.length > 0) {
+                    const perUp = Math.floor(deltaUp / activeConns.length);
+                    const perDown = Math.floor(deltaDown / activeConns.length);
+                    for (const conn of activeConns) {
+                      const domain = conn.destination.replace(/:\d+$/, "");
+                      analytics.addTraffic(domain, perUp, perDown, conn.rule);
+                    }
+                  } else {
+                    analytics.addTraffic("(unattributed)", deltaUp, deltaDown);
+                  }
+                }
+              }
+            });
           }
           break;
         }

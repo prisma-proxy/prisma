@@ -139,7 +139,7 @@ export default React.memo(function SpeedGraph() {
       let tx = x - tw / 2;
       tx = Math.max(pad.left, Math.min(tx, w - pad.right - tw));
 
-      const ty = pad.top - th - 4;
+      const ty = pad.top + 4;
 
       // Background
       ctx.fillStyle = "hsl(240 10% 3.9% / 0.85)";
@@ -159,7 +159,8 @@ export default React.memo(function SpeedGraph() {
   }, [speedSamplesDown, speedSamplesUp, maxVal, height]);
 
   useEffect(() => {
-    draw();
+    const id = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(id);
   }, [draw]);
 
   useEffect(() => {
@@ -169,6 +170,16 @@ export default React.memo(function SpeedGraph() {
     ro.observe(container);
     return () => ro.disconnect();
   }, [draw]);
+
+  const mouseDrawRef = useRef<number | null>(null);
+  function scheduleMouseDraw() {
+    if (mouseDrawRef.current === null) {
+      mouseDrawRef.current = requestAnimationFrame(() => {
+        mouseDrawRef.current = null;
+        draw();
+      });
+    }
+  }
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -180,17 +191,17 @@ export default React.memo(function SpeedGraph() {
     const n = speedSamplesDown.length;
     if (n < 2 || x < pad.left || x > rect.width - pad.right) {
       tooltipRef.current = null;
-      draw();
+      scheduleMouseDraw();
       return;
     }
     const idx = Math.round(((x - pad.left) / plotW) * (n - 1));
     tooltipRef.current = { x, idx };
-    draw();
+    scheduleMouseDraw();
   }
 
   function handleMouseLeave() {
     tooltipRef.current = null;
-    draw();
+    scheduleMouseDraw();
   }
 
   return (

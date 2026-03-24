@@ -84,15 +84,27 @@ fn extract_cookie(headers: &HeaderMap, cookie_name: &str) -> Option<String> {
 
 /// Validate session cookie and return session_id.
 fn validate_session(state: &XPortaState, headers: &HeaderMap) -> Option<[u8; 16]> {
-    let token = extract_cookie(headers, &state.cookie_name)?;
+    let token = match extract_cookie(headers, &state.cookie_name) {
+        Some(t) => t,
+        None => {
+            warn!("XPorta: no session cookie '{}' found in request", state.cookie_name);
+            return None;
+        }
+    };
 
-    // We need to try against all known client IDs in the session
-    // Since the token includes session_id, we verify it and look up the session
-    // The client_id is embedded in the session, so we try to decode first and then verify
+    let token_bytes = match util::hex_decode(&token) {
+        Some(b) => b,
+        None => {
+            warn!("XPorta: cookie hex decode failed (len={})", token.len());
+            return None;
+        }
+    };
 
-    // Parse the token to extract session_id, then look up client_id from session
-    let token_bytes = util::hex_decode(&token)?;
     if token_bytes.len() != 56 {
+        warn!(
+            len = token_bytes.len(),
+            "XPorta: invalid token length (expected 56)"
+        );
         return None;
     }
 
@@ -100,13 +112,26 @@ fn validate_session(state: &XPortaState, headers: &HeaderMap) -> Option<[u8; 16]
     session_id.copy_from_slice(&token_bytes[0..16]);
 
     // Look up session to get client_id
-    let session = state.sessions.get(&session_id)?;
+    let session = match state.sessions.get(&session_id) {
+        Some(s) => s,
+        None => {
+            warn!("XPorta: session not found (expired or handler exited)");
+            return None;
+        }
+    };
     let client_uuid = session.client_id;
     drop(session);
 
     // Now verify the full token with the client_id
     let client_id_bytes = *client_uuid.as_bytes();
-    let result = verify_cookie_token(&state.cookie_key, &token, &client_id_bytes, now_secs())?;
+    let result = match verify_cookie_token(&state.cookie_key, &token, &client_id_bytes, now_secs())
+    {
+        Some(r) => r,
+        None => {
+            warn!("XPorta: token verification failed (expired or MAC mismatch)");
+            return None;
+        }
+    };
 
     // Update last activity
     if let Some(session) = state.sessions.get(&result.0) {
@@ -207,11 +232,13 @@ pub async fn session_init_handler(
     let (upload_tx, upload_rx) = mpsc::channel::<Bytes>(256);
     let (download_tx, download_rx) = mpsc::channel::<Bytes>(256);
 
+    let poll_notify = Arc::new(Notify::new());
+
     let session = XPortaSession {
         client_id: client_uuid,
         upload_tx,
         download_rx: Arc::new(Mutex::new(download_rx)),
-        poll_notify: Arc::new(Notify::new()),
+        poll_notify: poll_notify.clone(),
         upload_reassembler: Arc::new(Mutex::new(Reassembler::new())),
         download_seq: AtomicU32::new(0),
         last_activity: AtomicU64::new(now_secs()),
@@ -219,8 +246,9 @@ pub async fn session_init_handler(
 
     state.sessions.insert(session_id, session);
 
-    // Spawn the PrismaVeil protocol handler with XPortaServerStream
-    let xporta_stream = XPortaServerStream::new(upload_rx, download_tx);
+    // Spawn the PrismaVeil protocol handler with XPortaServerStream.
+    // Pass poll_notify so the stream wakes the poll handler when download data arrives.
+    let xporta_stream = XPortaServerStream::new_with_notify(upload_rx, download_tx, poll_notify);
     let cdn = state.cdn.clone();
     let sessions = state.sessions.clone();
     let sid = session_id;
@@ -349,13 +377,12 @@ pub async fn upload_handler(
         }
     }
 
-    // Try to piggyback download data
+    // Try to piggyback download data (non-blocking to avoid stalling uploads
+    // when the poll handler holds the Mutex)
     let mut dl_seq = None;
     let mut dl_data = None;
-    {
-        let mut rx = download_rx.lock().await;
+    if let Ok(mut rx) = download_rx.try_lock() {
         if let Ok(data) = rx.try_recv() {
-            // Re-check session for sequence counter
             if let Some(session) = state.sessions.get(&session_id) {
                 let s = session.download_seq.fetch_add(1, Ordering::Relaxed);
                 info!(
@@ -423,49 +450,46 @@ pub async fn poll_handler(
         }
     };
 
-    // Try to collect download data with timeout
+    // Try to collect download data.
+    // IMPORTANT: Release the Mutex before any long wait to avoid blocking
+    // upload piggybacking and concurrent poll handlers.
     let mut items: Vec<(u32, Bytes)> = Vec::new();
 
+    // Fast path: drain immediately available data
     {
         let mut rx = download_rx.lock().await;
-
-        // First, try non-blocking recv for any immediately available data
         while let Ok(data) = rx.try_recv() {
             if let Some(session) = state.sessions.get(&session_id) {
                 let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
                 items.push((seq, data));
             }
             if items.len() >= 16 {
-                break; // Batch limit
+                break;
             }
         }
+    } // Mutex released here
 
-        // If no immediate data, wait with timeout
-        if items.is_empty() {
-            let timeout = tokio::time::Duration::from_secs(55);
-            match tokio::time::timeout(timeout, rx.recv()).await {
-                Ok(Some(data)) => {
-                    if let Some(session) = state.sessions.get(&session_id) {
-                        let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
-                        items.push((seq, data));
-                    }
-                    // Drain any more immediately available
-                    while let Ok(data) = rx.try_recv() {
-                        if let Some(session) = state.sessions.get(&session_id) {
-                            let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
-                            items.push((seq, data));
-                        }
-                        if items.len() >= 16 {
-                            break;
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // Channel closed — session ended
-                }
-                Err(_) => {
-                    // Timeout — return empty items (normal)
-                }
+    // If no immediate data, wait for notification WITHOUT holding the Mutex
+    if items.is_empty() {
+        let notify = state
+            .sessions
+            .get(&session_id)
+            .map(|s| s.poll_notify.clone());
+        if let Some(notify) = notify {
+            tokio::select! {
+                _ = notify.notified() => {}
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(25)) => {}
+            }
+        }
+        // Re-acquire and drain
+        let mut rx = download_rx.lock().await;
+        while let Ok(data) = rx.try_recv() {
+            if let Some(session) = state.sessions.get(&session_id) {
+                let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
+                items.push((seq, data));
+            }
+            if items.len() >= 16 {
+                break;
             }
         }
     }
