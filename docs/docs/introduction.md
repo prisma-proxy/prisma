@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.1.0** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.1.4** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
 
 ## Features
 
@@ -145,7 +145,7 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 2.0.0
+## What's New in 2.1.4
 
 - **Full project synchronization** — version references, documentation, and feature awareness aligned across all subprojects
 - **Connection pool documentation** — `connection_pool.enabled` fully documented in client config reference

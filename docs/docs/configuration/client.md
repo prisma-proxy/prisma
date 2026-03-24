@@ -7,7 +7,7 @@ sidebar_position: 2
 The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.1.4**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -28,8 +28,8 @@ This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only
 | `quic_version` | string | `"auto"` | QUIC version: `"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | Transport mode: `"auto"` or explicit name |
 | `fallback_order` | string[] | `["quic-v2", "prisma-tls", "ws-cdn", "xporta"]` | Transport fallback order for auto mode |
-| `sni_slicing` | bool | `false` | SNI slicing for QUIC (fragment ClientHello across CRYPTO frames) |
-| `entropy_camouflage` | bool | `false` | Entropy camouflage for Salamander/raw UDP |
+| `sni_slicing` | bool | `false` | SNI slicing for QUIC -- fragments the TLS ClientHello across multiple QUIC CRYPTO frames, preventing middleboxes from reading the SNI in a single packet. Effective against SNI-based filtering without requiring ECH support. |
+| `entropy_camouflage` | bool | `false` | Entropy camouflage for Salamander/raw UDP -- reshapes the byte distribution of encrypted packets to match typical HTTPS traffic patterns, defeating entropy-based DPI classifiers that flag high-entropy UDP flows. |
 | `transport_only_cipher` | bool | `false` | Use transport-only cipher (BLAKE3 MAC, no app-layer encryption). Only safe when transport provides confidentiality (TLS/QUIC). Server must also allow it. |
 | `server_key_pin` | string? | -- | SHA-256 hash of server's ephemeral public key (hex). Provides end-to-end server authentication independent of TLS. |
 | `salamander_password` | string? | -- | Salamander UDP obfuscation password (QUIC only) |
@@ -58,6 +58,27 @@ idle_timeout_secs = 600
 
 :::tip
 Connection pooling is most beneficial when using transports with expensive handshakes (PrismaTLS, WebSocket via CDN). For QUIC, the built-in multiplexing makes pooling less impactful.
+:::
+
+## `[connection_retry]` -- Automatic retry on failure
+
+When a transport connection attempt fails, the client automatically retries with exponential backoff. This is especially useful for unstable networks or during transport fallback.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_attempts` | u32 | `3` | Maximum number of connection retry attempts before giving up |
+| `initial_backoff_ms` | u64 | `500` | Initial backoff delay in milliseconds. Doubles after each failed attempt (500ms, 1000ms, 2000ms). |
+
+Example:
+
+```toml
+[connection_retry]
+max_attempts = 3
+initial_backoff_ms = 500
+```
+
+:::note
+Connection retry applies to the initial transport connection only. Once connected, transport-level keepalives and reconnection are handled by the transport itself (e.g., QUIC connection migration).
 :::
 
 ## `[identity]` -- Client credentials

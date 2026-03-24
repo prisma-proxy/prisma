@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.0.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.1.4**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -194,6 +194,33 @@ Each rule in `[[routing.rules]]`:
 | `h3_cover_site` | string? | -- | Upstream URL for HTTP/3 masquerade cover site |
 | `h3_static_dir` | string? | -- | Local static files directory for H3 masquerade (fallback when `h3_cover_site` is not set) |
 | `salamander_password` | string? | -- | Salamander UDP obfuscation password (QUIC only) |
+
+## `[camouflage.tls_probe_guard]` -- TLS Probe Detection
+
+Automatically detects and blocks IPs that exhibit repeated TLS handshake failures -- a strong indicator of active probing by censorship systems. When enabled, the server tracks per-IP handshake failure rates within a sliding window and temporarily blocks offending IPs.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable TLS probe guard (active by default when camouflage is enabled) |
+| `max_failures` | u32 | `20` | Maximum handshake failures per IP before blocking |
+| `failure_window_secs` | u64 | `120` | Sliding window duration in seconds for counting failures |
+| `block_duration_secs` | u64 | `120` | Duration in seconds to block an offending IP |
+
+Example:
+
+```toml
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20
+failure_window_secs = 120
+block_duration_secs = 120
+```
+
+:::tip Tuning
+- **Lower `max_failures`** (e.g., 5-10) for aggressive defense in heavily probed environments, at the risk of blocking legitimate clients with flaky TLS stacks.
+- **Increase `failure_window_secs`** (e.g., 300-600) to catch slow, distributed probing campaigns.
+- **Increase `block_duration_secs`** (e.g., 3600) to impose longer penalties on confirmed probers.
+:::
 
 ## `[ssh]` -- SSH transport
 
@@ -448,6 +475,13 @@ alpn_protocols = ["h2", "http/1.1"]
 # salamander_password = "shared-obfuscation-key"  # Salamander UDP obfuscation (QUIC)
 # h3_cover_site = "https://example.com"           # HTTP/3 masquerade cover site
 # h3_static_dir = "/var/www/html"                 # OR serve local static files for H3
+
+# TLS probe guard (auto-block IPs with repeated handshake failures)
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20
+failure_window_secs = 120
+block_duration_secs = 120
 
 # SSH transport (disguise as SSH server)
 # [ssh]

@@ -41,10 +41,10 @@ The app has **10 pages** accessible via sidebar navigation (collapsible) or bott
 | Page | Description |
 |------|-------------|
 | **Home** | Connection toggle, real-time speed graph, session stats (upload/download speed, data transferred, uptime), proxy mode selector (SOCKS5/System Proxy/TUN/Per-App), connection quality indicator, daily data usage, connection history |
-| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate and bulk export/import. **Latency testing** — tap a server to run a real-time latency test; results are displayed inline and persisted for sorting |
+| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a **tabbed dialog** with tabs for Connection, Auth, Transport, Routing & TUN, and Advanced settings. **5 preset templates**: Stealth Cloudflare (XPorta + CDN), Low Latency QUIC, PrismaTLS Direct, SSH Tunnel, and WireGuard VPN -- each pre-fills transport-specific fields for quick setup. Share profiles as TOML, prisma:// URI, or QR code. Import from QR scan, QR image file, or JSON file. Duplicate and bulk export/import. **Latency testing** -- tap a server to run a real-time latency test; results are displayed inline and persisted for sorting |
 | **Subscriptions** | Manage subscription URLs that auto-update server profiles. Add/edit/delete subscriptions with custom update intervals (1h-7d). Manual refresh, auto-refresh on launch, import from clipboard or QR. Subscription status indicators (last updated, server count, expiry date). Supports Prisma, Clash, and base64 subscription formats |
 | **Proxy Groups** | Visual proxy group manager matching the [Routing Rules](/docs/features/routing-rules#proxy-groups-v090) configuration. Create Select/AutoUrl/Fallback/LoadBalance groups. Drag-and-drop server ordering. Real-time latency indicators per server. Manual server selection for Select groups. URL test configuration for AutoUrl/Fallback groups |
-| **Import** | Unified import page for adding servers and profiles from multiple sources: QR code scan (camera on mobile, paste on desktop), `prisma://` URI, clipboard detection, TOML file, JSON file, subscription URL, and Clash YAML. Batch import with preview and selective add |
+| **Import** | Unified import page for adding servers and profiles from multiple sources: QR code scan (camera on mobile, paste on desktop), QR code from image file (select a screenshot or saved QR image), `prisma://` URI, clipboard detection, TOML file, JSON file, subscription URL, and Clash YAML. Batch import with preview and selective add |
 | **Connections** | Real-time active connections list showing destination, rule matched, proxy chain, upload/download speed, and total data per connection. Close individual connections. Filter by domain, IP, or rule. Sort by speed, data, or duration. Connection metadata (start time, transport, matched routing rule) |
 | **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT, or proxy group name. Import/export rules as JSON. Rule provider management (add remote rule set URLs) |
 | **Logs** | Real-time log viewer with virtualized scrolling, search with text highlighting, level filter (ALL/ERROR/WARN/INFO/DEBUG), level statistics badges, pause/resume auto-scroll, export to text file |
@@ -137,7 +137,7 @@ Download the appropriate installer for your platform from the [releases page](ht
 | System proxy | ✓ | ✓ | — |
 | TUN mode | ✓ | ✓ (VPN) | ✓ (NEPacketTunnel) |
 | Per-app proxy | ✓ | ✓ | ✓ (NEAppProxy) |
-| QR code import | ✓ (paste URI) | ✓ (camera) | ✓ (camera) |
+| QR code import | ✓ (paste URI / image file) | ✓ (camera / image file) | ✓ (camera / image file) |
 | Profile sharing (TOML/URI/QR) | ✓ | ✓ | ✓ |
 | Subscriptions | ✓ | ✓ | ✓ |
 | Proxy groups | ✓ | ✓ | ✓ |
@@ -247,7 +247,7 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ## Mobile Support (Tauri 2)
 
-As of v2.0.0, **prisma-gui** uses **Tauri 2 mobile targets** for Android and iOS. There are no longer separate native apps (`prisma-gui-android`, `prisma-gui-ios`). The same Tauri 2 + React codebase compiles to mobile targets, with `prisma-ffi` linked as the native backend through Tauri's mobile shell.
+As of v2.1.4, **prisma-gui** uses **Tauri 2 mobile targets** for Android and iOS. There are no longer separate native apps (`prisma-gui-android`, `prisma-gui-ios`). The same Tauri 2 + React codebase compiles to mobile targets, with `prisma-ffi` linked as the native backend through Tauri's mobile shell.
 
 Mobile builds have full feature parity with the desktop client, including subscriptions, proxy groups, the unified import page, active connections view, latency testing, rule providers, and full i18n (English + Chinese).
 

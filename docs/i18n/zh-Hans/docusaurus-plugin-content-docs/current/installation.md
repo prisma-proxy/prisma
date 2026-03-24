@@ -7,11 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # 安装
 
-Prisma v2.0.0 支持 Linux、macOS、Windows、FreeBSD、Docker 和移动平台（Android/iOS 通过 prisma-gui）。选择最适合您环境的安装方式。
+Prisma v2.1.4 支持 Linux、macOS、Windows、FreeBSD、Docker 和移动平台（Android/iOS 通过 prisma-gui）。选择最适合您环境的安装方式。
 
 ## 一键安装
 
-最快的安装方式。自动检测操作系统和架构，下载 v2.0.0 二进制文件并放置到 `PATH` 中。
+最快的安装方式。自动检测操作系统和架构，下载 v2.1.4 二进制文件并放置到 `PATH` 中。
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
@@ -58,20 +58,20 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 
 ### 安装指定版本
 
-固定到 v2.0.0（或其他发布标签）：
+固定到 v2.1.4（或其他发布标签）：
 
 <Tabs>
   <TabItem value="linux" label="Linux / macOS" default>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v2.0.0
+curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.sh | bash -s -- --version v2.1.4
 ```
 
   </TabItem>
   <TabItem value="windows" label="Windows (PowerShell)">
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v2.0.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/install.ps1))) -Version v2.1.4
 ```
 
   </TabItem>
@@ -125,7 +125,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | 选项 | 描述 |
 |------|------|
 | `--setup` | 生成凭证、TLS 证书和示例配置文件 |
-| `--version VER` | 安装指定版本（如 `v2.0.0`）。默认：最新版本 |
+| `--version VER` | 安装指定版本（如 `v2.1.4`）。默认：最新版本 |
 | `--dir DIR` | 安装目录。默认：`/usr/local/bin` |
 | `--config-dir DIR` | `--setup` 的配置文件输出目录。默认：当前目录 |
 | `--uninstall` | 删除 prisma 二进制文件 |
@@ -139,7 +139,7 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 | 选项 | 描述 |
 |------|------|
 | `-Setup` | 生成凭证、TLS 证书和示例配置文件 |
-| `-Version VER` | 安装指定版本（如 `v2.0.0`）。默认：最新版本 |
+| `-Version VER` | 安装指定版本（如 `v2.1.4`）。默认：最新版本 |
 | `-Dir DIR` | 安装目录。默认：`%LOCALAPPDATA%\prisma` |
 | `-ConfigDir DIR` | `-Setup` 的配置文件输出目录。默认：当前目录 |
 | `-Uninstall` | 删除 prisma 二进制文件并清理 PATH |
@@ -152,55 +152,55 @@ curl -fsSL https://raw.githubusercontent.com/Yamimega/prisma/master/scripts/inst
 
 ## 各平台手动下载
 
-如果您更倾向于直接下载 v2.0.0 二进制文件：
+如果您更倾向于直接下载 v2.1.4 二进制文件：
 
 <Tabs>
   <TabItem value="linux-x64" label="Linux x86_64" default>
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-linux-amd64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="linux-arm64" label="Linux aarch64">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-linux-arm64 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="linux-armv7" label="Linux ARMv7">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-linux-armv7 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-linux-armv7 -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="macos" label="macOS">
 
 ```bash
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-darwin-$(uname -m | sed s/x86_64/amd64/) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-darwin-$(uname -m | sed s/x86_64/amd64/) -o /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
   <TabItem value="windows-x64" label="Windows x64">
 
 ```powershell
-New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
+New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
 ```
 
   </TabItem>
   <TabItem value="windows-arm64" label="Windows ARM64">
 
 ```powershell
-New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-windows-arm64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
+New-Item -Force -ItemType Directory "$env:LOCALAPPDATA\prisma" | Out-Null; Invoke-WebRequest -Uri "https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-windows-arm64.exe" -OutFile "$env:LOCALAPPDATA\prisma\prisma.exe"; [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$env:LOCALAPPDATA\prisma", "User")
 ```
 
   </TabItem>
   <TabItem value="freebsd" label="FreeBSD">
 
 ```bash
-fetch -o /usr/local/bin/prisma https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-freebsd-amd64 && chmod +x /usr/local/bin/prisma
+fetch -o /usr/local/bin/prisma https://github.com/Yamimega/prisma/releases/download/v2.1.4/prisma-freebsd-amd64 && chmod +x /usr/local/bin/prisma
 ```
 
   </TabItem>
@@ -208,16 +208,16 @@ fetch -o /usr/local/bin/prisma https://github.com/Yamimega/prisma/releases/downl
 
 ## Docker
 
-直接使用 Docker 运行 v2.0.0 服务端：
+直接使用 Docker 运行 v2.1.4 服务端：
 
 ```bash
-docker run --rm -v $(pwd):/config ghcr.io/yamimega/prisma:2.0.0 server -c /config/server.toml
+docker run --rm -v $(pwd):/config ghcr.io/yamimega/prisma:2.1.4 server -c /config/server.toml
 ```
 
 运行客户端：
 
 ```bash
-docker run --rm -v $(pwd):/config -p 1080:1080 -p 8080:8080 ghcr.io/yamimega/prisma:2.0.0 client -c /config/client.toml
+docker run --rm -v $(pwd):/config -p 1080:1080 -p 8080:8080 ghcr.io/yamimega/prisma:2.1.4 client -c /config/client.toml
 ```
 
 使用 Docker Compose：
@@ -226,7 +226,7 @@ docker run --rm -v $(pwd):/config -p 1080:1080 -p 8080:8080 ghcr.io/yamimega/pri
 version: "3.8"
 services:
   prisma-server:
-    image: ghcr.io/yamimega/prisma:2.0.0
+    image: ghcr.io/yamimega/prisma:2.1.4
     command: server -c /config/server.toml
     volumes:
       - ./server.toml:/config/server.toml:ro
@@ -300,7 +300,7 @@ sudo cp target/release/prisma /usr/local/bin/
 
 ## 预编译二进制文件
 
-以下目标平台的 v2.0.0 预编译二进制文件通过 GitHub Releases 提供：
+以下目标平台的 v2.1.4 预编译二进制文件通过 GitHub Releases 提供：
 
 | 平台 | 架构 |
 |------|------|

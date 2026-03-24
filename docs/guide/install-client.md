@@ -48,9 +48,9 @@ Download `prisma-gui-macos.dmg`, open it, and drag Prisma to Applications.
 
 ### Linux
 
-**Ubuntu/Debian:** `sudo dpkg -i prisma-gui_2.0.0_amd64.deb`
+**Ubuntu/Debian:** `sudo dpkg -i prisma-gui_2.1.4_amd64.deb`
 
-**AppImage:** `chmod +x prisma-gui-2.0.0.AppImage && ./prisma-gui-2.0.0.AppImage`
+**AppImage:** `chmod +x prisma-gui-2.1.4.AppImage && ./prisma-gui-2.1.4.AppImage`
 
 ## Option 2: prisma CLI
 
@@ -76,7 +76,7 @@ Download from [GitHub Releases](https://github.com/Yamimega/prisma/releases/late
 
 ```bash
 prisma --version
-# Expected: prisma 2.0.0
+# Expected: prisma 2.1.4
 ```
 
 ## Next step

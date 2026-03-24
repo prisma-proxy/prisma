@@ -141,6 +141,31 @@ auth_secret = "your-hex-secret"
 | `tls_server_name` | string? | — | TLS SNI 服务器名称（默认使用 `server_addr` 中的主机名） |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS ALPN 协议（必须与服务端匹配） |
 
+## TLS 探测防御
+
+除了诱饵回退之外，Prisma v2.1.4 还包含 **TLS 探测防御**功能，可自动检测并封锁出现重复 TLS 握手失败的 IP。这是主动探测的强烈信号——审查系统通常会尝试快速连接序列来对服务器进行指纹识别。
+
+启用后（伪装激活时默认开启），探测防御在可配置的滑动窗口内追踪每个 IP 的握手失败次数。一旦某个 IP 超过阈值，它将被临时封锁。
+
+```toml
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20           # 封锁前每 IP 允许的失败次数
+failure_window_secs = 120   # 滑动窗口（秒）
+block_duration_secs = 120   # 封锁持续时间（秒）
+```
+
+### 调优指南
+
+| 场景 | 推荐设置 |
+|------|---------|
+| 标准部署 | 默认值（20 次失败 / 120 秒窗口 / 120 秒封锁） |
+| 被频繁探测的服务器 | `max_failures = 5`，`block_duration_secs = 3600` |
+| 共享主机（多客户端） | `max_failures = 50`，`failure_window_secs = 300` |
+| 调试连接问题 | `enabled = false`（临时禁用） |
+
+探测防御与诱饵回退协同工作——通过 TLS 握手但未通过 PrismaVeil 认证的探测者由诱饵回退处理，而连 TLS 都无法完成的探测者（例如发送随机字节）则被探测防御捕获。
+
 ## PrismaTLS（高级部署推荐）
 
 对于存在主动探测的环境，PrismaTLS 是推荐的主动探测抵抗方案，可替代基本伪装。PrismaTLS 将认证信息隐藏在 TLS padding 扩展中，并使用字节级 ClientHello 指纹构建来模拟真实浏览器，提供比诱饵回退更强的保护。详见[反检测](../features/anti-detection.md#prismatls)文档了解完整细节。

@@ -174,7 +174,9 @@ Changes take effect immediately — no server restart required.
 
 Visual routing rules editor:
 - **Rule list** — all rules sorted by priority, showing condition, action, and enabled status
+- **Inline edit** — click any rule field (condition, value, action) to edit it directly in the table without opening a dialog. Changes are saved immediately via the management API.
 - **Rule editor** — dialog form for creating new rules with condition type, value, and action
+- **Expanded rule types** — supports DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, PORT, and ALL rule types with auto-complete suggestions
 - **Toggle/delete** — enable, disable, or remove rules inline
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule types.
@@ -216,7 +218,8 @@ Traffic shaping visualization:
 ## Additional Features
 
 - **i18n** — full English and Simplified Chinese translations, switchable from the header
-- **Theme** — dark, light, and system mode, switchable from the header
+- **Theme toggle** — dark, light, and system mode, switchable from the header. Preference is persisted in localStorage and applied on page load.
+- **Toast notification system** — non-blocking toast notifications for operation feedback (success, error, warning, info). Toasts auto-dismiss after 5 seconds and stack vertically when multiple appear. Used for config save confirmations, client operations, rule changes, and API errors.
 - **Global search** — Ctrl+K command palette searching pages, clients, and config keys
 - **Data export** — export tables as CSV/JSON and charts as PNG
 - **Alert badge** — bell icon in header showing active alerts with severity levels

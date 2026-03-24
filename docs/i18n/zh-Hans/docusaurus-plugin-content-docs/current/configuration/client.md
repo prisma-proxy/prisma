@@ -7,7 +7,7 @@ sidebar_position: 2
 客户端通过 TOML 文件配置（默认：`client.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.0.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.1.4**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -28,8 +28,8 @@ sidebar_position: 2
 | `quic_version` | string | `"auto"` | QUIC 版本：`"v2"` / `"v1"` / `"auto"` |
 | `transport_mode` | string | `"auto"` | 传输模式：`"auto"` 或显式名称 |
 | `fallback_order` | string[] | `["quic-v2", "prisma-tls", "ws-cdn", "xporta"]` | 自动模式的传输回退顺序 |
-| `sni_slicing` | bool | `false` | QUIC SNI 分片（将 ClientHello 分片到多个 CRYPTO 帧中） |
-| `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装 |
+| `sni_slicing` | bool | `false` | QUIC SNI 分片——将 TLS ClientHello 分片到多个 QUIC CRYPTO 帧中，防止中间设备在单个数据包中读取 SNI。无需 ECH 支持即可有效对抗基于 SNI 的过滤。 |
+| `entropy_camouflage` | bool | `false` | Salamander/原始 UDP 的熵伪装——重塑加密数据包的字节分布以匹配典型 HTTPS 流量模式，击败标记高熵 UDP 流的基于熵的 DPI 分类器。 |
 | `transport_only_cipher` | bool | `false` | 使用仅传输层加密模式（BLAKE3 MAC，无应用层加密）。仅当传输层已提供加密（TLS/QUIC）时安全。服务端也须启用。 |
 | `server_key_pin` | string? | -- | 服务端临时公钥的 SHA-256 哈希（十六进制）。提供独立于 TLS 的端到端服务器认证。 |
 | `salamander_password` | string? | -- | Salamander UDP 混淆密码（仅 QUIC） |
@@ -58,6 +58,27 @@ idle_timeout_secs = 600
 
 :::tip
 连接池在使用握手开销较大的传输方式（PrismaTLS、通过 CDN 的 WebSocket）时最为有效。对于 QUIC，其内置多路复用使得池化效果不太明显。
+:::
+
+## `[connection_retry]` -- 连接失败自动重试
+
+当传输连接尝试失败时，客户端会自动以指数退避策略重试。这在不稳定的网络或传输回退期间特别有用。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `max_attempts` | u32 | `3` | 放弃前的最大连接重试次数 |
+| `initial_backoff_ms` | u64 | `500` | 初始退避延迟（毫秒）。每次失败后加倍（500ms、1000ms、2000ms）。 |
+
+示例：
+
+```toml
+[connection_retry]
+max_attempts = 3
+initial_backoff_ms = 500
+```
+
+:::note
+连接重试仅适用于初始传输连接。连接建立后，传输层的保活和重连由传输本身处理（如 QUIC 连接迁移）。
 :::
 
 ## `[identity]` -- 客户端凭证

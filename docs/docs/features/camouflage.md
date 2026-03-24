@@ -141,6 +141,31 @@ auth_secret = "your-hex-secret"
 | `tls_server_name` | string? | — | TLS SNI server name (defaults to hostname in `server_addr`) |
 | `alpn_protocols` | string[] | `["h2", "http/1.1"]` | TLS ALPN protocols (must match server) |
 
+## TLS Probe Guard
+
+In addition to decoy fallback, Prisma v2.1.4 includes a **TLS probe guard** that automatically detects and blocks IPs exhibiting repeated TLS handshake failures. This is a strong indicator of active probing -- censorship systems often attempt rapid connection sequences to fingerprint the server.
+
+When enabled (the default when camouflage is active), the probe guard tracks per-IP handshake failure counts within a configurable sliding window. Once an IP exceeds the threshold, it is temporarily blocked.
+
+```toml
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20           # failures per IP before blocking
+failure_window_secs = 120   # sliding window (seconds)
+block_duration_secs = 120   # block duration (seconds)
+```
+
+### Tuning guidance
+
+| Scenario | Recommended settings |
+|----------|---------------------|
+| Standard deployment | Defaults (20 failures / 120s window / 120s block) |
+| Heavily probed server | `max_failures = 5`, `block_duration_secs = 3600` |
+| Shared hosting (many clients) | `max_failures = 50`, `failure_window_secs = 300` |
+| Debugging connectivity | `enabled = false` (temporarily disable) |
+
+The probe guard works alongside the decoy fallback -- probers that pass the TLS handshake but fail the PrismaVeil authentication are handled by the decoy fallback, while probers that cannot even complete TLS (e.g., sending random bytes) are caught by the probe guard.
+
 ## PrismaTLS (Recommended for Advanced Deployments)
 
 For environments with active probing, PrismaTLS is the recommended approach for active probing resistance, replacing basic camouflage. PrismaTLS hides authentication inside the TLS padding extension and uses byte-level ClientHello fingerprint construction to match real browsers, providing stronger protection than decoy fallback alone. See the [Anti-Detection](../features/anti-detection.md#prismatls) documentation for full details.

@@ -174,7 +174,7 @@ poll_concurrency = 3       # 1-8
 upload_concurrency = 4     # 1-8
 max_payload_size = 65536   # bytes
 poll_timeout_secs = 55     # 10-90
-extra_headers = [["X-App-Version", "2.1.0"]]
+extra_headers = [["X-App-Version", "2.1.4"]]
 ```
 
 | Parameter | Default | Description |
@@ -214,6 +214,28 @@ XPorta is specifically designed to work within Cloudflare's free-tier limitation
 | HTTP/2 | Fully supported | Multiplexed short-lived streams |
 
 No special Cloudflare configuration is needed — no WebSocket toggle, no gRPC enablement. XPorta uses only standard HTTP POST and GET requests that every CDN handles natively.
+
+## Session Persistence
+
+XPorta sessions are designed to be resilient across transient network disruptions. Several mechanisms ensure that proxy connections survive brief interruptions without dropping the user's traffic:
+
+### Handler loop continuity
+
+Each XPorta session runs a dedicated handler loop on the server. This loop does not terminate when an individual relay connection ends -- it continues to accept new upload and download requests on the same session cookie. A single session can serve multiple sequential proxy connections without re-authenticating.
+
+### Idle timeout
+
+Sessions remain alive for **60 seconds** after the last activity (upload, download, or poll request). During this window, the client can resume sending data without re-establishing the session. If no activity occurs within the idle timeout, the server cleans up the session and releases its resources.
+
+### Instant download delivery
+
+The server uses a poll-notify mechanism for the download path. When new data arrives for a session, all pending long-poll requests are immediately notified and return the data without waiting for the next poll cycle. This ensures minimal latency for server-to-client data delivery, even when the client is between poll requests.
+
+### Practical implications
+
+- **Page navigation** -- when a browser loads a new page, existing proxy connections may close. The XPorta session persists, so the next connection reuses the same session cookie.
+- **Network switching** -- moving between Wi-Fi and cellular may briefly interrupt connectivity. The 60-second idle timeout provides a window for the client to reconnect.
+- **CDN connection resets** -- if the CDN drops an HTTP/2 connection, the XPorta session on the origin server remains intact and accepts new requests.
 
 ## Comparison with other transports
 

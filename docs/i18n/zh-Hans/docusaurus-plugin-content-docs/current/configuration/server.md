@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.0.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.1.4**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -194,6 +194,33 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `h3_cover_site` | string? | -- | HTTP/3 伪装上游 URL |
 | `h3_static_dir` | string? | -- | HTTP/3 伪装本地静态文件目录（`h3_cover_site` 未设置时的回退） |
 | `salamander_password` | string? | -- | Salamander UDP 混淆密码（仅 QUIC） |
+
+## `[camouflage.tls_probe_guard]` -- TLS 探测防御
+
+自动检测并封锁出现重复 TLS 握手失败的 IP——这是审查系统主动探测的强烈信号。启用后，服务器在滑动窗口内追踪每个 IP 的握手失败率，并临时封锁违规 IP。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | bool | `true` | 启用 TLS 探测防御（伪装启用时默认开启） |
+| `max_failures` | u32 | `20` | 封锁前每 IP 允许的最大握手失败次数 |
+| `failure_window_secs` | u64 | `120` | 计数失败的滑动窗口时间（秒） |
+| `block_duration_secs` | u64 | `120` | 封锁违规 IP 的持续时间（秒） |
+
+示例：
+
+```toml
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20
+failure_window_secs = 120
+block_duration_secs = 120
+```
+
+:::tip 调优指南
+- **降低 `max_failures`**（如 5-10）可在被频繁探测的环境中实现更积极的防御，但可能会误封 TLS 栈不稳定的合法客户端。
+- **增大 `failure_window_secs`**（如 300-600）可捕获缓慢的分布式探测活动。
+- **增大 `block_duration_secs`**（如 3600）可对已确认的探测者施加更长的封锁。
+:::
 
 ## `[ssh]` -- SSH 传输
 
@@ -440,6 +467,13 @@ enabled = true
 tls_on_tcp = true
 fallback_addr = "example.com:443"
 alpn_protocols = ["h2", "http/1.1"]
+
+# TLS 探测防御（自动封锁重复握手失败的 IP）
+[camouflage.tls_probe_guard]
+enabled = true
+max_failures = 20
+failure_window_secs = 120
+block_duration_secs = 120
 
 # 每客户端 ACL
 # [acls.client-uuid-1]
