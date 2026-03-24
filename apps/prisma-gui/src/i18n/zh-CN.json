@@ -597,5 +597,5 @@
     "random": "随机",
     "selected": "已在 {{group}} 中选择 {{server}}",
     "timeout": "超时"
-  },
+  }
 }

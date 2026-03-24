@@ -597,5 +597,5 @@
     "random": "Random",
     "selected": "Selected {{server}} in {{group}}",
     "timeout": "Timeout"
-  },
+  }
 }
