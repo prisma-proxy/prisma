@@ -39,6 +39,7 @@ interface PrismaStore {
   setStats: (s: Stats) => void;
   setProfiles: (p: Profile[]) => void;
   addLog: (entry: LogEntry) => void;
+  addLogs: (entries: LogEntry[]) => void;
   clearLogs: () => void;
   setUpdateAvailable: (info: UpdateInfo | null) => void;
   setUpdateProgress: (p: number | null) => void;
@@ -100,6 +101,15 @@ export const useStore = create<PrismaStore>((set) => ({
         ? state.logs.slice(1)
         : [...state.logs];
       logs.push(entry);
+      return { logs };
+    }),
+
+  addLogs: (entries) =>
+    set((state) => {
+      if (entries.length === 0) return state;
+      const trim = Math.max(0, state.logs.length + entries.length - MAX_LOGS);
+      const logs = trim > 0 ? state.logs.slice(trim) : [...state.logs];
+      logs.push(...entries);
       return { logs };
     }),
 

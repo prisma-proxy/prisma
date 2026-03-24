@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Wifi, Signal, Battery, ShieldCheck, Router, Shield } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useBattery } from "@/hooks/useBattery";
 import { useSettings } from "@/store/settings";
@@ -23,13 +24,16 @@ export default function MobileSection() {
     if (connectionMode === "vpn") {
       api.checkVpnPermission().then(setVpnPermission).catch(() => {});
     }
-    if (battery.level < 0) {
+  }, [connectionMode]);
+
+  useEffect(() => {
+    if (battery.level < 0 && rustBatteryLevel < 0) {
       api.getBatteryStatus().then((s) => {
         setRustBatteryLevel(s.level);
         setRustBatteryCharging(s.charging);
       }).catch(() => {});
     }
-  }, [battery.level, connectionMode]);
+  }, [battery.level, rustBatteryLevel]);
 
   const batteryLevel = battery.level >= 0 ? battery.level : rustBatteryLevel;
   const batteryCharging = battery.level >= 0 ? battery.charging : rustBatteryCharging;
@@ -72,26 +76,23 @@ export default function MobileSection() {
           <Label>{t("settings.connectionMode")}</Label>
           <p className="text-xs text-muted-foreground">{t("settings.connectionModeDesc")}</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant={connectionMode === "proxy" ? "default" : "outline"}
-            size="sm"
-            className="flex-1 gap-1.5"
-            onClick={() => patch({ connectionMode: "proxy" })}
-          >
+        <ToggleGroup
+          type="single"
+          value={connectionMode}
+          onValueChange={(v) => v && patch({ connectionMode: v as "proxy" | "vpn" })}
+          className="justify-start"
+          size="sm"
+          variant="outline"
+        >
+          <ToggleGroupItem value="proxy" className="gap-1.5">
             <Router size={13} />
             {t("settings.modeProxy")}
-          </Button>
-          <Button
-            variant={connectionMode === "vpn" ? "default" : "outline"}
-            size="sm"
-            className="flex-1 gap-1.5"
-            onClick={() => patch({ connectionMode: "vpn" })}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="vpn" className="gap-1.5">
             <Shield size={13} />
             {t("settings.modeVpn")}
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <p className="text-xs text-muted-foreground">
           {connectionMode === "proxy" ? t("settings.modeProxyDesc") : t("settings.modeVpnDesc")}
         </p>

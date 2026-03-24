@@ -936,7 +936,7 @@ pub unsafe extern "C" fn prisma_on_network_change(
         let client = unsafe { &*handle };
         let prev = client
             .network_type
-            .swap(network_type, std::sync::atomic::Ordering::SeqCst);
+            .swap(network_type, std::sync::atomic::Ordering::Relaxed);
 
         if prev == network_type {
             return PRISMA_OK;
@@ -957,10 +957,14 @@ pub unsafe extern "C" fn prisma_on_network_change(
             net_name
         );
 
-        client.fire_event(&format!(
-            r#"{{"type":"network_changed","network":"{}","previous":{}}}"#,
-            net_name, prev
-        ));
+        client.fire_event(
+            &serde_json::json!({
+                "type": "network_changed",
+                "network": net_name,
+                "previous": prev,
+            })
+            .to_string(),
+        );
 
         if let Ok(conn) = client.connection.lock() {
             if conn.is_connected() {
@@ -1028,7 +1032,7 @@ pub unsafe extern "C" fn prisma_on_background(handle: *mut PrismaClient) -> c_in
 
         client
             .foreground
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         tracing::info!("App entering background — reducing activity");
 
         if let Ok(mut guard) = client.stats_poller.lock() {
@@ -1059,7 +1063,7 @@ pub unsafe extern "C" fn prisma_on_foreground(handle: *mut PrismaClient) -> c_in
 
         client
             .foreground
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         tracing::info!("App returning to foreground — restoring full operation");
 
         if let Ok(conn_guard) = client.connection.lock() {
@@ -1140,14 +1144,18 @@ pub unsafe extern "C" fn prisma_set_tun_fd(handle: *mut PrismaClient, fd: c_int)
 
         let prev = client
             .tun_fd
-            .swap(fd, std::sync::atomic::Ordering::SeqCst);
+            .swap(fd, std::sync::atomic::Ordering::Relaxed);
 
         tracing::info!(previous = prev, current = fd, "TUN fd updated");
 
-        client.fire_event(&format!(
-            r#"{{"type":"tun_fd_set","fd":{},"previous":{}}}"#,
-            fd, prev
-        ));
+        client.fire_event(
+            &serde_json::json!({
+                "type": "tun_fd_set",
+                "fd": fd,
+                "previous": prev,
+            })
+            .to_string(),
+        );
 
         PRISMA_OK
     })
@@ -1166,7 +1174,7 @@ pub unsafe extern "C" fn prisma_get_tun_fd(handle: *mut PrismaClient) -> c_int {
     }
     // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
     let client = unsafe { &*handle };
-    client.tun_fd.load(std::sync::atomic::Ordering::SeqCst)
+    client.tun_fd.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Get the Prisma library version string.

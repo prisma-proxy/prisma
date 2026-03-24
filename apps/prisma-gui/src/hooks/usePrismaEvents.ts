@@ -39,6 +39,15 @@ interface PrismaEvent {
 let pendingStats: Stats | null = null;
 let statsRafId: number | null = null;
 
+// Throttle error notifications: at most 1 per second to prevent toast storms
+// when the server crashes and many error events fire in rapid succession.
+let lastErrorNotifyMs = 0;
+let suppressedErrors = 0;
+
+// Batch log entries via rAF to prevent per-log React re-renders under load.
+let pendingLogs: LogEntry[] = [];
+let logRafId: number | null = null;
+
 export function usePrismaEvents() {
   useEffect(() => {
     const unlisten = listen<string>("prisma://event", (event) => {
@@ -90,6 +99,18 @@ export function usePrismaEvents() {
             store.setManualDisconnect(false);
             store.setConnecting(true);
           } else {
+            // Cancel pending rAFs to stop processing stale data
+            if (statsRafId !== null) {
+              cancelAnimationFrame(statsRafId);
+              statsRafId = null;
+              pendingStats = null;
+            }
+            if (logRafId !== null) {
+              cancelAnimationFrame(logRafId);
+              logRafId = null;
+              pendingLogs = [];
+            }
+
             // Disconnected — record session bytes + uptime
             {
               const { activeProfileIdx, profiles, stats } = store;
@@ -161,11 +182,21 @@ export function usePrismaEvents() {
         case "log": {
           if (!store.connected) break; // Ignore logs after disconnect
           const logMsg = data.msg ?? "";
-          store.addLog({
+          pendingLogs.push({
             level: (data.level ?? "INFO") as LogEntry["level"],
             msg:   logMsg,
             time:  data.time ?? Date.now(),
           });
+          if (logRafId === null) {
+            logRafId = requestAnimationFrame(() => {
+              logRafId = null;
+              const batch = pendingLogs;
+              pendingLogs = [];
+              if (batch.length > 0 && useStore.getState().connected) {
+                useStore.getState().addLogs(batch);
+              }
+            });
+          }
           parseLogForConnection(logMsg);
           break;
         }
@@ -190,13 +221,23 @@ export function usePrismaEvents() {
           } as SpeedTestResult);
           break;
 
-        case "error":
+        case "error": {
           // Only reset speed test state for speed-test-specific errors
           if (data.code === "speed_test_failed") {
             store.setSpeedTestRunning(false);
           }
-          notify.error(data.msg ?? `Error: ${data.code ?? "unknown"}`);
+          // Throttle error toasts to prevent GUI lag from error storms
+          const now = Date.now();
+          if (now - lastErrorNotifyMs >= 1000) {
+            const suffix = suppressedErrors > 0 ? ` (+${suppressedErrors} more)` : "";
+            notify.error((data.msg ?? `Error: ${data.code ?? "unknown"}`) + suffix);
+            lastErrorNotifyMs = now;
+            suppressedErrors = 0;
+          } else {
+            suppressedErrors++;
+          }
           break;
+        }
       }
     });
 
