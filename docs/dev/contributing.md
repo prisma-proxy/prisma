@@ -65,7 +65,7 @@ cargo install cargo-fuzz
 cargo fuzz run fuzz_decode_client_init
 ```
 
-Key targets: `fuzz_decode_client_init`, `fuzz_decode_server_init`, `fuzz_decode_data_frame`, `fuzz_mux_frame`, `fuzz_import_uri`.
+Key targets: `fuzz_decode_client_init`, `fuzz_decode_server_init`, `fuzz_decode_data_frame`, `fuzz_mux_frame`.
 
 ---
 

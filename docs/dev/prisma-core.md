@@ -4,7 +4,7 @@ title: prisma-core Reference
 
 # prisma-core Reference
 
-`prisma-core` is the shared foundation library used by every other crate in the workspace. It provides cryptography, the PrismaVeil v5 protocol, configuration parsing, routing, DNS, multiplexing, access control, proxy groups, subscriptions, import parsers, and common types.
+`prisma-core` is the shared foundation library used by every other crate in the workspace. It provides cryptography, the PrismaVeil v5 protocol, configuration parsing, routing, DNS, multiplexing, access control, proxy groups, subscriptions, and common types.
 
 **Path:** `crates/prisma-core/src/`
 
@@ -24,7 +24,6 @@ title: prisma-core Reference
 | `proxy_group` | `proxy_group.rs` | Proxy group manager |
 | `subscription` | `subscription.rs` | Subscription fetch and parse |
 | `rule_provider` | `rule_provider.rs` | External rule provider manager |
-| `import` | `import/` | URI parsers (SS/VMess/Trojan/VLESS/Prisma) |
 | `buffer_pool` | `buffer_pool.rs` | Pooled buffer allocator |
 | `state` | `state.rs` | Server state, metrics, connection tracking |
 | `shadow_tls` | `shadow_tls.rs` | ShadowTLS v3 protocol |
@@ -312,11 +311,3 @@ graph LR
 
 ---
 
-## import -- URI Parsers
-
-| Function | Description |
-|----------|-------------|
-| `import_uri(uri) -> Result<ImportedServer>` | Parse a single proxy URI |
-| `import_batch(text) -> Vec<Result<ImportedServer>>` | Parse multiple URIs from text |
-
-Supported schemes: `ss://`, `vmess://`, `trojan://`, `vless://`, `prisma://`

@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI Reference
 
-The `prisma` binary (v2.0.0) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, importing server configurations, managing subscriptions, testing latency, and controlling a live server via the management API.
+The `prisma` binary (v2.0.0) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, managing subscriptions, testing latency, and controlling a live server via the management API.
 
 ## Global Flags
 
@@ -313,42 +313,7 @@ prisma validate -c client.toml -t client
 
 ---
 
-## Import and Subscription
-
-### `prisma import`
-
-Import server configurations from URIs. Supports Prisma (`prisma://`), Shadowsocks (`ss://`), VMess (`vmess://`), VLESS (`vless://`), and Trojan (`trojan://`) URI formats.
-
-```bash
-prisma import [--uri <URI>] [--file <PATH>] [--url <URL>]
-```
-
-| Flag | Description |
-|------|-------------|
-| `--uri <URI>` | Import a single URI string |
-| `--file <PATH>` | Import from a file containing URIs (one per line or base64-encoded) |
-| `--url <URL>` | Fetch and import from a subscription URL |
-
-Exactly one of `--uri`, `--file`, or `--url` must be provided.
-
-**Examples:**
-
-```bash
-# Import a single Prisma URI
-prisma import --uri "prisma://base64encodedconfig"
-
-# Import a VMess URI
-prisma import --uri "vmess://base64encodedconfig"
-
-# Import from a subscription URL
-prisma import --url "https://example.com/subscribe"
-
-# Import from a local file (one URI per line)
-prisma import --file servers.txt
-
-# JSON output for scripting
-prisma import --json --url "https://example.com/subscribe"
-```
+## Subscription
 
 ### `prisma subscription`
 
@@ -821,7 +786,6 @@ prisma logs --level DEBUG --json  # JSON-formatted debug logs
 | `prisma gen-cert` | Generate self-signed TLS certificate |
 | `prisma init [--cdn]` | Generate annotated config files |
 | `prisma validate -c PATH` | Validate a config file |
-| `prisma import --uri/--file/--url` | Import server configs (multi-protocol) |
 | `prisma subscription add/update/list/test` | Manage subscriptions |
 | `prisma latency-test --url/--servers` | Test latency to servers |
 | `prisma version` | Show version and features |

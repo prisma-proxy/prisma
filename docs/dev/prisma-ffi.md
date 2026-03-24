@@ -82,13 +82,6 @@ title: prisma-ffi Reference
 | `prisma_profile_to_uri(json)` | `*mut c_char` | Generate prisma:// URI |
 | `prisma_profile_config_to_toml(json)` | `*mut c_char` | Convert to TOML |
 
-### URI Import
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `prisma_import_uri(uri)` | `*mut c_char` | Import single URI |
-| `prisma_import_batch(text)` | `*mut c_char` | Import multiple URIs |
-
 ### System Proxy
 
 | Function | Returns | Description |

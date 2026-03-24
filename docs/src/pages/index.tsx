@@ -32,7 +32,7 @@ function getFeatures() {
     {
       title: translate({id: 'homepage.features.proxyGroups.title', message: 'Proxy Groups & Subscriptions'}),
       icon: '🔗',
-      description: translate({id: 'homepage.features.proxyGroups.description', message: 'Select, AutoUrl, Fallback, and LoadBalance proxy groups. Multi-protocol subscription import (SS/VMess/Trojan/VLESS) with auto-update.'}),
+      description: translate({id: 'homepage.features.proxyGroups.description', message: 'Select, AutoUrl, Fallback, and LoadBalance proxy groups. Subscription import with auto-update.'}),
     },
     {
       title: translate({id: 'homepage.features.tunMode.title', message: 'TUN Mode'}),
@@ -83,7 +83,7 @@ function getHighlights() {
     { label: translate({id: 'homepage.highlights.obfuscation', message: 'Obfuscation'}), value: 'Salamander v2 (nonce-based)' },
     { label: translate({id: 'homepage.highlights.platforms', message: 'Platforms'}), value: 'Windows, macOS, Linux, Android, iOS, FreeBSD' },
     { label: translate({id: 'homepage.highlights.proxyGroups', message: 'Proxy Groups'}), value: 'Select / AutoUrl / Fallback / LoadBalance' },
-    { label: translate({id: 'homepage.highlights.subscriptions', message: 'Subscriptions'}), value: 'SS / VMess / Trojan / VLESS / Clash YAML' },
+    { label: translate({id: 'homepage.highlights.subscriptions', message: 'Subscriptions'}), value: 'Prisma / Clash YAML / JSON' },
   ];
 }
 

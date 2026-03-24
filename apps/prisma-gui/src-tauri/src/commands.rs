@@ -357,28 +357,6 @@ pub fn speed_test(
     if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_speed_test error {rc}")) }
 }
 
-// ── URI import ────────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn import_uri(uri: String) -> Result<serde_json::Value, String> {
-    let cstr = CString::new(uri).map_err(|e| e.to_string())?;
-    let ptr = unsafe { prisma_ffi::prisma_import_uri(cstr.as_ptr()) };
-    match unsafe { read_owned_cstr(ptr) } {
-        None => Err("URI import failed".into()),
-        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
-    }
-}
-
-#[tauri::command]
-pub fn import_batch(text: String) -> Result<serde_json::Value, String> {
-    let cstr = CString::new(text).map_err(|e| e.to_string())?;
-    let ptr = unsafe { prisma_ffi::prisma_import_batch(cstr.as_ptr()) };
-    match unsafe { read_owned_cstr(ptr) } {
-        None => Err("batch import failed".into()),
-        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
-    }
-}
-
 // ── proxy groups ──────────────────────────────────────────────────────────────
 
 #[tauri::command]

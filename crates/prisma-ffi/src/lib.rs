@@ -1085,64 +1085,6 @@ pub extern "C" fn prisma_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
 }
 
-// ── URI import ───────────────────────────────────────────────────────────────
-
-/// Import a single proxy URI (ss://, vmess://, trojan://, vless://).
-/// Returns JSON with the parsed ImportedServer, or an error string.
-/// Caller must call `prisma_free_string`.
-///
-/// # Safety
-/// `uri` must be a valid non-null C string.
-#[no_mangle]
-pub unsafe extern "C" fn prisma_import_uri(uri: *const c_char) -> *mut c_char {
-    ffi_catch!(std::ptr::null_mut(), {
-        let uri_str = match cstr_to_str_opt!(uri) {
-            Some(s) => s,
-            None => return std::ptr::null_mut(),
-        };
-        match prisma_core::import::import_uri(uri_str) {
-            Ok(server) => serde_json::to_string(&server)
-                .ok()
-                .and_then(|s| CString::new(s).ok())
-                .map_or(std::ptr::null_mut(), CString::into_raw),
-            Err(e) => {
-                let err = format!(
-                    r#"{{"error":{}}}"#,
-                    serde_json::to_string(&e.to_string()).unwrap_or_default()
-                );
-                CString::new(err).map_or(std::ptr::null_mut(), CString::into_raw)
-            }
-        }
-    })
-}
-
-/// Import multiple URIs from a text block (line-separated or base64-encoded).
-/// Returns JSON array of results. Caller must call `prisma_free_string`.
-///
-/// # Safety
-/// `text` must be a valid non-null C string.
-#[no_mangle]
-pub unsafe extern "C" fn prisma_import_batch(text: *const c_char) -> *mut c_char {
-    ffi_catch!(std::ptr::null_mut(), {
-        let text_str = match cstr_to_str_opt!(text) {
-            Some(s) => s,
-            None => return std::ptr::null_mut(),
-        };
-        let results = prisma_core::import::import_batch(text_str);
-        let json_results: Vec<serde_json::Value> = results
-            .into_iter()
-            .map(|r| match r {
-                Ok(server) => serde_json::to_value(&server).unwrap_or(serde_json::Value::Null),
-                Err(e) => serde_json::json!({"error": e.to_string()}),
-            })
-            .collect();
-        serde_json::to_string(&json_results)
-            .ok()
-            .and_then(|s| CString::new(s).ok())
-            .map_or(std::ptr::null_mut(), CString::into_raw)
-    })
-}
-
 // ── Proxy groups ─────────────────────────────────────────────────────────────
 
 /// Global proxy group manager — lazily initialized.

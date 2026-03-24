@@ -8,7 +8,6 @@ mod console;
 mod daemon;
 mod diagnose;
 mod diagnostics;
-mod import;
 mod init;
 mod logs;
 mod metrics;
@@ -211,19 +210,6 @@ enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
-    },
-
-    /// Import server configs from URIs (prisma://, vmess://, vless://, ss://, trojan://)
-    Import {
-        /// Single URI to import
-        #[arg(long)]
-        uri: Option<String>,
-        /// Path to a file containing URIs (one per line or base64-encoded)
-        #[arg(long)]
-        file: Option<String>,
-        /// Subscription URL to fetch and import
-        #[arg(long)]
-        url: Option<String>,
     },
 
     // --- Management API commands ---
@@ -793,24 +779,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Completions { shell } => {
             completions::generate(shell);
         }
-        Commands::Import { uri, file, url } => {
-            if let Some(uri) = uri {
-                import::run_single(&uri, global_json)?;
-            } else if let Some(file) = file {
-                import::run_file(&file, global_json)?;
-            } else if let Some(url) = url {
-                import::run_url(&url, global_json)?;
-            } else {
-                anyhow::bail!(
-                    "Provide one of --uri, --file, or --url.\n\n\
-                     Examples:\n  \
-                     prisma import --uri 'prisma://...'\n  \
-                     prisma import --file servers.txt\n  \
-                     prisma import --url 'https://example.com/subscribe'"
-                );
-            }
-        }
-
         // --- Management API commands ---
         Commands::Clients(cmd) => {
             let client = api_client::ApiClient::resolve(

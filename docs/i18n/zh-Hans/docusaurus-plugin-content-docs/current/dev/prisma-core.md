@@ -18,6 +18,5 @@ title: prisma-core 参考
 | `mux` | XMUX 流多路复用 |
 | `types` | 协议常量、CipherSuite、ClientId |
 | `bandwidth` | 速率限制、流量配额 |
-| `import` | URI 解析器 (SS/VMess/Trojan/VLESS) |
 
 详细内容请参阅英文版本。

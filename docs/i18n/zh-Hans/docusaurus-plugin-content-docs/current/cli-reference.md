@@ -245,23 +245,7 @@ prisma validate -c <PATH> [-t <TYPE>]
 
 ---
 
-## 导入和订阅
-
-### `prisma import`
-
-从 URI 导入服务器配置。支持 Prisma (`prisma://`)、Shadowsocks (`ss://`)、VMess (`vmess://`)、VLESS (`vless://`) 和 Trojan (`trojan://`) URI 格式。
-
-```bash
-prisma import [--uri <URI>] [--file <PATH>] [--url <URL>]
-```
-
-| 参数 | 描述 |
-|------|------|
-| `--uri <URI>` | 导入单个 URI 字符串 |
-| `--file <PATH>` | 从包含 URI 的文件导入（每行一个或 base64 编码） |
-| `--url <URL>` | 从订阅 URL 获取并导入 |
-
-必须且只能提供 `--uri`、`--file` 或 `--url` 之一。
+## 订阅
 
 ### `prisma subscription`
 
@@ -497,7 +481,6 @@ prisma logs [--level <LEVEL>] [--lines <N>]
 | `prisma gen-cert` | 生成自签名 TLS 证书 |
 | `prisma init [--cdn]` | 生成带注释的配置文件 |
 | `prisma validate -c PATH` | 验证配置文件 |
-| `prisma import --uri/--file/--url` | 导入服务器配置（多协议） |
 | `prisma subscription add/update/list/test` | 管理订阅 |
 | `prisma latency-test --url/--servers` | 测试到服务器的延迟 |
 | `prisma version` | 显示版本和功能 |

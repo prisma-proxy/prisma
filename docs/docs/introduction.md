@@ -5,14 +5,13 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, multi-protocol inbound support (VMess/VLESS/Shadowsocks/Trojan), and advanced anti-censorship features. Version **1.5.0** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, multi-protocol compatibility, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), nine transport options, and advanced anti-censorship features. Version **2.0.0** ships with connection pooling, cipher auto-selection, API surface reduction, v5 AAD relay activation, daemon mode, subscription management, hot config reload, buffer pooling, client permissions, transport fallback, and many more production-grade features.
 
 ## Features
 
 ### Protocol and Cryptography
 
 - **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT session resumption, X25519 + BLAKE3 + ChaCha20-Poly1305 / AES-256-GCM / Transport-Only cipher modes, header-authenticated encryption (AAD), connection migration, enhanced KDF
-- **Multi-protocol inbounds** — VMess, VLESS, Shadowsocks (AEAD), and Trojan compatibility via `[[inbounds]]` config, allowing Prisma servers to accept connections from third-party clients
 - **Post-quantum hybrid key exchange** — ML-KEM-768 (Kyber) combined with X25519 for forward-secure key agreement resistant to quantum computers. Negotiated automatically when both sides support it.
 - **Modern cryptography** — X25519 ECDH, BLAKE3 KDF, ChaCha20-Poly1305 / AES-256-GCM AEAD
 - **Anti-replay protection** via 1024-bit sliding-window nonce bitmap
@@ -45,10 +44,9 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 - **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 
-### Subscription and Import
+### Subscription
 
 - **Subscription management** — add, update, list, and test subscriptions with auto-update
-- **Multi-protocol import** — import server configs from SS, VMess, Trojan, and VLESS URIs (single URI, file, or subscription URL)
 - **Latency testing** — measure RTT to subscription servers or manually specified server lists
 
 ### Anti-Censorship
@@ -94,7 +92,7 @@ Prisma is organized into six crates plus a console and documentation site:
 prisma/
 ├── crates/
 │   ├── prisma-core/       # Shared library: crypto, protocol (PrismaVeil v5), config, DNS, routing,
-│   │                      #   GeoIP, bandwidth, buffer pool, traffic shaping, import, types
+│   │                      #   GeoIP, bandwidth, buffer pool, traffic shaping, types
 │   ├── prisma-server/     # Proxy server: TCP/QUIC/WS/gRPC/XHTTP/XPorta/ShadowTLS/SSH/WireGuard
 │   │                      #   listeners, relay (standard + io_uring), auth, camouflage, hot-reload
 │   ├── prisma-client/     # Proxy client: SOCKS5/HTTP CONNECT/TUN inbound, transport selection,
@@ -102,10 +100,10 @@ prisma/
 │   ├── prisma-mgmt/       # Management API: REST + WebSocket via axum, auth middleware,
 │   │                      #   handlers for clients/connections/metrics/bandwidth/config/routes
 │   ├── prisma-cli/        # CLI binary (clap 4): server/client/console runners with daemon mode,
-│   │                      #   gen-key, gen-cert, init, validate, import, subscription, latency-test,
+│   │                      #   gen-key, gen-cert, init, validate, subscription, latency-test,
 │   │                      #   management commands, shell completions
 │   └── prisma-ffi/        # C FFI shared library: lifecycle, profiles, QR import/export,
-│                          #   system proxy, auto-update, subscription import, stats poller
+│                          #   system proxy, auto-update, subscription management, stats poller
 ├── apps/
 │   ├── prisma-gui/        # Desktop GUI (Tauri 2 + React + TypeScript)
 │   └── prisma-console/    # Web console (Next.js + shadcn/ui)
@@ -164,7 +162,6 @@ graph LR
 
 ### Previous (1.4.0)
 
-- v5 AAD relay activation, Shadowsocks crypto spec compliance, VMess timing hardening
-- Multi-protocol inbounds, client permissions, transport fallback, PQ hybrid KEM
+- v5 AAD relay activation, client permissions, transport fallback, PQ hybrid KEM
 - Daemon mode, subscription management, hot config reload, buffer pooling
-- Management API additions: `/api/inbounds`, `/api/clients/:id/permissions`, `/api/clients/:id/kick`, `/api/clients/:id/block`
+- Management API additions: `/api/clients/:id/permissions`, `/api/clients/:id/kick`, `/api/clients/:id/block`

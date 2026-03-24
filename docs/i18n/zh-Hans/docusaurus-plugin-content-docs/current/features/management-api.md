@@ -177,14 +177,6 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
 # [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
 ```
 
-### 入站（多协议）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/inbounds` | 列出所有已配置的入站（PrismaVeil、VMess、VLESS、Shadowsocks、Trojan） |
-
-返回服务器配置中的 `[[inbounds]]` 条目列表，包括协议类型、监听地址和状态。
-
 ### 客户端权限
 
 | 方法 | 路径 | 说明 |
@@ -316,7 +308,6 @@ WS /api/ws/reload
 | 客户端权限 | 4 REST | 权限、踢出、封禁 |
 | 客户端指标 | 1 REST | 每客户端指标快照 |
 | 系统 | 1 REST | 平台和资源信息 |
-| 入站 | 1 REST | 多协议入站列表 |
 | 配置 | 4 REST + 1 WS | 配置读写、热重载、重载流 |
 | 配置备份 | 5 REST | 备份、恢复、差异对比 |
 | 带宽与配额 | 5 REST | 每客户端限制和使用情况 |

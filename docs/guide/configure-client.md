@@ -82,7 +82,7 @@ graph TD
 
 ## Subscription management
 
-Import servers from subscription URLs (Prisma, SS, VMess, Trojan, VLESS, Clash YAML):
+Import servers from subscription URLs (Prisma, Clash YAML):
 
 ```toml
 [[subscriptions]]

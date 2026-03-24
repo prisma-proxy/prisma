@@ -271,47 +271,6 @@ type = "ip-cidr"
 value = "10.0.0.0/8"
 ```
 
-## `[[inbounds]]` -- Multi-protocol inbound listeners
-
-Each entry defines a protocol-specific inbound listener. Prisma can accept connections from VMess, VLESS, Shadowsocks, and Trojan clients in addition to native PrismaVeil clients.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `protocol` | string | -- | Inbound protocol: `"vmess"` / `"vless"` / `"shadowsocks"` / `"trojan"` |
-| `listen_addr` | string | -- | Listen address for this inbound (e.g., `"0.0.0.0:8444"`) |
-| `enabled` | bool | `true` | Enable/disable this inbound |
-| `settings` | table | -- | Protocol-specific settings (users, passwords, cipher methods, etc.) |
-
-Example:
-
-```toml
-[[inbounds]]
-protocol = "vmess"
-listen_addr = "0.0.0.0:10086"
-enabled = true
-
-[[inbounds.settings.clients]]
-id = "b831381d-6324-4d53-ad4f-8cda48b30811"
-alter_id = 0
-
-[[inbounds]]
-protocol = "shadowsocks"
-listen_addr = "0.0.0.0:8388"
-enabled = true
-
-[inbounds.settings]
-method = "aes-256-gcm"
-password = "your-password"
-
-[[inbounds]]
-protocol = "trojan"
-listen_addr = "0.0.0.0:443"
-enabled = true
-
-[inbounds.settings]
-password = "your-trojan-password"
-```
-
 ## `[fallback]` -- Transport fallback
 
 Server-side transport fallback configuration. When the primary transport fails or encounters repeated errors, the server can automatically activate fallback transports.

@@ -10,7 +10,6 @@ pub mod entropy;
 pub mod error;
 pub mod fec;
 pub mod geodata;
-pub mod import;
 pub mod logging;
 pub mod mux;
 pub mod permissions;

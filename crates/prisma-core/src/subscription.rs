@@ -1,7 +1,7 @@
 //! Subscription management: fetch, parse, and auto-update server lists from URLs.
 //!
 //! Supports three common subscription formats:
-//! 1. Base64-encoded line-separated URIs (e.g., ss://, vmess://, prisma://)
+//! 1. Base64-encoded line-separated URIs (prisma://)
 //! 2. Clash-style YAML with a `proxies` array
 //! 3. JSON array of server config objects
 
@@ -280,7 +280,6 @@ fn apply_yaml_field(
 
 fn yaml_type_to_transport(t: &str) -> String {
     match t {
-        "ss" | "trojan" | "vmess" | "vless" => "quic".into(),
         "hysteria" | "hysteria2" | "tuic" => "quic".into(),
         "http" | "http2" | "h2" => "xhttp".into(),
         "ws" | "websocket" => "ws".into(),
@@ -349,30 +348,10 @@ fn parse_base64_subscription(body: &str) -> Result<Vec<ServerEntry>, anyhow::Err
     Ok(servers)
 }
 
-/// Parse a single proxy URI (prisma://, ss://, vmess://, etc.) into a ServerEntry.
+/// Parse a single proxy URI (prisma://) into a ServerEntry.
 fn parse_uri_to_server_entry(uri: &str) -> Option<ServerEntry> {
     // prisma://host:port#name or prisma://host:port?name=foo
     if let Some(rest) = uri.strip_prefix("prisma://") {
-        return parse_simple_uri(rest, "quic");
-    }
-
-    // ss://base64@host:port#name
-    if let Some(rest) = uri.strip_prefix("ss://") {
-        return parse_simple_uri(rest, "quic");
-    }
-
-    // vmess://base64-json
-    if let Some(rest) = uri.strip_prefix("vmess://") {
-        return parse_vmess_uri(rest);
-    }
-
-    // trojan://password@host:port#name
-    if let Some(rest) = uri.strip_prefix("trojan://") {
-        return parse_simple_uri(rest, "quic");
-    }
-
-    // vless://uuid@host:port#name
-    if let Some(rest) = uri.strip_prefix("vless://") {
         return parse_simple_uri(rest, "quic");
     }
 
@@ -433,46 +412,6 @@ fn parse_simple_uri(rest: &str, default_transport: &str) -> Option<ServerEntry> 
         server_addr: addr,
         transport: default_transport.into(),
         extra: serde_json::Value::Null,
-    })
-}
-
-/// Parse a vmess:// URI (base64-encoded JSON).
-fn parse_vmess_uri(rest: &str) -> Option<ServerEntry> {
-    use base64::Engine;
-
-    let decoded = base64::engine::general_purpose::STANDARD
-        .decode(rest.trim())
-        .or_else(|_| {
-            base64::engine::general_purpose::STANDARD_NO_PAD
-                .decode(rest.trim().trim_end_matches('='))
-        })
-        .ok()?;
-    let text = String::from_utf8(decoded).ok()?;
-    let val: serde_json::Value = serde_json::from_str(&text).ok()?;
-
-    let host = val.get("add")?.as_str()?;
-    let port = val.get("port").and_then(|v| {
-        v.as_u64()
-            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-    })?;
-    let name = val
-        .get("ps")
-        .and_then(|v| v.as_str())
-        .unwrap_or("vmess server");
-
-    let net = val.get("net").and_then(|v| v.as_str()).unwrap_or("tcp");
-    let transport = match net {
-        "ws" => "ws",
-        "grpc" | "gun" => "grpc",
-        "h2" | "http" => "xhttp",
-        _ => "quic",
-    };
-
-    Some(ServerEntry {
-        name: name.to_string(),
-        server_addr: format!("{}:{}", host, port),
-        transport: transport.into(),
-        extra: val,
     })
 }
 

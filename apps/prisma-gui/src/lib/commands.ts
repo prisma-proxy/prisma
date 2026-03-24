@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ImportedServer, ProxyGroupInfo, LatencyResult } from "./types";
+import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ProxyGroupInfo, LatencyResult } from "./types";
 
-export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ImportedServer, ProxyGroupInfo, LatencyResult };
+export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ProxyGroupInfo, LatencyResult };
 
 export const api = {
   connect:          (configJson: string, modes: number) =>
@@ -97,13 +97,6 @@ export const api = {
 
   downloadFile: (url: string, destPath: string, proxyPort: number) =>
     invoke<void>("download_file", { url, destPath, proxyPort }),
-
-  // ── URI import ───────────────────────────────────────────────────────
-  importUri: (uri: string) =>
-    invoke<ImportedServer>("import_uri", { uri }),
-
-  importBatch: (text: string) =>
-    invoke<ImportedServer[]>("import_batch", { text }),
 
   // ── Proxy groups ─────────────────────────────────────────────────────
   proxyGroupsList: () =>

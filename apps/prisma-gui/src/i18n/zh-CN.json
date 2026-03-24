@@ -4,7 +4,6 @@
     "profiles": "配置",
     "subscriptions": "订阅",
     "proxyGroups": "代理组",
-    "import": "导入",
     "rules": "规则",
     "logs": "日志",
     "speed": "测速",
@@ -557,29 +556,4 @@
     "selected": "已在 {{group}} 中选择 {{server}}",
     "timeout": "超时"
   },
-  "import": {
-    "title": "导入",
-    "clipboard": "剪贴板",
-    "file": "文件",
-    "singleUri": "单个 URI",
-    "batchImport": "批量导入",
-    "uriLabel": "代理 URI",
-    "uriHint": "粘贴 ss://、vmess://、trojan:// 或 vless:// URI，解析后预览再添加。",
-    "batchLabel": "多个 URI",
-    "batchPlaceholder": "ss://...\nvmess://...\ntrojan://...\nvless://...",
-    "batchHint": "每行一个 URI，或粘贴 Base64 编码的订阅内容。",
-    "parse": "解析",
-    "parseAll": "全部解析",
-    "results": "解析结果",
-    "parsed": "已解析",
-    "errors": "错误",
-    "selectAll": "全选",
-    "deselectAll": "取消全选",
-    "saveSelected": "添加 {{count}} 个配置",
-    "savedCount": "已添加 {{count}} 个配置",
-    "clipboardEmpty": "剪贴板为空",
-    "clipboardError": "无法读取剪贴板",
-    "fileSuccess": "已从文件导入 {{count}} 个配置",
-    "fileInvalid": "期望 JSON 数组格式的配置文件"
-  }
 }

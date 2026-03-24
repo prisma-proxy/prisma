@@ -92,13 +92,6 @@
 | `prisma_profile_to_uri(json) -> *mut c_char` | 生成 prisma:// URI（需释放） |
 | `prisma_profile_config_to_toml(json) -> *mut c_char` | 转换为 TOML（需释放） |
 
-### URI 导入
-
-| 函数 | 描述 |
-|------|------|
-| `prisma_import_uri(uri) -> *mut c_char` | 导入单个 URI（需释放） |
-| `prisma_import_batch(text) -> *mut c_char` | 批量导入 URI（需释放） |
-
 ### 系统代理
 
 | 函数 | 描述 |
