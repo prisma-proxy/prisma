@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # 快速开始
 
-本指南将引导您完成 Prisma v2.0.0 的安装和首次代理会话——支持预编译二进制文件或从源码构建。
+本指南将引导您完成 Prisma v2.1.0 的安装和首次代理会话——支持预编译二进制文件或从源码构建。
 
 ## 前置要求
 
@@ -14,17 +14,17 @@ sidebar_position: 2
 
 ## 方式 A：预编译二进制文件（推荐）
 
-下载适用于您平台的最新 v2.0.0 版本：
+下载适用于您平台的最新 v2.1.0 版本：
 
 ```bash
 # Linux x86_64
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-linux-amd64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.0/prisma-linux-amd64 -o prisma && chmod +x prisma
 
 # macOS (Apple Silicon)
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-darwin-arm64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.0/prisma-darwin-arm64 -o prisma && chmod +x prisma
 
 # macOS (Intel)
-curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.0.0/prisma-darwin-amd64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/Yamimega/prisma/releases/download/v2.1.0/prisma-darwin-amd64 -o prisma && chmod +x prisma
 ```
 
 或使用一键安装脚本：
@@ -42,7 +42,7 @@ prisma version
 预期输出：
 
 ```
-Prisma v2.0.0
+Prisma v2.1.0
 Protocol: PrismaVeil v5
 Ciphers:  ChaCha20-Poly1305, AES-256-GCM, Transport-Only
 Transports: QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard
