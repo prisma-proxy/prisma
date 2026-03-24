@@ -68,6 +68,9 @@ pub struct PrismaClient {
     network_type: std::sync::atomic::AtomicI32,
     /// Whether the app is currently in the foreground.
     foreground: std::sync::atomic::AtomicBool,
+    /// TUN file descriptor passed from Android VpnService or iOS NetworkExtension.
+    /// -1 means not set. Only meaningful on mobile platforms.
+    tun_fd: std::sync::atomic::AtomicI32,
 }
 
 pub struct CallbackHolder {
@@ -173,6 +176,7 @@ pub extern "C" fn prisma_create() -> *mut PrismaClient {
             stats_poller: Arc::new(Mutex::new(None)),
             network_type: std::sync::atomic::AtomicI32::new(PRISMA_NET_WIFI),
             foreground: std::sync::atomic::AtomicBool::new(true),
+            tun_fd: std::sync::atomic::AtomicI32::new(-1),
         });
         Box::into_raw(client)
     })
@@ -1114,6 +1118,55 @@ pub unsafe extern "C" fn prisma_get_traffic_stats(handle: *mut PrismaClient) -> 
             Err(_) => std::ptr::null_mut(),
         }
     })
+}
+
+/// Set the TUN file descriptor received from Android VpnService or iOS NetworkExtension.
+///
+/// On Android, `PrismaVpnService` creates the TUN device and passes the fd
+/// here via JNI. On iOS, the NetworkExtension packet tunnel provides the fd.
+/// The stored fd is later consumed by the TUN handler when in VPN mode.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`. `fd` must be a valid
+/// open file descriptor, or -1 to clear.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_set_tun_fd(handle: *mut PrismaClient, fd: c_int) -> c_int {
+    ffi_catch!(PRISMA_ERR_INTERNAL, {
+        if handle.is_null() {
+            return PRISMA_ERR_NULL_POINTER;
+        }
+        // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+        let client = unsafe { &*handle };
+
+        let prev = client
+            .tun_fd
+            .swap(fd, std::sync::atomic::Ordering::SeqCst);
+
+        tracing::info!(previous = prev, current = fd, "TUN fd updated");
+
+        client.fire_event(&format!(
+            r#"{{"type":"tun_fd_set","fd":{},"previous":{}}}"#,
+            fd, prev
+        ));
+
+        PRISMA_OK
+    })
+}
+
+/// Get the currently stored TUN file descriptor.
+///
+/// Returns the fd, or -1 if not set / handle is NULL.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `prisma_create`, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn prisma_get_tun_fd(handle: *mut PrismaClient) -> c_int {
+    if handle.is_null() {
+        return -1;
+    }
+    // SAFETY: Caller guarantees `handle` is valid from `prisma_create`.
+    let client = unsafe { &*handle };
+    client.tun_fd.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Get the Prisma library version string.

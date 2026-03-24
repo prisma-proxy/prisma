@@ -156,6 +156,18 @@ PrismaError   prisma_on_foreground(PrismaClient* handle);
  */
 char*         prisma_get_traffic_stats(PrismaClient* handle);
 
+/**
+ * Set the TUN file descriptor from Android VpnService or iOS NetworkExtension.
+ * fd: a valid open file descriptor, or -1 to clear.
+ */
+PrismaError   prisma_set_tun_fd(PrismaClient* handle, int fd);
+
+/**
+ * Get the currently stored TUN file descriptor.
+ * Returns the fd, or -1 if not set / handle is NULL.
+ */
+int           prisma_get_tun_fd(PrismaClient* handle);
+
 /* ── iOS-specific (only available on iOS builds) ─────────────────────────── */
 #if defined(__APPLE__) && defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
 

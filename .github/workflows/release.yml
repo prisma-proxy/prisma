@@ -554,12 +554,111 @@ jobs:
           retention-days: 5
 
   # ---------------------------------------------------------------------------
-  # Job 5: Create GitHub Release
+  # Job 5: Build Tauri Android APK
+  # ---------------------------------------------------------------------------
+  build-android:
+    name: Android APK
+    if: ${{ !inputs.skip_gui }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK r27c
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+
+      - name: Install Rust Android targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: android-apk
+          workspaces: apps/prisma-gui/src-tauri
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/prisma-gui/package-lock.json
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: apps/prisma-gui
+
+      - name: Configure Android NDK environment
+        run: |
+          NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
+          TOOLCHAIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "ANDROID_NDK_HOME=${NDK_HOME}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${NDK_HOME}" >> "$GITHUB_ENV"
+          for TARGET in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+            case "$TARGET" in
+              aarch64-linux-android)    PREFIX="aarch64-linux-android24" ;;
+              armv7-linux-androideabi)  PREFIX="armv7a-linux-androideabi24" ;;
+              x86_64-linux-android)     PREFIX="x86_64-linux-android24" ;;
+            esac
+            CC="${TOOLCHAIN}/bin/${PREFIX}-clang"
+            LOWER=$(echo "$TARGET" | tr '-' '_')
+            UPPER=$(echo "$TARGET" | tr '[:lower:]-' '[:upper:]_')
+            echo "CC_${LOWER}=${CC}" >> "$GITHUB_ENV"
+            echo "AR_${LOWER}=${TOOLCHAIN}/bin/llvm-ar" >> "$GITHUB_ENV"
+            echo "CARGO_TARGET_${UPPER}_LINKER=${CC}" >> "$GITHUB_ENV"
+          done
+
+      - name: Build Android APK
+        run: npm run tauri:android:build
+        working-directory: apps/prisma-gui
+
+      - name: Collect APK artifacts
+        run: |
+          mkdir -p android-artifacts
+          find apps/prisma-gui/src-tauri/gen/android -name '*.apk' \
+            ! -name '*unsigned*' -exec cp {} android-artifacts/ \; 2>/dev/null || true
+          # Fallback: collect unsigned APK if no signed one found
+          if [ -z "$(ls -A android-artifacts)" ]; then
+            find apps/prisma-gui/src-tauri/gen/android -name '*.apk' \
+              -exec cp {} android-artifacts/ \; 2>/dev/null || true
+          fi
+          ls -la android-artifacts/
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: android-artifacts/*.apk
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # Job 6: Create GitHub Release
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build-server, build-gui, build-console, build-ffi]
-    # Run even if optional jobs (gui, ffi) were skipped or failed
+    needs: [build-server, build-gui, build-console, build-ffi, build-android]
+    # Run even if optional jobs (gui, ffi, android) were skipped or failed
     if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
     runs-on: ubuntu-latest
 
@@ -604,6 +703,9 @@ jobs:
           find artifacts -type f -name 'libprisma_ffi*' -exec cp {} release/ \;
           find artifacts -type f -name 'prisma_ffi*' -exec cp {} release/ \;
           find artifacts -type f -name 'prisma_ffi.h' -exec cp {} release/ \; 2>/dev/null || true
+
+          # Android APK
+          find artifacts -type f -name '*.apk' -exec cp {} release/ \; 2>/dev/null || true
 
           # Remove duplicate .sha256 collection artifacts
           # Keep only the meaningful ones
@@ -746,6 +848,12 @@ jobs:
             echo "| macOS (Universal) | [Prisma-macos-universal.dmg](${BASE_URL}/Prisma-macos-universal.dmg) | — |"
             echo "| Windows x64 | [Prisma-windows-x64.msi](${BASE_URL}/Prisma-windows-x64.msi) | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
             echo "| Linux x64 | [prisma-gui-linux-amd64.deb](${BASE_URL}/prisma-gui-linux-amd64.deb) | [prisma-gui-linux-amd64.AppImage](${BASE_URL}/prisma-gui-linux-amd64.AppImage) |"
+            echo ""
+            echo "### Android"
+            echo ""
+            echo "| Variant | Download |"
+            echo "|---------|----------|"
+            echo "| Universal APK | [app-universal-release.apk](${BASE_URL}/app-universal-release.apk) |"
             echo ""
             echo "### Web Console"
             echo ""

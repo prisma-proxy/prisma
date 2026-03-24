@@ -234,7 +234,68 @@ pub extern "system" fn Java_com_prisma_core_PrismaCore_nativeProfileDelete(
     unsafe { crate::prisma_profile_delete(c_str.as_ptr()) }
 }
 
-// ── Mobile lifecycle ─────────────────────────────────────────────────────────
+// ── VpnService JNI bridge ────────────────────────────────────────────────────
+//
+// These entry points are called from `PrismaVpnService.java` (the Android
+// VPN service). They follow the JNI naming convention for that class:
+//   `Java_com_prisma_client_PrismaVpnService_<method>`
+
+/// Store the TUN file descriptor received from `VpnService.Builder.establish()`.
+///
+/// The Android VpnService creates the TUN interface, then passes the fd here
+/// so the Rust TUN handler can read/write packets through it.
+#[no_mangle]
+pub extern "system" fn Java_com_prisma_client_PrismaVpnService_nativeSetTunFd(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    fd: jint,
+) -> jint {
+    if handle == 0 {
+        return PRISMA_ERR_NULL_POINTER;
+    }
+    // SAFETY: `handle` is a valid pointer from `nativeCreate`.
+    unsafe { crate::prisma_set_tun_fd(handle as *mut PrismaClient, fd) }
+}
+
+/// Notify the Rust engine of a network connectivity change detected by VpnService.
+///
+/// `network_type`: 0 = disconnected, 1 = WiFi, 2 = cellular, 3 = ethernet.
+/// VpnService monitors ConnectivityManager callbacks and forwards them here.
+#[no_mangle]
+pub extern "system" fn Java_com_prisma_client_PrismaVpnService_nativeOnNetworkChange(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    network_type: jint,
+) -> jint {
+    if handle == 0 {
+        return PRISMA_ERR_NULL_POINTER;
+    }
+    // SAFETY: `handle` is a valid pointer from `nativeCreate`.
+    unsafe { crate::prisma_on_network_change(handle as *mut PrismaClient, network_type) }
+}
+
+/// Disconnect the client session from VpnService (e.g., when VPN is revoked).
+///
+/// Called from `PrismaVpnService.onRevoke()` or when the user stops the VPN
+/// service via a stop intent.
+#[no_mangle]
+pub extern "system" fn Java_com_prisma_client_PrismaVpnService_nativeDisconnect(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jint {
+    if handle == 0 {
+        return throw_error(&mut env, "Null handle");
+    }
+    // Clear the TUN fd first so the engine knows the device is gone
+    unsafe { crate::prisma_set_tun_fd(handle as *mut PrismaClient, -1) };
+    // SAFETY: `handle` is a valid pointer from `nativeCreate`.
+    unsafe { crate::prisma_disconnect(handle as *mut PrismaClient) }
+}
+
+// ── Mobile lifecycle (PrismaCore) ───────────────────────────────────────────
 
 /// Notify network connectivity change.
 #[no_mangle]

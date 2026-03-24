@@ -25,6 +25,7 @@ export interface AppSettings {
   routingGeoipPath: string;
   routingGeositePath: string;
   connectionPoolEnabled: boolean;
+  connectionMode: "proxy" | "vpn";
 }
 
 interface SettingsStore extends AppSettings {
@@ -57,6 +58,7 @@ export const useSettings = create<SettingsStore>()(
       routingGeoipPath: "",
       routingGeositePath: "",
       connectionPoolEnabled: true,
+      connectionMode: "proxy",
       patch: (values) => set(values),
     }),
     { name: "prisma-settings" }

@@ -357,6 +357,12 @@
     "vpnPermissionDesc": "移动端 TUN 模式需要此权限",
     "vpnGranted": "已授权",
     "vpnRequest": "请求授权",
+    "connectionMode": "连接模式",
+    "connectionModeDesc": "选择此设备上的流量路由方式",
+    "modeProxy": "代理",
+    "modeProxyDesc": "本地 SOCKS5/HTTP 代理。应用需手动配置使用代理。",
+    "modeVpn": "VPN",
+    "modeVpnDesc": "系统级 TUN 设备。所有流量通过 Prisma 路由。",
     "performance": "性能",
     "connectionPool": "连接池",
     "connectionPoolDesc": "复用已建立的连接以减少握手开销并提高吞吐量"

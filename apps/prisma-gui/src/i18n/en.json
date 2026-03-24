@@ -357,6 +357,12 @@
     "vpnPermissionDesc": "Required for TUN mode on mobile",
     "vpnGranted": "Granted",
     "vpnRequest": "Request",
+    "connectionMode": "Connection Mode",
+    "connectionModeDesc": "Choose how traffic is routed on this device",
+    "modeProxy": "Proxy",
+    "modeProxyDesc": "SOCKS5/HTTP proxy on localhost. Apps must be configured to use the proxy.",
+    "modeVpn": "VPN",
+    "modeVpnDesc": "System-wide TUN device. All traffic is routed through Prisma.",
     "performance": "Performance",
     "connectionPool": "Connection pooling",
     "connectionPoolDesc": "Reuse established connections to reduce handshake overhead and improve throughput"
