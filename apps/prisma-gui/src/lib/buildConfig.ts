@@ -422,10 +422,12 @@ export function buildClientConfig(w: WizardState): Record<string, unknown> {
     if (w.entropyCamouflage) config.entropy_camouflage = true;
   }
 
-  // WebSocket nested config — always ws:// because TLS is handled by the
-  // outer tls_on_tcp layer, not by the WebSocket protocol itself.
+  // WebSocket URL scheme:
+  // - CDN (port 443): wss:// — CDN terminates TLS, client must connect via WSS
+  // - Direct with tls_on_tcp: ws:// — TLS handled by the outer TCP layer
+  // - Plain: ws://
   if (w.transport === "ws") {
-    const scheme = "ws";
+    const scheme = w.serverPort === 443 && !w.tlsOnTcp ? "wss" : "ws";
     const ws: Record<string, unknown> = {
       url: toFullUrl(w.wsUrl, w.serverHost, w.serverPort, scheme),
     };
