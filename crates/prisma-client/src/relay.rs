@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use prisma_core::buffer_pool::BufferPool;
 use prisma_core::protocol::frame_encoder::{FrameDecoder, FrameEncoder};
@@ -30,6 +30,8 @@ pub async fn relay(
     tunnel: TunnelConnection,
     metrics: ClientMetrics,
 ) -> Result<()> {
+    info!("Client relay started");
+
     let (mut socks_read, mut socks_write) = socks_stream.into_split();
     let (mut tunnel_read, mut tunnel_write) = tokio::io::split(tunnel.stream);
 
@@ -43,6 +45,7 @@ pub async fn relay(
     let metrics_up = metrics.clone();
     let socks_to_tunnel = async move {
         let mut encoder = FrameEncoder::new();
+        let mut first_upload = true;
         loop {
             match socks_read.read(encoder.payload_mut()).await {
                 Ok(0) => break,
@@ -59,6 +62,10 @@ pub async fn relay(
                         header_key.as_ref(),
                     ) {
                         Ok(wire) => {
+                            if first_upload {
+                                info!(bytes = n, "Client relay: first upload frame sent");
+                                first_upload = false;
+                            }
                             // Single write_all call (coalesced: outer_len + nonce + data + tag)
                             if tunnel_write.write_all(wire).await.is_err() {
                                 break;
@@ -79,6 +86,7 @@ pub async fn relay(
     let header_key_down = header_key;
     let tunnel_to_socks = async move {
         let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
+        let mut first_download = true;
         loop {
             let mut len_buf = [0u8; 2];
             if tunnel_read.read_exact(&mut len_buf).await.is_err() {
@@ -106,6 +114,10 @@ pub async fn relay(
             ) {
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
+                        if first_download {
+                            info!(bytes = payload.len(), "Client relay: first download frame received");
+                            first_download = false;
+                        }
                         metrics.add_down(payload.len() as u64);
                         if socks_write.write_all(payload).await.is_err() {
                             break;
@@ -127,7 +139,7 @@ pub async fn relay(
         _ = tunnel_to_socks => {},
     }
 
-    debug!("Relay session ended");
+    info!("Client relay ended");
     Ok(())
 }
 

@@ -36,14 +36,21 @@ struct BandwidthQuota {
 }
 
 /// Build an encrypted, length-prefixed Pong wire frame ready for `write_all`.
-fn build_pong_wire(seq: u32, cipher: &dyn AeadCipher, nonce: &[u8; 12]) -> Option<Vec<u8>> {
+///
+/// Uses v5 wire format with AAD so the client can decrypt it with `unseal_data_frame_v5`.
+fn build_pong_wire(
+    seq: u32,
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; 12],
+    header_key: Option<&[u8; 32]>,
+) -> Option<Vec<u8>> {
     let pong = DataFrame {
         command: Command::Pong(seq),
         flags: 0,
         stream_id: 0,
     };
     let pong_bytes = encode_data_frame(&pong);
-    let encrypted = encrypt_frame(cipher, nonce, &pong_bytes).ok()?;
+    let encrypted = encrypt_frame_v5(cipher, nonce, &pong_bytes, header_key).ok()?;
     let mut wire = Vec::with_capacity(2 + encrypted.len());
     wire.extend_from_slice(&(encrypted.len() as u16).to_be_bytes());
     wire.extend_from_slice(&encrypted);
@@ -177,12 +184,15 @@ where
     // Extract v5 header key for AAD binding (None for v4 backward compat)
     let header_key = session_keys.header_key;
 
+    info!("Server relay started");
+
     // tunnel -> destination (upload direction)
     let header_key_up = header_key;
     let mut tunnel_read = tunnel_read;
     let tunnel_to_dest = tokio::spawn(async move {
         let mut anti_replay = AntiReplayWindow::new();
         let mut frame_buf = SERVER_BUFFER_POOL.acquire();
+        let mut first_upload = true;
 
         loop {
             let mut len_buf = [0u8; 2];
@@ -235,6 +245,10 @@ where
 
                     match cmd {
                         CMD_DATA => {
+                            if first_upload {
+                                info!(bytes = payload.len(), "Server relay: first upload frame received");
+                                first_upload = false;
+                            }
                             if out_write.write_all(payload).await.is_err() {
                                 break;
                             }
@@ -247,7 +261,7 @@ where
                                 ]);
                                 let nonce = server_nonce_ping.next_nonce();
                                 if let Some(wire) =
-                                    build_pong_wire(seq, cipher_t2d.as_ref(), &nonce)
+                                    build_pong_wire(seq, cipher_t2d.as_ref(), &nonce, header_key_up.as_ref())
                                 {
                                     let _ = pong_tx.send(wire).await;
                                 }
@@ -269,6 +283,7 @@ where
     let dest_to_tunnel = tokio::spawn(async move {
         let mut tunnel_write = tunnel_write;
         let mut encoder = FrameEncoder::new();
+        let mut first_download = true;
 
         loop {
             tokio::select! {
@@ -303,6 +318,10 @@ where
                                         }
                                     }
 
+                                    if first_download {
+                                        info!(bytes = n, "Server relay: first download frame sent");
+                                        first_download = false;
+                                    }
                                     if tunnel_write.write_all(wire).await.is_err() {
                                         break;
                                     }
@@ -330,7 +349,7 @@ where
         _ = dest_to_tunnel => {},
     }
 
-    debug!("Relay session ended");
+    info!("Server relay ended");
     Ok(())
 }
 

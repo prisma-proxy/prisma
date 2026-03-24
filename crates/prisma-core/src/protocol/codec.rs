@@ -1003,6 +1003,21 @@ pub fn encrypt_frame(
     encrypt_frame_aad(cipher, nonce, plaintext, &[])
 }
 
+/// Encrypt a plaintext data frame with v5 AAD derived from the header key.
+///
+/// This is the public API for encrypting standalone frames (e.g. Pong responses)
+/// using the v5 wire format. The wire output is `[nonce:12][inner_len:2][ciphertext+tag]`
+/// (caller must prepend the outer_len:2 prefix).
+pub fn encrypt_frame_v5(
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; NONCE_SIZE],
+    plaintext: &[u8],
+    header_key: Option<&[u8; 32]>,
+) -> Result<Vec<u8>, CryptoError> {
+    let aad = build_v5_aad(header_key, nonce);
+    encrypt_frame_aad(cipher, nonce, plaintext, aad.as_slice())
+}
+
 /// Encrypt a plaintext data frame with explicit AAD (v5 header authentication).
 pub(crate) fn encrypt_frame_aad(
     cipher: &dyn AeadCipher,
