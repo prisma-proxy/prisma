@@ -79,38 +79,24 @@ export default function Step3Transport({ state, onChange }: Props) {
         )}
       </div>
 
-      {/* QUIC sub-fields */}
-      {state.transport === "quic" && (
-        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.quicSettings")}</p>
-          <div className="flex gap-2">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-1">
-                <Label>{t("wizard.cipher")}</Label>
-                <HelpTip content={t("wizard.help.cipher")} />
-              </div>
-              <Select value={state.cipher} onValueChange={(v) => onChange({ cipher: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="chacha20-poly1305">ChaCha20-Poly1305</SelectItem>
-                  <SelectItem value="aes-128-gcm">AES-128-GCM</SelectItem>
-                  <SelectItem value="aes-256-gcm">AES-256-GCM</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* Cipher & TLS fingerprint — applies to all transports except WireGuard */}
+      {state.transport !== "wireguard" && (
+        <div className="flex gap-2">
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-1">
+              <Label>{t("wizard.cipher")}</Label>
+              <HelpTip content={t("wizard.help.cipher")} />
             </div>
-            <div className="flex-1 space-y-1">
-              <Label>{t("wizard.quicVersion")}</Label>
-              <Select value={state.quicVersion} onValueChange={(v) => onChange({ quicVersion: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">{t("common.auto")}</SelectItem>
-                  <SelectItem value="v1">v1</SelectItem>
-                  <SelectItem value="v2">v2</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={state.cipher} onValueChange={(v) => onChange({ cipher: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chacha20-poly1305">ChaCha20-Poly1305</SelectItem>
+                <SelectItem value="aes-128-gcm">AES-128-GCM</SelectItem>
+                <SelectItem value="aes-256-gcm">AES-256-GCM</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-1">
+          <div className="flex-1 space-y-1">
             <Label>{t("wizard.tlsFingerprint")}</Label>
             <Select value={state.fingerprint} onValueChange={(v) => onChange({ fingerprint: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -122,6 +108,26 @@ export default function Step3Transport({ state, onChange }: Props) {
                 <SelectItem value="none">{t("common.none")}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      )}
+
+      {/* QUIC sub-fields */}
+      {state.transport === "quic" && (
+        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.quicSettings")}</p>
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-1">
+              <Label>{t("wizard.quicVersion")}</Label>
+              <Select value={state.quicVersion} onValueChange={(v) => onChange({ quicVersion: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{t("common.auto")}</SelectItem>
+                  <SelectItem value="v1">v1</SelectItem>
+                  <SelectItem value="v2">v2</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -224,37 +230,6 @@ export default function Step3Transport({ state, onChange }: Props) {
               <Label>{t("wizard.xportaPollTimeout")}</Label>
               <Input type="number" min={1} value={state.xportaPollTimeout} onChange={(e) => onChange({ xportaPollTimeout: parseInt(e.target.value, 10) || 55 })} />
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TCP sub-fields */}
-      {state.transport === "tcp" && (
-        <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("wizard.tcpSettings")}</p>
-          <div className="space-y-1">
-            <Label>{t("wizard.cipher")}</Label>
-            <Select value={state.cipher} onValueChange={(v) => onChange({ cipher: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="chacha20-poly1305">ChaCha20-Poly1305</SelectItem>
-                <SelectItem value="aes-128-gcm">AES-128-GCM</SelectItem>
-                <SelectItem value="aes-256-gcm">AES-256-GCM</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>{t("wizard.tlsFingerprint")}</Label>
-            <Select value={state.fingerprint} onValueChange={(v) => onChange({ fingerprint: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="chrome">Chrome</SelectItem>
-                <SelectItem value="firefox">Firefox</SelectItem>
-                <SelectItem value="safari">Safari</SelectItem>
-                <SelectItem value="random">Random</SelectItem>
-                <SelectItem value="none">{t("common.none")}</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       )}
