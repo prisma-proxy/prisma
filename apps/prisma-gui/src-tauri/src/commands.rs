@@ -297,25 +297,25 @@ pub fn refresh_subscriptions() -> Result<serde_json::Value, String> {
 // ── open folder ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn open_folder(path: String) -> Result<(), String> {
+pub fn open_folder(_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(&path)
+            .arg(&_path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
-            .arg(&path)
+            .arg(&_path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(&path)
+            .arg(&_path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
