@@ -231,8 +231,8 @@ pub async fn session_init_handler(
     let token = create_cookie_token(&state.cookie_key, &session_id, &client_id_bytes, expiry);
 
     // Create session channels
-    let (upload_tx, upload_rx) = mpsc::channel::<Bytes>(256);
-    let (download_tx, download_rx) = mpsc::channel::<Bytes>(256);
+    let (upload_tx, upload_rx) = mpsc::channel::<Bytes>(1024);
+    let (download_tx, download_rx) = mpsc::channel::<Bytes>(1024);
 
     let poll_notify = Arc::new(Notify::new());
     let handler_active = Arc::new(AtomicBool::new(true));
@@ -313,8 +313,8 @@ pub async fn session_init_handler(
                 break;
             };
 
-            let (new_upload_tx, new_upload_rx) = mpsc::channel::<Bytes>(256);
-            let (new_download_tx, new_download_rx) = mpsc::channel::<Bytes>(256);
+            let (new_upload_tx, new_upload_rx) = mpsc::channel::<Bytes>(1024);
+            let (new_download_tx, new_download_rx) = mpsc::channel::<Bytes>(1024);
 
             // Replace session channels atomically
             *session.upload_tx.lock().await = new_upload_tx;
@@ -409,24 +409,41 @@ pub async fn upload_handler(
         }
     };
 
-    // Insert into reassembler
-    {
+    // Insert into reassembler and conditionally drain.
+    // When the handler is inactive (between relays), data stays buffered in the
+    // reassembler — draining would fail because the old channel receiver is gone.
+    // The handler loop will create fresh channels when notified.
+    let chunks = {
         let mut reassembler = upload_reassembler.lock().await;
         if let Err(e) = reassembler.insert(seq, payload) {
             warn!(error = %e, "XPorta reassembler error");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
 
-        // Drain in-order data and send to upload channel
+        let active = state
+            .sessions
+            .get(&session_id)
+            .map(|s| s.handler_active.load(Ordering::Relaxed))
+            .unwrap_or(false);
+
+        if active {
+            reassembler.drain()
+        } else {
+            vec![]
+        }
+    }; // reassembler lock released
+
+    if !chunks.is_empty() {
         let tx = upload_tx.lock().await;
-        for chunk in reassembler.drain() {
+        for chunk in chunks {
             if tx.send(Bytes::from(chunk)).await.is_err() {
-                return StatusCode::GONE.into_response();
+                break; // Channel died mid-send — handler will recreate
             }
         }
     }
 
-    // If handler is inactive (relay ended, waiting for new data), notify it
+    // ALWAYS notify handler if inactive — this is critical for session survival
+    // when a relay ends and new data arrives before the handler creates fresh channels.
     if let Some(session) = state.sessions.get(&session_id) {
         if !session.handler_active.load(Ordering::Relaxed) {
             session.poll_notify.notify_one();
@@ -509,7 +526,10 @@ pub async fn poll_handler(
     // Try to collect download data.
     // IMPORTANT: Release the Mutex before any long wait to avoid blocking
     // upload piggybacking and concurrent poll handlers.
+    const MAX_POLL_ITEMS: usize = 128;
+    const MAX_POLL_BYTES: usize = 2 * 1024 * 1024; // 2MB cap per response
     let mut items: Vec<(u32, Bytes)> = Vec::new();
+    let mut total_bytes: usize = 0;
 
     // Fast path: drain immediately available data
     {
@@ -517,9 +537,10 @@ pub async fn poll_handler(
         while let Ok(data) = rx.try_recv() {
             if let Some(session) = state.sessions.get(&session_id) {
                 let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
+                total_bytes += data.len();
                 items.push((seq, data));
             }
-            if items.len() >= 16 {
+            if items.len() >= MAX_POLL_ITEMS || total_bytes >= MAX_POLL_BYTES {
                 break;
             }
         }
@@ -542,9 +563,10 @@ pub async fn poll_handler(
         while let Ok(data) = rx.try_recv() {
             if let Some(session) = state.sessions.get(&session_id) {
                 let seq = session.download_seq.fetch_add(1, Ordering::Relaxed);
+                total_bytes += data.len();
                 items.push((seq, data));
             }
-            if items.len() >= 16 {
+            if items.len() >= MAX_POLL_ITEMS || total_bytes >= MAX_POLL_BYTES {
                 break;
             }
         }
