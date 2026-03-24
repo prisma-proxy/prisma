@@ -2,7 +2,6 @@ pub mod auth;
 pub mod bandwidth;
 pub mod camouflage;
 pub mod channel_stream;
-pub mod compat_handler;
 pub mod forward;
 pub mod grpc_stream;
 pub mod handler;
@@ -283,42 +282,6 @@ pub async fn run(config_path: &str) -> Result<()> {
         info!(addr = %config.cdn.listen_addr, "CDN HTTPS listener spawned");
     }
 
-    // Start multi-protocol compat inbound listeners
-    let enabled_inbounds: Vec<_> = config
-        .inbounds
-        .iter()
-        .filter(|ib| ib.enabled)
-        .cloned()
-        .collect();
-    if !enabled_inbounds.is_empty() {
-        info!(
-            count = enabled_inbounds.len(),
-            "Starting multi-protocol inbound listeners"
-        );
-        for inbound in enabled_inbounds {
-            let ib_dns = dns_cache.clone();
-            let ib_ctx = ctx.clone();
-            info!(
-                tag = %inbound.tag,
-                protocol = %inbound.protocol,
-                addr = %inbound.listen,
-                "Compat inbound listener spawned"
-            );
-            tokio::spawn(async move {
-                let tag = inbound.tag.clone();
-                let protocol = inbound.protocol.clone();
-                if let Err(e) = listener::compat_inbound::listen(inbound, ib_dns, ib_ctx).await {
-                    tracing::error!(
-                        tag = %tag,
-                        protocol = %protocol,
-                        error = %e,
-                        "Compat inbound listener error"
-                    );
-                }
-            });
-        }
-    }
-
     // Start TCP and QUIC listeners concurrently
     let tcp_config = config.clone();
     let tcp_auth = auth_store.clone();
@@ -445,19 +408,6 @@ fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, conf
         "disabled"
     };
     eprintln!("  TLS: {}  Camouflage: {}", tls_status, camo_status);
-
-    // Multi-protocol inbounds
-    let enabled_inbounds: Vec<_> = config.inbounds.iter().filter(|ib| ib.enabled).collect();
-    if !enabled_inbounds.is_empty() {
-        eprintln!("  ─────────────────────────────────────");
-        eprintln!("  Inbounds: {} configured", enabled_inbounds.len());
-        for ib in &enabled_inbounds {
-            eprintln!(
-                "    [{}] {} on {} ({})",
-                ib.tag, ib.protocol, ib.listen, ib.transport
-            );
-        }
-    }
 
     eprintln!();
 }

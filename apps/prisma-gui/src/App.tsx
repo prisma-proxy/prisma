@@ -16,7 +16,6 @@ const Home = lazy(() => import("./pages/Home"));
 const Profiles = lazy(() => import("./pages/Profiles"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const ProxyGroups = lazy(() => import("./pages/ProxyGroups"));
-const Import = lazy(() => import("./pages/Import"));
 const Rules = lazy(() => import("./pages/Rules"));
 const Connections = lazy(() => import("./pages/Connections"));
 const Logs = lazy(() => import("./pages/Logs"));
@@ -44,7 +43,6 @@ export default function App() {
               <Route path="/profiles"  element={<Profiles />} />
               <Route path="/subscriptions" element={<Subscriptions />} />
               <Route path="/proxy-groups" element={<ProxyGroups />} />
-              <Route path="/import"    element={<Import />} />
               <Route path="/rules"     element={<Rules />} />
               <Route path="/connections" element={<Connections />} />
               <Route path="/logs"      element={<Logs />} />

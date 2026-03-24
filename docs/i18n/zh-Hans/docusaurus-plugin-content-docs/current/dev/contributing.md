@@ -112,7 +112,6 @@ cargo fuzz run fuzz_decode_client_init
 | `fuzz_decode_server_init` | PrismaServerInit 解码 |
 | `fuzz_decode_data_frame` | DataFrame 解码 |
 | `fuzz_mux_frame` | XMUX 帧解码 |
-| `fuzz_import_uri` | URI 导入解析器 |
 
 ---
 

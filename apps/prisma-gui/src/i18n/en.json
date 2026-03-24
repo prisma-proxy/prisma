@@ -4,7 +4,6 @@
     "profiles": "Profiles",
     "subscriptions": "Subscriptions",
     "proxyGroups": "Proxy Groups",
-    "import": "Import",
     "rules": "Rules",
     "logs": "Logs",
     "speed": "Speed",
@@ -557,29 +556,4 @@
     "selected": "Selected {{server}} in {{group}}",
     "timeout": "Timeout"
   },
-  "import": {
-    "title": "Import",
-    "clipboard": "Clipboard",
-    "file": "File",
-    "singleUri": "Single URI",
-    "batchImport": "Batch Import",
-    "uriLabel": "Proxy URI",
-    "uriHint": "Paste a ss://, vmess://, trojan://, or vless:// URI to parse and preview before adding.",
-    "batchLabel": "Multiple URIs",
-    "batchPlaceholder": "ss://...\nvmess://...\ntrojan://...\nvless://...",
-    "batchHint": "One URI per line, or paste a base64-encoded subscription body.",
-    "parse": "Parse",
-    "parseAll": "Parse All",
-    "results": "Parsed Results",
-    "parsed": "parsed",
-    "errors": "errors",
-    "selectAll": "Select All",
-    "deselectAll": "Deselect All",
-    "saveSelected": "Add {{count}} Profile(s)",
-    "savedCount": "Added {{count}} profile(s)",
-    "clipboardEmpty": "Clipboard is empty",
-    "clipboardError": "Could not read clipboard",
-    "fileSuccess": "Imported {{count}} profile(s) from file",
-    "fileInvalid": "Expected a JSON array of profiles"
-  }
 }

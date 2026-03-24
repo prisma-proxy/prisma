@@ -257,7 +257,6 @@ Mobile support is provided through **prisma-gui**, a Tauri + React application t
 The mobile app supports:
 - Profile management with QR code import/export
 - Subscription URLs with auto-update
-- Multi-protocol import (SS/VMess/Trojan/VLESS)
 - System proxy and TUN (VPN) modes
 - Per-app proxy routing
 - GeoIP lookups and latency testing

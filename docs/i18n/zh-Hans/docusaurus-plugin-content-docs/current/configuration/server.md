@@ -271,47 +271,6 @@ type = "ip-cidr"
 value = "10.0.0.0/8"
 ```
 
-## `[[inbounds]]` -- 多协议入站监听器
-
-每个条目定义一个协议特定的入站监听器。Prisma 除了原生 PrismaVeil 客户端外，还可接受来自 VMess、VLESS、Shadowsocks 和 Trojan 客户端的连接。
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `protocol` | string | -- | 入站协议：`"vmess"` / `"vless"` / `"shadowsocks"` / `"trojan"` |
-| `listen_addr` | string | -- | 此入站的监听地址（如 `"0.0.0.0:8444"`） |
-| `enabled` | bool | `true` | 启用/禁用此入站 |
-| `settings` | table | -- | 协议特定设置（用户、密码、加密方法等） |
-
-示例：
-
-```toml
-[[inbounds]]
-protocol = "vmess"
-listen_addr = "0.0.0.0:10086"
-enabled = true
-
-[[inbounds.settings.clients]]
-id = "b831381d-6324-4d53-ad4f-8cda48b30811"
-alter_id = 0
-
-[[inbounds]]
-protocol = "shadowsocks"
-listen_addr = "0.0.0.0:8388"
-enabled = true
-
-[inbounds.settings]
-method = "aes-256-gcm"
-password = "your-password"
-
-[[inbounds]]
-protocol = "trojan"
-listen_addr = "0.0.0.0:443"
-enabled = true
-
-[inbounds.settings]
-password = "your-trojan-password"
-```
-
 ## `[fallback]` -- 传输回退
 
 服务端传输回退配置。当主要传输失败或遇到重复错误时，服务器可以自动激活备用传输。
@@ -505,15 +464,6 @@ alpn_protocols = ["h2", "http/1.1"]
 # [acls.client-uuid-1.rules.matcher]
 # type = "domain-keyword"
 # value = "torrent"
-
-# 多协议入站
-# [[inbounds]]
-# protocol = "vmess"
-# listen_addr = "0.0.0.0:10086"
-# enabled = true
-# [[inbounds.settings.clients]]
-# id = "vmess-client-uuid"
-# alter_id = 0
 
 # 传输回退
 # [fallback]

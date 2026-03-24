@@ -9,7 +9,7 @@ All Rust workspace crates live under `crates/`:
 | Crate | Role |
 |-------|------|
 | `crates/prisma-core` | Shared library: crypto (PrismaVeil v5), protocol, config, types, bandwidth, DNS, routing |
-| `crates/prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta + multi-protocol inbounds), relay, auth, camouflage |
+| `crates/prisma-server` | Server binary: listeners (TCP/QUIC/WS/gRPC/XHTTP/XPorta/ShadowTLS/SSH/WireGuard), relay, auth, camouflage |
 | `crates/prisma-client` | Client library: SOCKS5/HTTP inbound, transport selection, TUN, connection pool |
 | `crates/prisma-cli` | CLI binary (clap 4): server/client runners, management commands |
 | `crates/prisma-mgmt` | Management API (axum): REST + WebSocket endpoints, auth middleware |

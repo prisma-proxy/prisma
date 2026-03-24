@@ -270,35 +270,3 @@ export interface AlertConfig {
   handshake_spike_threshold: number;
 }
 
-// --- Inbound management types ---
-
-export interface InboundSummary {
-  tag: string;
-  protocol: string;
-  listen: string;
-  transport: string;
-  enabled: boolean;
-  client_count: number;
-}
-
-export interface InboundDetail {
-  tag: string;
-  protocol: string;
-  listen: string;
-  transport: string;
-  enabled: boolean;
-  transport_settings: {
-    path?: string;
-    service_name?: string;
-  };
-  clients: InboundClient[];
-  method?: string;
-}
-
-export interface InboundClient {
-  id?: string;
-  email?: string;
-  flow?: string;
-  alter_id?: number;
-  has_password?: boolean;
-}

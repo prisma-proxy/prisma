@@ -28,7 +28,6 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/dashboard/backups": "sidebar.backups",
   "/dashboard/speed-test": "sidebar.speedTest",
   "/dashboard/bandwidth": "sidebar.bandwidth",
-  "/dashboard/inbounds": "sidebar.inbounds",
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

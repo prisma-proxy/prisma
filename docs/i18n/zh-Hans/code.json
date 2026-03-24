@@ -51,7 +51,7 @@
     "message": "代理组与订阅"
   },
   "homepage.features.proxyGroups.description": {
-    "message": "支持 Select、AutoUrl、Fallback 和 LoadBalance 代理组。多协议订阅导入（SS/VMess/Trojan/VLESS），支持自动更新。"
+    "message": "支持 Select、AutoUrl、Fallback 和 LoadBalance 代理组。订阅导入，支持自动更新。"
   },
   "homepage.features.tunMode.title": {
     "message": "TUN 模式"

@@ -70,19 +70,6 @@ export const NET_WIFI         = 1;
 export const NET_CELLULAR     = 2;
 export const NET_ETHERNET     = 3;
 
-// ── URI import types ──────────────────────────────────────────────────────────
-
-export type ImportProtocol = "shadowsocks" | "vmess" | "trojan" | "vless";
-
-export interface ImportedServer {
-  original_protocol: ImportProtocol;
-  server_name: string;
-  host: string;
-  port: number;
-  config: unknown;
-  error?: string;
-}
-
 // ── Proxy group types ─────────────────────────────────────────────────────────
 
 export type GroupType = "select" | "auto_url" | "fallback" | "load_balance";

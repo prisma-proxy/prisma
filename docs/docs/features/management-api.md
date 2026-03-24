@@ -177,14 +177,6 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/metrics/clients
 # [{"client_id":"uuid","name":"laptop","active_connections":3,"bytes_up":1048576,"bytes_down":5242880,"avg_latency_ms":42}]
 ```
 
-### Inbounds (Multi-Protocol)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/inbounds` | List all configured inbounds (PrismaVeil, VMess, VLESS, Shadowsocks, Trojan) |
-
-Returns the list of `[[inbounds]]` entries from the server configuration, including protocol type, listen address, and status.
-
 ### Client Permissions
 
 | Method | Path | Description |
@@ -316,7 +308,6 @@ All endpoints at a glance (v2.0.0):
 | Client Permissions | 4 REST | Permissions, kick, block |
 | Client Metrics | 1 REST | Per-client metrics snapshot |
 | System | 1 REST | Platform and resource info |
-| Inbounds | 1 REST | Multi-protocol inbound listing |
 | Configuration | 4 REST + 1 WS | Config read/write, hot-reload, reload stream |
 | Config Backups | 5 REST | Backup, restore, diff |
 | Bandwidth & Quotas | 5 REST | Per-client limits and usage |

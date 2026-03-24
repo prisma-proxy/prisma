@@ -160,7 +160,6 @@ export default function DevPage(): ReactNode {
             <div className={styles.moduleCard}><strong>mux</strong><span>XMUX 流多路复用。帧：[stream_id:4][type:1][len:2][payload]。类型：SYN、DATA、FIN、RST。</span></div>
             <div className={styles.moduleCard}><strong>traffic_shaping</strong><span>反指纹识别：桶填充、时序抖动、帧合并、噪声注入。</span></div>
             <div className={styles.moduleCard}><strong>state</strong><span>服务器状态：<code>ServerState</code>、原子指标计数器、连接信息、客户端级指标、历史环形缓冲区。</span></div>
-            <div className={styles.moduleCard}><strong>import</strong><span>URI 解析器：<code>ss://</code>、<code>vmess://</code>、<code>trojan://</code>、<code>vless://</code>，映射为 <code>ClientConfig</code>。</span></div>
           </div>
           <p>
             完整模块列表请参阅英文版的对应章节 — 技术名称（函数签名、类型名称、配置键）与英文版相同。

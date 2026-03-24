@@ -112,8 +112,6 @@ pub fn run() {
             commands::get_profiles_dir,
             commands::open_folder,
             commands::download_file,
-            commands::import_uri,
-            commands::import_batch,
             commands::proxy_groups_list,
             commands::proxy_group_select,
             commands::proxy_group_test,

@@ -257,7 +257,6 @@ docker run --rm -v $(pwd):/config prisma server -c /config/server.toml
 移动端应用支持：
 - 配置文件管理，支持二维码导入/导出
 - 订阅 URL，支持自动更新
-- 多协议导入（SS/VMess/Trojan/VLESS）
 - 系统代理和 TUN (VPN) 模式
 - 按应用代理路由
 - GeoIP 查询和延迟测试
