@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
-import { ToastProvider } from "@/lib/toast-context";
+import { ToastProvider, useToast } from "@/lib/toast-context";
 import { I18nProvider } from "@/lib/i18n";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+/** Bridges React Query errors to the toast notification system. */
+function QueryLayer({ children }: { children: React.ReactNode }) {
+  const { toast } = useToast();
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -17,18 +20,40 @@ export function Providers({ children }: { children: React.ReactNode }) {
             refetchOnWindowFocus: false,
           },
         },
+        queryCache: new QueryCache({
+          onError: (error, query) => {
+            // Only toast for queries that previously had data (background refetch failure).
+            // Avoids spamming toasts on initial page load when API is unreachable.
+            if (query.state.data !== undefined) {
+              toast(error.message || "Failed to refresh data", "error");
+            }
+          },
+        }),
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            toast(error.message || "Operation failed", "error");
+          },
+        }),
       })
   );
 
   return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
     <ThemeProvider>
       <I18nProvider>
         <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <ToastProvider>
+          <ToastProvider>
+            <QueryLayer>
               {children}
-            </ToastProvider>
-          </QueryClientProvider>
+            </QueryLayer>
+          </ToastProvider>
         </AuthProvider>
       </I18nProvider>
     </ThemeProvider>

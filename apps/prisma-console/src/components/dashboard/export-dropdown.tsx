@@ -1,7 +1,8 @@
 "use client";
 
 import { Download, FileSpreadsheet, FileJson, Image as ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,11 +22,7 @@ export function ExportDropdown({ onCSV, onJSON, onPNG }: ExportDropdownProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="outline" size="sm" />
-        }
-      >
+      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
         <Download className="h-4 w-4" />
         {t("common.export")}
       </DropdownMenuTrigger>

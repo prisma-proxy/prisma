@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -197,7 +198,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {!isEditing && (
-        <DialogTrigger render={<Button />}>{t("routing.addRule")}</DialogTrigger>
+        <DialogTrigger className={cn(buttonVariants())}>{t("routing.addRule")}</DialogTrigger>
       )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>

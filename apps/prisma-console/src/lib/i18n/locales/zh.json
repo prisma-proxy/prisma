@@ -23,6 +23,7 @@
   "dashboard.realtimeTraffic": "实时流量",
   "dashboard.activeConnections": "活跃连接",
   "dashboard.historicalMetrics": "历史指标",
+  "dashboard.connectionError": "无法连接到管理 API。服务器可达后将显示指标数据。",
   "dashboard.createClient": "创建客户端",
   "dashboard.viewBackups": "查看备份",
   "dashboard.viewLogs": "查看日志",

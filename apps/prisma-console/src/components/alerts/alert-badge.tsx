@@ -1,7 +1,8 @@
 "use client";
 
 import { Bell, AlertTriangle, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -40,11 +41,7 @@ export function AlertBadge({ alerts: externalAlerts }: AlertBadgePropsExternal) 
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" className="relative" />
-        }
-      >
+      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "relative")}>
         <Bell className="h-4 w-4" />
         {alerts.length > 0 && (
           <span

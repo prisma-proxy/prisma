@@ -23,6 +23,7 @@
   "dashboard.realtimeTraffic": "Real-time Traffic",
   "dashboard.activeConnections": "Active Connections",
   "dashboard.historicalMetrics": "Historical Metrics",
+  "dashboard.connectionError": "Unable to connect to the management API. Metrics will appear once the server is reachable.",
   "dashboard.createClient": "Create Client",
   "dashboard.viewBackups": "View Backups",
   "dashboard.viewLogs": "View Logs",

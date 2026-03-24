@@ -4,7 +4,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
 import { Sun, Moon, Monitor, Globe, Menu, Search, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -72,11 +73,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
 
         {/* Theme Toggle */}
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" />
-            }
-          >
+          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}>
             {themeIcon}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
@@ -107,11 +104,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
 
         {/* Locale Switcher */}
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" />
-            }
-          >
+          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}>
             <Globe className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>
