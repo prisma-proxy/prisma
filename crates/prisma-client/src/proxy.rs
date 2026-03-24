@@ -70,7 +70,7 @@ pub struct ProxyContext {
 impl ProxyContext {
     /// Connect to the remote Prisma server with retry and exponential backoff.
     ///
-    /// Retries up to 3 times (500ms, 1s backoff) to handle transient failures
+    /// Retries up to 3 times (1s, 2s, 4s backoff) to handle transient failures
     /// such as TLS handshake EOF or connection resets.
     pub async fn connect(&self) -> Result<TransportStream> {
         const MAX_RETRIES: u32 = 2;
@@ -82,7 +82,7 @@ impl ProxyContext {
                 Err(e) => {
                     if attempt < MAX_RETRIES {
                         let backoff =
-                            std::time::Duration::from_millis(500 * 2u64.pow(attempt));
+                            std::time::Duration::from_millis(1000 * 2u64.pow(attempt));
                         warn!(
                             attempt = attempt + 1,
                             max = MAX_RETRIES + 1,
