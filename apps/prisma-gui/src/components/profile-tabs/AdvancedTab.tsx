@@ -15,15 +15,6 @@ export default function AdvancedTab({ state, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Connection pool */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Label>{t("wizard.connectionPool")}</Label>
-          <p className="text-xs text-muted-foreground">{t("wizard.connectionPoolDesc")}</p>
-        </div>
-        <Switch checked={state.connectionPoolEnabled} onCheckedChange={(v) => onChange({ connectionPoolEnabled: v })} />
-      </div>
-
       {/* XMUX connection pool */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
