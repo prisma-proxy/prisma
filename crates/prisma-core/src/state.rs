@@ -242,7 +242,7 @@ impl ServerState {
             connections: Arc::new(RwLock::new(HashMap::new())),
             auth_store: Arc::new(RwLock::new(auth_store)),
             config: Arc::new(RwLock::new(config.clone())),
-            routing_rules: Arc::new(RwLock::new(Vec::new())),
+            routing_rules: Arc::new(RwLock::new(config.management_rules.clone())),
             log_tx,
             metrics_tx,
             metrics_history: Arc::new(RwLock::new(VecDeque::with_capacity(86400))),

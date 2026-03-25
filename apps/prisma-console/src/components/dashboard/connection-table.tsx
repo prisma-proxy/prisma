@@ -33,11 +33,10 @@ function countryFlag(code: string): string {
     .join("");
 }
 
-/** Format geo info as "🇺🇸 New York" or "🇺🇸 US" or empty string. */
-function formatGeo(country?: string, city?: string): string {
+/** Format geo info as compact "🇺🇸 US". City shown via tooltip. */
+function formatGeo(country?: string): string {
   if (!country) return "";
-  const flag = countryFlag(country);
-  return city ? `${flag} ${city}` : `${flag} ${country}`;
+  return `${countryFlag(country)} ${country}`;
 }
 
 /** Extract IP from "IP:port" or "[IPv6]:port" address strings. */
@@ -366,8 +365,9 @@ export function ConnectionTable({
                           {group.ip}
                           <CopyButton value={group.ip} />
                           {(() => {
-                            const geo = formatGeo(group.connections[0]?.country, group.connections[0]?.city);
-                            return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]">{geo}</span> : null;
+                            const c = group.connections[0];
+                            const geo = formatGeo(c?.country);
+                            return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]" title={c?.city ? `${c.country}, ${c.city}` : c?.country}>{geo}</span> : null;
                           })()}
                         </span>
                       </TableCell>
@@ -470,8 +470,8 @@ export function ConnectionTable({
                       {stripPort(conn.peer_addr)}
                       <CopyButton value={stripPort(conn.peer_addr)} />
                       {(() => {
-                        const geo = formatGeo(conn.country, conn.city);
-                        return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]">{geo}</span> : null;
+                        const geo = formatGeo(conn.country);
+                        return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]" title={conn.city ? `${conn.country}, ${conn.city}` : conn.country}>{geo}</span> : null;
                       })()}
                     </span>
                   </TableCell>

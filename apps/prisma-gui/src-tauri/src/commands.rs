@@ -383,6 +383,7 @@ pub fn speed_test(
 #[tauri::command]
 pub async fn update_rule_provider(
     id: String,
+    name: String,
     url: String,
     behavior: String,
     action: String,
@@ -401,6 +402,13 @@ pub async fn update_rule_provider(
         return Err(format!("HTTP {}", resp.status()));
     }
     let content = resp.text().await.map_err(|e| e.to_string())?;
+
+    // Write to the cache directory that prisma-client expects
+    // RuleProviderManager uses {name}.txt as the cache filename
+    let cache_dir = std::env::temp_dir().join("prisma-rule-providers");
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let cache_path = cache_dir.join(format!("{}.txt", name));
+    let _ = std::fs::write(&cache_path, &content);
 
     // Count lines that are actual rules (not comments/blanks)
     let rule_count = content

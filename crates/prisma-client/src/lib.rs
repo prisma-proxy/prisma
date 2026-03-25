@@ -249,10 +249,14 @@ async fn run_inner(
                     config.routing.rule_providers.clone(),
                     cache_dir,
                 );
-                mgr.load_all().await;
+                // Load from cache only (fast, non-blocking). The GUI pre-populates
+                // the cache when the user clicks "Update" on a provider. Network
+                // fetch is skipped here because the proxy is not running yet and
+                // each provider has a 30s timeout that would block connect.
+                mgr.load_cached_only().await;
                 let provider_rules = mgr.all_rules().await;
                 if !provider_rules.is_empty() {
-                    info!(count = provider_rules.len(), "Loaded rules from providers");
+                    info!(count = provider_rules.len(), "Loaded rules from provider cache");
                     all_rules.extend(provider_rules);
                 }
             }

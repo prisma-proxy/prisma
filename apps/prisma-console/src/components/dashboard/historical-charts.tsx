@@ -5,8 +5,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -50,18 +48,6 @@ export function HistoricalCharts() {
     });
   }, [history]);
 
-  const failureData = useMemo(() => {
-    if (!history || history.length < 2) return [];
-    return history.slice(1).map((s, i) => {
-      const prev = history[i];
-      const ts = new Date(s.timestamp);
-      return {
-        time: ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        failures: Math.max(0, s.handshake_failures - prev.handshake_failures),
-      };
-    });
-  }, [history]);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -80,69 +66,37 @@ export function HistoricalCharts() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">{t("metrics.activeConnections")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {connectionData.length === 0 ? (
-              <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-                {t("common.noData")}
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={connectionData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                  <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={50} />
-                  <Tooltip
-                    contentStyle={CHART_TOOLTIP_STYLE_SM}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="connections"
-                    stroke="hsl(217, 91%, 60%)"
-                    fill="hsl(217, 91%, 60%)"
-                    fillOpacity={0.15}
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">{t("metrics.handshakeFailures")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {failureData.length === 0 ? (
-              <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-                {t("common.noData")}
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={failureData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                  <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={50} />
-                  <Tooltip
-                    contentStyle={CHART_TOOLTIP_STYLE_SM}
-                  />
-                  <Bar
-                    dataKey="failures"
-                    fill="hsl(0, 72%, 51%)"
-                    fillOpacity={0.7}
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">{t("metrics.activeConnections")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {connectionData.length === 0 ? (
+            <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+              {t("common.noData")}
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={connectionData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} className="text-muted-foreground" />
+                <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={50} />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE_SM}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="connections"
+                  stroke="hsl(217, 91%, 60%)"
+                  fill="hsl(217, 91%, 60%)"
+                  fillOpacity={0.15}
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

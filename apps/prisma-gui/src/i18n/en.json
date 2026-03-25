@@ -169,6 +169,7 @@
     "toggleProvider": "Enable/disable provider",
     "updateProvider": "Update",
     "updateAll": "Update All",
+    "updatingProgress": "Updating {{current}}/{{total}}...",
     "noProviders": "No rule providers configured",
     "providerName": "Name",
     "providerNamePlaceholder": "My rule list",

@@ -118,6 +118,7 @@ export default function Rules() {
 
   // Provider update state
   const [updatingProviders, setUpdatingProviders] = useState<Set<string>>(new Set());
+  const [updateAllProgress, setUpdateAllProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Rule testing state
   const [testInput, setTestInput] = useState("");
@@ -265,7 +266,7 @@ export default function Rules() {
       const isConnected = useStore.getState().connected;
       const httpPort = isConnected ? (useSettings.getState().httpPort || 0) : 0;
       const result = await api.updateRuleProvider(
-        provider.id, provider.url, provider.behavior, provider.action, httpPort
+        provider.id, provider.name, provider.url, provider.behavior, provider.action, httpPort
       );
       const updatedAt = new Date(result.updated_at_epoch * 1000).toISOString();
       updateProviderStatus(provider.id, result.rule_count, updatedAt);
@@ -283,9 +284,13 @@ export default function Rules() {
 
   async function handleUpdateAllProviders() {
     const enabled = providers.filter((p) => p.enabled);
-    for (const p of enabled) {
-      handleUpdateProvider(p);
+    if (enabled.length === 0) return;
+    setUpdateAllProgress({ current: 0, total: enabled.length });
+    for (let i = 0; i < enabled.length; i++) {
+      setUpdateAllProgress({ current: i + 1, total: enabled.length });
+      await handleUpdateProvider(enabled[i]);
     }
+    setUpdateAllProgress(null);
   }
 
   // Group presets by category
@@ -437,8 +442,17 @@ export default function Rules() {
                 </p>
                 <div className="flex gap-1">
                   {providers.some((p) => p.enabled) && (
-                    <Button size="sm" variant="ghost" onClick={handleUpdateAllProviders}>
-                      <RefreshCw size={14} /> {t("rules.updateAll")}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleUpdateAllProviders}
+                      disabled={updateAllProgress !== null}
+                    >
+                      <RefreshCw size={14} className={updateAllProgress !== null ? "animate-spin" : ""} />
+                      {updateAllProgress !== null
+                        ? t("rules.updatingProgress", { current: updateAllProgress.current, total: updateAllProgress.total })
+                        : t("rules.updateAll")
+                      }
                     </Button>
                   )}
                   <Button size="sm" onClick={() => setProviderDialogOpen(true)}>

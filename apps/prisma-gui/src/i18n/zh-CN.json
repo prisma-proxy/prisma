@@ -169,6 +169,7 @@
     "toggleProvider": "启用/禁用规则源",
     "updateProvider": "更新",
     "updateAll": "全部更新",
+    "updatingProgress": "正在更新 {{current}}/{{total}}...",
     "noProviders": "尚未配置规则源",
     "providerName": "名称",
     "providerNamePlaceholder": "我的规则列表",

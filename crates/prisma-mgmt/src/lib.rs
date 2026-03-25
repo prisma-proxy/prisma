@@ -76,6 +76,13 @@ impl MgmtState {
         }
     }
 
+    /// Sync the in-memory routing rules back to `ServerConfig.management_rules`.
+    pub async fn sync_rules_to_config(&self) {
+        let rules = self.state.routing_rules.read().await;
+        let mut cfg = self.state.config.write().await;
+        cfg.management_rules = rules.clone();
+    }
+
     /// Sync the in-memory `auth_store` back to `ServerConfig.authorized_clients`.
     /// Preserves bandwidth/quota/permissions fields that only exist in the config.
     pub async fn sync_clients_to_config(&self) {

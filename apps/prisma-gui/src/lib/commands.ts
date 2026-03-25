@@ -133,9 +133,9 @@ export const api = {
     invoke<void>("on_memory_warning"),
 
   // ── Rule providers ─────────────────────────────────────────────────
-  updateRuleProvider: (id: string, url: string, behavior: string, action: string, proxyPort: number) =>
+  updateRuleProvider: (id: string, name: string, url: string, behavior: string, action: string, proxyPort: number) =>
     invoke<{ id: string; rule_count: number; updated_at_epoch: number }>(
-      "update_rule_provider", { id, url, behavior, action, proxyPort }
+      "update_rule_provider", { id, name, url, behavior, action, proxyPort }
     ),
 
   listRuleProviders: () =>

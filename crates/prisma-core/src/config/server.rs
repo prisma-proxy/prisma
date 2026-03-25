@@ -75,6 +75,9 @@ pub struct ServerConfig {
     /// Used in share configs/URIs. Falls back to `listen_addr` if unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public_address: Option<String>,
+    /// API-managed routing rules (persisted separately from router traffic rules).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub management_rules: Vec<RoutingRule>,
 }
 
 fn default_dns_upstream() -> String {

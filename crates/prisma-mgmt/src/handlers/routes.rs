@@ -42,6 +42,8 @@ pub async fn create(
 
     let json = Json(rule.clone());
     state.routing_rules.write().await.push(rule);
+    state.sync_rules_to_config().await;
+    state.persist_config().await;
     Ok(json)
 }
 
@@ -50,13 +52,22 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateRouteRequest>,
 ) -> StatusCode {
-    let mut rules = state.routing_rules.write().await;
-    if let Some(rule) = rules.iter_mut().find(|r| r.id == id) {
-        rule.name = req.name;
-        rule.priority = req.priority;
-        rule.condition = req.condition;
-        rule.action = req.action;
-        rule.enabled = req.enabled;
+    let found = {
+        let mut rules = state.routing_rules.write().await;
+        if let Some(rule) = rules.iter_mut().find(|r| r.id == id) {
+            rule.name = req.name;
+            rule.priority = req.priority;
+            rule.condition = req.condition;
+            rule.action = req.action;
+            rule.enabled = req.enabled;
+            true
+        } else {
+            false
+        }
+    };
+    if found {
+        state.sync_rules_to_config().await;
+        state.persist_config().await;
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -64,10 +75,15 @@ pub async fn update(
 }
 
 pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> StatusCode {
-    let mut rules = state.routing_rules.write().await;
-    let len_before = rules.len();
-    rules.retain(|r| r.id != id);
-    if rules.len() < len_before {
+    let removed = {
+        let mut rules = state.routing_rules.write().await;
+        let len_before = rules.len();
+        rules.retain(|r| r.id != id);
+        rules.len() < len_before
+    };
+    if removed {
+        state.sync_rules_to_config().await;
+        state.persist_config().await;
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

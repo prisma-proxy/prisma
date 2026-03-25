@@ -146,6 +146,34 @@ impl RuleProviderManager {
         }
     }
 
+    /// Load all providers from cache only (no network fetch). Fast and non-blocking.
+    /// Used during connect to avoid hanging when the proxy is not yet running.
+    pub async fn load_cached_only(&self) {
+        let names: Vec<String> = {
+            let providers = self.providers.read().await;
+            providers.keys().cloned().collect()
+        };
+        for name in names {
+            if let Ok(content) = self.read_cache(&name).await {
+                let parse_result = {
+                    let providers = self.providers.read().await;
+                    providers.get(&name).and_then(|state| {
+                        parse_rules(&content, state.config.format, state.config.behavior, state.config.action).ok()
+                    })
+                };
+                if let Some(rules) = parse_result {
+                    let rule_count = rules.len();
+                    let mut providers = self.providers.write().await;
+                    if let Some(state) = providers.get_mut(&name) {
+                        state.rules = rules;
+                        state.rule_count = rule_count;
+                        tracing::info!(provider = %name, rules = rule_count, "Loaded rules from cache");
+                    }
+                }
+            }
+        }
+    }
+
     /// Load all providers: try cache first, then fetch from URL.
     pub async fn load_all(&self) {
         let names: Vec<String> = {

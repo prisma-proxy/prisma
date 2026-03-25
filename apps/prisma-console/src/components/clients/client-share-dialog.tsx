@@ -144,7 +144,7 @@ export function ClientShareDialog({
           ) : tab === "toml" ? (
             /* TOML tab with line numbers */
             <div className="space-y-2">
-              <div className="overflow-y-auto max-h-[50vh] rounded-lg border bg-muted font-mono text-xs leading-5">
+              <div className="overflow-auto max-h-[50vh] rounded-lg border bg-muted font-mono text-xs leading-5">
                 <table className="w-full border-collapse">
                   <tbody>
                     {tomlLines.map((line, idx) => (
