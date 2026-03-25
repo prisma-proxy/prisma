@@ -1,6 +1,6 @@
 # Prisma
 
-Encrypted proxy system built in Rust. Workspace version 2.0.0, edition 2021.
+Encrypted proxy system built in Rust. Workspace version 2.8.0, edition 2021.
 
 ## Workspace Layout
 
@@ -52,6 +52,7 @@ Use `prisma-orchestrator` for any project work — it plans, executes, tests, ve
 | `frontend-engineer` | GUI (Tauri/React), Console (Next.js), CLI UX, Docusaurus docs |
 | `platform-engineer` | FFI safety, Tauri 2 mobile, TUN, system proxy, cross-platform |
 | `qa-engineer` | Tests, validation, benchmarks, CI/CD, quality gates |
+| `version-sync` | Atomic version bump across all 9 version files, validate + commit |
 
 ### Skills (`.claude/skills/`)
 

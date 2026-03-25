@@ -102,6 +102,8 @@ pub fn run() {
             commands::set_tray_port,
             commands::quit_app,
             commands::set_tray_proxy_mode,
+            commands::get_active_profile_id,
+            commands::get_proxy_mode,
             commands::set_per_app_filter,
             commands::clear_per_app_filter,
             commands::get_running_apps,

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
+import { useStatusSync } from "./hooks/useStatusSync";
 import { usePrismaEvents } from "./hooks/usePrismaEvents";
 import { usePlatform } from "./hooks/usePlatform";
 import { useWindowEvents } from "./hooks/useWindowEvents";
@@ -27,6 +28,7 @@ const Analytics = lazy(() => import("./pages/Analytics"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 export default function App() {
+  useStatusSync();
   usePrismaEvents();
   useWindowEvents();
   useAutoReconnect();

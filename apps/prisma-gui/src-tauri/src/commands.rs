@@ -209,6 +209,16 @@ pub fn set_tray_port(port: u16) {
     }
 }
 
+#[tauri::command]
+pub fn get_active_profile_id() -> Option<String> {
+    crate::state::ACTIVE_PROFILE_ID.lock().ok()?.clone()
+}
+
+#[tauri::command]
+pub fn get_proxy_mode() -> u32 {
+    crate::state::PROXY_MODE.lock().map(|g| *g).unwrap_or(0x02)
+}
+
 // ── ping ──────────────────────────────────────────────────────────────────────
 
 #[tauri::command]

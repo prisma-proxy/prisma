@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowUpDown,
   Search,
@@ -21,15 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ConnectionMap from "@/components/ConnectionMap";
 import ConnectionTimeline from "@/components/ConnectionTimeline";
@@ -76,21 +68,26 @@ function connDuration(conn: TrackedConnection): number {
   return Math.max(0, Math.floor((end - conn.startedAt) / 1000));
 }
 
+/** Each visible row manages its own 3-second timer for live duration updates. */
+const LiveDuration = memo(function LiveDuration({ conn }: { conn: TrackedConnection }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (conn.status !== "active") return;
+    const timer = setInterval(() => setTick((t) => t + 1), 3000);
+    return () => clearInterval(timer);
+  }, [conn.status]);
+  return <>{fmtDuration(connDuration(conn))}</>;
+});
+
+const GRID_COLS = "grid-cols-[40px_1fr_80px_100px_80px_80px_80px_80px_36px]";
+const GRID_COLS_MOBILE = "grid-cols-[32px_1fr_72px_72px_72px_28px]";
+
 export default function Connections() {
   const { t } = useTranslation();
   const connections = useConnections((s) => s.connections);
   const clearAll = useConnections((s) => s.clearAll);
   const clearClosed = useConnections((s) => s.clearClosed);
   const closeConnectionById = useConnections((s) => s.closeConnectionById);
-
-  // Force re-render every second for live duration updates
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const hasActive = connections.some((c) => c.status === "active");
-    if (!hasActive) return;
-    const timer = setInterval(() => setTick((t) => t + 1), 3000);
-    return () => clearInterval(timer);
-  }, [connections]);
 
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
@@ -183,6 +180,16 @@ export default function Connections() {
 
     return sorted;
   }, [connections, actionFilter, statusFilter, search, sortField, sortDir]);
+
+  // Virtual scrolling
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 36,
+    overscan: 15,
+  });
 
   const SortIcon = useCallback(
     ({ field }: { field: SortField }) => {
@@ -311,156 +318,302 @@ export default function Connections() {
         </Button>
       </div>
 
-      {/* Table */}
-      <ScrollArea className="flex-1 h-0 rounded-md border">
-        {filtered.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8 text-sm">
-            {t("connections.noConnections")}
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[60px]">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1"
-                    onClick={() => toggleSort("status")}
+      {/* Connections list - virtualized */}
+      <div className="flex-1 h-0 rounded-md border flex flex-col overflow-hidden">
+        {/* Sticky header - desktop */}
+        <div
+          className={cn(
+            "hidden sm:grid gap-0 text-xs font-medium text-muted-foreground border-b bg-card px-2 py-1.5 shrink-0",
+            GRID_COLS
+          )}
+        >
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("status")}
+            >
+              {t("connections.status")}
+              <SortIcon field="status" />
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("destination")}
+            >
+              {t("connections.destination")}
+              <SortIcon field="destination" />
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("action")}
+            >
+              {t("connections.action")}
+              <SortIcon field="action" />
+            </button>
+          </div>
+          <div>{t("connections.rule")}</div>
+          <div>{t("connections.transport")}</div>
+          <div className="text-right">
+            <button
+              type="button"
+              className="flex items-center gap-1 ml-auto"
+              onClick={() => toggleSort("bytesDown")}
+            >
+              <SortIcon field="bytesDown" />
+              {t("connections.download")}
+            </button>
+          </div>
+          <div className="text-right">
+            <button
+              type="button"
+              className="flex items-center gap-1 ml-auto"
+              onClick={() => toggleSort("bytesUp")}
+            >
+              <SortIcon field="bytesUp" />
+              {t("connections.upload")}
+            </button>
+          </div>
+          <div className="text-right">
+            <button
+              type="button"
+              className="flex items-center gap-1 ml-auto"
+              onClick={() => toggleSort("duration")}
+            >
+              <SortIcon field="duration" />
+              {t("connections.duration")}
+            </button>
+          </div>
+          <div />
+        </div>
+
+        {/* Sticky header - mobile */}
+        <div
+          className={cn(
+            "grid sm:hidden gap-0 text-xs font-medium text-muted-foreground border-b bg-card px-2 py-1.5 shrink-0",
+            GRID_COLS_MOBILE
+          )}
+        >
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("status")}
+            >
+              <SortIcon field="status" />
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("destination")}
+            >
+              {t("connections.destination")}
+              <SortIcon field="destination" />
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1"
+              onClick={() => toggleSort("action")}
+            >
+              {t("connections.action")}
+              <SortIcon field="action" />
+            </button>
+          </div>
+          <div className="text-right">
+            <button
+              type="button"
+              className="flex items-center gap-1 ml-auto"
+              onClick={() => toggleSort("bytesDown")}
+            >
+              <SortIcon field="bytesDown" />
+              {"\u2193"}
+            </button>
+          </div>
+          <div className="text-right">
+            <button
+              type="button"
+              className="flex items-center gap-1 ml-auto"
+              onClick={() => toggleSort("duration")}
+            >
+              <SortIcon field="duration" />
+              {t("connections.duration")}
+            </button>
+          </div>
+          <div />
+        </div>
+
+        {/* Virtual scroll body */}
+        <div ref={parentRef} className="flex-1 overflow-auto">
+          {filtered.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8 text-sm">
+              {t("connections.noConnections")}
+            </p>
+          ) : (
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const conn = filtered[virtualRow.index];
+                return (
+                  <div
+                    key={conn.id}
+                    data-index={virtualRow.index}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
                   >
-                    {t("connections.status")}
-                    <SortIcon field="status" />
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1"
-                    onClick={() => toggleSort("destination")}
-                  >
-                    {t("connections.destination")}
-                    <SortIcon field="destination" />
-                  </button>
-                </TableHead>
-                <TableHead className="w-[100px]">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1"
-                    onClick={() => toggleSort("action")}
-                  >
-                    {t("connections.action")}
-                    <SortIcon field="action" />
-                  </button>
-                </TableHead>
-                <TableHead className="w-[100px] hidden sm:table-cell">
-                  {t("connections.rule")}
-                </TableHead>
-                <TableHead className="w-[80px] hidden sm:table-cell">
-                  {t("connections.transport")}
-                </TableHead>
-                <TableHead className="w-[80px] text-right">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 ml-auto"
-                    onClick={() => toggleSort("bytesDown")}
-                  >
-                    <SortIcon field="bytesDown" />
-                    {t("connections.download")}
-                  </button>
-                </TableHead>
-                <TableHead className="w-[80px] text-right hidden sm:table-cell">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 ml-auto"
-                    onClick={() => toggleSort("bytesUp")}
-                  >
-                    <SortIcon field="bytesUp" />
-                    {t("connections.upload")}
-                  </button>
-                </TableHead>
-                <TableHead className="w-[80px] text-right">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 ml-auto"
-                    onClick={() => toggleSort("duration")}
-                  >
-                    <SortIcon field="duration" />
-                    {t("connections.duration")}
-                  </button>
-                </TableHead>
-                <TableHead className="w-[40px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((conn) => (
-                <TableRow key={conn.id} className="text-xs">
-                  <TableCell className="py-1.5">
-                    <span
+                    {/* Desktop row */}
+                    <div
                       className={cn(
-                        "inline-block w-2 h-2 rounded-full",
-                        conn.status === "active"
-                          ? "bg-green-400 animate-pulse"
-                          : "bg-gray-400"
-                      )}
-                      title={
-                        conn.status === "active"
-                          ? t("connections.active")
-                          : t("connections.closed")
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="py-1.5 font-mono text-xs max-w-[300px] truncate">
-                    {conn.destination}
-                  </TableCell>
-                  <TableCell className="py-1.5">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] px-1.5 py-0",
-                        actionColor(conn.action)
+                        "hidden sm:grid gap-0 items-center text-xs px-2 h-full border-b border-border/30 hover:bg-muted/30",
+                        GRID_COLS
                       )}
                     >
-                      <span
-                        className={cn(
-                          "inline-block w-1.5 h-1.5 rounded-full mr-1",
-                          actionDot(conn.action)
+                      <div className="flex items-center">
+                        <span
+                          className={cn(
+                            "inline-block w-2 h-2 rounded-full",
+                            conn.status === "active"
+                              ? "bg-green-400 animate-pulse"
+                              : "bg-gray-400"
+                          )}
+                          title={
+                            conn.status === "active"
+                              ? t("connections.active")
+                              : t("connections.closed")
+                          }
+                        />
+                      </div>
+                      <div className="font-mono text-xs truncate pr-1">
+                        {conn.destination}
+                      </div>
+                      <div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            actionColor(conn.action)
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-1.5 h-1.5 rounded-full mr-1",
+                              actionDot(conn.action)
+                            )}
+                          />
+                          {t(`connections.${conn.action}`)}
+                        </Badge>
+                      </div>
+                      <div className="text-muted-foreground truncate">
+                        {conn.rule}
+                      </div>
+                      <div className="text-muted-foreground truncate">
+                        {conn.transport}
+                      </div>
+                      <div className="text-right font-mono">
+                        {fmtBytes(conn.bytesDown)}
+                      </div>
+                      <div className="text-right font-mono">
+                        {fmtBytes(conn.bytesUp)}
+                      </div>
+                      <div className="text-right font-mono text-muted-foreground">
+                        <LiveDuration conn={conn} />
+                      </div>
+                      <div className="flex items-center justify-center">
+                        {conn.status === "active" && (
+                          <button
+                            type="button"
+                            className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            onClick={() => closeConnectionById(conn.id)}
+                            title={t("connections.close")}
+                          >
+                            <X size={12} />
+                          </button>
                         )}
-                      />
-                      {t(`connections.${conn.action}`)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground hidden sm:table-cell">
-                    {conn.rule}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground hidden sm:table-cell">
-                    {conn.transport}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right font-mono">
-                    {fmtBytes(conn.bytesDown)}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right font-mono hidden sm:table-cell">
-                    {fmtBytes(conn.bytesUp)}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right font-mono text-muted-foreground">
-                    {fmtDuration(connDuration(conn))}
-                  </TableCell>
-                  <TableCell className="py-1.5">
-                    {conn.status === "active" && (
-                      <button
-                        type="button"
-                        className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                        onClick={() => closeConnectionById(conn.id)}
-                        title={t("connections.close")}
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </ScrollArea>
+                      </div>
+                    </div>
+
+                    {/* Mobile row */}
+                    <div
+                      className={cn(
+                        "grid sm:hidden gap-0 items-center text-xs px-2 h-full border-b border-border/30 hover:bg-muted/30",
+                        GRID_COLS_MOBILE
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <span
+                          className={cn(
+                            "inline-block w-2 h-2 rounded-full",
+                            conn.status === "active"
+                              ? "bg-green-400 animate-pulse"
+                              : "bg-gray-400"
+                          )}
+                        />
+                      </div>
+                      <div className="font-mono text-xs truncate pr-1">
+                        {conn.destination}
+                      </div>
+                      <div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            actionColor(conn.action)
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-1.5 h-1.5 rounded-full mr-1",
+                              actionDot(conn.action)
+                            )}
+                          />
+                          {t(`connections.${conn.action}`)}
+                        </Badge>
+                      </div>
+                      <div className="text-right font-mono">
+                        {fmtBytes(conn.bytesDown)}
+                      </div>
+                      <div className="text-right font-mono text-muted-foreground">
+                        <LiveDuration conn={conn} />
+                      </div>
+                      <div className="flex items-center justify-center">
+                        {conn.status === "active" && (
+                          <button
+                            type="button"
+                            className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            onClick={() => closeConnectionById(conn.id)}
+                            title={t("connections.close")}
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Footer summary */}
       {connections.length > 0 && (

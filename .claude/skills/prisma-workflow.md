@@ -42,7 +42,7 @@ Auto-determine bump type from conventional commit type:
 
 When a task produces multiple changes, use the highest-priority bump across all accumulated changes (major > minor > patch > none).
 
-### Synced files (all 10)
+### Synced files (all 9)
 
 | # | File | Field |
 |---|------|-------|
@@ -53,9 +53,8 @@ When a task produces multiple changes, use the highest-priority bump across all 
 | 5 | `apps/prisma-console/package.json` | `version` |
 | 6 | `CLAUDE.md` | "Workspace version X.Y.Z" |
 | 7 | `docs/docusaurus.config.ts` | version label |
-| 8 | `tools/prisma-mcp/src/tools/evolution.ts` | competitive matrix version |
-| 9 | `apps/prisma-console/src/components/layout/sidebar.tsx` | fallback version |
-| 10 | `.claude/skills/prisma-crate-map.md` | header version |
+| 8 | `.claude/skills/prisma-crate-map.md` | header version |
+| 9 | `apps/prisma-console/src/app/login/page.tsx` | footer version text |
 
 The 6 crate Cargo.toml files inherit `version.workspace = true` — no individual updates needed.
 
@@ -66,7 +65,7 @@ The 6 crate Cargo.toml files inherit `version.workspace = true` — no individua
 After bumping, grep for the old version across all synced files to confirm nothing was missed:
 
 ```bash
-grep -rn "OLD_VERSION" Cargo.toml apps/prisma-gui/package.json apps/prisma-gui/src-tauri/tauri.conf.json apps/prisma-gui/src-tauri/Cargo.toml apps/prisma-console/package.json CLAUDE.md docs/docusaurus.config.ts tools/prisma-mcp/src/tools/evolution.ts apps/prisma-console/src/components/layout/sidebar.tsx .claude/skills/prisma-crate-map.md
+grep -rn "OLD_VERSION" Cargo.toml apps/prisma-gui/package.json apps/prisma-gui/src-tauri/tauri.conf.json apps/prisma-gui/src-tauri/Cargo.toml apps/prisma-console/package.json CLAUDE.md docs/docusaurus.config.ts .claude/skills/prisma-crate-map.md apps/prisma-console/src/app/login/page.tsx
 ```
 
 If any match remains, fix it before proceeding.

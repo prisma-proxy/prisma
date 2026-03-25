@@ -79,6 +79,12 @@ export const api = {
   setTrayProxyMode: (mode: number) =>
     invoke<void>("set_tray_proxy_mode", { mode }),
 
+  getActiveProfileId: () =>
+    invoke<string | null>("get_active_profile_id"),
+
+  getProxyMode: () =>
+    invoke<number>("get_proxy_mode"),
+
   // Per-app proxy
   setPerAppFilter: (filterJson: string) =>
     invoke<void>("set_per_app_filter", { filterJson }),
