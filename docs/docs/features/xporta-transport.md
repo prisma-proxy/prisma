@@ -174,7 +174,7 @@ poll_concurrency = 3       # 1-8
 upload_concurrency = 4     # 1-8
 max_payload_size = 65536   # bytes
 poll_timeout_secs = 55     # 10-90
-extra_headers = [["X-App-Version", "2.5.0"]]
+extra_headers = [["X-App-Version", "2.6.0"]]
 ```
 
 | Parameter | Default | Description |

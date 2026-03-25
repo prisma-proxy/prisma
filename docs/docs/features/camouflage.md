@@ -143,7 +143,7 @@ auth_secret = "your-hex-secret"
 
 ## TLS Probe Guard
 
-In addition to decoy fallback, Prisma v2.5.0 includes a **TLS probe guard** that automatically detects and blocks IPs exhibiting repeated TLS handshake failures. This is a strong indicator of active probing -- censorship systems often attempt rapid connection sequences to fingerprint the server.
+In addition to decoy fallback, Prisma v2.6.0 includes a **TLS probe guard** that automatically detects and blocks IPs exhibiting repeated TLS handshake failures. This is a strong indicator of active probing -- censorship systems often attempt rapid connection sequences to fingerprint the server.
 
 When enabled (the default when camouflage is active), the probe guard tracks per-IP handshake failure counts within a configurable sliding window. Once an IP exceeds the threshold, it is temporarily blocked.
 

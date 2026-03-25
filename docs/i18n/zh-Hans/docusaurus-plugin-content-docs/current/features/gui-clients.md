@@ -244,7 +244,7 @@ cargo build --release -p prisma-ffi --target aarch64-apple-darwin
 
 ## 移动端支持（Tauri 2）
 
-从 v2.5.0 开始，**prisma-gui** 使用 **Tauri 2 移动目标** 支持 Android 和 iOS。不再需要独立的原生应用（`prisma-gui-android`、`prisma-gui-ios`）。同一个 Tauri 2 + React 代码库编译到移动目标，`prisma-ffi` 作为原生后端通过 Tauri 的移动 shell 链接。
+从 v2.6.0 开始，**prisma-gui** 使用 **Tauri 2 移动目标** 支持 Android 和 iOS。不再需要独立的原生应用（`prisma-gui-android`、`prisma-gui-ios`）。同一个 Tauri 2 + React 代码库编译到移动目标，`prisma-ffi` 作为原生后端通过 Tauri 的移动 shell 链接。
 
 移动端构建与桌面端客户端具有完全功能对等，包括订阅、代理组、统一导入页面、活跃连接视图、延迟测试、规则提供者和完整的国际化（英文 + 中文）。
 
