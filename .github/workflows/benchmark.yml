@@ -12,14 +12,6 @@ on:
           - quick
   schedule:
     - cron: '0 4 * * 1'  # Weekly Monday 4am UTC
-  push:
-    branches: [master]
-    paths:
-      - 'crates/*/src/**'
-      - 'crates/*/Cargo.toml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'scripts/benchmark.sh'
 
 permissions:
   contents: write

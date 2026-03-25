@@ -19,7 +19,6 @@ on:
       - 'tools/prisma-mcp/src/**'
       - 'tools/prisma-mcp/package.json'
       - 'tools/prisma-mcp/tsconfig.json'
-      - 'docs/**'
   pull_request:
     paths:
       - 'crates/*/src/**'
@@ -37,7 +36,6 @@ on:
       - 'tools/prisma-mcp/src/**'
       - 'tools/prisma-mcp/package.json'
       - 'tools/prisma-mcp/tsconfig.json'
-      - 'docs/**'
 
 concurrency:
   group: ci-${{ github.ref }}
