@@ -60,6 +60,12 @@ pub struct UserPublic {
 }
 
 #[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Deserialize)]
 pub struct CreateUserRequest {
     pub username: String,
     pub password: String,
@@ -343,6 +349,63 @@ pub async fn delete_user(
 
     if !removed {
         return Err(StatusCode::NOT_FOUND);
+    }
+
+    state.persist_config().await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/auth/password  (authenticated — any role)
+// ---------------------------------------------------------------------------
+
+pub async fn change_password(
+    user: UserInfo,
+    State(state): State<MgmtState>,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<StatusCode, StatusCode> {
+    if req.new_password.len() < 8 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Verify current password
+    let current_hash = {
+        let cfg = state.config.read().await;
+        cfg.management_api
+            .users
+            .iter()
+            .find(|u| u.username == user.username && u.enabled)
+            .map(|u| u.password_hash.clone())
+            .ok_or(StatusCode::NOT_FOUND)?
+    };
+
+    let current_password = req.current_password.clone();
+    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(current_password, &current_hash))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    if !valid {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // Hash new password
+    let new_hash = tokio::task::spawn_blocking(move || bcrypt::hash(req.new_password, 10))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Update password
+    {
+        let mut cfg = state.config.write().await;
+        let target = cfg
+            .management_api
+            .users
+            .iter_mut()
+            .find(|u| u.username == user.username)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        target.password_hash = new_hash;
     }
 
     state.persist_config().await;

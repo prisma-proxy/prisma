@@ -730,5 +730,17 @@
   "role.accessDenied": "访问被拒绝",
   "role.accessDeniedDesc": "您没有权限访问此页面。请联系管理员。",
   "role.readOnly": "只读",
-  "role.readOnlyDesc": "您对此部分拥有只读访问权限。如需修改，请联系管理员。"
+  "role.readOnlyDesc": "您对此部分拥有只读访问权限。如需修改，请联系管理员。",
+  "auth.changePassword": "修改密码",
+  "auth.currentPassword": "当前密码",
+  "auth.newPassword": "新密码",
+  "auth.passwordChanged": "密码修改成功。",
+  "auth.profile": "个人资料",
+  "auth.loggedInAs": "已登录为 {username}",
+  "auth.wrongPassword": "当前密码不正确。",
+  "shortcuts.title": "键盘快捷键",
+  "shortcuts.openSearch": "打开搜索 / 命令面板",
+  "shortcuts.closeDialog": "关闭对话框",
+  "shortcuts.showShortcuts": "显示键盘快捷键",
+  "shortcuts.navigate": "页面导航"
 }

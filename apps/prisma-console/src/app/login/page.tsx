@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Shield, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/lib/toast-context";
@@ -446,12 +446,12 @@ export default function LoginPage() {
   else if (useLegacyToken) subtitle = t("auth.subtitle");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
-            <Shield className="h-7 w-7 text-primary-foreground" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary overflow-hidden">
+            <img src="/favicon.ico" className="h-10 w-10" alt="Prisma" />
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -469,6 +469,10 @@ export default function LoginPage() {
               ? renderLegacyTokenForm()
               : renderLoginForm()}
         </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          Prisma Console v2.8.0
+        </p>
       </div>
     </div>
   );

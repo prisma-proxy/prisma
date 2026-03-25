@@ -6,18 +6,19 @@ import { ChevronRight, Home } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 const SEGMENT_LABELS: Record<string, string> = {
-  dashboard: "sidebar.overview",
   connections: "sidebar.connections",
   servers: "sidebar.server",
   clients: "sidebar.clients",
   routing: "sidebar.routing",
-  logs: "sidebar.logs",
   settings: "sidebar.settings",
   system: "sidebar.system",
   "traffic-shaping": "sidebar.trafficShaping",
   backups: "sidebar.backups",
   "speed-test": "sidebar.speedTest",
   bandwidth: "sidebar.bandwidth",
+  analytics: "sidebar.analytics",
+  events: "sidebar.events",
+  users: "sidebar.users",
   new: "common.create",
   detail: "clients.clientDetails",
   edit: "common.edit",

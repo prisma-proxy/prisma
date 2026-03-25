@@ -14,6 +14,13 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const PAGE_TITLE_KEYS: Record<string, string> = {
   "/dashboard": "sidebar.overview",
@@ -41,6 +48,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return localStorage.getItem("prisma-sidebar-collapsed") === "true";
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Keyboard shortcuts overlay
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (e.key === "?") {
+        setShowShortcuts((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Resolve page title using i18n
   const titleKey =
@@ -115,6 +137,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <MobileNav />
 
         <CommandPalette />
+
+        {/* Keyboard shortcuts overlay */}
+        <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("shortcuts.title")}</DialogTitle>
+              <DialogDescription className="sr-only">
+                {t("shortcuts.title")}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {[
+                { keys: "Ctrl+K", label: t("shortcuts.openSearch") },
+                { keys: "Esc", label: t("shortcuts.closeDialog") },
+                { keys: "?", label: t("shortcuts.showShortcuts") },
+                { keys: "\u2190 \u2192", label: t("shortcuts.navigate") },
+              ].map(({ keys, label }) => (
+                <div key={keys} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{label}</span>
+                  <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                    {keys}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </MetricsProvider>
   );

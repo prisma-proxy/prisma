@@ -22,7 +22,7 @@ console_dir = "/opt/prisma/console"  # 可选：提供构建好的控制台
 
 管理 API 支持两种认证方式：
 
-### 基于 JWT 的认证（v2.7.0+）
+### 基于 JWT 的认证（v2.8.0+）
 
 使用用户名和密码进行认证以获取 JWT 令牌。在后续请求中使用该令牌：
 
@@ -100,7 +100,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.7.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.8.0"}
 ```
 
 ### 连接
@@ -398,7 +398,7 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.7.0）：
+所有端点一览（v2.8.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|

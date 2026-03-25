@@ -22,7 +22,7 @@ console_dir = "/opt/prisma/console"  # optional: serve built console
 
 The management API supports two authentication methods:
 
-### JWT-based authentication (v2.7.0+)
+### JWT-based authentication (v2.8.0+)
 
 Authenticate with username and password to receive a JWT token. Use the token in subsequent requests:
 
@@ -100,7 +100,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.7.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.8.0"}
 ```
 
 ### Connections
@@ -400,7 +400,7 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.7.0):
+All endpoints at a glance (v2.8.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|

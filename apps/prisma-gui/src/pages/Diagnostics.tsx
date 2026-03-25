@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Activity, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -7,22 +7,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/commands";
 
+const STILL_TESTING_THRESHOLD_MS = 5_000;
+
 type DiagResult =
   | { status: "idle" }
-  | { status: "testing" }
+  | { status: "testing"; startedAt: number }
   | { status: "success"; message: string; ms: number }
   | { status: "error"; message: string };
 
+/**
+ * Returns true once `thresholdMs` has elapsed since `startedAt`.
+ * Automatically re-renders the component when the threshold is crossed.
+ */
+function useTimeoutIndicator(startedAt: number | null, thresholdMs: number): boolean {
+  const [exceeded, setExceeded] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setExceeded(false);
+    if (startedAt === null) return;
+
+    const remaining = thresholdMs - (Date.now() - startedAt);
+    if (remaining <= 0) {
+      setExceeded(true);
+      return;
+    }
+
+    timerRef.current = setTimeout(() => setExceeded(true), remaining);
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, [startedAt, thresholdMs]);
+
+  return exceeded;
+}
+
 function ResultDisplay({ result }: { result: DiagResult }) {
   const { t } = useTranslation();
+  const startedAt = result.status === "testing" ? result.startedAt : null;
+  const slow = useTimeoutIndicator(startedAt, STILL_TESTING_THRESHOLD_MS);
 
   if (result.status === "idle") return null;
 
   if (result.status === "testing") {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
-        <Loader2 className="animate-spin" size={14} />
-        <span>{t("diagnostics.testing")}</span>
+      <div className="flex flex-col gap-1 mt-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="animate-spin" size={14} />
+          <span>{t("diagnostics.testing")}</span>
+        </div>
+        {slow && (
+          <span className="text-xs text-yellow-500">{t("diagnostics.stillTesting")}</span>
+        )}
       </div>
     );
   }
@@ -63,12 +99,16 @@ export default function Diagnostics() {
     const addr = latencyHost.trim();
     if (!addr) return;
 
-    setLatencyResult({ status: "testing" });
+    setLatencyResult({ status: "testing", startedAt: Date.now() });
+    // Yield to the renderer so the loading state paints before the FFI call
+    await new Promise(resolve => requestAnimationFrame(resolve));
     try {
+      const start = performance.now();
       const ms = await api.pingServer(addr);
+      const elapsed = Math.round(performance.now() - start);
       setLatencyResult({
         status: "success",
-        message: t("diagnostics.result") + ": " + ms + "ms",
+        message: t("diagnostics.result") + ": " + ms + "ms (" + elapsed + "ms total)",
         ms,
       });
     } catch (e) {
@@ -83,7 +123,8 @@ export default function Diagnostics() {
     const domain = dnsHost.trim();
     if (!domain) return;
 
-    setDnsResult({ status: "testing" });
+    setDnsResult({ status: "testing", startedAt: Date.now() });
+    await new Promise(resolve => requestAnimationFrame(resolve));
     try {
       // Use pingServer to resolve + measure round-trip to the domain
       const addr = domain.includes(":") ? domain : domain + ":443";
@@ -107,7 +148,8 @@ export default function Diagnostics() {
     const addr = connHost.trim();
     if (!addr) return;
 
-    setConnResult({ status: "testing" });
+    setConnResult({ status: "testing", startedAt: Date.now() });
+    await new Promise(resolve => requestAnimationFrame(resolve));
     try {
       const target = addr.includes(":") ? addr : addr + ":443";
       const start = performance.now();

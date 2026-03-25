@@ -730,5 +730,17 @@
   "role.accessDenied": "Access Denied",
   "role.accessDeniedDesc": "You do not have permission to access this page. Please contact an administrator.",
   "role.readOnly": "Read-only",
-  "role.readOnlyDesc": "You have read-only access to this section. Contact an administrator to make changes."
+  "role.readOnlyDesc": "You have read-only access to this section. Contact an administrator to make changes.",
+  "auth.changePassword": "Change Password",
+  "auth.currentPassword": "Current Password",
+  "auth.newPassword": "New Password",
+  "auth.passwordChanged": "Password changed successfully.",
+  "auth.profile": "Profile",
+  "auth.loggedInAs": "Logged in as {username}",
+  "auth.wrongPassword": "Current password is incorrect.",
+  "shortcuts.title": "Keyboard Shortcuts",
+  "shortcuts.openSearch": "Open search / command palette",
+  "shortcuts.closeDialog": "Close dialog",
+  "shortcuts.showShortcuts": "Show keyboard shortcuts",
+  "shortcuts.navigate": "Navigate pages"
 }

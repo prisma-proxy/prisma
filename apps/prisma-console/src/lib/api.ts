@@ -242,4 +242,11 @@ export const api = {
     }),
   deleteUser: (username: string) =>
     apiFetch<void>(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
+
+  // Auth – password change
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiFetch<void>("/api/auth/password", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 };

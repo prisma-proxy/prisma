@@ -119,9 +119,9 @@ This allows accessing the console without CORS configuration and without exposin
 
 The console supports two authentication modes:
 
-- **Username + password (JWT-based)** — the primary login method as of v2.7.0. Users authenticate with a username and password; the server issues a JWT token that is stored in the browser and sent with each API request. A "Remember me" option is available for persistent login sessions across browser restarts.
+- **Username + password (JWT-based)** — the primary login method as of v2.8.0. Users authenticate with a username and password; the server issues a JWT token that is stored in the browser and sent with each API request. A "Remember me" option is available for persistent login sessions across browser restarts.
 - **Self-registration** — users can register themselves via the login page. Self-registered users are assigned the **Client** role by default, which limits access to their own statistics only. An admin must promote users to higher roles.
-- **Legacy bearer token** — for backward compatibility, the console still accepts the `management_api.auth_token` as a bearer token on the login page. This is useful for automated tooling or migration from pre-v2.7.0 setups.
+- **Legacy bearer token** — for backward compatibility, the console still accepts the `management_api.auth_token` as a bearer token on the login page. This is useful for automated tooling or migration from pre-v2.8.0 setups.
 
 All `/console/*` routes are protected — unauthenticated users are redirected to `/login`.
 

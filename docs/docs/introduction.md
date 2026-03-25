@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.7.0** ships with GeoIP analytics, per-client metrics API, auto-backup, QUIC hostname support, console dashboards, GUI transport modes, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.8.0** ships with GeoIP analytics, per-client metrics API, auto-backup, QUIC hostname support, console dashboards, GUI transport modes, and many more production-grade features.
 
 ## Features
 
@@ -145,7 +145,7 @@ graph LR
     C --> D[ServerState]
 ```
 
-## What's New in 2.7.0
+## What's New in 2.8.0
 
 - **GeoIP analytics** — `GET /api/connections/geo` returns the country distribution of active connections; the console Overview page displays a live GeoIP pie chart
 - **Per-client metrics API** — three new endpoints: `GET /api/metrics/clients`, `GET /api/metrics/clients/{id}`, `GET /api/metrics/clients/{id}/history`. Returns bytes, connection count, active connections, latency p50/p95/p99, and time-series history
@@ -155,7 +155,7 @@ graph LR
 - **Console improvements** — GeoIP pie chart on Overview; real-time CPU/memory area chart on System page; per-client metrics (active connections, bytes, latency p50/p95/p99) on Clients; metrics summary cards on Bandwidth; speed test trend chart + extended stats + 4 test servers; live traffic window capped at 60 s
 - **GUI transport modes** — profile transport selector now includes XHTTP, XPorta, PrismaTLS, and WireGuard; QUIC-only settings (port hopping, entropy camouflage, SNI slicing) are hidden unless QUIC transport is selected
 
-## What's New in 2.7.0
+## What's New in 2.8.0
 
 - **Full project synchronization** — version references, documentation, and feature awareness aligned across all subprojects
 - **Connection pool documentation** — `connection_pool.enabled` fully documented in client config reference

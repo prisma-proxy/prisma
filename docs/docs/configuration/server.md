@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.7.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.8.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -126,7 +126,7 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `jwt_secret` | string | `""` | Secret key for signing JWT tokens. Auto-generated on first server run if left empty. |
 
 :::warning
-The `auth_token` protects all management API endpoints when using legacy token auth. The `jwt_secret` is used for JWT-based authentication (v2.7.0+). Use strong, random values for both in production.
+The `auth_token` protects all management API endpoints when using legacy token auth. The `jwt_secret` is used for JWT-based authentication (v2.8.0+). Use strong, random values for both in production.
 :::
 
 ### `[[management_api.users]]` -- Console users

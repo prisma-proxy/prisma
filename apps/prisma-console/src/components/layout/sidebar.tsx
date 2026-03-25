@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Server,
@@ -22,13 +22,24 @@ import {
   Moon,
   Globe,
   Radio,
+  LogOut,
+  User,
+  KeyRound,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
+import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/components/auth/role-guard";
 import { Button } from "@/components/ui/button";
 import { NotificationDrawer } from "@/components/layout/notification-drawer";
 import { ServerSelector } from "@/components/layout/server-selector";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipTrigger,
@@ -49,6 +60,12 @@ interface NavItem {
 }
 
 const ROLE_LEVEL: Record<Role, number> = { admin: 3, operator: 2, client: 1 };
+
+const ROLE_BADGE_CLASS: Record<Role, string> = {
+  admin: "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-400",
+  operator: "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+  client: "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400",
+};
 
 const navItems: NavItem[] = [
   { labelKey: "sidebar.overview", href: "/dashboard/", icon: LayoutDashboard, exact: true, group: "main" },
@@ -87,8 +104,10 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t, locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
   const { role } = useRole();
 
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
@@ -123,8 +142,8 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-                <span className="text-xs font-bold text-primary-foreground">P</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg overflow-hidden bg-primary">
+                <img src="/favicon.ico" alt="Prisma" className="h-6 w-6" />
               </div>
               <span className="text-base font-semibold tracking-tight">Prisma</span>
             </div>
@@ -212,8 +231,50 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
           })}
         </nav>
 
-        {/* Footer — theme, locale, alerts */}
+        {/* Footer — user menu, theme, locale, alerts */}
         <div className="border-t border-sidebar-border px-2 py-2">
+          {/* User menu */}
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 mb-1 ${
+                  collapsed ? "justify-center" : ""
+                }`}
+              >
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {(user.username ?? "U").charAt(0).toUpperCase()}
+                </div>
+                {!collapsed && (
+                  <div className="flex flex-1 items-center gap-2 overflow-hidden">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {user.username}
+                    </span>
+                    <span
+                      className={`inline-block shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium capitalize leading-none ${ROLE_BADGE_CLASS[role] ?? ROLE_BADGE_CLASS.client}`}
+                    >
+                      {role}
+                    </span>
+                  </div>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" sideOffset={8} align="start" className="min-w-[180px]">
+                <DropdownMenuItem onClick={() => router.push("/dashboard/profile/")}>
+                  <User className="h-4 w-4" />
+                  {t("auth.profile")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/dashboard/profile/")}>
+                  <KeyRound className="h-4 w-4" />
+                  {t("auth.changePassword")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={logout}>
+                  <LogOut className="h-4 w-4" />
+                  {t("auth.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <div className={`flex items-center ${collapsed ? "flex-col gap-1" : "gap-1"}`}>
             <NotificationDrawer />
             <Button

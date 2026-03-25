@@ -153,6 +153,7 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/ws/reload", get(ws_reload::ws_reload))
         // Authenticated user routes
         .route("/api/auth/me", get(users::me))
+        .route("/api/auth/password", put(users::change_password))
         .route(
             "/api/users",
             get(users::list_users).post(users::create_user),

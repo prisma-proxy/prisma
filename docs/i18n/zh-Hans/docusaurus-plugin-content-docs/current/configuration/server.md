@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.7.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.8.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -126,7 +126,7 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `jwt_secret` | string | `""` | JWT 令牌签名密钥。留空时在服务器首次运行时自动生成。 |
 
 :::warning
-`auth_token` 保护所有使用传统令牌认证的管理 API 端点。`jwt_secret` 用于基于 JWT 的认证（v2.7.0+）。生产环境请为两者使用强随机值。
+`auth_token` 保护所有使用传统令牌认证的管理 API 端点。`jwt_secret` 用于基于 JWT 的认证（v2.8.0+）。生产环境请为两者使用强随机值。
 :::
 
 **绑定地址**：默认 API 监听 `127.0.0.1:9090`（仅本地）。要暴露到网络，请更改 `listen_addr`——但请确保有适当的网络级别访问控制。
