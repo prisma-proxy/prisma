@@ -69,7 +69,7 @@ export function parseConditionType(condition: RuleCondition): { type: FriendlyTy
     const val = condition.value as [number, number];
     return { type: "PORT-RANGE", match: `${val[0]}-${val[1]}` };
   }
-  return { type: "DOMAIN", match: String(condition.value ?? "") };
+  return { type: "DOMAIN", match: String((condition as { value?: unknown }).value ?? "") };
 }
 
 /* ── Convert backend action → friendly action ── */
