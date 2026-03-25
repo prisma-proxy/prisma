@@ -22,12 +22,6 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
-function getInitialLocale(): Locale {
-  if (typeof window === "undefined") return "en";
-  const saved = localStorage.getItem("prisma-locale") as Locale | null;
-  return saved && dictionaries[saved] ? saved : "en";
-}
-
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("en");
 

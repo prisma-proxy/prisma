@@ -27,11 +27,6 @@ function resolveTheme(t: Theme): "light" | "dark" {
   return t;
 }
 
-function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "system";
-  return (localStorage.getItem("prisma-theme") as Theme | null) ?? "system";
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");

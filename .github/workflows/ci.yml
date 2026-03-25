@@ -80,7 +80,7 @@ jobs:
           toolchain: stable
           components: clippy
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
 
       - name: Clippy (workspace)
@@ -113,7 +113,7 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
 
       - name: Install nextest
@@ -155,7 +155,7 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/prisma-gui/src-tauri

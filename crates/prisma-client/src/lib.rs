@@ -256,7 +256,10 @@ async fn run_inner(
                 mgr.load_cached_only().await;
                 let provider_rules = mgr.all_rules().await;
                 if !provider_rules.is_empty() {
-                    info!(count = provider_rules.len(), "Loaded rules from provider cache");
+                    info!(
+                        count = provider_rules.len(),
+                        "Loaded rules from provider cache"
+                    );
                     all_rules.extend(provider_rules);
                 }
             }

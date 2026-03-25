@@ -96,18 +96,6 @@ function WidgetWrapper({
   );
 }
 
-/** Map widget IDs to labels for display */
-const WIDGET_LABELS: Record<string, string> = {
-  health: "Health & Metrics",
-  metrics: "Quick Actions",
-  "traffic-chart": "Traffic Chart",
-  "transport-pie": "Distribution Charts",
-  geoip: "GeoIP & Historical",
-  "connection-map": "Connection Map",
-  prometheus: "Prometheus",
-  connections: "Connections Table",
-};
-
 export default function OverviewPage() {
   const { t } = useI18n();
   const { current, history, connected, loading } = useMetricsContext();

@@ -158,7 +158,13 @@ impl RuleProviderManager {
                 let parse_result = {
                     let providers = self.providers.read().await;
                     providers.get(&name).and_then(|state| {
-                        parse_rules(&content, state.config.format, state.config.behavior, state.config.action).ok()
+                        parse_rules(
+                            &content,
+                            state.config.format,
+                            state.config.behavior,
+                            state.config.action,
+                        )
+                        .ok()
                     })
                 };
                 if let Some(rules) = parse_result {
