@@ -48,10 +48,10 @@ function buildCondition(conditionType: string, conditionValue: string): RuleCond
   }
 }
 
-/** Map template action to backend's RuleAction (Allow | Block only). */
-function mapAction(action: string): "Allow" | "Block" {
+/** Map template action to backend's RuleAction (Allow | Direct | Block). */
+function mapAction(action: string): "Allow" | "Direct" | "Block" {
   switch (action) {
-    case "Direct": return "Allow";
+    case "Direct": return "Direct";
     case "Reject": return "Block";
     case "Block": return "Block";
     default: return "Allow";

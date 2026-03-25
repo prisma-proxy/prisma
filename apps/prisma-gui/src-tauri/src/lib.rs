@@ -113,9 +113,6 @@ pub fn run() {
             commands::get_profiles_dir,
             commands::open_folder,
             commands::download_file,
-            commands::proxy_groups_list,
-            commands::proxy_group_select,
-            commands::proxy_group_test,
             // ── Rule provider commands ────────────────────────────────
             commands::update_rule_provider,
             commands::list_rule_providers,

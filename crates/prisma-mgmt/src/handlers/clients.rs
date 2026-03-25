@@ -211,9 +211,13 @@ pub async fn share(
     // Determine transport from server config
     let transport = if cfg.cdn.enabled { "websocket" } else { "quic" };
 
+    // Determine the best server address for client config:
+    // prefer explicit public_address, fall back to listen_addr.
+    let server_addr = cfg.public_address.as_deref().unwrap_or(&cfg.listen_addr);
+
     // Build a minimal ClientConfig JSON for sharing
     let config_json = serde_json::json!({
-        "server_addr": cfg.listen_addr,
+        "server_addr": server_addr,
         "identity": {
             "client_id": client.id,
             "auth_secret": client.auth_secret,

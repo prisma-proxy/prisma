@@ -54,6 +54,32 @@ async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
   return res.text();
 }
 
+// Public setup endpoints (no auth required)
+export async function getSetupStatus(): Promise<{ needs_setup: boolean }> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/setup/status`);
+  return res.json();
+}
+
+export async function setupInit(data: { username: string; password: string }): Promise<{
+  token: string;
+  user: { username: string; role: string };
+  expires_at: string;
+}> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/setup/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    if (res.status === 409) throw new Error("Setup already complete");
+    if (res.status === 400) throw new Error("Invalid credentials (password must be 8+ characters)");
+    throw new Error("Setup failed");
+  }
+  return res.json();
+}
+
 export const api = {
   getHealth: () => apiFetch<import("./types").HealthResponse>("/api/health"),
   getMetrics: () => apiFetch<import("./types").MetricsSnapshot>("/api/metrics"),

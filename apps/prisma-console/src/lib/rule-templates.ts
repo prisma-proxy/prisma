@@ -1,4 +1,4 @@
-import { ShieldBan, Wifi, Globe, ArrowRightLeft, Lock, Bug, type LucideIcon } from "lucide-react";
+import { ShieldBan, Wifi, Globe, ArrowRightLeft, Lock, Bug, Ban, type LucideIcon } from "lucide-react";
 
 export type TemplateCategory = "privacy" | "network" | "regional" | "catchall";
 
@@ -103,6 +103,49 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
       { name: "Block malware KW", condition_type: "DomainKeyword", condition_value: "malware", action: "Block", priority: 90, enabled: true },
       { name: "Block phishing KW", condition_type: "DomainKeyword", condition_value: "phishing", action: "Block", priority: 90, enabled: true },
       { name: "Block cryptominer KW", condition_type: "DomainKeyword", condition_value: "cryptominer", action: "Block", priority: 90, enabled: true },
+    ],
+  },
+
+  {
+    id: "block-torrent",
+    category: "privacy",
+    nameKey: "templates.blockTorrent",
+    descKey: "templates.blockTorrentDesc",
+    icon: Ban,
+    rules: [
+      { name: "Block torrent keyword", condition_type: "DomainKeyword", condition_value: "torrent", action: "Block", priority: 100, enabled: true },
+      { name: "Block tracker keyword", condition_type: "DomainKeyword", condition_value: "tracker", action: "Block", priority: 100, enabled: true },
+      { name: "Block announce keyword", condition_type: "DomainKeyword", condition_value: "announce", action: "Block", priority: 100, enabled: true },
+      { name: "Block BitTorrent ports", condition_type: "PortRange", condition_value: "6881-6889", action: "Block", priority: 100, enabled: true },
+    ],
+  },
+  {
+    id: "block-gambling",
+    category: "privacy",
+    nameKey: "templates.blockGambling",
+    descKey: "templates.blockGamblingDesc",
+    icon: Ban,
+    rules: [
+      { name: "Block bet365", condition_type: "DomainSuffix", condition_value: "bet365.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block pokerstars", condition_type: "DomainSuffix", condition_value: "pokerstars.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block gambling keyword", condition_type: "DomainKeyword", condition_value: "gambling", action: "Block", priority: 100, enabled: true },
+      { name: "Block casino keyword", condition_type: "DomainKeyword", condition_value: "casino", action: "Block", priority: 100, enabled: true },
+      { name: "Block betting keyword", condition_type: "DomainKeyword", condition_value: "betting", action: "Block", priority: 100, enabled: true },
+    ],
+  },
+  {
+    id: "block-social",
+    category: "privacy",
+    nameKey: "templates.blockSocial",
+    descKey: "templates.blockSocialDesc",
+    icon: Ban,
+    rules: [
+      { name: "Block Facebook", condition_type: "DomainSuffix", condition_value: "facebook.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block Instagram", condition_type: "DomainSuffix", condition_value: "instagram.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block TikTok", condition_type: "DomainSuffix", condition_value: "tiktok.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block Twitter/X", condition_type: "DomainSuffix", condition_value: "x.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block Snapchat", condition_type: "DomainSuffix", condition_value: "snapchat.com", action: "Block", priority: 100, enabled: true },
+      { name: "Block Reddit", condition_type: "DomainSuffix", condition_value: "reddit.com", action: "Block", priority: 100, enabled: true },
     ],
   },
 

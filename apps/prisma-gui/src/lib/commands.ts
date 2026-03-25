@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ProxyGroupInfo, LatencyResult } from "./types";
+import type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus } from "./types";
 
-export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus, ProxyGroupInfo, LatencyResult };
+export type { Profile, Stats, UpdateInfo, ImportResult, PerAppFilter, BatteryStatus };
 
 export const api = {
   connect:          (configJson: string, modes: number) =>
@@ -107,16 +107,6 @@ export const api = {
   downloadFile: (url: string, destPath: string, proxyPort: number) =>
     invoke<void>("download_file", { url, destPath, proxyPort }),
 
-  // ── Proxy groups ─────────────────────────────────────────────────────
-  proxyGroupsList: () =>
-    invoke<ProxyGroupInfo[]>("proxy_groups_list"),
-
-  proxyGroupSelect: (groupName: string, server: string) =>
-    invoke<void>("proxy_group_select", { groupName, server }),
-
-  proxyGroupTest: (groupName: string) =>
-    invoke<LatencyResult[]>("proxy_group_test", { groupName }),
-
   // ── Mobile commands ────────────────────────────────────────────────
   checkVpnPermission: () =>
     invoke<boolean>("check_vpn_permission"),
@@ -143,9 +133,9 @@ export const api = {
     invoke<void>("on_memory_warning"),
 
   // ── Rule providers ─────────────────────────────────────────────────
-  updateRuleProvider: (id: string, url: string, behavior: string, action: string) =>
+  updateRuleProvider: (id: string, url: string, behavior: string, action: string, proxyPort: number) =>
     invoke<{ id: string; rule_count: number; updated_at_epoch: number }>(
-      "update_rule_provider", { id, url, behavior, action }
+      "update_rule_provider", { id, url, behavior, action, proxyPort }
     ),
 
   listRuleProviders: () =>

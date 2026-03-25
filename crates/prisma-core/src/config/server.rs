@@ -71,6 +71,10 @@ pub struct ServerConfig {
     /// Session ticket key rotation interval in hours (default: 6).
     #[serde(default = "default_ticket_rotation_hours")]
     pub ticket_rotation_hours: u64,
+    /// Public address advertised to clients (e.g., "example.com:443").
+    /// Used in share configs/URIs. Falls back to `listen_addr` if unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_address: Option<String>,
 }
 
 fn default_dns_upstream() -> String {
@@ -352,6 +356,7 @@ pub enum RuleCondition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuleAction {
     Allow,
+    Direct,
     Block,
 }
 
@@ -381,6 +386,7 @@ impl RoutingRule {
         };
         let action = match rule.action {
             router::RouteAction::Block => RuleAction::Block,
+            router::RouteAction::Direct => RuleAction::Direct,
             _ => RuleAction::Allow,
         };
         RoutingRule {

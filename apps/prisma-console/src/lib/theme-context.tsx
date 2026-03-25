@@ -33,10 +33,19 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
-    resolveTheme(getInitialTheme())
-  );
+  const [theme, setThemeState] = useState<Theme>("system");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
+
+  // Sync from localStorage after mount
+  useEffect(() => {
+    const saved = localStorage.getItem("prisma-theme") as Theme | null;
+    if (saved && (saved === "light" || saved === "dark" || saved === "system")) {
+      setThemeState(saved);
+      setResolvedTheme(resolveTheme(saved));
+    } else {
+      setResolvedTheme(resolveTheme("system"));
+    }
+  }, []);
 
   // Sync DOM class on mount and when theme changes
   useEffect(() => {

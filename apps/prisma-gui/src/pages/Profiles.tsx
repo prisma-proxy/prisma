@@ -64,7 +64,7 @@ export default function Profiles() {
   const connected = useStore((s) => s.connected);
   const connecting = useStore((s) => s.connecting);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
-  const proxyModes = useStore((s) => s.proxyModes);
+  const proxyModes = useSettings((s) => s.proxyModes);
   const metrics = useProfileMetrics((s) => s.metrics);
   const { connectTo, disconnect, switchTo } = useConnection();
   const { isMobile } = usePlatform();

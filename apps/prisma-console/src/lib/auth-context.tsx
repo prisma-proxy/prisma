@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   getToken,
@@ -11,6 +11,7 @@ import {
   clearToken,
   type AuthUser,
 } from "./auth";
+import { getSetupStatus } from "./api";
 
 interface AuthContextType {
   token: string | null;
@@ -44,10 +45,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return getUser();
   });
 
-  // Redirect unauthenticated users away from dashboard
+  // Redirect unauthenticated users away from dashboard (with setup check).
+  // Cache result to avoid repeated API calls on every route change.
+  const setupCheckedRef = useRef(false);
   useEffect(() => {
-    if (pathname?.startsWith("/dashboard") && !token) {
-      router.replace("/login/");
+    if (pathname === "/setup" || pathname === "/setup/") return;
+    if (token) return;
+
+    if (pathname?.startsWith("/dashboard") || pathname === "/login" || pathname === "/login/") {
+      if (setupCheckedRef.current) {
+        if (!pathname?.startsWith("/login")) router.replace("/login/");
+        return;
+      }
+      getSetupStatus()
+        .then(({ needs_setup }) => {
+          if (needs_setup) {
+            router.replace("/setup/");
+          } else {
+            setupCheckedRef.current = true;
+            if (!pathname?.startsWith("/login")) router.replace("/login/");
+          }
+        })
+        .catch(() => {
+          if (!pathname?.startsWith("/login")) router.replace("/login/");
+        });
     }
   }, [pathname, token, router]);
 

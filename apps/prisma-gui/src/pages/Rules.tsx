@@ -23,6 +23,7 @@ import type { Rule } from "@/store/rules";
 import { useRuleProviders, SUGGESTED_PROVIDERS } from "@/store/ruleProviders";
 import type { RuleProvider } from "@/store/ruleProviders";
 import { useStore } from "@/store";
+import { useSettings } from "@/store/settings";
 import { useConnection } from "@/hooks/useConnection";
 import { usePlatform } from "@/hooks/usePlatform";
 import { notify } from "@/store/notifications";
@@ -90,7 +91,7 @@ export default function Rules() {
   const connected = useStore((s) => s.connected);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
   const storeProfiles = useStore((s) => s.profiles);
-  const proxyModes = useStore((s) => s.proxyModes);
+  const proxyModes = useSettings((s) => s.proxyModes);
   const { switchTo } = useConnection();
 
   function reconnectIfActive() {
@@ -261,8 +262,10 @@ export default function Rules() {
   async function handleUpdateProvider(provider: RuleProvider) {
     setUpdatingProviders((prev) => new Set(prev).add(provider.id));
     try {
+      const isConnected = useStore.getState().connected;
+      const httpPort = isConnected ? (useSettings.getState().httpPort || 0) : 0;
       const result = await api.updateRuleProvider(
-        provider.id, provider.url, provider.behavior, provider.action
+        provider.id, provider.url, provider.behavior, provider.action, httpPort
       );
       const updatedAt = new Date(result.updated_at_epoch * 1000).toISOString();
       updateProviderStatus(provider.id, result.rule_count, updatedAt);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import {
   UserPlus,
@@ -121,9 +121,14 @@ export default function OverviewPage() {
   const setEditMode = useDashboardStore((s) => s.setEditMode);
   const resetLayout = useDashboardStore((s) => s.resetLayout);
 
-  const [wizardDismissed, setWizardDismissed] = useState(
-    () => typeof window !== "undefined" && localStorage.getItem("prisma-setup-complete") === "true"
-  );
+  const [wizardDismissed, setWizardDismissed] = useState(false);
+
+  // Sync from localStorage after mount
+  useEffect(() => {
+    if (localStorage.getItem("prisma-setup-complete") === "true") {
+      setWizardDismissed(true);
+    }
+  }, []);
 
   const showWizard = !wizardDismissed && clients !== undefined && clients.length === 0;
 

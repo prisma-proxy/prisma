@@ -13,7 +13,7 @@ export function useAutoReconnect() {
   const manualDisconnect = useStore((s) => s.manualDisconnect);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
   const profiles = useStore((s) => s.profiles);
-  const proxyModes = useStore((s) => s.proxyModes);
+  const proxyModes = useSettings((s) => s.proxyModes);
   const { autoReconnect, reconnectDelaySecs, reconnectMaxAttempts } = useSettings();
   const attemptsRef = useRef(0);
 

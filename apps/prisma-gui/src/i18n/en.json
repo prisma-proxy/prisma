@@ -3,7 +3,6 @@
     "home": "Home",
     "profiles": "Profiles",
     "subscriptions": "Subscriptions",
-    "proxyGroups": "Proxy Groups",
     "rules": "Rules",
     "logs": "Logs",
     "speed": "Speed",
@@ -392,7 +391,9 @@
     "directColumn": "Direct",
     "addDomain": "Add",
     "domainPlaceholder": "e.g. example.com",
-    "splitTunnelingEmpty": "No entries"
+    "splitTunnelingEmpty": "No entries",
+    "allowLan": "Allow LAN Connections",
+    "allowLanDesc": "Allow other devices on the network to use this proxy"
   },
   "wizard": {
     "newProfile": "New Profile",
@@ -648,22 +649,6 @@
     "editSaved": "Subscription settings saved",
     "autoUpdateInterval": "every {{hours}}h"
   },
-  "proxyGroups": {
-    "title": "Proxy Groups",
-    "refresh": "Refresh",
-    "testAll": "Test All",
-    "test": "Test",
-    "noGroups": "No proxy groups",
-    "noGroupsDesc": "Proxy groups are configured on the server side or in your profile config.",
-    "typeSelect": "Select",
-    "typeAutoUrl": "Auto URL",
-    "typeFallback": "Fallback",
-    "typeLoadBalance": "Load Balance",
-    "roundRobin": "Round Robin",
-    "random": "Random",
-    "selected": "Selected {{server}} in {{group}}",
-    "timeout": "Timeout"
-  },
   "diagnostics": {
     "title": "Network Diagnostics",
     "latencyTest": "Latency Test",
@@ -676,6 +661,11 @@
     "failed": "Failed",
     "hostPlaceholder": "hostname or IP address",
     "stillTesting": "Still testing..."
+  },
+  "tray": {
+    "copyTerminalProxy": "Copy Terminal Proxy",
+    "copiedTerminalProxy": "Terminal proxy command copied to clipboard",
+    "httpPortNotSet": "HTTP proxy port not configured"
   },
   "language": {
     "english": "English",

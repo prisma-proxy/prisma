@@ -70,28 +70,6 @@ export const NET_WIFI         = 1;
 export const NET_CELLULAR     = 2;
 export const NET_ETHERNET     = 3;
 
-// ── Proxy group types ─────────────────────────────────────────────────────────
-
-export type GroupType = "select" | "auto_url" | "fallback" | "load_balance";
-export type LoadBalanceStrategy = "round_robin" | "random";
-
-export interface ProxyGroupInfo {
-  name: string;
-  group_type: GroupType;
-  servers: string[];
-  selected: string | null;
-  test_url: string;
-  test_interval_secs: number;
-  lb_strategy: LoadBalanceStrategy;
-}
-
-export interface LatencyResult {
-  server: string;
-  latency_ms: number | null;
-  available: boolean;
-  error?: string;
-}
-
 // ── Subscription types ────────────────────────────────────────────────────────
 
 export interface SubscriptionInfo {

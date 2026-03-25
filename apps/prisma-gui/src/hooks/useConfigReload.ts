@@ -31,7 +31,8 @@ export function useConfigReload() {
 
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      const { connected, activeProfileIdx, profiles, proxyModes } = useStore.getState();
+      const { connected, activeProfileIdx, profiles } = useStore.getState();
+      const { proxyModes } = useSettings.getState();
       if (!connected || activeProfileIdx === null) return;
       const profile = profiles[activeProfileIdx];
       if (profile) switchToRef.current(profile, proxyModes);

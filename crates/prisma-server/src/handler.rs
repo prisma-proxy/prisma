@@ -834,7 +834,7 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
         };
 
         if matches {
-            return rule.action == RuleAction::Allow;
+            return rule.action == RuleAction::Allow || rule.action == RuleAction::Direct;
         }
     }
 

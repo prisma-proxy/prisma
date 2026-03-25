@@ -14,7 +14,7 @@ export function useConnection() {
   const setManualDisconnect = useStore((s) => s.setManualDisconnect);
   const setConnectStartTime = useStore((s) => s.setConnectStartTime);
   const setConnected = useStore((s) => s.setConnected);
-  const setProxyModes = useStore((s) => s.setProxyModes);
+  const setProxyModes = useSettings((s) => s.setProxyModes);
 
   const connectTo = useCallback(async (profile: Profile, modes: number): Promise<boolean> => {
     const profiles = useStore.getState().profiles;
@@ -58,19 +58,13 @@ export function useConnection() {
   }, [setManualDisconnect]);
 
   const switchTo = useCallback(async (profile: Profile, modes: number) => {
-    try {
-      setManualDisconnect(true);
-      await api.disconnect();
-    } catch {
-      // Continue even if disconnect fails
-    }
+    setManualDisconnect(true);
+    try { await api.disconnect(); } catch {}
+    // Brief delay so the disconnect event propagates before we clear the
+    // manualDisconnect flag — prevents useAutoReconnect from firing.
+    await new Promise(r => setTimeout(r, 100));
     setManualDisconnect(false);
-    const ok = await connectTo(profile, modes);
-    if (!ok) {
-      // Connect failed (possibly old service still lingering) — force-kill and retry
-      try { await api.disconnect(); } catch {}
-      await connectTo(profile, modes);
-    }
+    await connectTo(profile, modes);
   }, [connectTo, setManualDisconnect]);
 
   const toggle = useCallback(async () => {
@@ -81,7 +75,7 @@ export function useConnection() {
       const profile = store.activeProfileIdx !== null
         ? store.profiles[store.activeProfileIdx]
         : store.profiles[0];
-      if (profile) await connectTo(profile, store.proxyModes);
+      if (profile) await connectTo(profile, useSettings.getState().proxyModes);
     }
   }, [connectTo, disconnect]);
 
@@ -103,6 +97,7 @@ export function useConnection() {
   }, [connectTo, disconnect, setProxyModes]);
 
   const switchProxyMode = useCallback(async (oldModes: number, newModes: number) => {
+    if (newModes === 0) newModes = MODE_SYSTEM_PROXY;
     const store = useStore.getState();
     if (store.connected) {
       const hadSystem = (oldModes & MODE_SYSTEM_PROXY) !== 0;

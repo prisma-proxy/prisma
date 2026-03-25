@@ -75,39 +75,52 @@ mod platform {
     use anyhow::Result;
     use std::process::Command;
 
-    pub fn set(host: &str, port: u16) -> Result<()> {
-        // Use networksetup to set SOCKS proxy on all network services
+    fn list_services() -> Result<Vec<String>> {
         let output = Command::new("networksetup")
             .args(["-listallnetworkservices"])
             .output()?;
-        let services = String::from_utf8_lossy(&output.stdout);
-        for service in services.lines().skip(1) {
-            let service = service.trim_start_matches('*').trim();
-            if service.is_empty() {
-                continue;
-            }
+        Ok(String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .skip(1)
+            .map(|s| s.trim_start_matches('*').trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect())
+    }
+
+    pub fn set(host: &str, port: u16) -> Result<()> {
+        let services = list_services()?;
+        let port_str = port.to_string();
+        for service in &services {
+            // Set HTTP proxy
             let _ = Command::new("networksetup")
-                .args(["-setsocksfirewallproxy", service, host, &port.to_string()])
+                .args(["-setwebproxy", service, host, &port_str])
                 .output();
             let _ = Command::new("networksetup")
-                .args(["-setsocksfirewallproxystate", service, "on"])
+                .args(["-setwebproxystate", service, "on"])
+                .output();
+            // Set HTTPS proxy
+            let _ = Command::new("networksetup")
+                .args(["-setsecurewebproxy", service, host, &port_str])
+                .output();
+            let _ = Command::new("networksetup")
+                .args(["-setsecurewebproxystate", service, "on"])
+                .output();
+            // Disable SOCKS to avoid conflicts
+            let _ = Command::new("networksetup")
+                .args(["-setsocksfirewallproxystate", service, "off"])
                 .output();
         }
         Ok(())
     }
 
     pub fn clear() -> Result<()> {
-        let output = Command::new("networksetup")
-            .args(["-listallnetworkservices"])
-            .output()?;
-        let services = String::from_utf8_lossy(&output.stdout);
-        for service in services.lines().skip(1) {
-            let service = service.trim_start_matches('*').trim();
-            if service.is_empty() {
-                continue;
-            }
+        let services = list_services()?;
+        for service in &services {
             let _ = Command::new("networksetup")
-                .args(["-setsocksfirewallproxystate", service, "off"])
+                .args(["-setwebproxystate", service, "off"])
+                .output();
+            let _ = Command::new("networksetup")
+                .args(["-setsecurewebproxystate", service, "off"])
                 .output();
         }
         Ok(())
@@ -155,9 +168,6 @@ mod platform {
             Desktop::Kde => set_kde(host, port)?,
             Desktop::Unknown => {}
         }
-
-        // Note: env vars only affect the current process, not the system.
-        // Desktop environment settings (gsettings/kwriteconfig) handle the real proxy.
         tracing::info!("Linux system proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -168,19 +178,27 @@ mod platform {
             Desktop::Kde => clear_kde()?,
             Desktop::Unknown => {}
         }
-
         tracing::info!("Linux system proxy cleared");
         Ok(())
     }
 
     fn set_gnome(host: &str, port: u16) -> Result<()> {
         let port_str = port.to_string();
+        // Set HTTP proxy
         let _ = Command::new("gsettings")
-            .args(["set", "org.gnome.system.proxy.socks", "host", host])
+            .args(["set", "org.gnome.system.proxy.http", "host", host])
             .output();
         let _ = Command::new("gsettings")
-            .args(["set", "org.gnome.system.proxy.socks", "port", &port_str])
+            .args(["set", "org.gnome.system.proxy.http", "port", &port_str])
             .output();
+        // Set HTTPS proxy
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy.https", "host", host])
+            .output();
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy.https", "port", &port_str])
+            .output();
+        // Enable manual proxy mode
         let _ = Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy", "mode", "manual"])
             .output();
@@ -195,7 +213,6 @@ mod platform {
     }
 
     fn set_kde(host: &str, port: u16) -> Result<()> {
-        let port_str = port.to_string();
         let kwrite = if Command::new("kwriteconfig6").arg("--help").output().is_ok() {
             "kwriteconfig6"
         } else {
@@ -220,8 +237,19 @@ mod platform {
                 "--group",
                 "Proxy Settings",
                 "--key",
-                "socksProxy",
-                &format!("socks://{}:{}", host, port_str),
+                "httpProxy",
+                &format!("http://{}:{}", host, port),
+            ])
+            .output();
+        let _ = Command::new(kwrite)
+            .args([
+                "--file",
+                "kioslaverc",
+                "--group",
+                "Proxy Settings",
+                "--key",
+                "httpsProxy",
+                &format!("http://{}:{}", host, port),
             ])
             .output();
         let _ = Command::new("dbus-send")

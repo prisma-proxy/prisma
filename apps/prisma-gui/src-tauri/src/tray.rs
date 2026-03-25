@@ -30,6 +30,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "tray-show", "Show Window", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit Prisma",  true, None::<&str>)?;
     let copy_addr = MenuItem::with_id(app, "tray-copy-addr", "Copy Proxy Address", true, None::<&str>)?;
+    let copy_terminal = MenuItem::with_id(app, "copy-terminal-proxy", "Copy Terminal Proxy", true, None::<&str>)?;
     let mode_sub = build_proxy_mode_submenu(app)?;
 
     let profiles_sub = SubmenuBuilder::new(app, "Profiles")
@@ -43,6 +44,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
         .item(&profiles_sub)
         .separator()
         .item(&copy_addr)
+        .item(&copy_terminal)
         .separator()
         .item(&show)
         .item(&quit)
@@ -68,6 +70,9 @@ pub fn setup(app: &App) -> tauri::Result<()> {
             }
             "tray-copy-addr" => {
                 let _ = app.emit("tray://copy-proxy-address", ());
+            }
+            "copy-terminal-proxy" => {
+                let _ = app.emit("tray://copy-terminal-proxy", ());
             }
             "mode:system" => {
                 let _ = app.emit("tray://proxy-mode-change", 0x02u32);
@@ -152,6 +157,7 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
     let show      = MenuItem::with_id(app, "tray-show",      "Show Window",        true, None::<&str>)?;
     let quit      = MenuItem::with_id(app, "tray-quit",      "Quit Prisma",        true, None::<&str>)?;
     let copy_addr = MenuItem::with_id(app, "tray-copy-addr", "Copy Proxy Address", true, None::<&str>)?;
+    let copy_terminal = MenuItem::with_id(app, "copy-terminal-proxy", "Copy Terminal Proxy", true, None::<&str>)?;
 
     let mut sub = SubmenuBuilder::new(app, "Profiles");
     if profiles.is_empty() {
@@ -185,6 +191,7 @@ pub fn refresh_profiles(app: &AppHandle) -> tauri::Result<()> {
         .item(&profiles_sub)
         .separator()
         .item(&copy_addr)
+        .item(&copy_terminal)
         .separator()
         .item(&show)
         .item(&quit)

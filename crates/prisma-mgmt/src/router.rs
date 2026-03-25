@@ -182,7 +182,9 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
     // Public auth routes — outside the auth middleware
     let public_auth = Router::new()
         .route("/api/auth/login", post(users::login))
-        .route("/api/auth/register", post(users::register));
+        .route("/api/auth/register", post(users::register))
+        .route("/api/setup/status", get(users::setup_status))
+        .route("/api/setup/init", post(users::setup_init));
 
     // Prometheus metrics endpoint — outside auth middleware for scraper access
     let prometheus_route = Router::new().route(

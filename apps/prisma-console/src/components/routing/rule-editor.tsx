@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -32,65 +33,117 @@ interface RuleEditorProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-const conditionTypes = [
-  "DomainMatch",
-  "DomainExact",
-  "DomainSuffix",
-  "DomainKeyword",
-  "IpCidr",
-  "GeoIp",
-  "PortRange",
-  "All",
+/* ── Friendly condition types shown in the dropdown ── */
+const FRIENDLY_TYPES = [
+  "DOMAIN",
+  "DOMAIN-SUFFIX",
+  "DOMAIN-KEYWORD",
+  "IP-CIDR",
+  "GEOIP",
+  "PORT-RANGE",
+  "FINAL",
 ] as const;
+type FriendlyType = (typeof FRIENDLY_TYPES)[number];
 
-type ConditionType = (typeof conditionTypes)[number];
+/* ── Friendly action types ── */
+const FRIENDLY_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
+type FriendlyAction = (typeof FRIENDLY_ACTIONS)[number];
 
-const actionTypes = ["Allow", "Direct", "Block", "Reject"] as const;
-type ActionType = (typeof actionTypes)[number];
-
-function extractConditionType(condition: RuleCondition): ConditionType {
-  return condition.type as ConditionType;
-}
-
-function extractConditionValue(condition: RuleCondition): string {
-  if (condition.type === "All") return "";
+/* ── Convert backend condition → friendly type + match string ── */
+export function parseConditionType(condition: RuleCondition): { type: FriendlyType; match: string } {
+  if (condition.type === "All") return { type: "FINAL", match: "" };
+  if (condition.type === "DomainExact") return { type: "DOMAIN", match: condition.value as string };
+  if (condition.type === "DomainMatch" || condition.type === "DomainSuffix" || condition.type === "DomainKeyword") {
+    const v = condition.value as string;
+    if (v.startsWith("*.")) return { type: "DOMAIN-SUFFIX", match: v.slice(2) };
+    if (v.startsWith("*") && v.endsWith("*")) return { type: "DOMAIN-KEYWORD", match: v.slice(1, -1) };
+    return { type: "DOMAIN", match: v };
+  }
+  if (condition.type === "IpCidr") {
+    const v = condition.value as string;
+    if (v.startsWith("geoip:")) return { type: "GEOIP", match: v.slice(6) };
+    return { type: "IP-CIDR", match: v };
+  }
+  if (condition.type === "GeoIp") return { type: "GEOIP", match: condition.value as string };
   if (condition.type === "PortRange") {
     const val = condition.value as [number, number];
-    return `${val[0]}-${val[1]}`;
+    return { type: "PORT-RANGE", match: `${val[0]}-${val[1]}` };
   }
-  return condition.value as string;
+  return { type: "DOMAIN", match: String(condition.value ?? "") };
 }
 
-/** Map legacy "Allow"/"Block" to expanded action set for display purposes. */
-function normalizeAction(action: string): ActionType {
-  if (action === "Allow" || action === "Direct" || action === "Block" || action === "Reject") {
-    return action as ActionType;
+/* ── Convert backend action → friendly action ── */
+export function parseAction(action: string): FriendlyAction {
+  switch (action) {
+    case "Allow": return "PROXY";
+    case "Direct": return "DIRECT";
+    case "Block": return "REJECT";
+    case "Reject": return "REJECT";
+    default: return "PROXY";
   }
-  return "Allow";
+}
+
+/* ── Convert friendly type + match → backend RuleCondition ── */
+function buildCondition(type: FriendlyType, match: string): RuleCondition {
+  switch (type) {
+    case "DOMAIN":
+      return { type: "DomainExact", value: match };
+    case "DOMAIN-SUFFIX":
+      return { type: "DomainMatch", value: `*.${match}` };
+    case "DOMAIN-KEYWORD":
+      return { type: "DomainMatch", value: `*${match}*` };
+    case "IP-CIDR":
+      return { type: "IpCidr", value: match };
+    case "GEOIP":
+      return { type: "IpCidr", value: `geoip:${match}` };
+    case "PORT-RANGE": {
+      const [a, b] = match.split("-").map(Number);
+      return { type: "PortRange", value: [a || 0, b || a || 0] };
+    }
+    case "FINAL":
+      return { type: "All", value: null };
+  }
+}
+
+/* ── Convert friendly action → backend action ── */
+function mapAction(action: FriendlyAction): "Allow" | "Direct" | "Block" {
+  switch (action) {
+    case "PROXY": return "Allow";
+    case "DIRECT": return "Direct";
+    case "REJECT": return "Block";
+    default: return "Allow";
+  }
 }
 
 export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: RuleEditorProps) {
   const { t } = useI18n();
   const isEditing = !!editingRule;
+
+  const initialType: FriendlyType = editingRule
+    ? parseConditionType(editingRule.condition).type
+    : "FINAL";
+  const initialMatch = editingRule
+    ? parseConditionType(editingRule.condition).match
+    : "";
+  const initialAction: FriendlyAction = editingRule
+    ? parseAction(editingRule.action)
+    : "PROXY";
+
   const [open, setOpen] = useState(isEditing);
   const [name, setName] = useState(editingRule?.name ?? "");
   const [priority, setPriority] = useState(editingRule?.priority ?? 0);
-  const [conditionType, setConditionType] = useState<ConditionType>(
-    editingRule ? extractConditionType(editingRule.condition) : "All"
-  );
-  const [conditionValue, setConditionValue] = useState(
-    editingRule ? extractConditionValue(editingRule.condition) : ""
-  );
-  const [action, setAction] = useState<ActionType>(
-    editingRule ? normalizeAction(editingRule.action) : "Allow"
-  );
+  const [condType, setCondType] = useState<FriendlyType>(initialType);
+  const [match, setMatch] = useState(initialMatch);
+  const [action, setAction] = useState<FriendlyAction>(initialAction);
+  const [enabled, setEnabled] = useState(editingRule?.enabled ?? true);
 
   function resetForm() {
     setName("");
     setPriority(0);
-    setConditionType("All");
-    setConditionValue("");
-    setAction("Allow");
+    setCondType("FINAL");
+    setMatch("");
+    setAction("PROXY");
+    setEnabled(true);
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -101,75 +154,15 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
     }
   }
 
-  function buildCondition(): RuleCondition {
-    switch (conditionType) {
-      case "DomainMatch":
-        return { type: "DomainMatch", value: conditionValue };
-      case "DomainExact":
-        return { type: "DomainExact", value: conditionValue };
-      case "DomainSuffix":
-        return { type: "DomainMatch", value: `*.${conditionValue}` };
-      case "DomainKeyword":
-        return { type: "DomainMatch", value: `*${conditionValue}*` };
-      case "IpCidr":
-        return { type: "IpCidr", value: conditionValue };
-      case "GeoIp":
-        return { type: "IpCidr", value: `geoip:${conditionValue}` };
-      case "PortRange": {
-        const parts = conditionValue.split("-").map(Number);
-        return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
-      }
-      case "All":
-        return { type: "All", value: null };
-    }
-  }
-
-  function mapActionToBackend(a: ActionType): "Allow" | "Block" {
-    return a === "Block" || a === "Reject" ? "Block" : "Allow";
-  }
-
-  function conditionLabel(ct: ConditionType): string {
-    const labels: Record<ConditionType, string> = {
-      DomainMatch: "DOMAIN",
-      DomainExact: "DOMAIN-EXACT",
-      DomainSuffix: "DOMAIN-SUFFIX",
-      DomainKeyword: "DOMAIN-KEYWORD",
-      IpCidr: "IP-CIDR",
-      GeoIp: "GEOIP",
-      PortRange: "PORT-RANGE",
-      All: t("routing.conditionFinalAll"),
-    };
-    return labels[ct];
-  }
-
-  function actionLabel(a: ActionType): string {
-    const labels: Record<ActionType, string> = {
-      Allow: t("routing.actionProxy"),
-      Direct: t("routing.actionDirect"),
-      Block: t("routing.actionBlock"),
-      Reject: t("routing.actionReject"),
-    };
-    return labels[a];
-  }
-
   function conditionPlaceholder(): string {
-    switch (conditionType) {
-      case "PortRange":
-        return "e.g. 8000-9000";
-      case "IpCidr":
-        return "e.g. 192.168.1.0/24";
-      case "GeoIp":
-        return "e.g. CN, US, JP";
-      case "DomainSuffix":
-        return "e.g. google.com";
-      case "DomainKeyword":
-        return "e.g. facebook";
-      case "DomainMatch":
-        return "e.g. *.example.com";
-      case "DomainExact":
-        return "e.g. www.example.com";
-      default:
-        return "";
+    switch (condType) {
+      case "PORT-RANGE": return "e.g. 8000-9000";
+      case "IP-CIDR": return "e.g. 192.168.1.0/24";
+      case "GEOIP": return "e.g. CN, US, JP";
+      case "DOMAIN-SUFFIX": return "e.g. google.com";
+      case "DOMAIN-KEYWORD": return "e.g. facebook";
+      case "DOMAIN": return "e.g. www.example.com";
+      default: return "";
     }
   }
 
@@ -179,9 +172,9 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
       await onSubmit({
         name,
         priority,
-        condition: buildCondition(),
-        action: mapActionToBackend(action),
-        enabled: editingRule?.enabled ?? true,
+        condition: buildCondition(condType, match),
+        action: mapAction(action),
+        enabled,
       });
       resetForm();
       setOpen(false);
@@ -208,6 +201,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name */}
           <div className="grid gap-1.5">
             <Label htmlFor="rule-name">{t("common.name")}</Label>
             <Input
@@ -220,6 +214,65 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
             />
           </div>
 
+          {/* Type */}
+          <div className="grid gap-1.5">
+            <Label>{t("routing.type")}</Label>
+            <Select
+              value={condType}
+              onValueChange={(val) => {
+                setCondType(val as FriendlyType);
+                if (val === "FINAL") setMatch("");
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <span className="flex flex-1 text-left font-mono text-xs">{condType}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {FRIENDLY_TYPES.map((ft) => (
+                  <SelectItem key={ft} value={ft}>
+                    <span className="font-mono text-xs">{ft}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Match (hidden when FINAL) */}
+          {condType !== "FINAL" && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="rule-match">{t("routing.match")}</Label>
+              <Input
+                id="rule-match"
+                type="text"
+                placeholder={conditionPlaceholder()}
+                value={match}
+                onChange={(e) => setMatch(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {/* Action */}
+          <div className="grid gap-1.5">
+            <Label>{t("routing.action")}</Label>
+            <Select
+              value={action}
+              onValueChange={(val) => setAction(val as FriendlyAction)}
+            >
+              <SelectTrigger className="w-full">
+                <span className="flex flex-1 text-left">{t(`routing.${action.toLowerCase()}`)}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {FRIENDLY_ACTIONS.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {t(`routing.${a.toLowerCase()}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Priority */}
           <div className="grid gap-1.5">
             <Label htmlFor="rule-priority">{t("routing.priority")}</Label>
             <Input
@@ -231,59 +284,14 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
             />
           </div>
 
-          <div className="grid gap-1.5">
-            <Label>{t("routing.conditionType")}</Label>
-            <Select
-              value={conditionType}
-              onValueChange={(val) => {
-                setConditionType(val as ConditionType);
-                if (val === "All") setConditionValue("");
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <span className="flex flex-1 text-left">{conditionLabel(conditionType)}</span>
-              </SelectTrigger>
-              <SelectContent>
-                {conditionTypes.map((ct) => (
-                  <SelectItem key={ct} value={ct}>
-                    {conditionLabel(ct)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {conditionType !== "All" && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="rule-condition-value">{t("routing.conditionValue")}</Label>
-              <Input
-                id="rule-condition-value"
-                type="text"
-                placeholder={conditionPlaceholder()}
-                value={conditionValue}
-                onChange={(e) => setConditionValue(e.target.value)}
-                required
-              />
-            </div>
-          )}
-
-          <div className="grid gap-1.5">
-            <Label>{t("routing.action")}</Label>
-            <Select
-              value={action}
-              onValueChange={(val) => setAction(val as ActionType)}
-            >
-              <SelectTrigger className="w-full">
-                <span className="flex flex-1 text-left">{actionLabel(action)}</span>
-              </SelectTrigger>
-              <SelectContent>
-                {actionTypes.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {actionLabel(a)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Enabled */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="rule-enabled">{t("routing.enabled")}</Label>
+            <Switch
+              id="rule-enabled"
+              checked={enabled}
+              onCheckedChange={(checked: boolean) => setEnabled(checked)}
+            />
           </div>
 
           <DialogFooter>

@@ -179,7 +179,10 @@ pub fn refresh_tray_profiles(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
-    let _ = prisma_ffi::prisma_clear_system_proxy();
+    let rc = prisma_ffi::prisma_clear_system_proxy();
+    if rc != prisma_ffi::PRISMA_OK {
+        tracing::error!("Failed to clear system proxy on quit (error code: {})", rc);
+    }
     app.exit(0);
 }
 
@@ -375,35 +378,6 @@ pub fn speed_test(
     if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_speed_test error {rc}")) }
 }
 
-// ── proxy groups ──────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn proxy_groups_list() -> Result<serde_json::Value, String> {
-    let ptr = prisma_ffi::prisma_proxy_groups_list();
-    match unsafe { read_owned_cstr(ptr) } {
-        None => Ok(serde_json::Value::Array(vec![])),
-        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
-    }
-}
-
-#[tauri::command]
-pub fn proxy_group_select(group_name: String, server: String) -> Result<(), String> {
-    let gn = CString::new(group_name).map_err(|e| e.to_string())?;
-    let srv = CString::new(server).map_err(|e| e.to_string())?;
-    let rc = unsafe { prisma_ffi::prisma_proxy_group_select(gn.as_ptr(), srv.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("proxy_group_select error {rc}")) }
-}
-
-#[tauri::command]
-pub fn proxy_group_test(group_name: String) -> Result<serde_json::Value, String> {
-    let gn = CString::new(group_name).map_err(|e| e.to_string())?;
-    let ptr = unsafe { prisma_ffi::prisma_proxy_group_test(gn.as_ptr()) };
-    match unsafe { read_owned_cstr(ptr) } {
-        None => Err("group test failed".into()),
-        Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
-    }
-}
-
 // ── rule providers ────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -412,11 +386,16 @@ pub async fn update_rule_provider(
     url: String,
     behavior: String,
     action: String,
+    proxy_port: u16,
 ) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30));
+    if proxy_port > 0 {
+        let proxy = reqwest::Proxy::all(format!("http://127.0.0.1:{}", proxy_port))
+            .map_err(|e| e.to_string())?;
+        builder = builder.proxy(proxy);
+    }
+    let client = builder.build().map_err(|e| e.to_string())?;
     let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Err(format!("HTTP {}", resp.status()));

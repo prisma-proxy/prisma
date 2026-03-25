@@ -24,14 +24,17 @@ export interface AppSettings {
   portForwards: string;      // "name,local_addr,remote_port" per line
   routingGeoipPath: string;
   routingGeositePath: string;
+  allowLan: boolean;
   connectionPoolEnabled: boolean;
   connectionMode: "proxy" | "vpn";
   splitTunnelProxy: string[];   // domains/apps routed through proxy
   splitTunnelDirect: string[];  // domains/apps that bypass proxy
+  proxyModes: number;           // bitmask: SOCKS5=0x01, SYSTEM_PROXY=0x02, TUN=0x04, PER_APP=0x08
 }
 
 interface SettingsStore extends AppSettings {
   patch: (values: Partial<AppSettings>) => void;
+  setProxyModes: (v: number) => void;
 }
 
 export const useSettings = create<SettingsStore>()(
@@ -59,11 +62,14 @@ export const useSettings = create<SettingsStore>()(
       portForwards: "",
       routingGeoipPath: "",
       routingGeositePath: "",
+      allowLan: false,
       connectionPoolEnabled: false,
       connectionMode: "proxy",
       splitTunnelProxy: [],
       splitTunnelDirect: [],
+      proxyModes: 0x02, // System proxy by default
       patch: (values) => set(values),
+      setProxyModes: (v) => set({ proxyModes: v }),
     }),
     { name: "prisma-settings" }
   )

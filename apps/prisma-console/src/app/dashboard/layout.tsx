@@ -43,10 +43,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { t } = useI18n();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("prisma-sidebar-collapsed") === "true";
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Sync from localStorage after mount
+  useEffect(() => {
+    const saved = localStorage.getItem("prisma-sidebar-collapsed");
+    if (saved === "true") setSidebarCollapsed(true);
+  }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
 

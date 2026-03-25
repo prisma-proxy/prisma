@@ -248,13 +248,14 @@ export function mergeSettingsIntoConfig(
   const config = { ...profileConfig };
 
   // Ports
+  const host = settings.allowLan ? "0.0.0.0" : "127.0.0.1";
   if (settings.socks5Port > 0) {
-    config.socks5_listen_addr = `127.0.0.1:${settings.socks5Port}`;
+    config.socks5_listen_addr = `${host}:${settings.socks5Port}`;
   } else {
     delete config.socks5_listen_addr;
   }
   if (settings.httpPort && settings.httpPort > 0) {
-    config.http_listen_addr = `127.0.0.1:${settings.httpPort}`;
+    config.http_listen_addr = `${host}:${settings.httpPort}`;
   } else {
     delete config.http_listen_addr;
   }

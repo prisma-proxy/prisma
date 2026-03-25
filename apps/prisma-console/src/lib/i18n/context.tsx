@@ -29,7 +29,15 @@ function getInitialLocale(): Locale {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
+  const [locale, setLocaleState] = useState<Locale>("en");
+
+  // Sync from localStorage after mount
+  useEffect(() => {
+    const saved = localStorage.getItem("prisma-locale") as Locale | null;
+    if (saved && dictionaries[saved]) {
+      setLocaleState(saved);
+    }
+  }, []);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

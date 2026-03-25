@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import StatusBadge from "@/components/StatusBadge";
 import SpeedGraph from "@/components/SpeedGraph";
 import { useStore } from "@/store";
+import { useSettings } from "@/store/settings";
 import { useConnection } from "@/hooks/useConnection";
 import { useConnectionHistory } from "@/store/connectionHistory";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtUptime } from "@/lib/format";
@@ -26,7 +27,7 @@ export default function Home() {
   const connecting = useStore((s) => s.connecting);
   const stats = useStore((s) => s.stats);
   const profiles = useStore((s) => s.profiles);
-  const proxyModes = useStore((s) => s.proxyModes);
+  const proxyModes = useSettings((s) => s.proxyModes);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
   const setActiveProfileIdx = useStore((s) => s.setActiveProfileIdx);
   const setProfiles = useStore((s) => s.setProfiles);
@@ -99,7 +100,7 @@ export default function Home() {
     if (vals.includes("tun"))    flags |= MODE_TUN;
     if (vals.includes("app"))    flags |= MODE_PER_APP;
     const newModes = flags || MODE_SYSTEM_PROXY;
-    const oldModes = useStore.getState().proxyModes;
+    const oldModes = useSettings.getState().proxyModes;
     switchProxyMode(oldModes, newModes);
   }, [switchProxyMode]);
 

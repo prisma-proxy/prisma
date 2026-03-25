@@ -88,10 +88,14 @@ export function usePrismaEvents() {
               }
             }
             // Set OS-level system proxy if MODE_SYSTEM_PROXY is active
-            if (store.proxyModes & MODE_SYSTEM_PROXY) {
+            if (useSettings.getState().proxyModes & MODE_SYSTEM_PROXY) {
               const httpPort = useSettings.getState().httpPort;
               if (httpPort && httpPort > 0) {
-                api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
+                setTimeout(() => {
+                  api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
+                }, 200);
+              } else {
+                notify.warning("System proxy mode is active but HTTP port is not configured");
               }
             }
             notify.success(i18n.t("notifications.connected"));

@@ -111,19 +111,7 @@ pub async fn login(
     let jwt_secret = mgmt.jwt_secret.clone();
     drop(cfg);
 
-    let expires_at = Utc::now() + chrono::Duration::hours(24);
-    let claims = Claims {
-        sub: req.username.clone(),
-        role: role_str.clone(),
-        exp: expires_at.timestamp() as usize,
-    };
-
-    let token = jsonwebtoken::encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(jwt_secret.as_bytes()),
-    )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (token, expires_at) = issue_jwt(&req.username, &role_str, &jwt_secret)?;
 
     Ok(Json(LoginResponse {
         token,
@@ -132,7 +120,102 @@ pub async fn login(
             role: role_str,
             enabled: None,
         },
-        expires_at: expires_at.to_rfc3339(),
+        expires_at,
+    }))
+}
+
+/// Issue a JWT token for the given user. Returns (token, expires_at_rfc3339).
+fn issue_jwt(username: &str, role: &str, jwt_secret: &str) -> Result<(String, String), StatusCode> {
+    let expires_at = Utc::now() + chrono::Duration::hours(24);
+    let claims = Claims {
+        sub: username.to_owned(),
+        role: role.to_owned(),
+        exp: expires_at.timestamp() as usize,
+    };
+    let token = jsonwebtoken::encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(jwt_secret.as_bytes()),
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok((token, expires_at.to_rfc3339()))
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/setup/status
+// ---------------------------------------------------------------------------
+
+pub async fn setup_status(State(state): State<MgmtState>) -> Json<serde_json::Value> {
+    let cfg = state.config.read().await;
+    let has_admin = cfg
+        .management_api
+        .users
+        .iter()
+        .any(|u| u.role == UserRole::Admin);
+    Json(serde_json::json!({
+        "needs_setup": !has_admin
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/setup/init
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct SetupInitRequest {
+    pub username: String,
+    pub password: String,
+}
+
+pub async fn setup_init(
+    State(state): State<MgmtState>,
+    Json(req): Json<SetupInitRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    if req.username.is_empty() || req.password.len() < 8 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Hash password before acquiring write lock
+    let password = req.password.clone();
+    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Atomically check + create inside a single write lock to prevent TOCTOU
+    let (username, jwt_secret) = {
+        let mut cfg = state.config.write().await;
+        if cfg
+            .management_api
+            .users
+            .iter()
+            .any(|u| u.role == UserRole::Admin)
+        {
+            return Err(StatusCode::CONFLICT);
+        }
+        let username = req.username.clone();
+        cfg.management_api.users.push(UserConfig {
+            username: username.clone(),
+            password_hash: hash,
+            role: UserRole::Admin,
+            enabled: true,
+        });
+        let secret = cfg.management_api.jwt_secret.clone();
+        (username, secret)
+    };
+
+    state.persist_config().await;
+
+    let (token, expires_at) = issue_jwt(&username, "admin", &jwt_secret)?;
+
+    Ok(Json(LoginResponse {
+        token,
+        user: UserPublic {
+            username,
+            role: "admin".to_owned(),
+            enabled: None,
+        },
+        expires_at,
     }))
 }
 
@@ -144,6 +227,19 @@ pub async fn register(
     State(state): State<MgmtState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<RegisterResponse>), StatusCode> {
+    // Require at least one admin to exist before allowing registration
+    {
+        let cfg = state.config.read().await;
+        if !cfg
+            .management_api
+            .users
+            .iter()
+            .any(|u| u.role == UserRole::Admin)
+        {
+            return Err(StatusCode::FORBIDDEN); // Setup required first
+        }
+    }
+
     if req.username.is_empty() || req.password.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }

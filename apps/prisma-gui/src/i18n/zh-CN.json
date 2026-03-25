@@ -3,7 +3,6 @@
     "home": "主页",
     "profiles": "配置",
     "subscriptions": "订阅",
-    "proxyGroups": "代理组",
     "rules": "规则",
     "logs": "日志",
     "speed": "测速",
@@ -392,7 +391,9 @@
     "directColumn": "直连",
     "addDomain": "添加",
     "domainPlaceholder": "例如 example.com",
-    "splitTunnelingEmpty": "暂无条目"
+    "splitTunnelingEmpty": "暂无条目",
+    "allowLan": "允许局域网连接",
+    "allowLanDesc": "允许网络上的其他设备使用此代理"
   },
   "wizard": {
     "newProfile": "新建配置",
@@ -648,22 +649,6 @@
     "editSaved": "订阅设置已保存",
     "autoUpdateInterval": "每 {{hours}} 小时"
   },
-  "proxyGroups": {
-    "title": "代理组",
-    "refresh": "刷新",
-    "testAll": "全部测试",
-    "test": "测试",
-    "noGroups": "暂无代理组",
-    "noGroupsDesc": "代理组在服务端或配置文件中进行配置。",
-    "typeSelect": "手动选择",
-    "typeAutoUrl": "自动测速",
-    "typeFallback": "故障转移",
-    "typeLoadBalance": "负载均衡",
-    "roundRobin": "轮询",
-    "random": "随机",
-    "selected": "已在 {{group}} 中选择 {{server}}",
-    "timeout": "超时"
-  },
   "diagnostics": {
     "title": "网络诊断",
     "latencyTest": "延迟测试",
@@ -676,6 +661,11 @@
     "failed": "失败",
     "hostPlaceholder": "主机名或 IP 地址",
     "stillTesting": "仍在测试中..."
+  },
+  "tray": {
+    "copyTerminalProxy": "复制终端代理命令",
+    "copiedTerminalProxy": "终端代理命令已复制到剪贴板",
+    "httpPortNotSet": "HTTP代理端口未配置"
   },
   "language": {
     "english": "English",

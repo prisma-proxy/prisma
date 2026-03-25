@@ -42,11 +42,39 @@ export function useWindowEvents() {
   // Handle tray "Copy Proxy Address"
   useEffect(() => {
     const unlisten = listen("tray://copy-proxy-address", async () => {
-      const port = useSettings.getState().socks5Port;
-      const addr = `127.0.0.1:${port || 1080}`;
+      const socks5Port = useSettings.getState().socks5Port;
+      const httpPort = useSettings.getState().httpPort;
+      const host = useSettings.getState().allowLan ? "0.0.0.0" : "127.0.0.1";
+      const lines: string[] = [];
+      if (socks5Port > 0) lines.push(`socks5://${host}:${socks5Port}`);
+      if (httpPort && httpPort > 0) lines.push(`http://${host}:${httpPort}`);
+      const text = lines.join("\n") || `${host}:${socks5Port || 1080}`;
       try {
-        await writeText(addr);
-        notify.success(`${i18n.t("profiles.copiedToClipboard")}: ${addr}`);
+        await writeText(text);
+        notify.success(`${i18n.t("profiles.copiedToClipboard")}: ${text.replace("\n", ", ")}`);
+      } catch {
+        notify.error(i18n.t("notifications.error"));
+      }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // Handle tray "Copy Terminal Proxy"
+  useEffect(() => {
+    const unlisten = listen("tray://copy-terminal-proxy", async () => {
+      const httpPort = useSettings.getState().httpPort;
+      if (!httpPort || httpPort <= 0) {
+        notify.warning(i18n.t("tray.httpPortNotSet"));
+        return;
+      }
+      const host = useSettings.getState().allowLan ? "0.0.0.0" : "127.0.0.1";
+      const isWin = navigator.userAgent.includes("Windows");
+      const cmd = isWin
+        ? `set http_proxy=http://${host}:${httpPort} && set https_proxy=http://${host}:${httpPort}`
+        : `export http_proxy=http://${host}:${httpPort}; export https_proxy=http://${host}:${httpPort}`;
+      try {
+        await writeText(cmd);
+        notify.success(i18n.t("tray.copiedTerminalProxy"));
       } catch {
         notify.error(i18n.t("notifications.error"));
       }
@@ -58,7 +86,7 @@ export function useWindowEvents() {
   useEffect(() => {
     const unlisten = listen<number>("tray://proxy-mode-change", (event) => {
       const newMode = event.payload;
-      const currentModes = useStore.getState().proxyModes;
+      const currentModes = useSettings.getState().proxyModes;
       switchProxyMode(currentModes, newMode);
     });
     return () => { unlisten.then((f) => f()); };
@@ -70,7 +98,7 @@ export function useWindowEvents() {
       const profileId = event.payload;
       const store = useStore.getState();
       const profile = store.profiles.find((p) => p.id === profileId);
-      if (profile) switchTo(profile, store.proxyModes);
+      if (profile) switchTo(profile, useSettings.getState().proxyModes);
     });
     return () => { unlisten.then((f) => f()); };
   }, [switchTo]);

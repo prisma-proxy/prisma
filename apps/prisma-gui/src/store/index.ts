@@ -5,7 +5,6 @@ interface PrismaStore {
   // Connection
   connected: boolean;
   connecting: boolean;
-  proxyModes: number;
   activeProfileIdx: number | null;
   activeProfileJson: string;
   manualDisconnect: boolean;
@@ -31,7 +30,6 @@ interface PrismaStore {
   // Setters
   setConnected: (v: boolean) => void;
   setConnecting: (v: boolean) => void;
-  setProxyModes: (v: number) => void;
   setActiveProfileIdx: (idx: number | null) => void;
   setActiveProfileJson: (json: string) => void;
   setManualDisconnect: (v: boolean) => void;
@@ -53,7 +51,6 @@ const MAX_LOGS = 500;
 export const useStore = create<PrismaStore>((set) => ({
   connected: false,
   connecting: false,
-  proxyModes: 0x02, // System proxy by default
   activeProfileIdx: null,
   activeProfileJson: "",
   manualDisconnect: false,
@@ -74,7 +71,6 @@ export const useStore = create<PrismaStore>((set) => ({
 
   setConnected:  (v) => set({ connected: v, connecting: false }),
   setConnecting: (v) => set({ connecting: v }),
-  setProxyModes: (v) => set({ proxyModes: v }),
   setActiveProfileIdx:  (idx)  => set({ activeProfileIdx: idx }),
   setActiveProfileJson: (json) => set({ activeProfileJson: json }),
   setManualDisconnect:  (v)    => set({ manualDisconnect: v }),
