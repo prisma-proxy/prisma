@@ -19,7 +19,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { CopyButton } from "@/components/ui/copy-button";
-import { ArrowUp, ArrowDown, ChevronRight, ChevronDown, Layers } from "lucide-react";
+import { ArrowUp, ArrowDown, ChevronRight, ChevronDown } from "lucide-react";
 import type { ConnectionInfo } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -142,28 +142,6 @@ export function ConnectionTable({
     });
     return arr;
   }, [filtered, sortKey, sortDir]);
-
-  // IP Groups
-  const ipGroups = useMemo<IPGroup[]>(() => {
-    if (!groupByIp) return [];
-    const map = new Map<string, ConnectionInfo[]>();
-    for (const conn of sorted) {
-      const ip = stripPort(conn.peer_addr);
-      const arr = map.get(ip) ?? [];
-      arr.push(conn);
-      map.set(ip, arr);
-    }
-    return [...map.entries()].map(([ip, conns]) => ({
-      ip,
-      connections: conns,
-      totalBytesUp: conns.reduce((s, c) => s + c.bytes_up, 0),
-      totalBytesDown: conns.reduce((s, c) => s + c.bytes_down, 0),
-      firstConnected: conns.reduce(
-        (min, c) => (c.connected_at < min ? c.connected_at : min),
-        conns[0].connected_at
-      ),
-    }));
-  }, [sorted, groupByIp]);
 
   // Pagination
   const totalPages = Math.ceil(sorted.length / pageSize);
