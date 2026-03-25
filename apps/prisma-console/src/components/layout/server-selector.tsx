@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
@@ -81,29 +82,31 @@ export function ServerSelector({ collapsed }: ServerSelectorProps) {
           )}
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" sideOffset={8} align="start">
-          <DropdownMenuLabel>{t("server.select")}</DropdownMenuLabel>
-          {servers.map((server) => (
-            <DropdownMenuItem
-              key={server.id}
-              onClick={() => handleSwitch(server)}
-              className="flex items-center justify-between gap-2"
-            >
-              <span className="flex items-center gap-2 flex-1 truncate">
-                {server.id === activeServerId && (
-                  <Check className="h-3 w-3 text-primary shrink-0" />
-                )}
-                <span className="truncate">{server.name}</span>
-              </span>
-              <button
-                type="button"
-                className="ml-2 rounded p-0.5 text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleRemove(server.id, e)}
-                aria-label={t("server.remove")}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t("server.select")}</DropdownMenuLabel>
+            {servers.map((server) => (
+              <DropdownMenuItem
+                key={server.id}
+                onClick={() => handleSwitch(server)}
+                className="flex items-center justify-between gap-2"
               >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </DropdownMenuItem>
-          ))}
+                <span className="flex items-center gap-2 flex-1 truncate">
+                  {server.id === activeServerId && (
+                    <Check className="h-3 w-3 text-primary shrink-0" />
+                  )}
+                  <span className="truncate">{server.name}</span>
+                </span>
+                <button
+                  type="button"
+                  className="ml-2 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => handleRemove(server.id, e)}
+                  aria-label={t("server.remove")}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
           {servers.length > 0 && <DropdownMenuSeparator />}
           <DropdownMenuItem onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />

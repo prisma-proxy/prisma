@@ -29,6 +29,7 @@ reqwest = { workspace = true }
 jsonwebtoken = { workspace = true }
 bcrypt = { workspace = true }
 hex = { workspace = true }
+maxminddb = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true }

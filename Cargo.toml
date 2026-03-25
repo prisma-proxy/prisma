@@ -3,7 +3,7 @@ members = ["crates/prisma-core", "crates/prisma-server", "crates/prisma-client",
 resolver = "2"
 
 [workspace.package]
-version = "2.8.0"
+version = "2.9.0"
 edition = "2021"
 license = "GPLv3.0"
 
@@ -43,6 +43,7 @@ ml-kem = "0.2"
 blake3 = "1"
 hmac = "0.12"
 sha2 = "0.10"
+maxminddb = "0.24"
 sha1 = "0.10"
 sha3 = "0.10"
 md-5 = "0.10"

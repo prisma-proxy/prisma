@@ -1,4 +1,5 @@
 pub mod acl;
+pub mod auto_update;
 pub mod bandwidth;
 pub mod buffer_pool;
 pub mod cache;

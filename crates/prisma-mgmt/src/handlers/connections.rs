@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -8,7 +8,6 @@ use axum::Json;
 use serde::Serialize;
 use uuid::Uuid;
 
-use prisma_core::geodata::GeoIPMatcher;
 use prisma_core::state::{SessionMode, Transport};
 
 use crate::MgmtState;
@@ -29,9 +28,55 @@ pub struct ConnectionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_rule: Option<String>,
     pub duration_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub city: Option<String>,
+}
+
+/// Extract IP from peer_addr (strip port and brackets).
+fn extract_ip(peer_addr: &str) -> Option<IpAddr> {
+    let ip_str = peer_addr
+        .rsplit_once(':')
+        .map(|(host, _port)| host)
+        .unwrap_or(peer_addr);
+    let ip_str = ip_str.trim_start_matches('[').trim_end_matches(']');
+    ip_str.parse().ok()
+}
+
+/// Lookup country and city from an MMDB reader.
+fn lookup_geo(reader: &maxminddb::Reader<Vec<u8>>, ip: IpAddr) -> (Option<String>, Option<String>) {
+    let Ok(city): Result<maxminddb::geoip2::City, _> = reader.lookup(ip) else {
+        return (None, None);
+    };
+    let country = city.country.and_then(|c| c.iso_code).map(|s| s.to_string());
+    let city_name = city
+        .city
+        .and_then(|c| c.names)
+        .and_then(|n| n.get("en").copied())
+        .map(|s| s.to_string());
+    (country, city_name)
+}
+
+/// Try to open the MMDB file from the config path.
+fn open_mmdb(
+    state_config: &prisma_core::config::server::ServerConfig,
+) -> Option<maxminddb::Reader<Vec<u8>>> {
+    let path = state_config.routing.geoip_path.as_deref()?;
+    match maxminddb::Reader::open_readfile(path) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            tracing::warn!(error = %e, path, "Failed to open MMDB GeoIP database");
+            None
+        }
+    }
 }
 
 pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ConnectionResponse>> {
+    let cfg = state.config.read().await;
+    let reader = open_mmdb(&cfg);
+    drop(cfg);
+
     let conns = state.connections.read().await;
     let now = chrono::Utc::now();
     let list: Vec<_> = conns
@@ -41,6 +86,12 @@ pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ConnectionResponse
                 .signed_duration_since(c.connected_at)
                 .num_seconds()
                 .max(0) as u64;
+
+            let (country, city) = reader
+                .as_ref()
+                .and_then(|r| extract_ip(&c.peer_addr).map(|ip| lookup_geo(r, ip)))
+                .unwrap_or((None, None));
+
             ConnectionResponse {
                 session_id: c.session_id,
                 client_id: c.client_id,
@@ -54,6 +105,8 @@ pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ConnectionResponse
                 destination: None,
                 matched_rule: None,
                 duration_secs: duration,
+                country,
+                city,
             }
         })
         .collect();
@@ -77,44 +130,24 @@ pub struct GeoEntry {
 
 /// GET /api/connections/geo — country distribution of active connections.
 pub async fn geo_summary(State(state): State<MgmtState>) -> Json<Vec<GeoEntry>> {
-    // Read GeoIP path from config; if not configured, return empty.
-    let geoip_path = {
-        let cfg = state.config.read().await;
-        cfg.routing.geoip_path.clone()
-    };
+    let cfg = state.config.read().await;
+    let reader = open_mmdb(&cfg);
+    drop(cfg);
 
-    let Some(path) = geoip_path else {
+    let Some(reader) = reader else {
         return Json(Vec::new());
-    };
-
-    // Load the GeoIP matcher. If the file can't be loaded, return empty.
-    let matcher = match GeoIPMatcher::load(&path) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to load GeoIP database for geo summary");
-            return Json(Vec::new());
-        }
     };
 
     let conns = state.connections.read().await;
     let mut counts: HashMap<String, u32> = HashMap::new();
 
     for conn in conns.values() {
-        // Strip port from peer_addr (formats: "1.2.3.4:1234" or "[::1]:1234")
-        let ip_str = conn
-            .peer_addr
-            .rsplit_once(':')
-            .map(|(host, _port)| host)
-            .unwrap_or(&conn.peer_addr);
-        // Remove surrounding brackets for IPv6
-        let ip_str = ip_str.trim_start_matches('[').trim_end_matches(']');
-
-        if let Ok(ipv4) = ip_str.parse::<Ipv4Addr>() {
-            if let Some(country) = matcher.lookup(ipv4) {
-                *counts.entry(country.to_uppercase()).or_insert(0) += 1;
+        if let Some(ip) = extract_ip(&conn.peer_addr) {
+            let (country, _city) = lookup_geo(&reader, ip);
+            if let Some(code) = country {
+                *counts.entry(code).or_insert(0) += 1;
             }
         }
-        // IPv6 addresses are silently skipped since GeoIPMatcher only supports IPv4.
     }
 
     let mut entries: Vec<GeoEntry> = counts
@@ -129,9 +162,9 @@ pub async fn geo_summary(State(state): State<MgmtState>) -> Json<Vec<GeoEntry>> 
 // ── POST /api/geoip/download ─────────────────────────────────────────────
 
 const GEOIP_DOWNLOAD_URL: &str =
-    "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb";
+    "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb";
 const GEOIP_DATA_DIR: &str = "./data";
-const GEOIP_FILE_NAME: &str = "GeoLite2-Country.mmdb";
+const GEOIP_FILE_NAME: &str = "GeoLite2-City.mmdb";
 
 /// POST /api/geoip/download — download GeoIP MMDB and auto-configure.
 pub async fn download_geoip(State(state): State<MgmtState>) -> impl IntoResponse {

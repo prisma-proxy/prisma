@@ -48,6 +48,8 @@ governor = { workspace = true }
 reqwest = { workspace = true }
 base64 = { workspace = true }
 dashmap = { workspace = true }
+ureq = { workspace = true }
+semver = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

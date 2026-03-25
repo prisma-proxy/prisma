@@ -316,6 +316,16 @@ enum Commands {
     /// Create and manage client profiles
     #[command(subcommand)]
     Profile(ProfileCmd),
+    /// Check for updates and self-update the binary
+    Update {
+        /// Just check for updates without downloading
+        #[arg(long)]
+        check: bool,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 // --- Subcommands for daemon-aware services ---
@@ -1158,6 +1168,9 @@ async fn main() -> anyhow::Result<()> {
                 profile_wizard::run_wizard(output)?;
             }
         },
+        Commands::Update { check, yes } => {
+            cmd_update(check, yes, global_json);
+        }
     }
 
     // If we are a daemon child, clean up PID file on normal exit
@@ -1568,4 +1581,89 @@ fn print_version(json: bool) {
     println!("  - grpc      (gRPC, CDN-compatible)");
     println!("  - xhttp     (HTTP-native, CDN-compatible)");
     println!("  - xporta    (REST API simulation, CDN-compatible)");
+}
+
+fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
+    use prisma_core::auto_update;
+
+    // 1. Check for updates
+    let info = match auto_update::check() {
+        Ok(Some(info)) => info,
+        Ok(None) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({"up_to_date": true, "version": VERSION})
+                );
+            } else {
+                println!("Already up to date (v{})", VERSION);
+            }
+            return;
+        }
+        Err(e) => {
+            eprintln!("Failed to check for updates: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // 2. Print update info
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&info).expect("serialize UpdateInfo")
+        );
+        if check_only {
+            return;
+        }
+    } else {
+        println!("Update available: v{} -> {}", VERSION, info.version);
+        if !info.changelog.is_empty() {
+            println!("\nChangelog:\n{}", info.changelog);
+        }
+        if check_only {
+            return;
+        }
+    }
+
+    if info.url.is_empty() {
+        eprintln!("No download URL found for this platform.");
+        std::process::exit(1);
+    }
+
+    // 3. Confirm
+    if !skip_confirm {
+        eprint!("\nDownload and apply update? [y/N] ");
+        use std::io::Write;
+        std::io::stderr().flush().ok();
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).ok();
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Update cancelled.");
+            return;
+        }
+    }
+
+    // 4. Download
+    eprintln!("Downloading {}...", info.url);
+    let bytes = match auto_update::download(&info.url) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Download failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // 5. Replace current binary
+    match auto_update::self_replace(&bytes) {
+        Ok(()) => {
+            println!(
+                "Updated to {}. Restart to use the new version.",
+                info.version
+            );
+        }
+        Err(e) => {
+            eprintln!("Failed to replace binary: {}", e);
+            std::process::exit(1);
+        }
+    }
 }

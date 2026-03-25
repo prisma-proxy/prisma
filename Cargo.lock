@@ -2595,6 +2595,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
+name = "ipnetwork"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "iri-string"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2978,6 +2987,18 @@ name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
+
+[[package]]
+name = "maxminddb"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6087e5d8ea14861bb7c7f573afbc7be3798d3ef0fae87ec4fd9a4de9a127c3c"
+dependencies = [
+ "ipnetwork",
+ "log",
+ "memchr",
+ "serde",
+]
 
 [[package]]
 name = "md-5"
@@ -3722,7 +3743,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-cli"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3763,7 +3784,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -3801,7 +3822,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3833,6 +3854,7 @@ dependencies = [
  "reed-solomon-erasure",
  "reqwest",
  "rustls",
+ "semver",
  "serde",
  "serde_json",
  "sha1 0.10.6",
@@ -3846,6 +3868,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-subscriber",
+ "ureq",
  "uuid",
  "webpki-roots 0.26.11",
  "x25519-dalek",
@@ -3854,7 +3877,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-ffi"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3887,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-mgmt"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3898,6 +3921,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "jsonwebtoken",
+ "maxminddb",
  "prisma-core",
  "prometheus",
  "qrcode",
@@ -3919,7 +3943,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-server"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "axum",

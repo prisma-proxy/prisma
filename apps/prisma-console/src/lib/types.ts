@@ -30,6 +30,8 @@ export interface ConnectionInfo {
   matched_rule?: string;
   /** Connection duration in seconds, always present from backend */
   duration_secs: number;
+  country?: string;
+  city?: string;
 }
 
 export interface ClientInfo {

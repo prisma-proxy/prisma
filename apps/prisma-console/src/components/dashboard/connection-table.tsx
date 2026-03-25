@@ -24,6 +24,22 @@ import type { ConnectionInfo } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
+/** Convert 2-letter ISO country code to flag emoji. */
+function countryFlag(code: string): string {
+  return code
+    .toUpperCase()
+    .split("")
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join("");
+}
+
+/** Format geo info as "🇺🇸 New York" or "🇺🇸 US" or empty string. */
+function formatGeo(country?: string, city?: string): string {
+  if (!country) return "";
+  const flag = countryFlag(country);
+  return city ? `${flag} ${city}` : `${flag} ${country}`;
+}
+
 /** Extract IP from "IP:port" or "[IPv6]:port" address strings. */
 function stripPort(addr: string): string {
   if (addr.startsWith("[")) {
@@ -349,6 +365,10 @@ export function ConnectionTable({
                         <span className="flex items-center gap-1">
                           {group.ip}
                           <CopyButton value={group.ip} />
+                          {(() => {
+                            const geo = formatGeo(group.connections[0]?.country, group.connections[0]?.city);
+                            return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]">{geo}</span> : null;
+                          })()}
                         </span>
                       </TableCell>
                       <TableCell className="text-sm font-medium">
@@ -449,6 +469,10 @@ export function ConnectionTable({
                     <span className="flex items-center gap-1">
                       {stripPort(conn.peer_addr)}
                       <CopyButton value={stripPort(conn.peer_addr)} />
+                      {(() => {
+                        const geo = formatGeo(conn.country, conn.city);
+                        return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]">{geo}</span> : null;
+                      })()}
                     </span>
                   </TableCell>
                   <TableCell>{conn.transport}</TableCell>
