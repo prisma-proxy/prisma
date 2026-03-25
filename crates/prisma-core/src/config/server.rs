@@ -241,6 +241,41 @@ impl Default for PortForwardingConfig {
     }
 }
 
+/// A management API user account.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserConfig {
+    pub username: String,
+    pub password_hash: String,
+    pub role: UserRole,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+/// Role-based access levels for management API users.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserRole {
+    Admin,
+    Operator,
+    Client,
+}
+
+impl std::fmt::Display for UserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Admin => write!(f, "admin"),
+            Self::Operator => write!(f, "operator"),
+            Self::Client => write!(f, "client"),
+        }
+    }
+}
+
+fn default_jwt_secret() -> String {
+    use rand::Rng;
+    let secret: [u8; 32] = rand::thread_rng().gen();
+    hex::encode(secret)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagementApiConfig {
     #[serde(default)]
@@ -266,6 +301,12 @@ pub struct ManagementApiConfig {
     /// Periodic auto-backup interval in minutes (0 = disabled, event-driven only).
     #[serde(default)]
     pub auto_backup_interval_mins: u32,
+    /// JWT-authenticated management users.
+    #[serde(default)]
+    pub users: Vec<UserConfig>,
+    /// Secret used to sign/verify JWT tokens. Auto-generated if not set.
+    #[serde(default = "default_jwt_secret")]
+    pub jwt_secret: String,
 }
 
 impl Default for ManagementApiConfig {
@@ -279,6 +320,8 @@ impl Default for ManagementApiConfig {
             tls: None,
             tls_enabled: false,
             auto_backup_interval_mins: 0,
+            users: Vec::new(),
+            jwt_secret: default_jwt_secret(),
         }
     }
 }

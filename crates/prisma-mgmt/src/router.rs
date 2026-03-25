@@ -10,10 +10,10 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use prisma_core::config::server::ManagementApiConfig;
 
-use crate::auth::{auth_middleware, AuthToken};
+use crate::auth::{auth_middleware, AuthToken, JwtSecret};
 use crate::handlers::{
     acls, alerts, backup, bandwidth, client_metrics, clients, config, connections, forwards,
-    health, permissions, prometheus_export, reload, routes, system,
+    health, permissions, prometheus_export, reload, routes, system, users,
 };
 use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
@@ -37,6 +37,7 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
     };
 
     let auth_token = Arc::new(AuthToken(config.auth_token.clone()));
+    let jwt_secret = Arc::new(JwtSecret(config.jwt_secret.clone()));
 
     let api = Router::new()
         // Health & metrics
@@ -150,16 +151,37 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/ws/logs", get(logs::ws_logs))
         .route("/api/ws/connections", get(ws_connections::ws_connections))
         .route("/api/ws/reload", get(ws_reload::ws_reload))
-        // Auth middleware
+        // Authenticated user routes
+        .route("/api/auth/me", get(users::me))
+        .route(
+            "/api/users",
+            get(users::list_users).post(users::create_user),
+        )
+        .route(
+            "/api/users/{username}",
+            put(users::update_user).delete(users::delete_user),
+        )
+        // Auth middleware — protects everything above
         .layer(middleware::from_fn(auth_middleware))
-        .layer(middleware::from_fn(move |mut req: Request, next: Next| {
+        .layer({
             let token = auth_token.clone();
-            async move {
-                req.extensions_mut().insert((*token).clone());
-                let resp: Response = next.run(req).await;
-                Ok::<_, std::convert::Infallible>(resp)
-            }
-        }));
+            let secret = jwt_secret.clone();
+            middleware::from_fn(move |mut req: Request, next: Next| {
+                let token = token.clone();
+                let secret = secret.clone();
+                async move {
+                    req.extensions_mut().insert((*token).clone());
+                    req.extensions_mut().insert((*secret).clone());
+                    let resp: Response = next.run(req).await;
+                    Ok::<_, std::convert::Infallible>(resp)
+                }
+            })
+        });
+
+    // Public auth routes — outside the auth middleware
+    let public_auth = Router::new()
+        .route("/api/auth/login", post(users::login))
+        .route("/api/auth/register", post(users::register));
 
     // Prometheus metrics endpoint — outside auth middleware for scraper access
     let prometheus_route = Router::new().route(
@@ -168,17 +190,19 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
     );
 
     // OpenAPI spec — parsed once, served on every request
-    static OPENAPI_SPEC: std::sync::LazyLock<serde_json::Value> =
-        std::sync::LazyLock::new(|| {
-            serde_json::from_str(include_str!("openapi.json"))
-                .expect("embedded openapi.json is valid JSON")
-        });
+    static OPENAPI_SPEC: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
+        serde_json::from_str(include_str!("openapi.json"))
+            .expect("embedded openapi.json is valid JSON")
+    });
     let openapi_route = Router::new().route(
         "/api/docs/openapi.json",
         get(|| async { axum::Json(OPENAPI_SPEC.clone()) }),
     );
 
-    let mut app = api.merge(prometheus_route).merge(openapi_route);
+    let mut app = api
+        .merge(public_auth)
+        .merge(prometheus_route)
+        .merge(openapi_route);
 
     if let Some(ref dir) = config.console_dir {
         tracing::info!(console_dir = %dir, "Serving console static files");

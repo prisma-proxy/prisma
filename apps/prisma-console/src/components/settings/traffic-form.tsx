@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -22,9 +23,11 @@ interface TrafficFormProps {
   config: ConfigResponse;
   onSave: (data: Record<string, unknown>) => void;
   isLoading: boolean;
+  /** When true, all inputs are disabled and the save button is hidden. */
+  readOnly?: boolean;
 }
 
-export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormProps) {
+export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: TrafficFormProps) {
   const { t } = useI18n();
 
   // Traffic shaping
@@ -87,6 +90,12 @@ export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormPr
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {readOnly && (
+        <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
+          {t("role.readOnly")}
+        </Badge>
+      )}
+      <fieldset disabled={readOnly} className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>{t("trafficShaping.title")}</CardTitle>
@@ -279,9 +288,12 @@ export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormPr
         </Card>
       </div>
 
-      <Button type="submit" disabled={saving}>
-        {saving ? t("settings.saving") : t("settings.save")}
-      </Button>
+      </fieldset>
+      {!readOnly && (
+        <Button type="submit" disabled={saving}>
+          {saving ? t("settings.saving") : t("settings.save")}
+        </Button>
+      )}
     </form>
   );
 }

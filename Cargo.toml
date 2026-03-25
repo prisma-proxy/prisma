@@ -176,6 +176,10 @@ crossterm = "0.28"
 # Terminal colors
 colored = "2"
 
+# Auth
+jsonwebtoken = "9"
+bcrypt = "0.15"
+
 # Misc
 webpki-roots = "0.26"
 hex = "0.4"

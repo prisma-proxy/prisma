@@ -1,4 +1,4 @@
-mod auth;
+pub mod auth;
 mod handlers;
 pub mod router;
 mod ws;

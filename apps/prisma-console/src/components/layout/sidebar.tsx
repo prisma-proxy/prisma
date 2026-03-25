@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Server,
   Users,
+  UserCog,
   Route,
   Settings,
   Monitor,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
+import { useRole } from "@/components/auth/role-guard";
 import { Button } from "@/components/ui/button";
 import { NotificationDrawer } from "@/components/layout/notification-drawer";
 import { ServerSelector } from "@/components/layout/server-selector";
@@ -34,28 +36,43 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
+type Role = "admin" | "operator" | "client";
+
 interface NavItem {
   labelKey: string;
   href: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
   group: "main" | "monitoring" | "config";
+  /** Minimum role required to see this item. Defaults to "client" (visible to all). */
+  minRole?: Role;
 }
+
+const ROLE_LEVEL: Record<Role, number> = { admin: 3, operator: 2, client: 1 };
 
 const navItems: NavItem[] = [
   { labelKey: "sidebar.overview", href: "/dashboard/", icon: LayoutDashboard, exact: true, group: "main" },
-  { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network, group: "main" },
-  { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main" },
-  { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main" },
-  { labelKey: "sidebar.events", href: "/dashboard/events/", icon: Radio, group: "monitoring" },
+  { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network, group: "main", minRole: "operator" },
+  { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main", minRole: "operator" },
+  { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main", minRole: "operator" },
+  { labelKey: "sidebar.events", href: "/dashboard/events/", icon: Radio, group: "monitoring", minRole: "operator" },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },
-  { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3, group: "monitoring" },
-  { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route, group: "config" },
-  { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity, group: "config" },
-  { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor, group: "config" },
-  { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings, group: "config" },
-  { labelKey: "sidebar.backups", href: "/dashboard/backups/", icon: Archive, group: "config" },
+  { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3, group: "monitoring", minRole: "operator" },
+  { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route, group: "config", minRole: "operator" },
+  { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity, group: "config", minRole: "operator" },
+  { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor, group: "config", minRole: "operator" },
+  { labelKey: "sidebar.users", href: "/dashboard/users/", icon: UserCog, group: "config", minRole: "admin" },
+  { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings, group: "config", minRole: "admin" },
+  { labelKey: "sidebar.backups", href: "/dashboard/backups/", icon: Archive, group: "config", minRole: "admin" },
 ];
+
+function filterNavByRole(items: NavItem[], role: Role): NavItem[] {
+  const userLevel = ROLE_LEVEL[role] ?? ROLE_LEVEL.client;
+  return items.filter((item) => {
+    const requiredLevel = ROLE_LEVEL[item.minRole ?? "client"];
+    return userLevel >= requiredLevel;
+  });
+}
 
 const GROUP_LABELS: Record<string, string> = {
   main: "sidebar.overview",
@@ -72,6 +89,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
   const pathname = usePathname();
   const { t, locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
+  const { role } = useRole();
 
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
     if (typeof window === "undefined" || controlledCollapsed !== undefined) return false;
@@ -91,6 +109,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
     localStorage.setItem("prisma-sidebar-collapsed", String(next));
   }, [collapsed, onCollapsedChange]);
 
+  const filteredNavItems = filterNavByRole(navItems, role);
   const groups = ["main", "monitoring", "config"] as const;
 
   return (
@@ -135,7 +154,8 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
           {groups.map((group, gi) => {
-            const items = navItems.filter((n) => n.group === group);
+            const items = filteredNavItems.filter((n) => n.group === group);
+            if (items.length === 0) return null;
             return (
               <div key={group}>
                 {gi > 0 && <div className="my-2 mx-2 h-px bg-sidebar-border" />}
@@ -225,10 +245,12 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
 export function MobileSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { role } = useRole();
+  const filteredItems = filterNavByRole(navItems, role);
 
   return (
     <nav className="flex-1 space-y-1 px-3 py-4">
-      {navItems.map(({ labelKey, href, icon: Icon, exact }) => {
+      {filteredItems.map(({ labelKey, href, icon: Icon, exact }) => {
         const base = href.replace(/\/$/, "");
         const isActive = exact
           ? pathname === base || pathname === base + "/"

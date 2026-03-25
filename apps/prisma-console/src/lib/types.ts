@@ -323,3 +323,9 @@ export interface AclRule {
   action: "allow" | "deny";
 }
 
+export interface UserInfo {
+  username: string;
+  role: "admin" | "operator" | "client";
+  enabled: boolean;
+}
+

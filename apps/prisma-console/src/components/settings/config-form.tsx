@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -20,12 +21,14 @@ interface ConfigFormProps {
   config: ConfigResponse;
   onSave: (data: Record<string, unknown>) => void;
   isLoading: boolean;
+  /** When true, all inputs are disabled and the save button is hidden. */
+  readOnly?: boolean;
 }
 
 const loggingLevels = LOG_LEVELS.map((l) => l.toLowerCase());
 const loggingFormats = ["pretty", "json"];
 
-export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
+export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormProps) {
   const { t } = useI18n();
 
   // Existing editable fields
@@ -73,6 +76,12 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {readOnly && (
+        <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
+          {t("role.readOnly")}
+        </Badge>
+      )}
+      <fieldset disabled={readOnly} className="space-y-6">
       {/* Network */}
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-muted-foreground">
@@ -262,9 +271,12 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
         </div>
       </div>
 
-      <Button type="submit" disabled={isLoading || hasValidationErrors}>
-        {isLoading ? t("settings.saving") : t("settings.save")}
-      </Button>
+      </fieldset>
+      {!readOnly && (
+        <Button type="submit" disabled={isLoading || hasValidationErrors}>
+          {isLoading ? t("settings.saving") : t("settings.save")}
+        </Button>
+      )}
     </form>
   );
 }

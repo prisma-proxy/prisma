@@ -13,3 +13,4 @@ pub mod prometheus_export;
 pub mod reload;
 pub mod routes;
 pub mod system;
+pub mod users;

@@ -226,4 +226,20 @@ export const api = {
   // GeoIP download
   downloadGeoIP: () =>
     apiFetch<{ success: boolean; path: string }>("/api/geoip/download", { method: "POST" }),
+
+  // Users
+  getUsers: () =>
+    apiFetch<import("./types").UserInfo[]>("/api/users"),
+  createUser: (data: { username: string; password: string; role: string }) =>
+    apiFetch<import("./types").UserInfo>("/api/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateUser: (username: string, data: { role?: string; enabled?: boolean }) =>
+    apiFetch<void>(`/api/users/${encodeURIComponent(username)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteUser: (username: string) =>
+    apiFetch<void>(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
 };

@@ -16,9 +16,11 @@ interface SecurityFormProps {
   tls?: TlsInfoResponse;
   onSave: (data: Record<string, unknown>) => void;
   isLoading: boolean;
+  /** When true, all inputs are disabled and the save button is hidden. */
+  readOnly?: boolean;
 }
 
-export function SecurityForm({ config, tls, onSave, isLoading: saving }: SecurityFormProps) {
+export function SecurityForm({ config, tls, onSave, isLoading: saving, readOnly }: SecurityFormProps) {
   const { t } = useI18n();
 
   const [allowTransportOnlyCipher, setAllowTransportOnlyCipher] = useState<boolean | null>(null);
@@ -40,6 +42,12 @@ export function SecurityForm({ config, tls, onSave, isLoading: saving }: Securit
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {readOnly && (
+        <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
+          {t("role.readOnly")}
+        </Badge>
+      )}
+      <fieldset disabled={readOnly} className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>{t("server.tlsInfo")}</CardTitle>
@@ -108,9 +116,12 @@ export function SecurityForm({ config, tls, onSave, isLoading: saving }: Securit
         </CardContent>
       </Card>
 
-      <Button type="submit" disabled={saving}>
-        {saving ? t("settings.saving") : t("settings.save")}
-      </Button>
+      </fieldset>
+      {!readOnly && (
+        <Button type="submit" disabled={saving}>
+          {saving ? t("settings.saving") : t("settings.save")}
+        </Button>
+      )}
     </form>
   );
 }

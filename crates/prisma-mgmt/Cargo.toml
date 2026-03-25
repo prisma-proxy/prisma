@@ -26,6 +26,9 @@ prometheus = { workspace = true }
 base64 = { workspace = true }
 qrcode = { workspace = true }
 reqwest = { workspace = true }
+jsonwebtoken = { workspace = true }
+bcrypt = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true }

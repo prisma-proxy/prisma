@@ -25,7 +25,8 @@ interface ClientTableProps {
   clients: ClientInfo[];
   metrics?: ClientMetricsEntry[];
   onToggle: (id: string, enabled: boolean) => void;
-  onDelete: (id: string) => void;
+  /** When undefined, delete buttons are hidden (role-based restriction). */
+  onDelete?: (id: string) => void;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -68,7 +69,9 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
   }
 
   function handleBatchDelete() {
-    selected.forEach((id) => onDelete(id));
+    if (onDelete) {
+      selected.forEach((id) => onDelete(id));
+    }
     setSelected(new Set());
     setBatchConfirmOpen(false);
   }
@@ -85,7 +88,7 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
 
   return (
     <>
-      {selected.size > 0 && (
+      {onDelete && selected.size > 0 && (
         <div className="flex items-center gap-3 mb-3 px-1">
           <span className="text-sm text-muted-foreground">
             {t("common.selectedCount", { count: selected.size })}
@@ -103,15 +106,17 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleSelectAll}
-                className="rounded"
-                aria-label="Select all"
-              />
-            </TableHead>
+            {onDelete && (
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="rounded"
+                  aria-label="Select all"
+                />
+              </TableHead>
+            )}
             <TableHead>{t("clients.name")}</TableHead>
             <TableHead>{t("clients.status")}</TableHead>
             <TableHead>{t("clients.activeConns")}</TableHead>
@@ -126,15 +131,17 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
             const m = metricsMap.get(client.id);
             return (
               <TableRow key={client.id} data-state={selected.has(client.id) ? "selected" : undefined}>
-                <TableCell>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(client.id)}
-                    onChange={() => toggleSelect(client.id)}
-                    className="rounded"
-                    aria-label={`Select ${client.name ?? client.id}`}
-                  />
-                </TableCell>
+                {onDelete && (
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(client.id)}
+                      onChange={() => toggleSelect(client.id)}
+                      className="rounded"
+                      aria-label={`Select ${client.name ?? client.id}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Link
@@ -214,13 +221,15 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                       }
                       size="sm"
                     />
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setDeleteId(client.id)}
-                    >
-                      {t("common.delete")}
-                    </Button>
+                    {onDelete && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteId(client.id)}
+                      >
+                        {t("common.delete")}
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -239,7 +248,7 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
         cancelLabel={t("common.cancel")}
         variant="destructive"
         onConfirm={() => {
-          if (deleteId) onDelete(deleteId);
+          if (deleteId && onDelete) onDelete(deleteId);
           setDeleteId(null);
         }}
       />

@@ -10,7 +10,6 @@ export function createWebSocket<T>(
   onError?: (error: Event) => void,
   onStatusChange?: (status: WSStatus) => void,
 ): { close: () => void; send: (data: unknown) => void } {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   let ws: WebSocket | null = null;
   let shouldReconnect = true;
   let reconnectDelay = 1000;
@@ -24,9 +23,21 @@ export function createWebSocket<T>(
       useServerStore.getState().getActiveServer()?.url ||
       localStorage.getItem("prisma-api-base") ||
       "";
+
+    let wsUrl: string;
+    if (base && /^https?:\/\//.test(base)) {
+      const parsed = new URL(base);
+      const wsProto = parsed.protocol === "https:" ? "wss:" : "ws:";
+      const pathname = parsed.pathname.replace(/\/$/, "");
+      wsUrl = `${wsProto}//${parsed.host}${pathname}${path}${tokenParam}`;
+    } else {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl = `${protocol}//${window.location.host}${base}${path}${tokenParam}`;
+    }
+
     onStatusChange?.(isFirstConnect ? "connecting" : "reconnecting");
     isFirstConnect = false;
-    ws = new WebSocket(`${protocol}//${window.location.host}${base}${path}${tokenParam}`);
+    ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       reconnectDelay = 1000;

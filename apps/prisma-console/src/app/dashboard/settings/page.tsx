@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/lib/toast-context";
+import { useRole } from "@/components/auth/role-guard";
 import { ConfigForm } from "@/components/settings/config-form";
 import { CamouflageForm } from "@/components/settings/camouflage-form";
 import { TrafficForm } from "@/components/settings/traffic-form";
@@ -16,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { RefreshCw, Download, Upload } from "lucide-react";
+import { RefreshCw, Download, Upload, ShieldAlert } from "lucide-react";
 import { exportToJSON } from "@/lib/export";
 import { PresetSelector } from "@/components/settings/preset-selector";
 import { ConfigHistory } from "@/components/settings/config-history";
@@ -24,6 +25,7 @@ import { ConfigHistory } from "@/components/settings/config-history";
 export default function SettingsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [reloading, setReloading] = React.useState(false);
 
@@ -190,6 +192,16 @@ export default function SettingsPage() {
       setImporting(false);
     }
   }, [importData, queryClient, t, toast]);
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="text-lg font-semibold">{t("role.accessDenied")}</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md">{t("role.accessDeniedDesc")}</p>
+      </div>
+    );
+  }
 
   if (configLoading) {
     return (
