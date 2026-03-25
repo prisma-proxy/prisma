@@ -381,10 +381,11 @@ pub async fn change_password(
     };
 
     let current_password = req.current_password.clone();
-    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(current_password, &current_hash))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let valid =
+        tokio::task::spawn_blocking(move || bcrypt::verify(current_password, &current_hash))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     if !valid {
         return Err(StatusCode::UNAUTHORIZED);
