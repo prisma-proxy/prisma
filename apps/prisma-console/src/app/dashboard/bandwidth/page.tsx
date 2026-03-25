@@ -39,7 +39,7 @@ export default function BandwidthPage() {
               <div className="flex items-center gap-3">
                 <ArrowUp className="h-5 w-5 text-blue-500" />
                 <div>
-                  <p className="text-lg font-bold">{formatBytes(totalUp)}</p>
+                  <p className="text-lg font-bold" title={totalUp.toLocaleString() + " bytes"}>{formatBytes(totalUp)}</p>
                   <p className="text-xs text-muted-foreground">{t("bandwidth.totalUpload")}</p>
                 </div>
               </div>
@@ -50,7 +50,7 @@ export default function BandwidthPage() {
               <div className="flex items-center gap-3">
                 <ArrowDown className="h-5 w-5 text-green-500" />
                 <div>
-                  <p className="text-lg font-bold">{formatBytes(totalDown)}</p>
+                  <p className="text-lg font-bold" title={totalDown.toLocaleString() + " bytes"}>{formatBytes(totalDown)}</p>
                   <p className="text-xs text-muted-foreground">{t("bandwidth.totalDownload")}</p>
                 </div>
               </div>

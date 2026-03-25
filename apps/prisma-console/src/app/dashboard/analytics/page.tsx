@@ -16,7 +16,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { ArrowUp, ArrowDown, Download } from "lucide-react";
+import { ArrowUp, ArrowDown, Download, BarChart3, Users, GitBranch, PieChart as PieChartIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +35,7 @@ import { useMetricsHistory, type TimeRange, type Resolution } from "@/hooks/use-
 import { useAllClientMetrics } from "@/hooks/use-client-metrics";
 import { useConnections } from "@/hooks/use-connections";
 import { SkeletonChart, SkeletonTable, SkeletonCard } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 
 // --- Constants ---
 
@@ -325,13 +326,11 @@ export default function AnalyticsPage() {
           <SkeletonTable rows={5} />
         </div>
       ) : !hasData ? (
-        <Card>
-          <CardContent>
-            <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-              {t("analytics.noData")}
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={BarChart3}
+          title={t("analytics.noData")}
+          description={t("empty.noAnalyticsHint")}
+        />
       ) : (
         <>
           {/* Section 1: Traffic Over Time */}
@@ -341,9 +340,10 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               {trafficData.length === 0 ? (
-                <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                  {t("common.waitingForData")}
-                </p>
+                <EmptyState
+                  icon={BarChart3}
+                  title={t("common.waitingForData")}
+                />
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={trafficData}>
@@ -412,7 +412,7 @@ export default function AnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatBytes(peakStats.peakBandwidth)}</p>
+                <p className="text-2xl font-bold" title={peakStats.peakBandwidth.toLocaleString() + " bytes"}>{formatBytes(peakStats.peakBandwidth)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -422,7 +422,7 @@ export default function AnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatBytes(peakStats.totalTransferred)}</p>
+                <p className="text-2xl font-bold" title={peakStats.totalTransferred.toLocaleString() + " bytes"}>{formatBytes(peakStats.totalTransferred)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -435,7 +435,7 @@ export default function AnalyticsPage() {
                 {peakStats.busiestClient ? (
                   <div>
                     <p className="text-2xl font-bold truncate">{peakStats.busiestClient.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground" title={peakStats.busiestClient.total.toLocaleString() + " bytes"}>
                       {formatBytes(peakStats.busiestClient.total)}
                     </p>
                   </div>
@@ -459,9 +459,11 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               {rankedClients.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  {t("analytics.noData")}
-                </p>
+                <EmptyState
+                  icon={Users}
+                  title={t("analytics.noData")}
+                  description={t("empty.noClientsHint")}
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -557,9 +559,9 @@ export default function AnalyticsPage() {
                         <TableCell className="font-medium">
                           {client.client_name ?? client.client_id.slice(0, 8)}
                         </TableCell>
-                        <TableCell>{formatBytes(client.bytes_up)}</TableCell>
-                        <TableCell>{formatBytes(client.bytes_down)}</TableCell>
-                        <TableCell className="font-medium">{formatBytes(client.total)}</TableCell>
+                        <TableCell title={client.bytes_up.toLocaleString() + " bytes"}>{formatBytes(client.bytes_up)}</TableCell>
+                        <TableCell title={client.bytes_down.toLocaleString() + " bytes"}>{formatBytes(client.bytes_down)}</TableCell>
+                        <TableCell className="font-medium" title={client.total.toLocaleString() + " bytes"}>{formatBytes(client.total)}</TableCell>
                         <TableCell>{client.active_connections}</TableCell>
                         <TableCell>
                           {client.avgLatency > 0 ? `${client.avgLatency.toFixed(1)} ms` : "--"}
@@ -581,9 +583,10 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {transportDistribution.length === 0 ? (
-                  <p className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
-                    {t("common.noData")}
-                  </p>
+                  <EmptyState
+                    icon={PieChartIcon}
+                    title={t("common.noData")}
+                  />
                 ) : (
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
@@ -621,9 +624,10 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {ruleBreakdown.length === 0 ? (
-                  <p className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
-                    {t("common.noData")}
-                  </p>
+                  <EmptyState
+                    icon={GitBranch}
+                    title={t("common.noData")}
+                  />
                 ) : (
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={ruleBreakdown} layout="vertical">

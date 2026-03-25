@@ -5,8 +5,9 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Prisma Console",
+  title: { default: "Prisma Console", template: "%s | Prisma Console" },
   description: "Management console for Prisma proxy server",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({

@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/lib/toast-context";
 import { CHART_TOOLTIP_STYLE_SM } from "@/lib/chart-utils";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, CheckCircle } from "lucide-react";
 
 const COLORS = [
   "hsl(217, 91%, 60%)",
@@ -29,6 +29,10 @@ const COLORS = [
   "hsl(60, 100%, 45%)",
 ];
 
+function isGeoIPConfigured(): boolean {
+  try { return localStorage.getItem("prisma-geoip-configured") === "true"; } catch { return false; }
+}
+
 export function GeoIPPie() {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -40,14 +44,18 @@ export function GeoIPPie() {
   });
 
   const [downloading, setDownloading] = useState(false);
+  const [configured, setConfigured] = useState(isGeoIPConfigured);
 
   const total = geo?.reduce((s, e) => s + e.count, 0) ?? 0;
+  const hasData = geo && geo.length > 0;
 
   async function handleDownloadAndConfigure() {
     setDownloading(true);
     try {
       await api.downloadGeoIP();
       toast(t("geoip.downloadSuccess"), "success");
+      localStorage.setItem("prisma-geoip-configured", "true");
+      setConfigured(true);
       await queryClient.invalidateQueries({ queryKey: ["connections-geo"] });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Download failed";
@@ -63,24 +71,7 @@ export function GeoIPPie() {
         <CardTitle className="text-sm font-medium">Connection Origins</CardTitle>
       </CardHeader>
       <CardContent>
-        {!geo || geo.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-6 px-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              {t("geoip.noData")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t("geoip.noConnectionsHint")}
-            </p>
-            <Button
-              size="sm"
-              onClick={handleDownloadAndConfigure}
-              disabled={downloading}
-            >
-              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-icon="inline-start" /> : <Download className="h-3.5 w-3.5" data-icon="inline-start" />}
-              {downloading ? t("geoip.downloading") : t("geoip.downloadAndConfigure")}
-            </Button>
-          </div>
-        ) : (
+        {hasData ? (
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie
@@ -113,6 +104,35 @@ export function GeoIPPie() {
               />
             </PieChart>
           </ResponsiveContainer>
+        ) : configured ? (
+          // GeoIP is configured but no connections have geo data yet
+          <div className="flex flex-col items-center justify-center gap-2 py-6 px-4 text-center">
+            <CheckCircle className="h-8 w-8 text-green-500" />
+            <p className="text-sm font-medium text-foreground">
+              {t("geoip.configured")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("geoip.waitingForConnections")}
+            </p>
+          </div>
+        ) : (
+          // GeoIP not configured — show download button
+          <div className="flex flex-col items-center justify-center gap-3 py-6 px-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              {t("geoip.noData")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("geoip.noConnectionsHint")}
+            </p>
+            <Button
+              size="sm"
+              onClick={handleDownloadAndConfigure}
+              disabled={downloading}
+            >
+              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-icon="inline-start" /> : <Download className="h-3.5 w-3.5" data-icon="inline-start" />}
+              {downloading ? t("geoip.downloading") : t("geoip.downloadAndConfigure")}
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

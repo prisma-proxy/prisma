@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebarContent } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -28,6 +28,8 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/dashboard/backups": "sidebar.backups",
   "/dashboard/speed-test": "sidebar.speedTest",
   "/dashboard/bandwidth": "sidebar.bandwidth",
+  "/dashboard/analytics": "sidebar.analytics",
+  "/dashboard/events": "sidebar.events",
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -47,6 +49,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .find(([path]) => pathname.startsWith(path))?.[1] ?? "sidebar.overview";
 
   const title = t(titleKey);
+
+  // Set document title for browser tab
+  useEffect(() => {
+    document.title = pathname === "/dashboard" || pathname === "/dashboard/"
+      ? "Prisma Console"
+      : `${title} | Prisma Console`;
+  }, [pathname, title]);
 
   // Show breadcrumb on sub-pages (not the overview root)
   const showBreadcrumb = pathname !== "/dashboard" && pathname !== "/dashboard/";

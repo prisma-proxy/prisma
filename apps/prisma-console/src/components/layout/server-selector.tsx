@@ -125,7 +125,7 @@ export function ServerSelector({ collapsed }: ServerSelectorProps) {
                 id="server-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="My Server"
+                placeholder={t("server.namePlaceholder")}
               />
             </div>
             <div className="space-y-1.5">
@@ -134,7 +134,7 @@ export function ServerSelector({ collapsed }: ServerSelectorProps) {
                 id="server-url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/prisma-mgmt"
+                placeholder={t("server.urlPlaceholder")}
               />
             </div>
             <div className="space-y-1.5">
@@ -144,7 +144,7 @@ export function ServerSelector({ collapsed }: ServerSelectorProps) {
                 type="password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="Enter API token"
+                placeholder={t("server.tokenPlaceholder")}
               />
             </div>
           </div>

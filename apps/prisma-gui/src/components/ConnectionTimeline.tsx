@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TrackedConnection } from "@/store/connections";
@@ -7,10 +7,7 @@ interface ConnectionTimelineProps {
   connections: TrackedConnection[];
 }
 
-/** 5 minutes in milliseconds */
 const WINDOW_MS = 5 * 60 * 1000;
-
-/** Bar height and spacing */
 const BAR_HEIGHT = 6;
 const BAR_GAP = 2;
 const PADDING_TOP = 20;
@@ -31,10 +28,15 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
   const [hovered, setHovered] = useState<TrackedConnection | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const now = Date.now();
+  // Tick every second so the timeline slides
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const windowStart = now - WINDOW_MS;
 
-  // Filter connections that overlap with the visible window
   const visibleConns = useMemo(() => {
     return connections.filter((c) => {
       const end = c.closedAt ?? now;
@@ -42,9 +44,10 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
     });
   }, [connections, windowStart, now]);
 
-  // Build bar data
+  const activeCount = visibleConns.filter((c) => c.status === "active").length;
+
   const { bars, svgHeight } = useMemo(() => {
-    const chartWidth = 100; // Percentage-based; actual width set via viewBox
+    const chartWidth = 100;
     const usableWidth = chartWidth - PADDING_LEFT - PADDING_RIGHT;
 
     const result: TimelineBar[] = visibleConns.map((conn, idx) => {
@@ -65,7 +68,6 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
     return { bars: result, svgHeight: Math.max(height, 80) };
   }, [visibleConns, windowStart, now]);
 
-  // Generate time labels at minute marks
   const timeLabels = useMemo(() => {
     const labels: { x: number; label: string }[] = [];
     const usableWidth = 100 - PADDING_LEFT - PADDING_RIGHT;
@@ -102,22 +104,26 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">
-          {t("connections.timeline")}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">
+            {t("connections.timeline")}
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {activeCount} {t("connections.active")}
+          </span>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="relative">
           <svg
             viewBox={`0 0 100 ${svgHeight}`}
             className="w-full"
-            style={{ height: Math.min(svgHeight * 1.2, 200) }}
-            preserveAspectRatio="none"
+            style={{ height: Math.min(svgHeight * 1.5, 200) }}
+            preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label={t("connections.timeline")}
             onMouseLeave={() => setHovered(null)}
           >
-            {/* Time axis labels */}
             {timeLabels.map((tl) => (
               <g key={tl.label}>
                 <line
@@ -125,16 +131,17 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
                   y1={PADDING_TOP - 4}
                   x2={tl.x}
                   y2={svgHeight - PADDING_BOTTOM}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="currentColor"
                   strokeWidth="0.15"
-                  opacity="0.3"
+                  opacity="0.15"
                   strokeDasharray="0.5,0.5"
                 />
                 <text
                   x={tl.x}
                   y={PADDING_TOP - 6}
                   textAnchor="middle"
-                  className="fill-muted-foreground"
+                  fill="currentColor"
+                  opacity="0.5"
                   style={{ fontSize: "3px" }}
                 >
                   {tl.label}
@@ -142,7 +149,6 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
               </g>
             ))}
 
-            {/* Connection bars */}
             {bars.map((bar) => (
               <rect
                 key={bar.conn.id}
@@ -159,20 +165,14 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
                   const svg = e.currentTarget.ownerSVGElement;
                   if (svg) {
                     const rect = svg.getBoundingClientRect();
-                    setMousePos({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
-                    });
+                    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
                   }
                 }}
                 onMouseMove={(e) => {
                   const svg = e.currentTarget.ownerSVGElement;
                   if (svg) {
                     const rect = svg.getBoundingClientRect();
-                    setMousePos({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
-                    });
+                    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
                   }
                 }}
                 onMouseLeave={() => setHovered(null)}
@@ -180,27 +180,17 @@ export default function ConnectionTimeline({ connections }: ConnectionTimelinePr
             ))}
           </svg>
 
-          {/* HTML tooltip positioned over the SVG */}
           {hovered && (
             <div
               className="absolute pointer-events-none z-10 bg-card border border-border rounded px-2 py-1 text-[10px] text-foreground shadow-md whitespace-nowrap"
-              style={{
-                left: mousePos.x + 8,
-                top: mousePos.y - 28,
-              }}
+              style={{ left: mousePos.x + 8, top: mousePos.y - 28 }}
             >
               <span className="font-mono">{hovered.destination}</span>
               <span className="text-muted-foreground mx-1">|</span>
               <span>{hovered.transport}</span>
               <span className="text-muted-foreground mx-1">|</span>
               <span>
-                {Math.max(
-                  0,
-                  Math.floor(
-                    ((hovered.closedAt ?? Date.now()) - hovered.startedAt) / 1000
-                  )
-                )}
-                s
+                {Math.max(0, Math.floor(((hovered.closedAt ?? Date.now()) - hovered.startedAt) / 1000))}s
               </span>
             </div>
           )}

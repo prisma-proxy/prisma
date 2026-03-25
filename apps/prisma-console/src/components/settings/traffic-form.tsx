@@ -11,7 +11,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import type { ConfigResponse } from "@/lib/types";
@@ -97,7 +96,7 @@ export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormPr
             <Label>{t("trafficShaping.paddingMode")}</Label>
             <Select value={ePaddingMode} onValueChange={(v) => v && setPaddingMode(v)}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <span className="flex flex-1 text-left">{ePaddingMode}</span>
               </SelectTrigger>
               <SelectContent>
                 {PADDING_MODES.map((m) => (
@@ -171,7 +170,7 @@ export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormPr
             <Label>{t("settings.congestionMode")}</Label>
             <Select value={eCongestionMode} onValueChange={(v) => v && setCongestionMode(v)}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <span className="flex flex-1 text-left">{eCongestionMode}</span>
               </SelectTrigger>
               <SelectContent>
                 {CONGESTION_MODES.map((m) => (
@@ -186,7 +185,7 @@ export function TrafficForm({ config, onSave, isLoading: saving }: TrafficFormPr
               id="congestion-bandwidth"
               value={eCongestionTargetBandwidth}
               onChange={(e) => setCongestionTargetBandwidth(e.target.value)}
-              placeholder="e.g. 100mbps"
+              placeholder={t("trafficShaping.targetBandwidthPlaceholder")}
             />
           </div>
         </CardContent>

@@ -116,7 +116,7 @@ export function LogFilters({ onFilterChange }: LogFiltersProps) {
         <Input
           id="target-filter"
           type="text"
-          placeholder="Filter by target..."
+          placeholder={t("logs.filterByTarget")}
           value={target}
           onChange={(e) => handleTargetChange(e.target.value)}
           className="w-48"

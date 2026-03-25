@@ -10,7 +10,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import type { ClientBandwidthInfo } from "@/lib/types";
@@ -97,7 +96,7 @@ export function BandwidthCard({ bandwidth, onSave, isPending }: BandwidthCardPro
               <Label className="text-muted-foreground min-w-20">{t("bandwidth.upload")}</Label>
               <Select value={unit} onValueChange={(v) => setUnit(v as BandwidthUnit)}>
                 <SelectTrigger size="sm">
-                  <SelectValue />
+                  <span className="flex flex-1 text-left">{unit}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="bps">{t("clients.unitBps")}</SelectItem>

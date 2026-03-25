@@ -19,7 +19,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import type { RoutingRule, RuleCondition } from "@/lib/types";
@@ -138,7 +137,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
       IpCidr: "IP-CIDR",
       GeoIp: "GEOIP",
       PortRange: "PORT-RANGE",
-      All: "FINAL (All)",
+      All: t("routing.conditionFinalAll"),
     };
     return labels[ct];
   }
@@ -214,7 +213,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
             <Input
               id="rule-name"
               type="text"
-              placeholder="Rule name"
+              placeholder={t("routing.ruleNamePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -242,7 +241,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("routing.selectCondition")} />
+                <span className="flex flex-1 text-left">{conditionLabel(conditionType)}</span>
               </SelectTrigger>
               <SelectContent>
                 {conditionTypes.map((ct) => (
@@ -275,7 +274,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
               onValueChange={(val) => setAction(val as ActionType)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <span className="flex flex-1 text-left">{actionLabel(action)}</span>
               </SelectTrigger>
               <SelectContent>
                 {actionTypes.map((a) => (

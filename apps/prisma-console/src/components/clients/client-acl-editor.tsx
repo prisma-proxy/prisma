@@ -21,7 +21,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 
 interface ClientAclEditorProps {
   clientId: string;
@@ -98,9 +99,11 @@ export function ClientAclEditor({ clientId }: ClientAclEditorProps) {
   return (
     <div className="space-y-4">
       {displayRules.length === 0 && !showForm ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
-          {t("acl.noRules")}
-        </p>
+        <EmptyState
+          icon={ShieldCheck}
+          title={t("acl.noRules")}
+          description={t("empty.noAclRulesHint")}
+        />
       ) : (
         <Table>
           <TableHeader>

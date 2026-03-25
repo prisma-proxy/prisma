@@ -12,7 +12,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { DiffViewer } from "./diff-viewer";
 import { useI18n } from "@/lib/i18n";
@@ -63,7 +62,7 @@ export function BackupCompare({ backups }: BackupCompareProps) {
               <label className="text-sm text-muted-foreground">{t("backups.compareLeft")}</label>
               <Select value={leftName} onValueChange={(v) => v && setLeftName(v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder={t("backups.selectBackup")} />
+                  <span className="flex flex-1 text-left">{leftName || t("backups.selectBackup")}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {backups.map((b) => (
@@ -78,7 +77,7 @@ export function BackupCompare({ backups }: BackupCompareProps) {
               <label className="text-sm text-muted-foreground">{t("backups.compareRight")}</label>
               <Select value={rightName} onValueChange={(v) => v && setRightName(v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder={t("backups.selectBackup")} />
+                  <span className="flex flex-1 text-left">{rightName || t("backups.selectBackup")}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {backups.map((b) => (

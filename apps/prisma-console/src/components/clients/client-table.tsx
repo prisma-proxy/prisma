@@ -179,7 +179,7 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                 </TableCell>
                 <TableCell className="text-xs font-mono">
                   {m ? (
-                    <span title={`↑${formatBytes(m.bytes_up)} ↓${formatBytes(m.bytes_down)}`}>
+                    <span title={`↑ ${m.bytes_up.toLocaleString()} bytes  ↓ ${m.bytes_down.toLocaleString()} bytes`}>
                       <span className="text-muted-foreground">↑</span>{formatBytes(m.bytes_up)}{" "}
                       <span className="text-muted-foreground">↓</span>{formatBytes(m.bytes_down)}
                     </span>
@@ -188,7 +188,11 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                   )}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {m?.last_seen ? formatRelativeTime(m.last_seen) : "—"}
+                  {m?.last_seen ? (
+                    <span title={new Date(m.last_seen).toISOString()}>
+                      {formatRelativeTime(m.last_seen)}
+                    </span>
+                  ) : "—"}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-3">

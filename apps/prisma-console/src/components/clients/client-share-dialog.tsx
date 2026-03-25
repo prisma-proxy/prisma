@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
-import { Loader2, Copy, Check } from "lucide-react";
+import { highlightToml } from "@/lib/toml-highlight";
+import { Loader2, Copy, Check, Download } from "lucide-react";
 import type { ShareClientResponse } from "@/lib/types";
 
 type ShareTab = "toml" | "uri" | "qr";
@@ -49,6 +50,11 @@ export function ClientShareDialog({
       .finally(() => setLoading(false));
   }, [open, clientId]);
 
+  const tomlLines = useMemo(() => {
+    if (!data?.toml) return [];
+    return data.toml.split("\n");
+  }, [data?.toml]);
+
   async function handleCopy() {
     if (!data) return;
     const text = tab === "toml" ? data.toml : data.uri;
@@ -60,6 +66,17 @@ export function ClientShareDialog({
     } catch {
       // clipboard not available
     }
+  }
+
+  function handleDownloadQR() {
+    if (!data?.qr_svg) return;
+    const blob = new Blob([data.qr_svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `prisma-client-${clientName}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -109,12 +126,14 @@ export function ClientShareDialog({
             </div>
           ) : tab === "toml" ? (
             <div className="space-y-2">
-              <Textarea
-                readOnly
-                value={data.toml}
-                className="min-h-[140px] font-mono text-xs"
-                rows={8}
-              />
+              <div className="overflow-y-auto max-h-[50vh] rounded-lg border bg-muted/20 p-3 font-mono text-xs leading-5">
+                {tomlLines.map((line, idx) => (
+                  <div key={idx} className="whitespace-pre">
+                    {highlightToml(line)}
+                    {idx < tomlLines.length - 1 ? "\n" : null}
+                  </div>
+                ))}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -126,7 +145,7 @@ export function ClientShareDialog({
                 ) : (
                   <Copy className="h-3.5 w-3.5" data-icon="inline-start" />
                 )}
-                {copied ? t("clients.shareCopied") : t("common.copy")}
+                {copied ? t("clients.shareCopySuccess") : t("common.copy")}
               </Button>
             </div>
           ) : tab === "uri" ? (
@@ -136,6 +155,7 @@ export function ClientShareDialog({
                 value={data.uri}
                 className="min-h-[80px] break-all font-mono text-xs"
                 rows={4}
+                onFocus={(e) => e.target.select()}
               />
               <Button
                 variant="outline"
@@ -148,15 +168,26 @@ export function ClientShareDialog({
                 ) : (
                   <Copy className="h-3.5 w-3.5" data-icon="inline-start" />
                 )}
-                {copied ? t("clients.shareCopied") : t("common.copy")}
+                {copied ? t("clients.shareCopySuccess") : t("common.copy")}
               </Button>
             </div>
           ) : (
-            <div className="flex items-center justify-center py-4">
-              <div
-                className="mx-auto max-w-[240px]"
-                dangerouslySetInnerHTML={{ __html: data.qr_svg }}
-              />
+            <div className="space-y-3">
+              <div className="flex items-center justify-center py-4">
+                <div
+                  className="mx-auto max-w-[240px]"
+                  dangerouslySetInnerHTML={{ __html: data.qr_svg }}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleDownloadQR}
+              >
+                <Download className="h-3.5 w-3.5" data-icon="inline-start" />
+                {t("clients.shareDownloadQr")}
+              </Button>
             </div>
           )}
         </div>

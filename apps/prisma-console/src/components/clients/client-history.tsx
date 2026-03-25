@@ -6,7 +6,8 @@ import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatBytes } from "@/lib/utils";
-import { Activity } from "lucide-react";
+import { Activity, Clock } from "lucide-react";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 
 interface HistoryEvent {
   time: string;
@@ -67,7 +68,23 @@ export function ClientHistory({ clientId }: { clientId: string }) {
   }, [history, t]);
 
   if (!history || history.length < 2) {
-    return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            {t("clientHistory.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmptyState
+            icon={Clock}
+            title={t("clientHistory.noEvents")}
+            description={t("empty.noHistoryHint")}
+          />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -80,9 +97,10 @@ export function ClientHistory({ clientId }: { clientId: string }) {
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            {t("clientHistory.noEvents")}
-          </p>
+          <EmptyState
+            icon={Clock}
+            title={t("clientHistory.noEvents")}
+          />
         ) : (
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {events.map((event, idx) => (

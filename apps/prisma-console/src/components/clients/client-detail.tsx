@@ -264,8 +264,8 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
                     </TableCell>
                     <TableCell>{conn.transport}</TableCell>
                     <TableCell>{conn.mode}</TableCell>
-                    <TableCell>{formatBytes(conn.bytes_up)}</TableCell>
-                    <TableCell>{formatBytes(conn.bytes_down)}</TableCell>
+                    <TableCell title={conn.bytes_up.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_up)}</TableCell>
+                    <TableCell title={conn.bytes_down.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_down)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

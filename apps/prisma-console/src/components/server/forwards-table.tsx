@@ -19,7 +19,8 @@ import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import type { ForwardInfo } from "@/lib/types";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
+import { EmptyState } from "@/components/ui/loading-placeholder";
 
 interface ForwardsTableProps {
   forwards: ForwardInfo[];
@@ -117,9 +118,11 @@ export function ForwardsTable({ forwards }: ForwardsTableProps) {
         </CardHeader>
         <CardContent>
           {forwards.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {t("server.noForwards")}
-            </p>
+            <EmptyState
+              icon={ArrowRightLeft}
+              title={t("server.noForwards")}
+              description={t("empty.noForwardsHint")}
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -149,9 +152,9 @@ export function ForwardsTable({ forwards }: ForwardsTableProps) {
                       {fwd.bind_addr}
                     </TableCell>
                     <TableCell>{fwd.active_connections}</TableCell>
-                    <TableCell>{formatBytes(fwd.bytes_up)}</TableCell>
-                    <TableCell>{formatBytes(fwd.bytes_down)}</TableCell>
-                    <TableCell>{formatTimestamp(fwd.registered_at)}</TableCell>
+                    <TableCell title={fwd.bytes_up.toLocaleString() + " bytes"}>{formatBytes(fwd.bytes_up)}</TableCell>
+                    <TableCell title={fwd.bytes_down.toLocaleString() + " bytes"}>{formatBytes(fwd.bytes_down)}</TableCell>
+                    <TableCell title={new Date(fwd.registered_at).toISOString()}>{formatTimestamp(fwd.registered_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button

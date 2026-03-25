@@ -15,7 +15,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { SkeletonCard } from "@/components/ui/skeleton";
 
@@ -102,7 +101,7 @@ export default function TrafficShapingPage() {
               <Label>{t("trafficShaping.paddingMode")}</Label>
               <Select value={ePaddingMode} onValueChange={(v) => v && setPaddingMode(v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <span className="flex flex-1 text-left">{ePaddingMode}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {PADDING_MODES.map((m) => (
@@ -192,7 +191,7 @@ export default function TrafficShapingPage() {
               <Label>{t("trafficShaping.congestionMode")}</Label>
               <Select value={eCongestionMode} onValueChange={(v) => v && setCongestionMode(v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <span className="flex flex-1 text-left">{eCongestionMode}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {CONGESTION_MODES.map((m) => (

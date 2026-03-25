@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/loading-placeholder";
+import { Globe } from "lucide-react";
 
 // Simplified world map SVG path (natural earth-style outline)
 const WORLD_PATH =
@@ -116,7 +118,22 @@ export function ConnectionMap() {
   );
 
   if (!geo || geo.length === 0) {
-    return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            {t("connectionMap.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmptyState
+            icon={Globe}
+            title={t("empty.noConnections")}
+            description={t("empty.noConnectionsHint")}
+          />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

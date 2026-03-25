@@ -354,8 +354,8 @@ export function ConnectionTable({
                       <TableCell className="text-sm font-medium">
                         {group.connections.length}
                       </TableCell>
-                      <TableCell className="font-medium">{formatBytes(group.totalBytesUp)}</TableCell>
-                      <TableCell className="font-medium">{formatBytes(group.totalBytesDown)}</TableCell>
+                      <TableCell className="font-medium" title={group.totalBytesUp.toLocaleString() + " bytes"}>{formatBytes(group.totalBytesUp)}</TableCell>
+                      <TableCell className="font-medium" title={group.totalBytesDown.toLocaleString() + " bytes"}>{formatBytes(group.totalBytesDown)}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="destructive"
@@ -382,8 +382,8 @@ export function ConnectionTable({
                           {conn.client_name && <span className="ml-2 text-foreground">{conn.client_name}</span>}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{conn.transport} / {conn.mode}</TableCell>
-                        <TableCell className="text-xs">{formatBytes(conn.bytes_up)}</TableCell>
-                        <TableCell className="text-xs">{formatBytes(conn.bytes_down)}</TableCell>
+                        <TableCell className="text-xs" title={conn.bytes_up.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_up)}</TableCell>
+                        <TableCell className="text-xs" title={conn.bytes_down.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_down)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="destructive"
@@ -453,9 +453,9 @@ export function ConnectionTable({
                   </TableCell>
                   <TableCell>{conn.transport}</TableCell>
                   <TableCell>{conn.mode}</TableCell>
-                  <TableCell>{formatConnectedAt(conn.connected_at)}</TableCell>
-                  <TableCell>{formatBytes(conn.bytes_up)}</TableCell>
-                  <TableCell>{formatBytes(conn.bytes_down)}</TableCell>
+                  <TableCell title={new Date(conn.connected_at).toISOString()}>{formatConnectedAt(conn.connected_at)}</TableCell>
+                  <TableCell title={conn.bytes_up.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_up)}</TableCell>
+                  <TableCell title={conn.bytes_down.toLocaleString() + " bytes"}>{formatBytes(conn.bytes_down)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="destructive"
