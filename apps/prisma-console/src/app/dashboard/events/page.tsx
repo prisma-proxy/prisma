@@ -154,7 +154,7 @@ export default function EventsPage() {
           <EmptyState
             icon={Activity}
             title={t("events.noEvents")}
-            description={showNoEventsHint ? t("events.noEvents") : t("events.noEvents")}
+            description={showNoEventsHint ? t("events.noEventsHint") : t("empty.noEventsHint")}
           />
         ) : (
           <div

@@ -205,7 +205,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
           )
         ) : data.length === 0 ? (
           <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-            Waiting for data...
+            {t("common.waitingForData")}
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

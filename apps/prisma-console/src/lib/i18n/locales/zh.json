@@ -684,6 +684,7 @@
   "events.disconnect": "断开",
   "events.error": "错误",
   "events.noEvents": "暂无连接事件",
+  "events.noEventsHint": "已连接但未收到事件 — 服务器目前可能未广播连接事件。",
   "settings.history": "历史",
   "settings.historyDesc": "查看并恢复之前的配置版本。",
   "settings.noHistory": "暂无配置历史记录",

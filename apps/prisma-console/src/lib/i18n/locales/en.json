@@ -684,6 +684,7 @@
   "events.disconnect": "Disconnect",
   "events.error": "Error",
   "events.noEvents": "No connection events yet",
+  "events.noEventsHint": "Connected but no events received — the server may not be broadcasting connection events at this time.",
   "settings.history": "History",
   "settings.historyDesc": "View and restore previous configuration versions.",
   "settings.noHistory": "No configuration history available",
