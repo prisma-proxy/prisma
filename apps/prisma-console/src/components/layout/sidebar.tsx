@@ -21,12 +21,14 @@ import {
   Sun,
   Moon,
   Globe,
+  Radio,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
 import { Button } from "@/components/ui/button";
 import { AlertBadge } from "@/components/alerts/alert-badge";
 import { NotificationDrawer } from "@/components/layout/notification-drawer";
+import { ServerSelector } from "@/components/layout/server-selector";
 import {
   Tooltip,
   TooltipTrigger,
@@ -48,6 +50,7 @@ const navItems: NavItem[] = [
   { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main" },
   { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main" },
   { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText, group: "monitoring" },
+  { labelKey: "sidebar.events", href: "/dashboard/events/", icon: Radio, group: "monitoring" },
   { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3, group: "monitoring" },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },
   { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3, group: "monitoring" },
@@ -126,6 +129,11 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
               <PanelLeftClose className="h-4 w-4" />
             )}
           </Button>
+        </div>
+
+        {/* Server Selector */}
+        <div className="border-b border-sidebar-border px-2 py-2">
+          <ServerSelector collapsed={collapsed} />
         </div>
 
         {/* Navigation */}

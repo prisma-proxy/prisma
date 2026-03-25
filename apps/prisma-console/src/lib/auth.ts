@@ -1,7 +1,11 @@
+import { useServerStore } from "./server-store";
+
 const TOKEN_KEY = "prisma_auth_token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
+  const serverToken = useServerStore.getState().getActiveServer()?.token;
+  if (serverToken) return serverToken;
   return sessionStorage.getItem(TOKEN_KEY);
 }
 

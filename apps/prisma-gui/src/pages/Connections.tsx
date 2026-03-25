@@ -32,6 +32,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ConnectionMap from "@/components/ConnectionMap";
+import ConnectionTimeline from "@/components/ConnectionTimeline";
 import { useConnections, type TrackedConnection, type ConnectionAction } from "@/store/connections";
 import { fmtBytes, fmtDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -479,6 +480,9 @@ export default function Connections() {
           )}
         </div>
       )}
+
+      {/* Connection timeline */}
+      <ConnectionTimeline connections={connections} />
 
       {/* Connection geo map */}
       <ConnectionMap />

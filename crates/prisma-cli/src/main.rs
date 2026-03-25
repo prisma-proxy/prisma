@@ -11,6 +11,8 @@ mod diagnostics;
 mod init;
 mod logs;
 mod metrics;
+mod monitor;
+mod profile_wizard;
 mod routes;
 mod status;
 mod subscription;
@@ -178,11 +180,23 @@ enum Commands {
     /// Validate a config file without starting
     Validate {
         /// Path to config file
-        #[arg(short, long)]
+        #[arg(short, long, default_value = "server.toml")]
         config: String,
-        /// Config type: 'server' or 'client'
-        #[arg(short = 't', long, default_value = "server")]
-        r#type: String,
+        /// Validate as client config instead of server
+        #[arg(long)]
+        client: bool,
+    },
+    /// Interactive TUI dashboard for monitoring the server
+    Monitor {
+        /// Management API URL
+        #[arg(long)]
+        mgmt_url: Option<String>,
+        /// Auth token for management API
+        #[arg(long)]
+        token: Option<String>,
+        /// Path to server config file (for auto-detecting mgmt URL/token)
+        #[arg(short, long)]
+        config: Option<String>,
     },
     /// Query management API for server status
     Status {
@@ -299,6 +313,9 @@ enum Commands {
         #[arg(long)]
         servers: Option<String>,
     },
+    /// Create and manage client profiles
+    #[command(subcommand)]
+    Profile(ProfileCmd),
 }
 
 // --- Subcommands for daemon-aware services ---
@@ -386,6 +403,16 @@ enum GenerateCommand {
 }
 
 #[derive(Subcommand)]
+enum ProfileCmd {
+    /// Interactively create a new client profile
+    New {
+        /// Output file path (default: print to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum ClientsCmd {
     /// List all authorized clients
     List,
@@ -417,6 +444,45 @@ enum ClientsCmd {
     Disable {
         /// Client ID
         id: String,
+    },
+    /// Create multiple clients in batch
+    BatchCreate {
+        /// Number of clients to create
+        #[arg(long)]
+        count: u32,
+        /// Name prefix for generated clients
+        #[arg(long, default_value = "client-")]
+        prefix: String,
+        /// Management API URL (overrides global)
+        #[arg(long)]
+        mgmt_url: Option<String>,
+        /// Management API auth token (overrides global)
+        #[arg(long)]
+        token: Option<String>,
+    },
+    /// Export all clients to a JSON file
+    Export {
+        /// Output file path
+        #[arg(short, long, default_value = "clients.json")]
+        output: String,
+        /// Management API URL (overrides global)
+        #[arg(long)]
+        mgmt_url: Option<String>,
+        /// Management API auth token (overrides global)
+        #[arg(long)]
+        token: Option<String>,
+    },
+    /// Import clients from a JSON file
+    Import {
+        /// Input file path
+        #[arg(short, long)]
+        file: String,
+        /// Management API URL (overrides global)
+        #[arg(long)]
+        mgmt_url: Option<String>,
+        /// Management API auth token (overrides global)
+        #[arg(long)]
+        token: Option<String>,
     },
 }
 
@@ -777,8 +843,21 @@ async fn main() -> anyhow::Result<()> {
         } => {
             init::run_init(cdn, server_only, client_only, force)?;
         }
-        Commands::Validate { config, r#type } => {
-            validate::run_validate(&config, &r#type)?;
+        Commands::Validate { config, client } => {
+            let config_type = if client { "client" } else { "server" };
+            validate::run_validate(&config, config_type)?;
+        }
+        Commands::Monitor {
+            mgmt_url,
+            token,
+            config,
+        } => {
+            monitor::run_monitor(
+                mgmt_url.or_else(|| global_mgmt_url.clone()),
+                token.or_else(|| global_mgmt_token.clone()),
+                config,
+            )
+            .await?;
         }
         Commands::Status { url, token } => {
             let client = api_client::ApiClient::resolve(
@@ -816,6 +895,43 @@ async fn main() -> anyhow::Result<()> {
                 ClientsCmd::Delete { id, .. } => clients::delete(&client, &id)?,
                 ClientsCmd::Enable { id } => clients::enable(&client, &id)?,
                 ClientsCmd::Disable { id } => clients::disable(&client, &id)?,
+                ClientsCmd::BatchCreate {
+                    count,
+                    prefix,
+                    mgmt_url,
+                    token,
+                } => {
+                    let api = api_client::ApiClient::resolve(
+                        mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
+                        token.as_deref().or(global_mgmt_token.as_deref()),
+                        global_json,
+                    )?;
+                    clients::batch_create(&api, count, &prefix)?;
+                }
+                ClientsCmd::Export {
+                    output,
+                    mgmt_url,
+                    token,
+                } => {
+                    let api = api_client::ApiClient::resolve(
+                        mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
+                        token.as_deref().or(global_mgmt_token.as_deref()),
+                        global_json,
+                    )?;
+                    clients::export(&api, &output)?;
+                }
+                ClientsCmd::Import {
+                    file,
+                    mgmt_url,
+                    token,
+                } => {
+                    let api = api_client::ApiClient::resolve(
+                        mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
+                        token.as_deref().or(global_mgmt_token.as_deref()),
+                        global_json,
+                    )?;
+                    clients::import(&api, &file)?;
+                }
             }
         }
         Commands::Connections(cmd) => {
@@ -1037,6 +1153,11 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Profile(cmd) => match cmd {
+            ProfileCmd::New { output } => {
+                profile_wizard::run_wizard(output)?;
+            }
+        },
     }
 
     // If we are a daemon child, clean up PID file on normal exit

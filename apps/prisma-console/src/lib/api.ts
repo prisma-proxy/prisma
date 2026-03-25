@@ -1,8 +1,13 @@
 import { getToken, clearToken } from "./auth";
+import { useServerStore } from "./server-store";
 
 function getApiBase(): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem("prisma-api-base") || "";
+  return (
+    useServerStore.getState().getActiveServer()?.url ||
+    localStorage.getItem("prisma-api-base") ||
+    ""
+  );
 }
 
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {

@@ -1,4 +1,5 @@
 import { getToken } from "./auth";
+import { useServerStore } from "./server-store";
 
 export type WSCallback<T> = (data: T) => void;
 export type WSStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
@@ -19,7 +20,10 @@ export function createWebSocket<T>(
   function connect() {
     const token = getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-    const base = localStorage.getItem("prisma-api-base") || "";
+    const base =
+      useServerStore.getState().getActiveServer()?.url ||
+      localStorage.getItem("prisma-api-base") ||
+      "";
     onStatusChange?.(isFirstConnect ? "connecting" : "reconnecting");
     isFirstConnect = false;
     ws = new WebSocket(`${protocol}//${window.location.host}${base}${path}${tokenParam}`);

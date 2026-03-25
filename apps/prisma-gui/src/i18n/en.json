@@ -10,7 +10,8 @@
     "connections": "Connections",
     "settings": "Settings",
     "collapse": "Collapse",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "diagnostics": "Diagnostics"
   },
   "home": {
     "title": "Prisma",
@@ -115,7 +116,10 @@
     "copyOf": "Copy of {{name}}",
     "duplicateTitle": "Duplicate Profile",
     "duplicateName": "Profile name",
-    "nameExists": "A profile with this name already exists"
+    "nameExists": "A profile with this name already exists",
+    "scanCamera": "Scan with Camera",
+    "cameraNotAvailable": "Camera is not available or permission was denied",
+    "scanning": "Scanning..."
   },
   "rules": {
     "title": "Rules",
@@ -213,7 +217,9 @@
     "clearAllMessage": "Clear all tracked connections? This cannot be undone.",
     "close": "Close connection",
     "mapTitle": "Connection Map",
-    "mapTooltip": "{{dest}} — {{count}} connection(s)"
+    "mapTooltip": "{{dest}} — {{count}} connection(s)",
+    "timeline": "Connection Timeline",
+    "timelineEmpty": "No connections in the last 5 minutes"
   },
   "logs": {
     "search": "Search…",
@@ -379,7 +385,14 @@
     "exportConfig": "Export Config",
     "importConfig": "Import Config",
     "configExported": "Config exported (settings + rules + providers)",
-    "configImported": "Config imported"
+    "configImported": "Config imported",
+    "splitTunneling": "Split Tunneling",
+    "splitTunnelingDesc": "Route specific domains or apps through the proxy, or bypass the proxy for direct access.",
+    "proxyColumn": "Proxy",
+    "directColumn": "Direct",
+    "addDomain": "Add",
+    "domainPlaceholder": "e.g. example.com",
+    "splitTunnelingEmpty": "No entries"
   },
   "wizard": {
     "newProfile": "New Profile",
@@ -650,6 +663,18 @@
     "random": "Random",
     "selected": "Selected {{server}} in {{group}}",
     "timeout": "Timeout"
+  },
+  "diagnostics": {
+    "title": "Network Diagnostics",
+    "latencyTest": "Latency Test",
+    "dnsLookup": "DNS Lookup",
+    "connectionTest": "Connection Test",
+    "test": "Test",
+    "testing": "Testing...",
+    "result": "Result",
+    "success": "Success",
+    "failed": "Failed",
+    "hostPlaceholder": "hostname or IP address"
   },
   "language": {
     "english": "English",

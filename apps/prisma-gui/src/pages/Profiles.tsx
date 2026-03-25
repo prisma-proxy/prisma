@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap, ImagePlus } from "lucide-react";
+import { Plus, ScanLine, MoreHorizontal, Pencil, Copy, Trash2, Download, Upload, Search, Share2, FileCode, Link, QrCode, Check, Globe, RefreshCw, Loader2, Signal, Zap, ImagePlus, Camera, VideoOff } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,15 @@ export default function Profiles() {
   const [qrImportText, setQrImportText] = useState("");
   const [qrImportErr,  setQrImportErr]  = useState("");
   const [qrImageDecoding, setQrImageDecoding] = useState(false);
+
+  // Camera scanner
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [cameraScanning, setCameraScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Duplicate dialog
   const [dupDialogOpen, setDupDialogOpen] = useState(false);
@@ -415,6 +424,108 @@ export default function Profiles() {
     } catch (e) {
       setQrImageDecoding(false);
       setQrImportErr(String(e));
+    }
+  }
+
+  function stopCamera() {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+    setCameraScanning(false);
+  }
+
+  async function startCamera() {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      // Wait for the video element to be rendered, then attach stream
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+          // Start periodic frame capture for QR decoding
+          setCameraScanning(true);
+          scanIntervalRef.current = setInterval(() => {
+            captureAndDecode();
+          }, 500);
+        }
+      });
+    } catch {
+      setCameraError(t("profiles.cameraNotAvailable"));
+    }
+  }
+
+  async function captureAndDecode() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < video.HAVE_CURRENT_DATA) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    try {
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!blob) return;
+
+      // Convert blob to base64 data URL, then extract the base64 part
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+
+      // Use profileFromQr to try decoding the data URL as a QR payload
+      // First try to decode using the Tauri backend by writing temp file
+      const base64Data = dataUrl.split(",")[1];
+      if (!base64Data) return;
+
+      // Write to a temp file via a data approach: create an object URL won't work for Tauri,
+      // so we pass the base64 directly to a specialized flow.
+      // The decodeQrImage expects a file path, so we use a temporary approach:
+      // Convert the blob to an array buffer, write to temp, then decode.
+      const arrayBuf = await blob.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+
+      // Use Tauri's fs to write a temp file
+      const { writeFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+      const tempName = `prisma-camera-frame-${Date.now()}.png`;
+      await writeFile(tempName, uint8, { baseDir: BaseDirectory.Temp });
+
+      // Get the temp dir path
+      const { tempDir } = await import("@tauri-apps/api/path");
+      const tempPath = await tempDir();
+      const filePath = `${tempPath}${tempName}`;
+
+      const content = await api.decodeQrImage(filePath);
+      // If we got here, QR was successfully decoded
+      const json = await api.profileFromQr(content);
+      const parsed = JSON.parse(json);
+
+      stopCamera();
+      setQrImportOpen(false);
+      setQrImportText("");
+      const initial = parseProfileToWizard(parsed.name ?? "", parsed.config ?? parsed, parsed.tags);
+      setEditInitial(initial);
+      setWizardOpen(true);
+    } catch {
+      // No QR found in this frame, keep scanning silently
     }
   }
 
@@ -804,21 +915,65 @@ export default function Profiles() {
       </Dialog>
 
       {/* QR import dialog */}
-      <Dialog open={qrImportOpen} onOpenChange={(v) => { setQrImportOpen(v); setQrImportErr(""); setQrImageDecoding(false); }}>
+      <Dialog open={qrImportOpen} onOpenChange={(v) => { if (!v) stopCamera(); setQrImportOpen(v); setQrImportErr(""); setQrImageDecoding(false); setCameraError(""); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t("profiles.importQrTitle")}</DialogTitle></DialogHeader>
           <div className="space-y-2">
+            {/* Image file picker */}
             <Button
               variant="outline"
               className="w-full"
               onClick={handleQrImageImport}
-              disabled={qrImageDecoding}
+              disabled={qrImageDecoding || cameraActive}
             >
               {qrImageDecoding
                 ? <><Loader2 size={14} className="mr-1.5 animate-spin" /> {t("profiles.decodingImage")}</>
                 : <><ImagePlus size={14} className="mr-1.5" /> {t("profiles.importQrFromImage")}</>
               }
             </Button>
+
+            {/* Camera scanner */}
+            {!cameraActive ? (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={startCamera}
+                disabled={qrImageDecoding}
+              >
+                <Camera size={14} className="mr-1.5" />
+                {t("profiles.scanCamera")}
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative rounded-md overflow-hidden border bg-black">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-48 object-cover"
+                  />
+                  {cameraScanning && (
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                      <Loader2 size={12} className="animate-spin" />
+                      {t("profiles.scanning")}
+                    </div>
+                  )}
+                </div>
+                <canvas ref={canvasRef} className="hidden" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={stopCamera}
+                >
+                  <VideoOff size={14} className="mr-1.5" />
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            )}
+            {cameraError && <p className="text-xs text-destructive">{cameraError}</p>}
+
             <div className="relative flex items-center py-1">
               <div className="flex-1 border-t" />
               <span className="px-2 text-xs text-muted-foreground">{t("common.or", "or")}</span>

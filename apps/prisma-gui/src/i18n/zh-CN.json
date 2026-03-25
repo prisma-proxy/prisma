@@ -10,7 +10,8 @@
     "connections": "连接",
     "settings": "设置",
     "collapse": "收起",
-    "analytics": "分析"
+    "analytics": "分析",
+    "diagnostics": "诊断"
   },
   "home": {
     "title": "Prisma",
@@ -115,7 +116,10 @@
     "copyOf": "{{name}} 的副本",
     "duplicateTitle": "复制配置",
     "duplicateName": "配置名称",
-    "nameExists": "已存在同名配置"
+    "nameExists": "已存在同名配置",
+    "scanCamera": "使用摄像头扫描",
+    "cameraNotAvailable": "摄像头不可用或权限被拒绝",
+    "scanning": "扫描中..."
   },
   "rules": {
     "title": "规则",
@@ -213,7 +217,9 @@
     "clearAllMessage": "清除所有已跟踪的连接？此操作不可撤销。",
     "close": "关闭连接",
     "mapTitle": "连接地图",
-    "mapTooltip": "{{dest}} — {{count}} 个连接"
+    "mapTooltip": "{{dest}} — {{count}} 个连接",
+    "timeline": "连接时间线",
+    "timelineEmpty": "最近 5 分钟内无连接"
   },
   "logs": {
     "search": "搜索…",
@@ -379,7 +385,14 @@
     "exportConfig": "导出配置",
     "importConfig": "导入配置",
     "configExported": "配置已导出（设置 + 规则 + 提供者）",
-    "configImported": "配置已导入"
+    "configImported": "配置已导入",
+    "splitTunneling": "分流",
+    "splitTunnelingDesc": "将特定域名或应用通过代理路由，或绕过代理直连。",
+    "proxyColumn": "代理",
+    "directColumn": "直连",
+    "addDomain": "添加",
+    "domainPlaceholder": "例如 example.com",
+    "splitTunnelingEmpty": "暂无条目"
   },
   "wizard": {
     "newProfile": "新建配置",
@@ -650,6 +663,18 @@
     "random": "随机",
     "selected": "已在 {{group}} 中选择 {{server}}",
     "timeout": "超时"
+  },
+  "diagnostics": {
+    "title": "网络诊断",
+    "latencyTest": "延迟测试",
+    "dnsLookup": "DNS 查询",
+    "connectionTest": "连接测试",
+    "test": "测试",
+    "testing": "测试中...",
+    "result": "结果",
+    "success": "成功",
+    "failed": "失败",
+    "hostPlaceholder": "主机名或 IP 地址"
   },
   "language": {
     "english": "English",

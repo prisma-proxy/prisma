@@ -26,6 +26,8 @@ export interface AppSettings {
   routingGeositePath: string;
   connectionPoolEnabled: boolean;
   connectionMode: "proxy" | "vpn";
+  splitTunnelProxy: string[];   // domains/apps routed through proxy
+  splitTunnelDirect: string[];  // domains/apps that bypass proxy
 }
 
 interface SettingsStore extends AppSettings {
@@ -59,6 +61,8 @@ export const useSettings = create<SettingsStore>()(
       routingGeositePath: "",
       connectionPoolEnabled: false,
       connectionMode: "proxy",
+      splitTunnelProxy: [],
+      splitTunnelDirect: [],
       patch: (values) => set(values),
     }),
     { name: "prisma-settings" }

@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RefreshCw, Download, Upload } from "lucide-react";
 import { exportToJSON } from "@/lib/export";
 import { PresetSelector } from "@/components/settings/preset-selector";
+import { ConfigHistory } from "@/components/settings/config-history";
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -244,6 +245,7 @@ export default function SettingsPage() {
           <TabsTrigger value="traffic">{t("settings.traffic")}</TabsTrigger>
           <TabsTrigger value="security">{t("settings.security")}</TabsTrigger>
           <TabsTrigger value="alerts">{t("settings.alerts")}</TabsTrigger>
+          <TabsTrigger value="history">{t("settings.history")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -300,6 +302,10 @@ export default function SettingsPage() {
 
         <TabsContent value="alerts">
           <AlertsForm />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ConfigHistory />
         </TabsContent>
       </Tabs>
 

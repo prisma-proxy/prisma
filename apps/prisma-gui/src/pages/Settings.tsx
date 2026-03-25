@@ -12,6 +12,7 @@ import TunSection from "./settings/TunSection";
 import MobileSection from "./settings/MobileSection";
 import RoutingSection from "./settings/RoutingSection";
 import PerAppSection from "./settings/PerAppSection";
+import SplitTunnelingSection from "./settings/SplitTunnelingSection";
 import AutoReconnectSection from "./settings/AutoReconnectSection";
 import PerformanceSection from "./settings/PerformanceSection";
 import DataManagementSection from "./settings/DataManagementSection";
@@ -66,6 +67,9 @@ export default function Settings() {
 
         <Separator />
         <PerAppSection />
+
+        <Separator />
+        <SplitTunnelingSection />
 
         <Separator />
         <AutoReconnectSection />

@@ -167,7 +167,18 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         get(prometheus_export::prometheus_metrics),
     );
 
-    let mut app = api.merge(prometheus_route);
+    // OpenAPI spec — parsed once, served on every request
+    static OPENAPI_SPEC: std::sync::LazyLock<serde_json::Value> =
+        std::sync::LazyLock::new(|| {
+            serde_json::from_str(include_str!("openapi.json"))
+                .expect("embedded openapi.json is valid JSON")
+        });
+    let openapi_route = Router::new().route(
+        "/api/docs/openapi.json",
+        get(|| async { axum::Json(OPENAPI_SPEC.clone()) }),
+    );
+
+    let mut app = api.merge(prometheus_route).merge(openapi_route);
 
     if let Some(ref dir) = config.console_dir {
         tracing::info!(console_dir = %dir, "Serving console static files");

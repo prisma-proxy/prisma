@@ -155,6 +155,18 @@ impl ApiClient {
         }
     }
 
+    pub fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let url = format!("{}{}", self.url, path);
+        let mut resp = self
+            .agent
+            .get(&url)
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .call()
+            .with_context(|| format!("GET {}", path))?;
+        let body: T = resp.body_mut().read_json()?;
+        Ok(body)
+    }
+
     pub fn get(&self, path: &str) -> Result<serde_json::Value> {
         let url = format!("{}{}", self.url, path);
         let mut resp = self
