@@ -3,6 +3,7 @@ use std::net::Ipv4Addr;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use serde::Serialize;
 use uuid::Uuid;
@@ -123,4 +124,99 @@ pub async fn geo_summary(State(state): State<MgmtState>) -> Json<Vec<GeoEntry>> 
     entries.sort_by(|a, b| b.count.cmp(&a.count));
 
     Json(entries)
+}
+
+// ── POST /api/geoip/download ─────────────────────────────────────────────
+
+const GEOIP_DOWNLOAD_URL: &str =
+    "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb";
+const GEOIP_DATA_DIR: &str = "./data";
+const GEOIP_FILE_NAME: &str = "GeoLite2-Country.mmdb";
+
+/// POST /api/geoip/download — download GeoIP MMDB and auto-configure.
+pub async fn download_geoip(State(state): State<MgmtState>) -> impl IntoResponse {
+    // 1. Create data directory if it doesn't exist
+    if let Err(e) = tokio::fs::create_dir_all(GEOIP_DATA_DIR).await {
+        tracing::error!(error = %e, "Failed to create data directory");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to create data directory: {}", e)
+            })),
+        );
+    }
+
+    // 2. Download the GeoIP database
+    let bytes = match reqwest::get(GEOIP_DOWNLOAD_URL).await {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let status = resp.status();
+                tracing::error!(%status, "GeoIP download returned non-success status");
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": format!("Download failed with HTTP status {}", status)
+                    })),
+                );
+            }
+            match resp.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!(error = %e, "Failed to read GeoIP download body");
+                    return (
+                        StatusCode::BAD_GATEWAY,
+                        Json(serde_json::json!({
+                            "success": false,
+                            "error": format!("Failed to read download response: {}", e)
+                        })),
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "GeoIP download request failed");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Download request failed: {}", e)
+                })),
+            );
+        }
+    };
+
+    // 3. Save to disk
+    let save_path = format!("{}/{}", GEOIP_DATA_DIR, GEOIP_FILE_NAME);
+    if let Err(e) = tokio::fs::write(&save_path, &bytes).await {
+        tracing::error!(error = %e, path = %save_path, "Failed to write GeoIP database");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to write file: {}", e)
+            })),
+        );
+    }
+
+    tracing::info!(path = %save_path, size = bytes.len(), "GeoIP database downloaded");
+
+    // 4. Update config with geoip_path
+    {
+        let mut cfg = state.config.write().await;
+        cfg.routing.geoip_path = Some(save_path.clone());
+    }
+
+    // 5. Persist config to disk
+    state.persist_config().await;
+
+    // 6. Return success
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "path": save_path
+        })),
+    )
 }

@@ -217,4 +217,8 @@ export const api = {
     }),
   deleteForward: (id: number) =>
     apiFetch<void>(`/api/forwards/${id}`, { method: "DELETE" }),
+
+  // GeoIP download
+  downloadGeoIP: () =>
+    apiFetch<{ success: boolean; path: string }>("/api/geoip/download", { method: "POST" }),
 };
