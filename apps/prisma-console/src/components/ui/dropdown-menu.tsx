@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 
 import { cn } from "@/lib/utils"
@@ -31,10 +30,6 @@ function DropdownMenuContent({
     MenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner

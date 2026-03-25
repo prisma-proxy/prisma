@@ -18,9 +18,14 @@ import {
   Gauge,
   BarChart3,
   Network,
+  Sun,
+  Moon,
+  Globe,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme-context";
 import { Button } from "@/components/ui/button";
+import { AlertBadge } from "@/components/alerts/alert-badge";
 import {
   Tooltip,
   TooltipTrigger,
@@ -64,7 +69,8 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const { theme, setTheme } = useTheme();
 
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
     if (typeof window === "undefined" || controlledCollapsed !== undefined) return false;
@@ -179,12 +185,28 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
           })}
         </nav>
 
-        {/* Footer */}
-        {!collapsed && (
-          <div className="border-t border-sidebar-border px-4 py-3">
-            <p className="text-[10px] text-muted-foreground">Prisma Console v{process.env.NEXT_PUBLIC_APP_VERSION || "2.0.0"}</p>
+        {/* Footer — theme, locale, alerts */}
+        <div className="border-t border-sidebar-border px-2 py-2">
+          <div className={`flex items-center ${collapsed ? "flex-col gap-1" : "gap-1"}`}>
+            <AlertBadge />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
+              title={t("theme.title")}
+            >
+              {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
+              title={locale === "en" ? "中文" : "English"}
+            >
+              <Globe className="h-4 w-4" />
+            </Button>
           </div>
-        )}
+        </div>
       </aside>
     </TooltipProvider>
   );

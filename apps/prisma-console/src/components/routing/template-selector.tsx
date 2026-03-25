@@ -15,6 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { RuleCondition } from "@/lib/types";
 
+/**
+ * Map template condition types to the backend's RuleCondition enum.
+ * Backend only supports: DomainMatch, DomainExact, IpCidr, PortRange, All.
+ * Frontend-friendly types are converted:
+ *   DomainSuffix  → DomainMatch("*.value")
+ *   DomainKeyword → DomainMatch("*value*")
+ *   GeoIp         → IpCidr("geoip:value")
+ */
 function buildCondition(conditionType: string, conditionValue: string): RuleCondition {
   switch (conditionType) {
     case "DomainMatch":
@@ -22,13 +30,13 @@ function buildCondition(conditionType: string, conditionValue: string): RuleCond
     case "DomainExact":
       return { type: "DomainExact", value: conditionValue };
     case "DomainSuffix":
-      return { type: "DomainSuffix", value: conditionValue };
+      return { type: "DomainMatch", value: `*.${conditionValue}` };
     case "DomainKeyword":
-      return { type: "DomainKeyword", value: conditionValue };
+      return { type: "DomainMatch", value: `*${conditionValue}*` };
     case "IpCidr":
       return { type: "IpCidr", value: conditionValue };
     case "GeoIp":
-      return { type: "GeoIp", value: conditionValue };
+      return { type: "IpCidr", value: `geoip:${conditionValue}` };
     case "PortRange": {
       const parts = conditionValue.split("-").map(Number);
       return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
@@ -37,6 +45,16 @@ function buildCondition(conditionType: string, conditionValue: string): RuleCond
       return { type: "All", value: null };
     default:
       return { type: "DomainMatch", value: conditionValue };
+  }
+}
+
+/** Map template action to backend's RuleAction (Allow | Block only). */
+function mapAction(action: string): "Allow" | "Block" {
+  switch (action) {
+    case "Direct": return "Allow";
+    case "Reject": return "Block";
+    case "Block": return "Block";
+    default: return "Allow";
   }
 }
 
@@ -57,7 +75,7 @@ export function TemplateSelector() {
           name: rule.name,
           priority: rule.priority,
           condition: buildCondition(rule.condition_type, rule.condition_value),
-          action: rule.action as "Allow" | "Block" | "Direct" | "Reject",
+          action: mapAction(rule.action),
           enabled: rule.enabled,
         });
         successCount++;

@@ -33,6 +33,8 @@ pub async fn get_permissions(
 }
 
 /// PUT /api/clients/:id/permissions -- Update permissions (partial update).
+/// Updates the in-memory permission store and persists the change to the server
+/// config file so it survives restarts.
 pub async fn update_permissions(
     State(state): State<MgmtState>,
     Path(id): Path<Uuid>,
@@ -48,11 +50,22 @@ pub async fn update_permissions(
         }
     }
 
+    // Update the runtime permission store
     state
         .state
         .permission_store
         .update_permissions(&id_str, &update)
         .await;
+
+    // Persist the updated permissions into the server config
+    {
+        let resolved = state.state.permission_store.get_permissions(&id_str).await;
+        let mut cfg = state.state.config.write().await;
+        if let Some(client) = cfg.authorized_clients.iter_mut().find(|c| c.id == id_str) {
+            client.permissions = Some(resolved);
+        }
+    }
+    state.persist_config().await;
 
     Ok(StatusCode::OK)
 }

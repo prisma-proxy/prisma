@@ -111,7 +111,8 @@
     "latencyError": "Error",
     "importQrFromImage": "Import from Image File",
     "noQrFound": "No QR code found in the image",
-    "decodingImage": "Decoding image…"
+    "decodingImage": "Decoding image…",
+    "copyOf": "Copy of {{name}}"
   },
   "rules": {
     "title": "Rules",
@@ -636,5 +637,9 @@
     "random": "Random",
     "selected": "Selected {{server}} in {{group}}",
     "timeout": "Timeout"
+  },
+  "language": {
+    "english": "English",
+    "chineseCN": "简体中文"
   }
 }

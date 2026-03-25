@@ -111,7 +111,8 @@
     "latencyError": "错误",
     "importQrFromImage": "从图片文件导入",
     "noQrFound": "图片中未找到二维码",
-    "decodingImage": "正在解析图片…"
+    "decodingImage": "正在解析图片…",
+    "copyOf": "{{name}} 的副本"
   },
   "rules": {
     "title": "规则",
@@ -636,5 +637,9 @@
     "random": "随机",
     "selected": "已在 {{group}} 中选择 {{server}}",
     "timeout": "超时"
+  },
+  "language": {
+    "english": "English",
+    "chineseCN": "简体中文"
   }
 }

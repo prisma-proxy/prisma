@@ -226,6 +226,17 @@ export interface ListenerInfo {
   protocol: string;
 }
 
+export interface ClientPermissions {
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  allowed_destinations: string[];
+  blocked_destinations: string[];
+  max_connections: number;
+  bandwidth_limit: number | null;
+  allowed_ports: string[];
+  blocked_ports: number[];
+}
+
 export interface ClientBandwidthInfo {
   client_id: string;
   upload_bps: number;

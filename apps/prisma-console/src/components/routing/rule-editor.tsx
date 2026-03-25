@@ -109,13 +109,13 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
       case "DomainExact":
         return { type: "DomainExact", value: conditionValue };
       case "DomainSuffix":
-        return { type: "DomainSuffix", value: conditionValue };
+        return { type: "DomainMatch", value: `*.${conditionValue}` };
       case "DomainKeyword":
-        return { type: "DomainKeyword", value: conditionValue };
+        return { type: "DomainMatch", value: `*${conditionValue}*` };
       case "IpCidr":
         return { type: "IpCidr", value: conditionValue };
       case "GeoIp":
-        return { type: "GeoIp", value: conditionValue };
+        return { type: "IpCidr", value: `geoip:${conditionValue}` };
       case "PortRange": {
         const parts = conditionValue.split("-").map(Number);
         return { type: "PortRange", value: [parts[0] || 0, parts[1] || 0] };
@@ -123,6 +123,10 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
       case "All":
         return { type: "All", value: null };
     }
+  }
+
+  function mapActionToBackend(a: ActionType): "Allow" | "Block" {
+    return a === "Block" || a === "Reject" ? "Block" : "Allow";
   }
 
   function conditionLabel(ct: ConditionType): string {
@@ -177,7 +181,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
         name,
         priority,
         condition: buildCondition(),
-        action,
+        action: mapActionToBackend(action),
         enabled: editingRule?.enabled ?? true,
       });
       resetForm();

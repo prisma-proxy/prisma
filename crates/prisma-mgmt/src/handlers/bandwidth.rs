@@ -1,6 +1,7 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
+use prisma_core::bandwidth::limiter::parse_bandwidth;
 use serde::{Deserialize, Serialize};
 
 use crate::MgmtState;
@@ -52,10 +53,26 @@ pub async fn get_client_bandwidth(
     Path(id): Path<String>,
 ) -> Result<Json<ClientBandwidthInfo>, StatusCode> {
     let _bandwidth = state.bandwidth.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let cfg = state.config.read().await;
+    let client_cfg = cfg
+        .authorized_clients
+        .iter()
+        .find(|c| c.id == id)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let upload_bps = client_cfg
+        .bandwidth_up
+        .as_deref()
+        .and_then(parse_bandwidth)
+        .unwrap_or(0);
+    let download_bps = client_cfg
+        .bandwidth_down
+        .as_deref()
+        .and_then(parse_bandwidth)
+        .unwrap_or(0);
     Ok(Json(ClientBandwidthInfo {
         client_id: id,
-        upload_bps: 0,
-        download_bps: 0,
+        upload_bps,
+        download_bps,
     }))
 }
 
@@ -118,6 +135,7 @@ pub async fn update_client_quota(
 pub async fn get_bandwidth_summary(State(state): State<MgmtState>) -> Json<BandwidthSummary> {
     let mut clients = Vec::new();
     let auth = state.auth_store.read().await;
+    let cfg = state.config.read().await;
 
     for (id, entry) in &auth.clients {
         let id_str = id.to_string();
@@ -129,11 +147,30 @@ pub async fn get_bandwidth_summary(State(state): State<MgmtState>) -> Json<Bandw
             None => (0, 0),
         };
 
+        let (upload_bps, download_bps) = cfg
+            .authorized_clients
+            .iter()
+            .find(|c| c.id == id_str)
+            .map(|c| {
+                let up = c
+                    .bandwidth_up
+                    .as_deref()
+                    .and_then(parse_bandwidth)
+                    .unwrap_or(0);
+                let down = c
+                    .bandwidth_down
+                    .as_deref()
+                    .and_then(parse_bandwidth)
+                    .unwrap_or(0);
+                (up, down)
+            })
+            .unwrap_or((0, 0));
+
         clients.push(ClientBandwidthSummaryEntry {
             client_id: id_str,
             client_name: entry.name.clone(),
-            upload_bps: 0,
-            download_bps: 0,
+            upload_bps,
+            download_bps,
             quota_bytes,
             quota_used,
         });

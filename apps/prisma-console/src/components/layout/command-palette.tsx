@@ -20,7 +20,22 @@ interface SearchResult {
   label: string;
   description?: string;
   href?: string;
-  action?: () => void;
+  action?: () => void | Promise<void>;
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
 }
 
 function generateHex(bytes: number): string {
@@ -160,15 +175,14 @@ export function CommandPalette() {
     }
 
     // Action items: Generator tools
-    const actionItems: { id: string; labelKey: string; fallback: string; keywords: string[]; action: () => void }[] = [
+    const actionItems: { id: string; labelKey: string; fallback: string; keywords: string[]; action: () => Promise<void> }[] = [
       {
         id: "action-generate-hex-32",
         labelKey: "tools.generateHex32",
         fallback: "Generate Hex (32 digits / 16 bytes)",
         keywords: ["hex", "generate", "random", "32", "16"],
-        action: () => {
-          const hex = generateHex(16);
-          navigator.clipboard.writeText(hex);
+        action: async () => {
+          await copyToClipboard(generateHex(16));
           toast(t("tools.hexCopied"), "success");
         },
       },
@@ -177,9 +191,8 @@ export function CommandPalette() {
         labelKey: "tools.generateHex64",
         fallback: "Generate Hex (64 digits / 32 bytes)",
         keywords: ["hex", "generate", "random", "secret", "64", "32"],
-        action: () => {
-          const hex = generateHex(32);
-          navigator.clipboard.writeText(hex);
+        action: async () => {
+          await copyToClipboard(generateHex(32));
           toast(t("tools.hexCopied"), "success");
         },
       },
@@ -188,9 +201,8 @@ export function CommandPalette() {
         labelKey: "tools.generateHex128",
         fallback: "Generate Hex (128 digits / 64 bytes)",
         keywords: ["hex", "generate", "random", "128", "64"],
-        action: () => {
-          const hex = generateHex(64);
-          navigator.clipboard.writeText(hex);
+        action: async () => {
+          await copyToClipboard(generateHex(64));
           toast(t("tools.hexCopied"), "success");
         },
       },
@@ -199,9 +211,8 @@ export function CommandPalette() {
         labelKey: "tools.generateUuid",
         fallback: "Generate UUID v4",
         keywords: ["uuid", "generate", "random", "id"],
-        action: () => {
-          const uuid = generateUuidV4();
-          navigator.clipboard.writeText(uuid);
+        action: async () => {
+          await copyToClipboard(generateUuidV4());
           toast(t("tools.uuidCopied"), "success");
         },
       },
@@ -210,9 +221,8 @@ export function CommandPalette() {
         labelKey: "tools.generateBase64",
         fallback: "Generate Base64 Key (32 bytes)",
         keywords: ["base64", "generate", "random", "key"],
-        action: () => {
-          const key = generateBase64Key(32);
-          navigator.clipboard.writeText(key);
+        action: async () => {
+          await copyToClipboard(generateBase64Key(32));
           toast(t("tools.base64Copied"), "success");
         },
       },
@@ -254,9 +264,9 @@ export function CommandPalette() {
     return groups;
   }, [results, t]);
 
-  function handleSelect(result: SearchResult) {
+  async function handleSelect(result: SearchResult) {
     if (result.action) {
-      result.action();
+      await result.action();
     } else if (result.href) {
       router.push(result.href);
     }

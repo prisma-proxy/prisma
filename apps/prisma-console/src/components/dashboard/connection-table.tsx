@@ -79,7 +79,7 @@ export function ConnectionTable({
   const [sortKey, setSortKey] = useState<SortKey>("connected_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [groupByIp, setGroupByIp] = useState(false);
+  const [groupByIp] = useState(true);
   const [expandedIPs, setExpandedIPs] = useState<Set<string>>(new Set());
 
   // Unique transports and modes for filter dropdowns
@@ -260,14 +260,6 @@ export function ConnectionTable({
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant={groupByIp ? "default" : "outline"}
-            size="sm"
-            onClick={() => { setGroupByIp(!groupByIp); setExpandedIPs(new Set()); }}
-          >
-            <Layers className="h-3.5 w-3.5" data-icon="inline-start" />
-            {t("connections.groupByIp")}
-          </Button>
         </div>
 
         {sorted.length === 0 ? (

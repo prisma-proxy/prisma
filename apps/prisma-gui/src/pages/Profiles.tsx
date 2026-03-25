@@ -284,7 +284,7 @@ export default function Profiles() {
   async function handleDuplicate(p: Profile) {
     const dup: Profile = {
       id: crypto.randomUUID(),
-      name: `Copy of ${p.name}`,
+      name: t("profiles.copyOf", { name: p.name }),
       tags: [...p.tags],
       config: JSON.parse(JSON.stringify(p.config)),
       created_at: new Date().toISOString(),

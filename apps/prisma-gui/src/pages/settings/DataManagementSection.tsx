@@ -40,7 +40,7 @@ export default function DataManagementSection() {
     let plat: string;
     try { plat = osPlatform(); } catch { plat = "unknown"; }
     const info = [
-      `Prisma v2.0.0`,
+      `Prisma v${__APP_VERSION__}`,
       `Platform: ${plat}`,
       `Language: ${language}`,
       `Theme: ${theme}`,

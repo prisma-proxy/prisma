@@ -23,6 +23,7 @@ import { useRuleProviders, SUGGESTED_PROVIDERS } from "@/store/ruleProviders";
 import type { RuleProvider } from "@/store/ruleProviders";
 import { useStore } from "@/store";
 import { useConnection } from "@/hooks/useConnection";
+import { usePlatform } from "@/hooks/usePlatform";
 import { notify } from "@/store/notifications";
 import { downloadJson, pickJsonFile } from "@/lib/utils";
 import {
@@ -59,6 +60,7 @@ function isPresetFullyApplied(preset: RulePreset, currentRules: Rule[]): boolean
 
 export default function Rules() {
   const { t } = useTranslation();
+  const { isMobile } = usePlatform();
   const rules = useRules((s) => s.rules);
   const addRule = useRules((s) => s.add);
   const addMany = useRules((s) => s.addMany);
@@ -278,7 +280,7 @@ export default function Rules() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("rules.type")}</TableHead>
-                  <TableHead>{t("rules.match")}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t("rules.match")}</TableHead>
                   <TableHead>{t("rules.action")}</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -286,7 +288,7 @@ export default function Rules() {
               <TableBody>
                 {rules.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={isMobile ? 3 : 4} className="text-center text-muted-foreground py-8">
                       {t("rules.noRules")}
                     </TableCell>
                   </TableRow>
@@ -294,8 +296,8 @@ export default function Rules() {
                 {rules.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-xs">{r.type}</TableCell>
-                    <TableCell className="text-sm">{r.match || "\u2014"}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm hidden sm:table-cell">{r.match || "\u2014"}</TableCell>
+                    <TableCell className="text-xs sm:text-sm">
                       <span className={
                         r.action === "PROXY"  ? "text-green-400" :
                         r.action === "REJECT" ? "text-red-400"   : "text-muted-foreground"

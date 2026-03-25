@@ -25,7 +25,7 @@ export async function exportSettings(t: TFunction) {
   const data: Record<string, unknown> = {};
   for (const k of SETTINGS_KEYS) data[k] = allSettings[k];
   const payload = {
-    version: "2.0.0",
+    version: __APP_VERSION__,
     exportedAt: new Date().toISOString(),
     settings: data,
   };
@@ -113,7 +113,7 @@ export async function exportFullBackup(t: TFunction) {
   for (const k of SETTINGS_KEYS) settingsData[k] = allSettings[k];
 
   const backup = {
-    version: "2.0.0",
+    version: __APP_VERSION__,
     exportedAt: new Date().toISOString(),
     settings: settingsData,
     profiles,

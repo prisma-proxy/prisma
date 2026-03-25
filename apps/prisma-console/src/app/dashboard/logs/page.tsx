@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { ScrollText } from "lucide-react";
 import { useLogs } from "@/hooks/use-logs";
 import { LogViewer } from "@/components/logs/log-viewer";
@@ -13,6 +14,16 @@ import { exportToCSV, exportToJSON } from "@/lib/export";
 export default function LogsPage() {
   const { t } = useI18n();
   const { logs, setFilter, clearLogs, connectionStatus } = useLogs();
+
+  // Show hint if connected but no logs after 5 seconds
+  const [showNoLogsHint, setShowNoLogsHint] = useState(false);
+  useEffect(() => {
+    if (connectionStatus === "connected" && logs.length === 0) {
+      const timer = setTimeout(() => setShowNoLogsHint(true), 5000);
+      return () => clearTimeout(timer);
+    }
+    setShowNoLogsHint(false);
+  }, [connectionStatus, logs.length]);
 
   const handleExportCSV = () => {
     if (logs.length === 0) return;
@@ -71,7 +82,10 @@ export default function LogsPage() {
           <EmptyState
             icon={ScrollText}
             title={t("empty.noLogs")}
-            description={t("empty.noLogsHint")}
+            description={showNoLogsHint
+              ? t("logs.noLogsHint")
+              : t("empty.noLogsHint")
+            }
           />
         ) : (
           <LogViewer logs={logs} />

@@ -32,6 +32,7 @@ import { ClientTrafficChart } from "@/components/clients/client-traffic-chart";
 import { formatBytes } from "@/lib/utils";
 import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { ArrowLeft } from "lucide-react";
+import { ClientPermissionsForm } from "@/components/clients/client-permissions";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const id = clientId;
@@ -113,6 +114,16 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
           isPending={updateQuota.isPending}
         />
       </div>
+
+      {/* Permissions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("permissions.title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ClientPermissionsForm clientId={id} />
+        </CardContent>
+      </Card>
 
       {/* Latency + connections metrics */}
       {clientMetrics && (

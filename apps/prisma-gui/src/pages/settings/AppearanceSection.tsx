@@ -18,8 +18,8 @@ export default function AppearanceSection() {
           <Select value={language} onValueChange={(v) => { patch({ language: v as "en" | "zh-CN" }); i18n.changeLanguage(v); }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="zh-CN">简体中文</SelectItem>
+              <SelectItem value="en">{t("language.english")}</SelectItem>
+              <SelectItem value="zh-CN">{t("language.chineseCN")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

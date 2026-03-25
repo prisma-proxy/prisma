@@ -16,7 +16,7 @@ export default function AboutSection() {
       <p className="text-xs font-semibold uppercase tracking-wider">{t("settings.about")}</p>
       <div className="flex items-center gap-2">
         <Shield size={14} />
-        <span>Prisma v2.0.0</span>
+        <span>Prisma v{__APP_VERSION__}</span>
       </div>
       <p>{t("settings.platform")}: {platformName}</p>
       <p>License: GPLv3.0</p>

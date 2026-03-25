@@ -18,7 +18,12 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    let detail = res.statusText;
+    try {
+      const json = await res.json();
+      detail = json.error || json.message || detail;
+    } catch { /* response body not JSON */ }
+    throw new Error(detail);
   }
   return res;
 }
@@ -96,6 +101,15 @@ export const api = {
   // System
   getSystemInfo: () =>
     apiFetch<import("./types").SystemInfoResponse>("/api/system/info"),
+
+  // Permissions
+  getClientPermissions: (id: string) =>
+    apiFetch<import("./types").ClientPermissions>(`/api/clients/${id}/permissions`),
+  updateClientPermissions: (id: string, data: import("./types").ClientPermissions) =>
+    apiFetch<void>(`/api/clients/${id}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 
   // Bandwidth
   getClientBandwidth: (id: string) =>
