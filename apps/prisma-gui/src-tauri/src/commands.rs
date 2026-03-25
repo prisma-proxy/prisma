@@ -323,11 +323,15 @@ pub async fn download_file(
     proxy_port: u16,
 ) -> Result<(), String> {
     let mut builder = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120));
+        .timeout(std::time::Duration::from_secs(120))
+        .redirect(reqwest::redirect::Policy::limited(10));
     if proxy_port > 0 {
-        let proxy = reqwest::Proxy::all(format!("socks5://127.0.0.1:{}", proxy_port))
+        // Use HTTP CONNECT proxy (not SOCKS5) for reliable HTTPS tunneling
+        let proxy = reqwest::Proxy::http(format!("http://127.0.0.1:{}", proxy_port))
             .map_err(|e| e.to_string())?;
-        builder = builder.proxy(proxy);
+        let proxy_https = reqwest::Proxy::https(format!("http://127.0.0.1:{}", proxy_port))
+            .map_err(|e| e.to_string())?;
+        builder = builder.proxy(proxy).proxy(proxy_https);
     }
     let client = builder.build().map_err(|e| e.to_string())?;
     let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;

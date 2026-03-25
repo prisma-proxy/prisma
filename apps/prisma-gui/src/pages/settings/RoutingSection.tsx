@@ -19,7 +19,7 @@ const GEO_URLS = {
 
 export default function RoutingSection() {
   const { t } = useTranslation();
-  const { routingGeoipPath, routingGeositePath, portForwards, socks5Port, patch } = useSettings();
+  const { routingGeoipPath, routingGeositePath, portForwards, httpPort, patch } = useSettings();
   const [geoipDownloading, setGeoipDownloading] = useState(false);
   const [geositeDownloading, setGeositeDownloading] = useState(false);
 
@@ -30,7 +30,7 @@ export default function RoutingSection() {
     try {
       const dir = await api.getProfilesDir();
       const destPath = `${dir}/${kind}.dat`;
-      const proxyPort = useProxy ? (socks5Port || 1080) : 0;
+      const proxyPort = useProxy ? (httpPort || 8080) : 0;
       await api.downloadFile(GEO_URLS[kind], destPath, proxyPort);
       patch({ [settingsKey]: destPath });
       notify.success(t("settings.downloadFileOk", { path: destPath }));
