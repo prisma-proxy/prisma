@@ -117,7 +117,11 @@ This allows accessing the console without CORS configuration and without exposin
 
 ## Authentication
 
-The console uses token-based authentication. Enter the `management_api.auth_token` from your server config on the login page. The token is stored in the browser's session storage and sent as a `Bearer` token with each API request.
+The console supports two authentication modes:
+
+- **Username + password (JWT-based)** — the primary login method as of v2.7.0. Users authenticate with a username and password; the server issues a JWT token that is stored in the browser and sent with each API request. A "Remember me" option is available for persistent login sessions across browser restarts.
+- **Self-registration** — users can register themselves via the login page. Self-registered users are assigned the **Client** role by default, which limits access to their own statistics only. An admin must promote users to higher roles.
+- **Legacy bearer token** — for backward compatibility, the console still accepts the `management_api.auth_token` as a bearer token on the login page. This is useful for automated tooling or migration from pre-v2.7.0 setups.
 
 All `/console/*` routes are protected — unauthenticated users are redirected to `/login`.
 
@@ -223,6 +227,18 @@ Visual routing rules editor:
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule types.
 
+### User Management
+
+*(Admin only)* Manage console users and their roles:
+- **User table** — CRUD table listing all users with username, role badge (Admin / Operator / Client), enabled/disabled status, and creation date
+- **Role badges** — color-coded badges: red for Admin, blue for Operator, green for Client
+- **Enable/disable toggle** — quickly enable or disable a user account without deleting it
+- **Create user** — dialog form to create a new user with username, password, and role assignment
+- **Edit user** — update a user's role or reset their password
+- **Delete user** — remove a user account permanently
+
+This page is only visible to users with the **Admin** role.
+
 ### ~~Logs~~ (removed)
 
 :::note
@@ -261,6 +277,7 @@ Traffic shaping and anti-analysis visualization:
 
 ## Additional Features
 
+- **Role-based access control** — three roles control what each user can see and do: **Admin** (full access to all pages and settings), **Operator** (monitoring only — can view dashboards and metrics but cannot modify configuration or manage users), **Client** (can only view their own connection statistics and speed test). Navigation items and UI elements adapt automatically based on the logged-in user's role.
 - **i18n** — full English and Simplified Chinese translations, switchable from the sidebar
 - **Theme toggle** — dark, light, and system mode, switchable from the sidebar footer. Preference is persisted in localStorage and applied on page load.
 - **Notification center** — persistent notification drawer with history, accessible from the sidebar bell icon

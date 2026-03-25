@@ -20,15 +20,73 @@ console_dir = "/opt/prisma/console"  # 可选：提供构建好的控制台
 
 ## 认证
 
-所有端点都需要在 `Authorization` 头部中携带 Bearer 令牌：
+管理 API 支持两种认证方式：
+
+### 基于 JWT 的认证（v2.7.0+）
+
+使用用户名和密码进行认证以获取 JWT 令牌。在后续请求中使用该令牌：
+
+```bash
+# 登录获取 JWT 令牌
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}' \
+  http://127.0.0.1:9090/api/auth/login
+# {"token":"eyJhbGciOi...","role":"admin","expires_in":86400}
+
+# 使用 JWT 令牌
+curl -H "Authorization: Bearer eyJhbGciOi..." http://127.0.0.1:9090/api/health
+```
+
+### 传统 Bearer 令牌
+
+为保持向后兼容，仍然接受 `server.toml` 中的静态 `auth_token` 作为 Bearer 令牌。此方式授予完整的管理员级别访问权限：
 
 ```bash
 curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api/health
 ```
 
-如果 `auth_token` 为空，则禁用认证（仅限开发模式）。
+如果 `auth_token` 和 `jwt_secret` 均为空，则禁用认证（仅限开发模式）。
 
 ## REST 端点
+
+### 认证与用户
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/auth/login` | 使用用户名+密码认证，返回 JWT |
+| `POST` | `/api/auth/register` | 自助注册为 Client 角色用户 |
+| `GET` | `/api/auth/me` | 从 JWT 获取当前用户信息 |
+| `GET` | `/api/users` | 列出所有用户（仅管理员） |
+| `POST` | `/api/users` | 创建用户（仅管理员） |
+| `PUT` | `/api/users/{username}` | 更新用户角色/状态（仅管理员） |
+| `DELETE` | `/api/users/{username}` | 删除用户（仅管理员） |
+
+**登录：**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}' \
+  http://127.0.0.1:9090/api/auth/login
+# {"token":"eyJhbGciOi...","role":"admin","expires_in":86400}
+```
+
+**自助注册：**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/auth/register
+# {"username":"newuser","role":"client","enabled":true}
+```
+
+自助注册用户将被分配 **Client** 角色，仅能查看自己的统计信息。
+
+**列出用户（仅管理员）：**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
+# [{"username":"admin","role":"admin","enabled":true},{"username":"viewer","role":"operator","enabled":true}]
+```
 
 ### 健康状态与指标
 
@@ -42,7 +100,7 @@ curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.6.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.7.0"}
 ```
 
 ### 连接
@@ -340,10 +398,11 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.6.0）：
+所有端点一览（v2.7.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|
+| 认证与用户 | 7 REST | 登录、注册、用户 CRUD、角色管理 |
 | 健康与指标 | 3 REST + 1 WS | 服务器状态、快照、历史、实时流 |
 | 连接 | 3 REST + 1 WS | 列表、断开、GeoIP 分布、实时事件 |
 | 客户端 | 6 REST | 授权客户端的 CRUD、密钥获取、分享配置 |

@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.6.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.7.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -123,9 +123,52 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `tls.cert_path` | string? | -- | TLS certificate path (inherits from top-level `[tls]` if omitted and `tls_enabled = true`) |
 | `tls.key_path` | string? | -- | TLS private key path (inherits from top-level `[tls]` if omitted and `tls_enabled = true`) |
 | `auto_backup_interval_mins` | u32 | `0` | Periodically create a config backup every N minutes. `0` disables auto-backup. |
+| `jwt_secret` | string | `""` | Secret key for signing JWT tokens. Auto-generated on first server run if left empty. |
 
 :::warning
-The `auth_token` protects all management API endpoints. Use a strong, random token in production.
+The `auth_token` protects all management API endpoints when using legacy token auth. The `jwt_secret` is used for JWT-based authentication (v2.7.0+). Use strong, random values for both in production.
+:::
+
+### `[[management_api.users]]` -- Console users
+
+Pre-configure console users in TOML. Users can also be created at runtime via the console's self-registration endpoint or the admin user management page.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `username` | string | -- | Unique username |
+| `password_hash` | string | -- | bcrypt-hashed password (generate with `prisma hash-password`) |
+| `role` | string | `"client"` | User role: `"admin"` / `"operator"` / `"client"` |
+| `enabled` | bool | `true` | Whether the user account is active |
+
+Roles:
+- **admin** — full access to all API endpoints and console pages, including user management
+- **operator** — monitoring only; can view dashboards, metrics, and connections but cannot modify configuration or manage users
+- **client** — can only view their own connection statistics
+
+Example:
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+jwt_secret = "auto-generated-on-first-run"
+
+[[management_api.users]]
+username = "admin"
+password_hash = "$2b$10$..."  # bcrypt hash
+role = "admin"
+enabled = true
+
+[[management_api.users]]
+username = "viewer"
+password_hash = "$2b$10$..."
+role = "operator"
+enabled = true
+```
+
+:::tip
+You can either pre-configure users in `server.toml` or let them self-register via the console login page. Self-registered users are always assigned the **Client** role. An admin can later promote users via the console or the management API.
 :::
 
 **Auto-backup**: Set `auto_backup_interval_mins` to a non-zero value to create automatic config snapshots on a fixed schedule. The backup task runs in the background and will not interfere with active connections. Backups are stored alongside manual backups and can be viewed or restored from the console Config Backups page.
@@ -461,8 +504,16 @@ log_connections = true
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
+jwt_secret = "auto-generated-on-first-run"
 console_dir = "/opt/prisma/console"  # Path to built console static files
 # tls_enabled = false                # Set true to enable HTTPS on management API
+
+# Console users (can also self-register via /api/auth/register)
+[[management_api.users]]
+username = "admin"
+password_hash = "$2b$10$..."  # bcrypt hash, generate with: prisma hash-password
+role = "admin"
+enabled = true
 
 # Per-frame padding
 [padding]

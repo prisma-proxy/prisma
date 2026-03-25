@@ -20,15 +20,73 @@ console_dir = "/opt/prisma/console"  # optional: serve built console
 
 ## Authentication
 
-All endpoints require a Bearer token in the `Authorization` header:
+The management API supports two authentication methods:
+
+### JWT-based authentication (v2.7.0+)
+
+Authenticate with username and password to receive a JWT token. Use the token in subsequent requests:
+
+```bash
+# Login to get a JWT token
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}' \
+  http://127.0.0.1:9090/api/auth/login
+# {"token":"eyJhbGciOi...","role":"admin","expires_in":86400}
+
+# Use the JWT token
+curl -H "Authorization: Bearer eyJhbGciOi..." http://127.0.0.1:9090/api/health
+```
+
+### Legacy bearer token
+
+For backward compatibility, the static `auth_token` from `server.toml` is still accepted as a Bearer token. This grants full admin-level access:
 
 ```bash
 curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api/health
 ```
 
-If `auth_token` is empty, authentication is disabled (development mode only).
+If both `auth_token` and `jwt_secret` are empty, authentication is disabled (development mode only).
 
 ## REST Endpoints
+
+### Auth & Users
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/auth/login` | Authenticate with username+password, returns JWT |
+| `POST` | `/api/auth/register` | Self-register as Client role user |
+| `GET` | `/api/auth/me` | Get current user info from JWT |
+| `GET` | `/api/users` | List all users (admin only) |
+| `POST` | `/api/users` | Create user (admin only) |
+| `PUT` | `/api/users/{username}` | Update user role/status (admin only) |
+| `DELETE` | `/api/users/{username}` | Delete user (admin only) |
+
+**Login:**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}' \
+  http://127.0.0.1:9090/api/auth/login
+# {"token":"eyJhbGciOi...","role":"admin","expires_in":86400}
+```
+
+**Self-register:**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/auth/register
+# {"username":"newuser","role":"client","enabled":true}
+```
+
+Self-registered users are assigned the **Client** role and can only view their own statistics.
+
+**List users (admin only):**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
+# [{"username":"admin","role":"admin","enabled":true},{"username":"viewer","role":"operator","enabled":true}]
+```
 
 ### Health & Metrics
 
@@ -42,7 +100,7 @@ If `auth_token` is empty, authentication is disabled (development mode only).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.6.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.7.0"}
 ```
 
 ### Connections
@@ -342,10 +400,11 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.6.0):
+All endpoints at a glance (v2.7.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
+| Auth & Users | 7 REST | Login, register, user CRUD, role management |
 | Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
 | Connections | 3 REST + 1 WS | List, disconnect, GeoIP distribution, real-time events |
 | Clients | 6 REST | CRUD for authorized clients, secret retrieval, share config |

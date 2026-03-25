@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.6.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.7.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -123,9 +123,10 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 | `tls.cert_path` | string? | -- | TLS 证书路径（未设置时继承顶级 `[tls]` 配置） |
 | `tls.key_path` | string? | -- | TLS 私钥路径（未设置时继承顶级 `[tls]` 配置） |
 | `auto_backup_interval_mins` | u32 | `0` | 每隔 N 分钟自动创建一次配置备份。`0` 表示禁用自动备份。 |
+| `jwt_secret` | string | `""` | JWT 令牌签名密钥。留空时在服务器首次运行时自动生成。 |
 
 :::warning
-`auth_token` 保护所有管理 API 端点。生产环境请使用强随机令牌。
+`auth_token` 保护所有使用传统令牌认证的管理 API 端点。`jwt_secret` 用于基于 JWT 的认证（v2.7.0+）。生产环境请为两者使用强随机值。
 :::
 
 **绑定地址**：默认 API 监听 `127.0.0.1:9090`（仅本地）。要暴露到网络，请更改 `listen_addr`——但请确保有适当的网络级别访问控制。
@@ -133,6 +134,48 @@ allowed_ports = [{ start = 80, end = 80 }, { start = 443, end = 443 }, { start =
 **控制台**：将 `console_dir` 设置为包含已构建控制台静态文件的路径。服务器将在管理 API 地址提供控制台服务。从[最新版本](https://github.com/Yamimega/prisma/releases/latest)下载预构建文件，或使用 `cd apps/prisma-console && npm ci && npm run build` 从源码构建。
 
 **CORS 来源**：仅在控制台开发服务器运行在不同来源时需要（如 `http://localhost:3000`）。生产环境中控制台由服务器自身提供时不需要。
+
+### `[[management_api.users]]` -- 控制台用户
+
+在 TOML 中预配置控制台用户。用户也可以通过控制台的自助注册端点或管理员用户管理页面在运行时创建。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `username` | string | -- | 唯一用户名 |
+| `password_hash` | string | -- | bcrypt 哈希密码（使用 `prisma hash-password` 生成） |
+| `role` | string | `"client"` | 用户角色：`"admin"` / `"operator"` / `"client"` |
+| `enabled` | bool | `true` | 用户账户是否激活 |
+
+角色说明：
+- **admin** — 完全访问所有 API 端点和控制台页面，包括用户管理
+- **operator** — 仅监控；可查看仪表盘、指标和连接，但无法修改配置或管理用户
+- **client** — 仅能查看自己的连接统计
+
+示例：
+
+```toml
+[management_api]
+enabled = true
+listen_addr = "127.0.0.1:9090"
+auth_token = "your-secure-token-here"
+jwt_secret = "auto-generated-on-first-run"
+
+[[management_api.users]]
+username = "admin"
+password_hash = "$2b$10$..."  # bcrypt hash
+role = "admin"
+enabled = true
+
+[[management_api.users]]
+username = "viewer"
+password_hash = "$2b$10$..."
+role = "operator"
+enabled = true
+```
+
+:::tip
+您可以在 `server.toml` 中预配置用户，也可以让用户通过控制台登录页面自助注册。自助注册的用户始终被分配 **Client** 角色。管理员可以稍后通过控制台或管理 API 提升用户角色。
+:::
 
 **自动备份**：将 `auto_backup_interval_mins` 设置为非零值，即可按固定间隔自动创建配置快照。备份任务在后台运行，不会影响活跃连接。备份与手动备份一同存储，可在控制台的"配置备份"页面查看或恢复。
 
@@ -457,7 +500,15 @@ log_connections = true
 enabled = true
 listen_addr = "127.0.0.1:9090"
 auth_token = "your-secure-token-here"
+jwt_secret = "auto-generated-on-first-run"
 console_dir = "/opt/prisma/console"
+
+# 控制台用户（也可通过 /api/auth/register 自助注册）
+[[management_api.users]]
+username = "admin"
+password_hash = "$2b$10$..."  # bcrypt 哈希，使用以下命令生成：prisma hash-password
+role = "admin"
+enabled = true
 
 # 每帧填充
 [padding]
