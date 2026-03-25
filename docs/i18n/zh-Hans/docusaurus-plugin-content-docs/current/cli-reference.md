@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI 参考
 
-`prisma` 二进制文件（v2.8.0）提供多个子命令，用于运行服务端和客户端（支持守护进程模式）、生成凭证、管理配置、启动控制台、导入服务器配置、管理订阅、测试延迟，以及通过管理 API 控制运行中的服务器。
+`prisma` 二进制文件（v2.10.0）提供多个子命令，用于运行服务端和客户端（支持守护进程模式）、生成凭证、管理配置、启动控制台、导入服务器配置、管理订阅、测试延迟，以及通过管理 API 控制运行中的服务器。
 
 ## 全局参数
 
@@ -552,6 +552,38 @@ prisma logs [--level <LEVEL>] [--lines <N>]
 
 ---
 
+## 自更新
+
+### `prisma update`
+
+检查并安装来自 GitHub Releases 的更新。
+
+```bash
+prisma update [--check] [--yes]
+```
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `--check` | -- | 仅检查更新，不下载安装 |
+| `--yes` | -- | 跳过确认提示，直接安装 |
+
+从 GitHub 下载最新版本，验证二进制文件，并替换当前运行的可执行文件。需要对二进制文件位置的写入权限。
+
+**示例：**
+
+```bash
+# 检查更新
+prisma update --check
+
+# 带确认提示的更新
+prisma update
+
+# 无确认自动更新
+prisma update --yes
+```
+
+---
+
 ## 快速参考
 
 | 命令 | 用途 |
@@ -588,3 +620,4 @@ prisma logs [--level <LEVEL>] [--lines <N>]
 | `prisma config get/set/tls/backup` | 管理服务器配置 |
 | `prisma routes list/create/update/delete/setup` | 管理路由规则 |
 | `prisma logs [--level LEVEL]` | 实时流式传输服务器日志 |
+| `prisma update [--check] [--yes]` | 检查并安装更新 |

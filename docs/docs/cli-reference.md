@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # CLI Reference
 
-The `prisma` binary (v2.8.0) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, managing subscriptions, testing latency, and controlling a live server via the management API.
+The `prisma` binary (v2.10.0) provides subcommands for running the server and client (with daemon mode), generating credentials, managing configs, launching the console, managing subscriptions, testing latency, and controlling a live server via the management API.
 
 ## Global Flags
 
@@ -844,6 +844,38 @@ prisma logs --level DEBUG --json  # JSON-formatted debug logs
 
 ---
 
+## Self-Update
+
+### `prisma update`
+
+Check for and install updates from GitHub Releases.
+
+```bash
+prisma update [--check] [--yes]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--check` | -- | Only check for updates without downloading |
+| `--yes` | -- | Skip confirmation prompt and install immediately |
+
+Downloads the latest release from GitHub, verifies the binary, and replaces the running executable. Requires write permission to the binary's location.
+
+**Examples:**
+
+```bash
+# Check for updates
+prisma update --check
+
+# Update with confirmation prompt
+prisma update
+
+# Auto-update without confirmation
+prisma update --yes
+```
+
+---
+
 ## Quick Reference
 
 | Command | Purpose |
@@ -880,3 +912,4 @@ prisma logs --level DEBUG --json  # JSON-formatted debug logs
 | `prisma config get/set/tls/backup` | Manage server configuration |
 | `prisma routes list/create/update/delete/setup` | Manage routing rules |
 | `prisma logs [--level LEVEL]` | Stream live server logs |
+| `prisma update [--check] [--yes]` | Check for and install updates |

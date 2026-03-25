@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.8.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.10.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -21,6 +21,7 @@ This page reflects Prisma **v2.8.0**. Protocol v4 support has been removed; only
 | `config_watch` | bool | `false` | Watch the config file for changes and auto-reload at runtime |
 | `shutdown_drain_timeout_secs` | u64 | `30` | Seconds to wait for in-flight connections during graceful shutdown |
 | `ticket_rotation_hours` | u64 | `6` | Session ticket encryption key rotation interval in hours. Old keys are retained for 3 rotation periods to allow graceful resumption. |
+| `public_address` | string? | -- | Public-facing server address for shared client configs (e.g., `"proxy.example.com:8443"`). Used instead of `listen_addr` in shared configs. Falls back to TLS SNI domain, then `listen_addr`. |
 
 ## `[tls]` -- TLS certificates
 
@@ -52,6 +53,7 @@ Each entry defines one authorized client. At least one is required.
 | `bandwidth_down` | string? | -- | Per-client download rate limit (e.g., `"500mbps"`) |
 | `quota` | string? | -- | Per-client transfer quota (e.g., `"100GB"`) |
 | `quota_period` | string? | -- | Quota reset period: `"daily"` / `"weekly"` / `"monthly"` |
+| `owner` | string? | -- | Owner username for data scoping. When set, client-role console users only see clients they own. |
 
 Example with multiple clients:
 
@@ -204,7 +206,7 @@ Port resolution: a port is allowed when forwarding is enabled, the port is NOT i
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `geoip_path` | string? | -- | Path to v2fly `geoip.dat` file for GeoIP-based routing |
+| `geoip_path` | string? | -- | Path to MaxMind GeoLite2-City.mmdb file for GeoIP-based routing and per-connection country/city lookups |
 | `rules` | array | `[]` | Ordered list of routing rules |
 
 Each rule in `[[routing.rules]]`:
@@ -213,7 +215,7 @@ Each rule in `[[routing.rules]]`:
 |-------|------|-------------|
 | `type` | string | Rule type: `domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
 | `value` | string | Match value (country code for `geoip`, e.g. `"cn"`, `"private"`) |
-| `action` | string | Action: `"allow"` / `"block"` (or `"proxy"` / `"direct"` mapped to allow) |
+| `action` | string | Action: `"allow"` / `"direct"` / `"block"` (with aliases `"proxy"`, `"reject"`) |
 
 ## `[padding]` -- Per-frame padding
 
@@ -616,7 +618,7 @@ block_duration_secs = 120
 
 # Static routing rules (persist across restarts)
 # [routing]
-# geoip_path = "/etc/prisma/geoip.dat"
+# geoip_path = "/etc/prisma/GeoLite2-City.mmdb"
 # [[routing.rules]]
 # type = "ip-cidr"
 # value = "10.0.0.0/8"

@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.8.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.10.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -21,6 +21,7 @@ sidebar_position: 1
 | `config_watch` | bool | `false` | 监视配置文件变化并在运行时自动重载 |
 | `shutdown_drain_timeout_secs` | u64 | `30` | 优雅关闭时等待进行中连接的秒数 |
 | `ticket_rotation_hours` | u64 | `6` | 会话票据加密密钥轮换间隔（小时）。旧密钥保留 3 个轮换周期以允许优雅恢复。 |
+| `public_address` | string? | -- | 公网服务器地址，用于共享客户端配置（如 `"proxy.example.com:8443"`）。若未设置则回退到 `listen_addr`。 |
 
 ## `[tls]` -- TLS 证书
 
@@ -52,6 +53,7 @@ prisma gen-cert --output /etc/prisma --cn prisma-server
 | `bandwidth_down` | string? | -- | 单客户端下载速率限制（如 `"500mbps"`） |
 | `quota` | string? | -- | 单客户端流量配额（如 `"100GB"`） |
 | `quota_period` | string? | -- | 配额重置周期：`"daily"` / `"weekly"` / `"monthly"` |
+| `owner` | string? | -- | 所有者用户名，用于数据隔离。设置后，客户端角色用户只能看到自己拥有的客户端。 |
 
 多客户端示例：
 
@@ -204,7 +206,7 @@ enabled = true
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `geoip_path` | string? | -- | v2fly `geoip.dat` 文件路径，用于 GeoIP 路由 |
+| `geoip_path` | string? | -- | MaxMind GeoLite2-City.mmdb（城市级）文件路径，用于 GeoIP 路由 |
 | `rules` | array | `[]` | 有序的路由规则列表 |
 
 每个 `[[routing.rules]]`：
@@ -213,7 +215,7 @@ enabled = true
 |------|------|------|
 | `type` | string | 规则类型：`domain` / `domain-suffix` / `domain-keyword` / `ip-cidr` / `geoip` / `port` / `all` |
 | `value` | string | 匹配值（`geoip` 类型使用国家代码，如 `"cn"`、`"private"`） |
-| `action` | string | 动作：`"allow"` / `"block"`（或 `"proxy"` / `"direct"` 映射为 allow） |
+| `action` | string | 动作：`"allow"` / `"block"` / `"direct"`（或 `"proxy"` 映射为 allow） |
 
 ## `[padding]` -- 每帧填充
 

@@ -120,10 +120,26 @@ This allows accessing the console without CORS configuration and without exposin
 The console supports two authentication modes:
 
 - **Username + password (JWT-based)** — the primary login method as of v2.8.0. Users authenticate with a username and password; the server issues a JWT token that is stored in the browser and sent with each API request. A "Remember me" option is available for persistent login sessions across browser restarts.
-- **Self-registration** — users can register themselves via the login page. Self-registered users are assigned the **Client** role by default, which limits access to their own statistics only. An admin must promote users to higher roles.
+- **Self-registration** — users can register themselves via the login page once an admin user exists (registration is gated until initial setup is complete). Self-registered users are assigned the **Client** role by default, which limits access to their own statistics only. An admin must promote users to higher roles.
 - **Legacy bearer token** — for backward compatibility, the console still accepts the `management_api.auth_token` as a bearer token on the login page. This is useful for automated tooling or migration from pre-v2.8.0 setups.
+- **Change password** — authenticated users can change their own password via the sidebar user menu, which calls `PUT /api/auth/password`
 
 All `/console/*` routes are protected — unauthenticated users are redirected to `/login`.
+
+## First-Run Setup
+
+When no admin user exists, the console redirects to a setup wizard at `/setup`. This WordPress-style setup page:
+
+1. Checks setup status via `GET /api/setup/status`
+2. Presents a form to create the initial admin user (username + password)
+3. Submits via `POST /api/setup/init` (no authentication required)
+4. Auto-logs in with the returned JWT token and redirects to the dashboard
+
+Once an admin user exists, the `/setup` page shows a "Setup complete" message and links to the login page.
+
+:::note
+Self-registration (`POST /api/auth/register`) is blocked until an admin user has been created through the setup wizard. This ensures the first user always has admin privileges.
+:::
 
 ## Architecture
 
@@ -216,14 +232,22 @@ Changes take effect immediately — no server restart required.
 
 ### Routing
 
-Visual routing rules editor:
-- **Rule list** — all rules sorted by priority, showing condition, action, and enabled status
-- **Inline edit** — click any rule field (condition, value, action) to edit it directly in the table without opening a dialog. Changes are saved immediately via the management API.
-- **Rule editor** — dialog form for creating new rules with condition type, value, and action
-- **Expanded rule types** — supports DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, PORT, and ALL rule types with auto-complete suggestions
-- **Rule presets** — 8 preset templates in 4 categories (Privacy, Network, Regional, Catch-all) with one-click apply
+Visual routing rules editor with a two-tab layout:
+
+#### Manual Rules tab
+- **Rule list** — all rules sorted by priority, showing type, match value, action, and enabled status
+- **Inline edit** — click any rule to edit it directly in the table. Changes are saved immediately via the management API.
+- **Rule editor** — dialog form for creating/editing rules with fields: type, match, action, name, priority, enabled
+- **Rule types** — DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, PORT-RANGE, and FINAL (match-all)
+- **Rule actions** — PROXY (tunnel through server), DIRECT (bypass proxy), REJECT (block connection)
+- **Rule testing** — input field to test which rule matches a given domain or IP
 - **Batch deletion** — select multiple rules and delete in bulk
 - **Toggle/delete** — enable, disable, or remove rules inline
+
+#### Quick Templates tab
+- **Template categories** — pre-built rule sets organized by purpose: Privacy (Block Ads, Block Trackers), Network (Block Torrent/P2P), Regional (Block Gambling, Block Social Media), and Catch-all (Allow All, Block All)
+- **One-click apply** — apply a template to instantly add a curated set of rules
+- **Template preview** — view the rules a template will add before applying
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule types.
 

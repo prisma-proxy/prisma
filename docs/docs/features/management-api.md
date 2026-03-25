@@ -60,6 +60,9 @@ If both `auth_token` and `jwt_secret` are empty, authentication is disabled (dev
 | `POST` | `/api/users` | Create user (admin only) |
 | `PUT` | `/api/users/{username}` | Update user role/status (admin only) |
 | `DELETE` | `/api/users/{username}` | Delete user (admin only) |
+| `PUT` | `/api/auth/password` | Change current user's password (requires auth) |
+| `GET` | `/api/setup/status` | Check if initial setup is complete (no auth required) |
+| `POST` | `/api/setup/init` | Create initial admin user (no auth required, one-time only) |
 
 **Login:**
 
@@ -81,6 +84,36 @@ curl -X POST -H "Content-Type: application/json" \
 
 Self-registered users are assigned the **Client** role and can only view their own statistics.
 
+**Change password:**
+
+```bash
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password": "old-password", "new_password": "new-strong-password"}' \
+  http://127.0.0.1:9090/api/auth/password
+# {"status":"ok"}
+```
+
+:::note
+Self-registration is only available after the initial admin user has been created via `/api/setup/init` or the console setup wizard.
+:::
+
+**Check setup status (no auth required):**
+
+```bash
+curl http://127.0.0.1:9090/api/setup/status
+# {"needs_setup":true}
+```
+
+**Initial setup (no auth required, one-time):**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/setup/init
+# {"token":"eyJhbGciOi...","user":{"username":"admin","role":"admin","enabled":true}}
+```
+
 **List users (admin only):**
 
 ```bash
@@ -100,7 +133,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.8.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.10.0"}
 ```
 
 ### Connections
@@ -400,11 +433,11 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.8.0):
+All endpoints at a glance (v2.10.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
-| Auth & Users | 7 REST | Login, register, user CRUD, role management |
+| Auth & Users | 10 REST | Login, register, user CRUD, role management |
 | Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
 | Connections | 3 REST + 1 WS | List, disconnect, GeoIP distribution, real-time events |
 | Clients | 6 REST | CRUD for authorized clients, secret retrieval, share config |

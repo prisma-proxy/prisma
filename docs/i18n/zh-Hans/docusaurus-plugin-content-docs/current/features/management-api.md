@@ -60,6 +60,9 @@ curl -H "Authorization: Bearer your-secure-token-here" http://127.0.0.1:9090/api
 | `POST` | `/api/users` | 创建用户（仅管理员） |
 | `PUT` | `/api/users/{username}` | 更新用户角色/状态（仅管理员） |
 | `DELETE` | `/api/users/{username}` | 删除用户（仅管理员） |
+| `PUT` | `/api/auth/password` | 修改当前用户密码（需认证） |
+| `GET` | `/api/setup/status` | 检查初始设置是否完成（无需认证） |
+| `POST` | `/api/setup/init` | 创建初始管理员用户（无需认证，仅限一次） |
 
 **登录：**
 
@@ -81,6 +84,32 @@ curl -X POST -H "Content-Type: application/json" \
 
 自助注册用户将被分配 **Client** 角色，仅能查看自己的统计信息。
 
+**修改密码：**
+
+```bash
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password": "old-password", "new_password": "new-strong-password"}' \
+  http://127.0.0.1:9090/api/auth/password
+# {"status":"ok"}
+```
+
+**检查设置状态：**
+
+```bash
+curl http://127.0.0.1:9090/api/setup/status
+# {"setup_complete":false,"has_admin":false}
+```
+
+**首次设置（创建管理员）：**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/setup/init
+# {"token":"eyJhbGciOi...","username":"admin","role":"admin"}
+```
+
 **列出用户（仅管理员）：**
 
 ```bash
@@ -100,7 +129,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.8.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.10.0"}
 ```
 
 ### 连接
@@ -398,11 +427,11 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.8.0）：
+所有端点一览（v2.10.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|
-| 认证与用户 | 7 REST | 登录、注册、用户 CRUD、角色管理 |
+| 认证与用户 | 10 REST | 登录、注册、修改密码、设置、用户 CRUD、角色管理 |
 | 健康与指标 | 3 REST + 1 WS | 服务器状态、快照、历史、实时流 |
 | 连接 | 3 REST + 1 WS | 列表、断开、GeoIP 分布、实时事件 |
 | 客户端 | 6 REST | 授权客户端的 CRUD、密钥获取、分享配置 |

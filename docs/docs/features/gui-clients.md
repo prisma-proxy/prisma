@@ -48,7 +48,7 @@ The app has **11 pages** accessible via sidebar navigation (collapsible) or bott
 | **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT, or proxy group name. Import/export rules as JSON. Rule provider management (add remote rule set URLs). Mobile-responsive table (match column hidden on small screens) |
 | **Logs** | Real-time log viewer with virtualized scrolling, search with text highlighting, level filter (ALL/ERROR/WARN/INFO/DEBUG), level statistics badges, pause/resume auto-scroll, export to text file |
 | **Speed Test** | Run speed tests through the proxy with configurable server (Cloudflare/Google) and duration (5-60s). Measures download, upload, and latency. Persistent test history with list and chart views, summary statistics (average/best) |
-| **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install. **Split Tunneling** — visual two-column editor for proxy/direct domain routing, with drag-and-drop between columns. |
+| **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install. **Split Tunneling** — visual two-column editor for proxy/direct domain routing, with drag-and-drop between columns. **LAN mode** — `allowLan` setting binds the local proxy to `0.0.0.0` instead of `127.0.0.1`, allowing other devices on the local network to use this device as a proxy gateway. |
 | **Diagnostics** | Built-in network diagnostic tools — latency test, DNS lookup, and connection test. Three cards with input field and test button for each tool. Results displayed inline with color-coded pass/fail indicators |
 | **Analytics** | Connection analytics, top domains, daily trend, rule breakdown, CSV export |
 
@@ -60,6 +60,7 @@ On desktop platforms, prisma-gui displays a **system tray icon** with the follow
 - **Connect/Disconnect toggle** — quick connect/disconnect from the tray menu
 - **Profile switcher** — submenu listing all profiles, with the active profile marked
 - **Copy Proxy Address** — copies the local proxy address to clipboard
+- **Copy Terminal Proxy** — copies a platform-appropriate terminal proxy export command (e.g., `export http_proxy=...` on macOS/Linux, `set http_proxy=...` on Windows)
 - **Live tooltip** — shows real-time upload/download speeds (e.g., "Prisma Up: 1.2 MB/s Down: 4.5 MB/s")
 - **Show Window / Quit** — standard window management actions
 
@@ -78,6 +79,8 @@ All shortcuts use `Cmd` (macOS) or `Ctrl` (Windows/Linux) as the modifier:
 - **Proxy modes** — selectable on the Home page: SOCKS5, System Proxy, TUN, Per-App (toggle multiple simultaneously)
 - **Auto-reconnect** — configurable in Settings with retry delay (seconds) and maximum attempts
 - **Connection history** — records connect/disconnect events with profile name, latency, session data transferred, and timestamps
+- **Connection virtualization** — efficient virtualized list rendering using @tanstack/react-virtual for handling 1000+ simultaneous connections without lag
+- **Status sync on reload** — proper reconnection detection when the page reloads or the app resumes from sleep, with debounced visibility-change listeners
 - **Connection quality indicator** — real-time signal quality (Excellent/Good/Fair/Poor) based on speed stability
 - **Daily data usage tracking** — persistent per-day upload/download tracking with automatic 90-day pruning
 - **Quick connect FAB** — floating action button on mobile for one-tap connect/disconnect with elapsed duration badge
@@ -419,7 +422,7 @@ Network Extension entitlements require an explicit App ID with the NetworkExtens
 
 ### prisma-gui: System proxy fails
 
-Setting the system proxy requires platform-specific permissions. On macOS, the app calls `networksetup` which may prompt for administrator credentials. On Linux, system proxy configuration depends on your desktop environment.
+Setting the system proxy requires platform-specific permissions. On macOS, the system proxy is now configured using HTTP/HTTPS proxy settings (`networksetup -setwebproxy` / `-setsecurewebproxy`) instead of SOCKS5, providing broader application compatibility. The app may prompt for administrator credentials. On Linux, system proxy configuration depends on your desktop environment.
 
 ### prisma-gui: Tray icon not visible
 

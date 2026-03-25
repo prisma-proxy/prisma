@@ -174,7 +174,7 @@ poll_concurrency = 3       # 1-8
 upload_concurrency = 4     # 1-8
 max_payload_size = 65536   # 字节
 poll_timeout_secs = 55     # 10-90
-extra_headers = [["X-App-Version", "2.8.0"]]
+extra_headers = [["X-App-Version", "2.10.0"]]
 ```
 
 | 参数 | 默认值 | 说明 |

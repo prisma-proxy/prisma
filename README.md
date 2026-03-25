@@ -9,14 +9,15 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **PrismaVeil v5 protocol** — 1-RTT handshake, 0-RTT resumption, X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only, header-authenticated encryption (AAD), connection migration, enhanced KDF
 - **8 transports** — QUIC v2, PrismaTLS, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard
 - **TUN mode** — system-wide proxy via virtual network interface (Windows/Linux/macOS)
-- **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server
+- **GeoIP routing** — country and city-level smart routing via MaxMind MMDB, on both client and server
 - **PrismaTLS** — active probing resistance replacing REALITY, with browser fingerprint mimicry + dynamic mask server pool
 - **Traffic shaping** — bucket padding, timing jitter, chaff injection, frame coalescing to defeat encapsulated TLS fingerprinting
 - **Anti-censorship** — Salamander UDP obfuscation, HTTP/3 masquerade, port hopping, TLS camouflage, entropy camouflage
 - **Port forwarding** — frp-style reverse proxy over encrypted tunnels
-- **Web console** — real-time dashboard with analytics, client sharing (TOML/URI/QR), multi-server management, customizable widgets, config history (Next.js + shadcn/ui)
+- **Web console** — real-time dashboard with first-run setup wizard, analytics, client sharing (TOML/URI/QR), multi-server management, routing templates, config history (Next.js + shadcn/ui)
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 - **CLI tools** — `prisma monitor` (TUI dashboard), `prisma validate` (config checker), `prisma profile new` (interactive wizard), batch client management
+- **CLI self-update** — `prisma update` checks GitHub releases and self-replaces the binary
 - **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
 - **Cross-platform GUI** — speed test, split tunneling, network diagnostics, connection timeline, QR camera scanner, full backup/restore, system tray (Tauri 2 + React)
 - **OpenAPI spec** — full API documentation at `/api/docs/openapi.json` for third-party integration

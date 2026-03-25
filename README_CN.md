@@ -9,14 +9,15 @@
 - **PrismaVeil v5 协议** — 1-RTT 握手、0-RTT 恢复，X25519 + BLAKE3 + ChaCha20/AES-256-GCM/Transport-Only，头部认证加密（AAD）、连接迁移、增强型 KDF
 - **8 种传输方式** — QUIC v2、PrismaTLS、WebSocket、gRPC、XHTTP、XPorta、SSH、WireGuard
 - **TUN 模式** — 通过虚拟网络接口实现系统级代理（Windows/Linux/macOS）
-- **GeoIP 路由** — 基于 v2fly geoip.dat 的国家级智能分流，客户端和服务端均支持
+- **GeoIP 路由** — 基于 MaxMind MMDB 的国家和城市级智能分流，客户端和服务端均支持
 - **PrismaTLS** — 替代 REALITY 的主动探测防御，浏览器指纹模拟 + 动态掩护服务器池
 - **流量整形** — 桶填充、时序抖动、杂音注入、帧合并，抵御封装 TLS 指纹识别
 - **抗审查** — Salamander UDP 混淆、HTTP/3 伪装、端口跳跃、TLS 伪装、熵伪装
 - **端口转发** — 通过加密隧道实现类 frp 的反向代理
-- **Web 管理控制台** — 实时仪表盘、数据分析、客户端分享（TOML/URI/QR）、多服务器管理、可自定义组件、配置历史（Next.js + shadcn/ui）
+- **Web 管理控制台** — 实时仪表盘、首次运行设置向导、数据分析、客户端分享（TOML/URI/QR）、多服务器管理、路由模板、配置历史（Next.js + shadcn/ui）
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
 - **CLI 工具** — `prisma monitor`（TUI 仪表盘）、`prisma validate`（配置检查）、`prisma profile new`（交互式向导）、批量客户端管理
+- **CLI 自更新** — `prisma update` 检查 GitHub Releases 并自动替换二进制文件
 - **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
 - **跨平台 GUI** — 速度测试、分流隧道、网络诊断、连接时间线、QR 摄像头扫描、完整备份/恢复、系统托盘（Tauri 2 + React）
 - **OpenAPI 规范** — 完整 API 文档位于 `/api/docs/openapi.json`，支持第三方集成

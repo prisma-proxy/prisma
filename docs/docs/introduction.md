@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.8.0** ships with GeoIP analytics, per-client metrics API, auto-backup, QUIC hostname support, console dashboards, GUI transport modes, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.10.0** ships with a first-run setup wizard, CLI self-update, city-level GeoIP analytics, routing redesign with templates, per-client metrics API, auto-backup, QUIC hostname support, console dashboards, GUI LAN mode, and many more production-grade features.
 
 ## Features
 
@@ -40,7 +40,7 @@ Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. 
 - **Port forwarding / reverse proxy** — expose local services through the server (frp-style)
 - **Routing rules engine** — domain/IP/port/GeoIP-based allow/block filtering, ACL files, rule providers
 - **Proxy groups** — load balancing, failover, and URL-test-based auto-selection
-- **GeoIP routing** — country-level smart routing via v2fly geoip.dat, on both client and server
+- **GeoIP routing** — country and city-level smart routing via MaxMind MMDB (GeoLite2-City.mmdb), on both client and server
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 
 ### Subscription
@@ -145,6 +145,30 @@ graph LR
     C --> D[ServerState]
 ```
 
+## What's New in 2.10.0
+
+- **Console setup wizard** — WordPress-style first-run setup at `/setup` that creates the initial admin user; no pre-configuration needed
+- **Setup API** — `GET /api/setup/status` and `POST /api/setup/init` endpoints (no auth required) for programmatic first-run setup
+- **Change password** — `PUT /api/auth/password` endpoint for users to change their own password
+- **Registration gating** — self-registration is blocked until an admin user exists (enforced by setup flow)
+- **Share config fix** — `public_address` field in `[server]` config used for shared client configs instead of `listen_addr` (0.0.0.0)
+- **Routing redesign** — two-tab layout (Manual Rules + Templates), new rule types (DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, FINAL), new actions (PROXY/DIRECT/REJECT), new templates (Block Torrent/P2P, Block Gambling, Block Social Media)
+- **Direct routing action** — `RuleAction::Direct` for bypassing the proxy on matched traffic
+- **GUI: LAN server mode** — `allowLan` setting binds local proxy to 0.0.0.0 for LAN sharing
+- **GUI: proxy mode polish** — persisted proxy modes, httpPort validation, tray state sync
+- **GUI: macOS system proxy fix** — uses HTTP/HTTPS proxy settings instead of SOCKS5
+- **GUI: "Copy Terminal Proxy"** — tray menu item copies platform-appropriate proxy export commands
+- **GUI: connection virtualization** — efficient virtualized list rendering for 1000+ connections
+- **GUI: status sync** — proper reconnection detection on page reload and app resume
+- **React hydration fix** — deferred localStorage reads for SSR compatibility (fixes error #418)
+
+## What's New in 2.9.0
+
+- **CLI self-update** — `prisma update [--check] [--yes]` checks GitHub releases and self-replaces the binary
+- **Per-connection GeoIP with city** — connections now include `country` and `city` fields using maxminddb (GeoLite2-City.mmdb) instead of v2fly geoip.dat
+- **Owner-based client data scoping** — `owner` field on authorized clients; client-role users only see their owned clients and metrics
+- **Client quota fix** — quota endpoint returns default zeros instead of 404 when quotas not configured
+
 ## What's New in 2.8.0
 
 - **GeoIP analytics** — `GET /api/connections/geo` returns the country distribution of active connections; the console Overview page displays a live GeoIP pie chart
@@ -154,13 +178,6 @@ graph LR
 - **RouteAction aliases** — `reject`, `REJECT`, and `BLOCK` are accepted as aliases for the server-side `Block` routing action
 - **Console improvements** — GeoIP pie chart on Overview; real-time CPU/memory area chart on System page; per-client metrics (active connections, bytes, latency p50/p95/p99) on Clients; metrics summary cards on Bandwidth; speed test trend chart + extended stats + 4 test servers; live traffic window capped at 60 s
 - **GUI transport modes** — profile transport selector now includes XHTTP, XPorta, PrismaTLS, and WireGuard; QUIC-only settings (port hopping, entropy camouflage, SNI slicing) are hidden unless QUIC transport is selected
-
-## What's New in 2.8.0
-
-- **Full project synchronization** — version references, documentation, and feature awareness aligned across all subprojects
-- **Connection pool documentation** — `connection_pool.enabled` fully documented in client config reference
-- **Cipher auto-select documentation** — `cipher_suite = "auto"` documented with hardware detection behavior
-- **i18n sync** — all console locale keys synchronized between EN and ZH
 
 ### Previous (1.5.0)
 
