@@ -143,7 +143,7 @@ export function ResourceChart() {
         )}
 
         {/* Current values */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex items-center gap-2 rounded-lg border bg-card p-3">
             <Cpu className="h-4 w-4 text-blue-500" />
             <div>

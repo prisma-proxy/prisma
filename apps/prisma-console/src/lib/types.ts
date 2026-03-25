@@ -36,6 +36,7 @@ export interface ClientInfo {
   id: string;
   name: string | null;
   enabled: boolean;
+  tags: string[];
 }
 
 export interface CreateClientResponse {

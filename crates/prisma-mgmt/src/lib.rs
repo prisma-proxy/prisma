@@ -107,6 +107,7 @@ impl MgmtState {
                     quota: base.and_then(|b| b.quota.clone()),
                     quota_period: base.and_then(|b| b.quota_period.clone()),
                     permissions: base.and_then(|b| b.permissions.clone()),
+                    tags: entry.tags.clone(),
                 }
             })
             .collect();

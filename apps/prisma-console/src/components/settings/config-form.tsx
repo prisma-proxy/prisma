@@ -12,6 +12,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
+import { useValidation } from "@/hooks/use-validation";
 import type { ConfigResponse } from "@/lib/types";
 import { LOG_LEVELS } from "@/lib/types";
 
@@ -40,6 +41,17 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
   const [portRangeEnd, setPortRangeEnd] = useState(config.port_forwarding.port_range_end);
   const [autoBackupInterval, setAutoBackupInterval] = useState(config.auto_backup_interval_mins ?? 0);
   const [managementApiEnabled, setManagementApiEnabled] = useState(config.management_api?.enabled ?? true);
+
+  const listenAddrValidation = useValidation(listenAddr, ["address"]);
+  const quicListenAddrValidation = useValidation(quicListenAddr, ["address"]);
+  const portRangeStartValidation = useValidation(String(portRangeStart), ["port"]);
+  const portRangeEndValidation = useValidation(String(portRangeEnd), ["port"]);
+
+  const hasValidationErrors =
+    !!listenAddrValidation.error ||
+    !!quicListenAddrValidation.error ||
+    (portForwardingEnabled &&
+      (!!portRangeStartValidation.error || !!portRangeEndValidation.error));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +86,9 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
             onChange={(e) => setListenAddr(e.target.value)}
             placeholder="0.0.0.0:443"
           />
+          {listenAddrValidation.error && (
+            <p className="text-xs text-destructive mt-1">{listenAddrValidation.error}</p>
+          )}
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="quic-listen-addr">{t("settings.quicListenAddr")}</Label>
@@ -83,6 +98,9 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
             onChange={(e) => setQuicListenAddr(e.target.value)}
             placeholder="0.0.0.0:443"
           />
+          {quicListenAddrValidation.error && (
+            <p className="text-xs text-destructive mt-1">{quicListenAddrValidation.error}</p>
+          )}
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="dns-upstream">{t("settings.dnsUpstream")}</Label>
@@ -187,6 +205,9 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
                 min={1}
                 max={65535}
               />
+              {portRangeStartValidation.error && (
+                <p className="text-xs text-destructive mt-1">{portRangeStartValidation.error}</p>
+              )}
             </div>
             <div className="flex-1 grid gap-1.5">
               <Label htmlFor="port-range-end" className="text-xs">{t("settings.portRangeEnd")}</Label>
@@ -198,6 +219,9 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
                 min={1}
                 max={65535}
               />
+              {portRangeEndValidation.error && (
+                <p className="text-xs text-destructive mt-1">{portRangeEndValidation.error}</p>
+              )}
             </div>
           </div>
         )}
@@ -238,7 +262,7 @@ export function ConfigForm({ config, onSave, isLoading }: ConfigFormProps) {
         </div>
       </div>
 
-      <Button type="submit" disabled={isLoading}>
+      <Button type="submit" disabled={isLoading || hasValidationErrors}>
         {isLoading ? t("settings.saving") : t("settings.save")}
       </Button>
     </form>

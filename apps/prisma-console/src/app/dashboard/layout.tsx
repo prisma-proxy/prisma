@@ -6,6 +6,7 @@ import { Sidebar, MobileSidebarContent } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { MetricsProvider } from "@/contexts/metrics-context";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -88,7 +89,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onMobileMenuToggle={() => setMobileOpen(true)}
           />
           <main className="flex-1 overflow-y-auto bg-background">
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl px-4 py-6 pb-20 md:pb-6 sm:px-6 lg:px-8">
               {showBreadcrumb && (
                 <div className="mb-4">
                   <Breadcrumb />
@@ -100,6 +101,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </main>
         </div>
+
+        {/* Mobile bottom navigation */}
+        <MobileNav />
 
         <CommandPalette />
       </div>

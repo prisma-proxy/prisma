@@ -13,11 +13,13 @@ pub struct ClientResponse {
     pub id: Uuid,
     pub name: Option<String>,
     pub enabled: bool,
+    pub tags: Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct CreateClientRequest {
     pub name: Option<String>,
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -31,6 +33,7 @@ pub struct CreateClientResponse {
 pub struct UpdateClientRequest {
     pub name: Option<String>,
     pub enabled: Option<bool>,
+    pub tags: Option<Vec<String>>,
 }
 
 pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ClientResponse>> {
@@ -42,6 +45,7 @@ pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ClientResponse>> {
             id: *id,
             name: entry.name.clone(),
             enabled: entry.enabled,
+            tags: entry.tags.clone(),
         })
         .collect();
     Json(clients)
@@ -62,6 +66,7 @@ pub async fn create(
         auth_secret: secret,
         name: req.name.clone(),
         enabled: true,
+        tags: req.tags.clone().unwrap_or_default(),
     };
 
     state.auth_store.write().await.clients.insert(id, entry);
@@ -91,6 +96,9 @@ pub async fn update(
                 }
                 if let Some(enabled) = req.enabled {
                     entry.enabled = enabled;
+                }
+                if let Some(tags) = req.tags {
+                    entry.tags = tags;
                 }
                 true
             }

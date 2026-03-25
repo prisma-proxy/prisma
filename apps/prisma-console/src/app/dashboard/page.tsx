@@ -7,10 +7,12 @@ import { useMetricsContext } from "@/contexts/metrics-context";
 import { useConnections, useDisconnect } from "@/hooks/use-connections";
 import { useClients } from "@/hooks/use-clients";
 import { MetricsCards } from "@/components/dashboard/metrics-cards";
+import { HealthScore } from "@/components/dashboard/health-score";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
 import { ConnectionTable } from "@/components/dashboard/connection-table";
 import { TransportPie } from "@/components/dashboard/transport-pie";
 import { GeoIPPie } from "@/components/dashboard/geoip-pie";
+import { ConnectionMap } from "@/components/dashboard/connection-map";
 import { ConnectionHistogram } from "@/components/dashboard/connection-histogram";
 import { HistoricalCharts } from "@/components/dashboard/historical-charts";
 import { SetupWizard } from "@/components/onboarding/setup-wizard";
@@ -44,11 +46,16 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* Metrics cards with sparklines */}
+      {/* Health score + Metrics cards with sparklines */}
       {!current ? (
         <SkeletonMetrics />
       ) : (
-        <MetricsCards metrics={current} history={history} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_1fr]">
+            <HealthScore />
+            <MetricsCards metrics={current} history={history} />
+          </div>
+        </div>
       )}
 
       {/* Quick Actions */}
@@ -97,6 +104,9 @@ export default function OverviewPage() {
         <GeoIPPie />
         <HistoricalCharts />
       </div>
+
+      {/* Connection world map */}
+      <ConnectionMap />
 
       {/* Connections table */}
       {connectionsLoading ? (

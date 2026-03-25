@@ -19,6 +19,9 @@ pub struct ClientEntry {
     pub auth_secret: [u8; 32],
     pub name: Option<String>,
     pub enabled: bool,
+    /// Arbitrary tags/labels for organizing clients.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// The mutable inner data of AuthStore, shared between server and management API.
@@ -41,6 +44,7 @@ impl AuthStoreInner {
                     auth_secret: secret_bytes,
                     name: c.name.clone(),
                     enabled: true,
+                    tags: c.tags.clone(),
                 },
             );
         }

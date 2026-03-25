@@ -157,7 +157,7 @@ export function SpeedTestHistory({ history, onClear }: SpeedTestHistoryProps) {
 
       {/* Extended stats: Min / Max / Median */}
       {extendedStats && (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div className="rounded-lg border bg-card p-2 space-y-1">
             <p className="text-[10px] font-medium text-muted-foreground">Download (Mbps)</p>
             <div className="grid grid-cols-3 gap-1 text-center text-[10px]">

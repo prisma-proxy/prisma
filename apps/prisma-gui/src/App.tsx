@@ -10,6 +10,7 @@ import { useClipboardImport } from "./hooks/useClipboardImport";
 import { useMobileLifecycle } from "./hooks/useMobileLifecycle";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
+import QuickConnectFab from "./components/QuickConnectFab";
 import StatusBar from "./components/StatusBar";
 import PageLoader from "./components/PageLoader";
 
@@ -57,6 +58,7 @@ export default function App() {
         {!isMobile && <StatusBar />}
       </div>
       {isMobile && <BottomNav />}
+      {isMobile && <QuickConnectFab />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
+import { useNotificationStore } from "@/lib/notification-store";
 
 export type ToastVariant = "success" | "error" | "warning";
 
@@ -51,6 +52,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         dismiss(id);
       }, variant === "error" ? 5000 : 3000);
       timeoutRefs.current.set(id, tid);
+
+      // Also push to the persistent notification store
+      const notifType = variant === "warning" ? "info" : variant;
+      useNotificationStore.getState().add(message, notifType);
     },
     [dismiss]
   );

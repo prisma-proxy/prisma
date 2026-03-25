@@ -1,14 +1,18 @@
 "use client";
 
+import React from "react";
+
 interface SparklineProps {
   data: number[];
   color?: string;
+  width?: number;
   height?: number;
 }
 
-export function Sparkline({
+export const Sparkline = React.memo(function Sparkline({
   data,
-  color = "hsl(217, 91%, 60%)",
+  color = "currentColor",
+  width = 80,
   height = 24,
 }: SparklineProps) {
   if (data.length < 2) return null;
@@ -22,7 +26,7 @@ export function Sparkline({
 
   const points = data
     .map((value, index) => {
-      const x = (index / (data.length - 1)) * 100;
+      const x = (index / (data.length - 1)) * width;
       const y = padding + effectiveHeight - ((value - min) / range) * effectiveHeight;
       return `${x},${y}`;
     })
@@ -32,7 +36,7 @@ export function Sparkline({
     <svg
       width="100%"
       height={height}
-      viewBox={`0 0 100 ${height}`}
+      viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       className="block"
     >
@@ -47,4 +51,4 @@ export function Sparkline({
       />
     </svg>
   );
-}
+});

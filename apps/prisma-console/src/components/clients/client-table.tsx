@@ -133,13 +133,18 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                   />
                 </TableCell>
                 <TableCell className="font-medium">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <Link
                       href={`/dashboard/clients/detail/?id=${client.id}`}
                       className="hover:underline text-primary"
                     >
                       {client.name || t("clients.unnamed")}
                     </Link>
+                    {client.tags?.map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
+                        {tag}
+                      </Badge>
+                    ))}
                     <CopyButton
                       value={client.id}
                       className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useStore } from "@/store";
 import { usePlatform } from "@/hooks/usePlatform";
 
@@ -9,7 +10,18 @@ function formatSpeed(mbps: number): string {
   return `${(mbps / 1000).toFixed(2)} Gbps`;
 }
 
+/** Format speed in bytes-per-second style for the label overlay. */
+function formatSpeedLabel(mbps: number): string {
+  const bps = mbps * 1e6;
+  if (bps >= 1e9) return `${(bps / 1e9).toFixed(1)} GB/s`;
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} MB/s`;
+  if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} KB/s`;
+  return `${bps.toFixed(0)} B/s`;
+}
+
 export default React.memo(function SpeedGraph() {
+  const { t } = useTranslation();
+  const connected = useStore((s) => s.connected);
   const speedSamplesUp = useStore((s) => s.speedSamplesUp);
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
   const { isMobile } = usePlatform();
@@ -18,6 +30,10 @@ export default React.memo(function SpeedGraph() {
   const tooltipRef = useRef<{ x: number; idx: number } | null>(null);
 
   const height = isMobile ? 120 : 180;
+
+  // Current speed values (last sample, in Mbps)
+  const currentDown = speedSamplesDown.length > 0 ? speedSamplesDown[speedSamplesDown.length - 1] : 0;
+  const currentUp = speedSamplesUp.length > 0 ? speedSamplesUp[speedSamplesUp.length - 1] : 0;
 
   const maxVal = useMemo(() => {
     let m = 1;
@@ -204,14 +220,29 @@ export default React.memo(function SpeedGraph() {
     scheduleMouseDraw();
   }
 
+  if (!connected) {
+    return (
+      <div className="flex items-center justify-center text-xs text-muted-foreground" style={{ height: 60 }}>
+        {t("status.disconnected")}
+      </div>
+    );
+  }
+
   return (
-    <div ref={containerRef} className="w-full" style={{ height }}>
-      <canvas
-        ref={canvasRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        className="w-full h-full"
-      />
+    <div className="space-y-1">
+      {/* Current speed labels */}
+      <div className="flex items-center justify-between text-xs font-mono px-1">
+        <span className="text-blue-400">{"\u2191"} {formatSpeedLabel(currentUp)}</span>
+        <span className="text-green-400">{"\u2193"} {formatSpeedLabel(currentDown)}</span>
+      </div>
+      <div ref={containerRef} className="w-full" style={{ height }}>
+        <canvas
+          ref={canvasRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          className="w-full h-full"
+        />
+      </div>
     </div>
   );
 });

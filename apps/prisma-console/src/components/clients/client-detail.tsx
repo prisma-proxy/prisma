@@ -33,6 +33,7 @@ import { formatBytes } from "@/lib/utils";
 import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { ArrowLeft } from "lucide-react";
 import { ClientPermissionsForm } from "@/components/clients/client-permissions";
+import { ClientHistory } from "@/components/clients/client-history";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const id = clientId;
@@ -201,6 +202,8 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
         connections={connections ?? []}
         clientId={id}
       />
+
+      <ClientHistory clientId={id} />
 
       <Card>
         <CardHeader>

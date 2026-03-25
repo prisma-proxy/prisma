@@ -57,7 +57,7 @@ export function ClientTrafficChart({ connections, clientId }: ClientTrafficChart
           </p>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="text-sm">
                 <p className="text-muted-foreground">{t("bandwidth.upload")}</p>
                 <p className="text-xl font-bold">{formatBytes(totals.bytes_up)}</p>

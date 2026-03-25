@@ -103,6 +103,9 @@ pub struct AuthorizedClient {
     /// Per-client permissions (granular access control).
     #[serde(default)]
     pub permissions: Option<crate::permissions::ClientPermissions>,
+    /// Arbitrary tags/labels for organizing clients.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
