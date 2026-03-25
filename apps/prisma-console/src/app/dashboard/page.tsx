@@ -17,6 +17,8 @@ import { ConnectionHistogram } from "@/components/dashboard/connection-histogram
 import { HistoricalCharts } from "@/components/dashboard/historical-charts";
 import { SetupWizard } from "@/components/onboarding/setup-wizard";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CopyButton } from "@/components/ui/copy-button";
 import { SkeletonMetrics, SkeletonChart, SkeletonTable } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
 
@@ -107,6 +109,27 @@ export default function OverviewPage() {
 
       {/* Connection world map */}
       <ConnectionMap />
+
+      {/* Prometheus metrics endpoint */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">{t("prometheus.title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-2">
+            {t("prometheus.description")}
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
+              {typeof window !== "undefined" ? `${window.location.origin}/api/prometheus` : "/api/prometheus"}
+            </code>
+            <CopyButton value={typeof window !== "undefined" ? `${window.location.origin}/api/prometheus` : "/api/prometheus"} />
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {t("prometheus.hint")}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Connections table */}
       {connectionsLoading ? (

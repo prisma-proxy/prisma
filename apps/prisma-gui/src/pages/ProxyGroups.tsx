@@ -299,7 +299,7 @@ export default function ProxyGroups() {
                                   ) : (
                                     <Badge
                                       variant="outline"
-                                      className="text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-gray-800 text-gray-500"
+                                      className="text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
                                     >
                                       {lr.error ?? t("proxyGroups.timeout")}
                                     </Badge>

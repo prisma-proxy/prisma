@@ -317,3 +317,9 @@ export interface ShareClientResponse {
   qr_svg: string;
 }
 
+export interface AclRule {
+  destination: string;
+  ports: string;
+  action: "allow" | "deny";
+}
+

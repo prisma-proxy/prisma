@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -81,6 +81,14 @@ export function ConnectionTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupByIp] = useState(true);
   const [expandedIPs, setExpandedIPs] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem("prisma-conn-page-size") || "50");
+    } catch {
+      return 50;
+    }
+  });
 
   // Unique transports and modes for filter dropdowns
   const transports = useMemo(
@@ -156,6 +164,48 @@ export function ConnectionTable({
       ),
     }));
   }, [sorted, groupByIp]);
+
+  // Pagination
+  const totalPages = Math.ceil(sorted.length / pageSize);
+  const paged = useMemo(
+    () => sorted.slice(page * pageSize, (page + 1) * pageSize),
+    [sorted, page, pageSize]
+  );
+
+  // Paged IP groups (computed from paged connections)
+  const pagedIpGroups = useMemo<IPGroup[]>(() => {
+    if (!groupByIp) return [];
+    const map = new Map<string, ConnectionInfo[]>();
+    for (const conn of paged) {
+      const ip = stripPort(conn.peer_addr);
+      const arr = map.get(ip) ?? [];
+      arr.push(conn);
+      map.set(ip, arr);
+    }
+    return [...map.entries()].map(([ip, conns]) => ({
+      ip,
+      connections: conns,
+      totalBytesUp: conns.reduce((s, c) => s + c.bytes_up, 0),
+      totalBytesDown: conns.reduce((s, c) => s + c.bytes_down, 0),
+      firstConnected: conns.reduce(
+        (min, c) => (c.connected_at < min ? c.connected_at : min),
+        conns[0].connected_at
+      ),
+    }));
+  }, [paged, groupByIp]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [search, transportFilter, modeFilter]);
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setPage(0);
+    try {
+      localStorage.setItem("prisma-conn-page-size", String(size));
+    } catch { /* localStorage may be unavailable */ }
+  }, []);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -233,6 +283,7 @@ export function ConnectionTable({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
+            aria-label={t("connections.searchPlaceholder")}
           />
           <Select value={transportFilter} onValueChange={(v) => v && setTransportFilter(v)}>
             <SelectTrigger className="w-[140px]">
@@ -288,7 +339,7 @@ export function ConnectionTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ipGroups.map((group) => {
+              {pagedIpGroups.map((group) => {
                 const expanded = expandedIPs.has(group.ip);
                 const groupAllSelected = group.connections.every((c) => selected.has(c.session_id));
                 return (
@@ -299,6 +350,8 @@ export function ConnectionTable({
                           type="button"
                           onClick={() => toggleExpand(group.ip)}
                           className="p-0.5 rounded hover:bg-accent"
+                          aria-label={expanded ? t("connections.collapse") : t("connections.expand")}
+                          aria-expanded={expanded}
                         >
                           {expanded
                             ? <ChevronDown className="h-4 w-4" />
@@ -382,29 +435,29 @@ export function ConnectionTable({
                     className="rounded"
                   />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("peer_addr")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("peer_addr")} onKeyDown={(e) => e.key === "Enter" && handleSort("peer_addr")}>
                   {t("connections.peer")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="peer_addr" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("transport")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("transport")} onKeyDown={(e) => e.key === "Enter" && handleSort("transport")}>
                   {t("connections.transport")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="transport" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("mode")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("mode")} onKeyDown={(e) => e.key === "Enter" && handleSort("mode")}>
                   {t("connections.mode")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="mode" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("connected_at")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("connected_at")} onKeyDown={(e) => e.key === "Enter" && handleSort("connected_at")}>
                   {t("connections.connected")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="connected_at" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("bytes_up")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("bytes_up")} onKeyDown={(e) => e.key === "Enter" && handleSort("bytes_up")}>
                   {t("connections.bytesUp")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="bytes_up" />
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => handleSort("bytes_down")}>
+                <TableHead className="cursor-pointer select-none" role="button" tabIndex={0} onClick={() => handleSort("bytes_down")} onKeyDown={(e) => e.key === "Enter" && handleSort("bytes_down")}>
                   {t("connections.bytesDown")}<SortIndicator sortKey={sortKey} sortDir={sortDir} col="bytes_down" />
                 </TableHead>
                 <TableHead className="text-right">{t("connections.action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((conn) => (
+              {paged.map((conn) => (
                 <TableRow key={conn.session_id}>
                   <TableCell>
                     <input
@@ -438,6 +491,46 @@ export function ConnectionTable({
               ))}
             </TableBody>
           </Table>
+        )}
+
+        {/* Pagination controls */}
+        {sorted.length > 0 && (
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+              >
+                {t("connections.prev")}
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {t("connections.page")} {page + 1} {t("connections.of")} {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+              >
+                {t("connections.next")}
+              </Button>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-muted-foreground mr-1">{t("connections.show")}:</span>
+              {[25, 50, 100].map((size) => (
+                <Button
+                  key={size}
+                  variant={pageSize === size ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageSizeChange(size)}
+                >
+                  {size}
+                </Button>
+              ))}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

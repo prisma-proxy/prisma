@@ -112,7 +112,10 @@
     "importQrFromImage": "从图片文件导入",
     "noQrFound": "图片中未找到二维码",
     "decodingImage": "正在解析图片…",
-    "copyOf": "{{name}} 的副本"
+    "copyOf": "{{name}} 的副本",
+    "duplicateTitle": "复制配置",
+    "duplicateName": "配置名称",
+    "nameExists": "已存在同名配置"
   },
   "rules": {
     "title": "规则",
@@ -176,7 +179,11 @@
     "providerUpdateFailed": "更新「{{name}}」失败：{{error}}",
     "providerLastUpdated": "更新于 {{time}}",
     "providerRuleCount": "{{count}} 条规则",
-    "suggestedProviders": "推荐规则源"
+    "suggestedProviders": "推荐规则源",
+    "testInput": "测试域名或 IP",
+    "test": "测试",
+    "testResult": "匹配",
+    "noMatch": "没有规则匹配此输入"
   },
   "connections": {
     "title": "连接",
@@ -204,7 +211,9 @@
     "clearAll": "清除全部",
     "clearAllTitle": "清除连接",
     "clearAllMessage": "清除所有已跟踪的连接？此操作不可撤销。",
-    "close": "关闭连接"
+    "close": "关闭连接",
+    "mapTitle": "连接地图",
+    "mapTooltip": "{{dest}} — {{count}} 个连接"
   },
   "logs": {
     "search": "搜索…",
@@ -366,7 +375,11 @@
     "modeVpnDesc": "系统级 TUN 设备。所有流量通过 Prisma 路由。",
     "performance": "性能",
     "connectionPool": "连接池",
-    "connectionPoolDesc": "复用已建立的连接以减少握手开销并提高吞吐量"
+    "connectionPoolDesc": "复用已建立的连接以减少握手开销并提高吞吐量",
+    "exportConfig": "导出配置",
+    "importConfig": "导入配置",
+    "configExported": "配置已导出（设置 + 规则 + 提供者）",
+    "configImported": "配置已导入"
   },
   "wizard": {
     "newProfile": "新建配置",

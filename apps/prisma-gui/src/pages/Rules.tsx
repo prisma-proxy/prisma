@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -36,6 +37,19 @@ const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "G
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Parse an IPv4 address string to a 32-bit unsigned number, or null if invalid */
+function ipToNum(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let num = 0;
+  for (const part of parts) {
+    const n = parseInt(part, 10);
+    if (isNaN(n) || n < 0 || n > 255) return null;
+    num = (num << 8) | n;
+  }
+  return num >>> 0;
+}
 
 /** Build a set of "type|match|action" keys for all rules in a category */
 function categoryRuleKeys(category: PresetCategory): Set<string> {
@@ -104,11 +118,59 @@ export default function Rules() {
   // Provider update state
   const [updatingProviders, setUpdatingProviders] = useState<Set<string>>(new Set());
 
+  // Rule testing state
+  const [testInput, setTestInput] = useState("");
+  const [testResult, setTestResult] = useState<{ matched: true; rule: Rule } | { matched: false } | null>(null);
+
   function handleAdd() {
     addRule({ id: crypto.randomUUID(), type, match, action });
     setMatch("");
     setOpen(false);
     reconnectIfActive();
+  }
+
+  function handleTest() {
+    const input = testInput.trim().toLowerCase();
+    if (!input) {
+      setTestResult(null);
+      return;
+    }
+    for (const r of rules) {
+      const m = r.match.toLowerCase();
+      switch (r.type) {
+        case "DOMAIN":
+          if (input === m) { setTestResult({ matched: true, rule: r }); return; }
+          break;
+        case "DOMAIN-SUFFIX":
+          if (input === m || input.endsWith("." + m)) { setTestResult({ matched: true, rule: r }); return; }
+          break;
+        case "DOMAIN-KEYWORD":
+          if (input.includes(m)) { setTestResult({ matched: true, rule: r }); return; }
+          break;
+        case "IP-CIDR": {
+          // Basic CIDR match: parse "ip/prefix"
+          const [cidrIp, prefixStr] = r.match.split("/");
+          const prefix = parseInt(prefixStr, 10);
+          const inputNum = ipToNum(input);
+          const cidrNum = ipToNum(cidrIp);
+          if (inputNum !== null && cidrNum !== null && !isNaN(prefix)) {
+            const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
+            if ((inputNum & mask) === (cidrNum & mask)) {
+              setTestResult({ matched: true, rule: r });
+              return;
+            }
+          }
+          break;
+        }
+        case "GEOIP":
+          // Cannot resolve without backend, skip
+          break;
+        case "FINAL":
+          setTestResult({ matched: true, rule: r });
+          return;
+      }
+    }
+    setTestResult({ matched: false });
   }
 
   async function handleExportRules() {
@@ -266,6 +328,51 @@ export default function Rules() {
           {t("rules.persistNote")}
         </AlertDescription>
       </Alert>
+
+      {/* Test Rule */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">{t("rules.testInput")}</Label>
+              <Input
+                placeholder="example.com or 8.8.8.8"
+                value={testInput}
+                onChange={(e) => { setTestInput(e.target.value); setTestResult(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleTest(); }}
+                className="h-8 text-sm"
+              />
+            </div>
+            <Button size="sm" onClick={handleTest} disabled={!testInput.trim()}>
+              {t("rules.test")}
+            </Button>
+          </div>
+          {testResult && (
+            <div className="mt-2 text-sm">
+              {testResult.matched ? (
+                <p>
+                  {t("rules.testResult")}:{" "}
+                  <Badge variant="outline" className="text-xs mx-1">{testResult.rule.type}</Badge>
+                  {testResult.rule.match && (
+                    <span className="text-xs text-muted-foreground font-mono mr-1">{testResult.rule.match}</span>
+                  )}
+                  <Badge
+                    variant={
+                      testResult.rule.action === "PROXY" ? "success" :
+                      testResult.rule.action === "REJECT" ? "destructive" : "secondary"
+                    }
+                    className="text-xs"
+                  >
+                    {testResult.rule.action}
+                  </Badge>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">{t("rules.noMatch")}</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="rules" className="flex-1 flex flex-col h-0">
         <TabsList className="w-fit">

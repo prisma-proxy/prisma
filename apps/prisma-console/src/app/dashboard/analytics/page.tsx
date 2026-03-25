@@ -34,6 +34,7 @@ import { exportToCSV } from "@/lib/export";
 import { useMetricsHistory, type TimeRange, type Resolution } from "@/hooks/use-metrics";
 import { useAllClientMetrics } from "@/hooks/use-client-metrics";
 import { useConnections } from "@/hooks/use-connections";
+import { SkeletonChart, SkeletonTable, SkeletonCard } from "@/components/ui/skeleton";
 
 // --- Constants ---
 
@@ -111,9 +112,9 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<TimeRange>("24h");
   const resolution = RESOLUTION_MAP[period];
 
-  const { data: metricsHistory } = useMetricsHistory(period, resolution);
-  const { data: clientMetrics } = useAllClientMetrics();
-  const { data: connections } = useConnections();
+  const { data: metricsHistory, isLoading: metricsLoading } = useMetricsHistory(period, resolution);
+  const { data: clientMetrics, isLoading: clientMetricsLoading } = useAllClientMetrics();
+  const { data: connections, isLoading: connectionsLoading } = useConnections();
 
   // =============================================
   // Section 1: Traffic Over Time
@@ -287,6 +288,8 @@ export default function AnalyticsPage() {
   // Render
   // =============================================
 
+  const isLoading = metricsLoading && clientMetricsLoading && connectionsLoading;
+
   const hasData =
     (metricsHistory && metricsHistory.length > 0) ||
     (clientMetrics && clientMetrics.length > 0) ||
@@ -311,7 +314,17 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {!hasData ? (
+      {isLoading ? (
+        <div className="space-y-6">
+          <SkeletonChart height={300} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+          <SkeletonTable rows={5} />
+        </div>
+      ) : !hasData ? (
         <Card>
           <CardContent>
             <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -455,28 +468,40 @@ export default function AnalyticsPage() {
                     <TableRow>
                       <TableHead
                         className="w-16 cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("rank")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("rank")}
                       >
                         {t("analytics.rank")}
                         <SortIndicator sortKey={clientSort} sortDir={clientSortDir} col="rank" />
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("name")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("name")}
                       >
                         {t("clients.name")}
                         <SortIndicator sortKey={clientSort} sortDir={clientSortDir} col="name" />
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("upload")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("upload")}
                       >
                         {t("common.upload")}
                         <SortIndicator sortKey={clientSort} sortDir={clientSortDir} col="upload" />
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("download")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("download")}
                       >
                         {t("common.download")}
                         <SortIndicator
@@ -487,14 +512,20 @@ export default function AnalyticsPage() {
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("total")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("total")}
                       >
-                        Total
+                        {t("analytics.total")}
                         <SortIndicator sortKey={clientSort} sortDir={clientSortDir} col="total" />
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("connections")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("connections")}
                       >
                         {t("metrics.activeConnections")}
                         <SortIndicator
@@ -505,7 +536,10 @@ export default function AnalyticsPage() {
                       </TableHead>
                       <TableHead
                         className="cursor-pointer select-none"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleClientSort("latency")}
+                        onKeyDown={(e) => e.key === "Enter" && handleClientSort("latency")}
                       >
                         {t("speedTest.latency")}
                         <SortIndicator

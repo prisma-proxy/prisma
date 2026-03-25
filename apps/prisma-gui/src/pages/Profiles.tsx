@@ -98,6 +98,11 @@ export default function Profiles() {
   const [qrImportErr,  setQrImportErr]  = useState("");
   const [qrImageDecoding, setQrImageDecoding] = useState(false);
 
+  // Duplicate dialog
+  const [dupDialogOpen, setDupDialogOpen] = useState(false);
+  const [dupProfile, setDupProfile] = useState<Profile | null>(null);
+  const [dupName, setDupName] = useState("");
+
   // Subscription import
   const [subImportOpen, setSubImportOpen] = useState(false);
   const [subUrl, setSubUrl] = useState("");
@@ -281,20 +286,36 @@ export default function Profiles() {
     setWizardOpen(true);
   }
 
-  async function handleDuplicate(p: Profile) {
+  function openDuplicateDialog(p: Profile) {
+    setDupProfile(p);
+    setDupName(t("profiles.copyOf", { name: p.name }));
+    setDupDialogOpen(true);
+  }
+
+  const dupNameExists = useMemo(
+    () => dupName.trim() !== "" && profiles.some((p) => p.name === dupName.trim()),
+    [dupName, profiles]
+  );
+
+  async function handleDuplicateConfirm() {
+    if (!dupProfile || !dupName.trim()) return;
     const dup: Profile = {
       id: crypto.randomUUID(),
-      name: t("profiles.copyOf", { name: p.name }),
-      tags: [...p.tags],
-      config: JSON.parse(JSON.stringify(p.config)),
+      name: dupName.trim(),
+      tags: [...dupProfile.tags],
+      config: JSON.parse(JSON.stringify(dupProfile.config)),
       created_at: new Date().toISOString(),
     };
     try {
       await api.saveProfile(JSON.stringify(dup));
       await reload();
-      notify.success(t("profiles.duplicated", { name: p.name }));
+      notify.success(t("profiles.duplicated", { name: dupProfile.name }));
     } catch (e) {
       notify.error(String(e));
+    } finally {
+      setDupDialogOpen(false);
+      setDupProfile(null);
+      setDupName("");
     }
   }
 
@@ -615,7 +636,7 @@ export default function Profiles() {
                       const le = latencyMap[p.id];
                       if (!le) return null;
                       if (le.loading) return <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />;
-                      if (le.ms == null) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-gray-800 text-gray-500">{t("profiles.latencyError")}</Badge>;
+                      if (le.ms == null) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">{t("profiles.latencyError")}</Badge>;
                       const color = le.ms < 100
                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                         : le.ms < 300
@@ -677,7 +698,7 @@ export default function Profiles() {
                     <DropdownMenuItem onSelect={() => openEdit(p)}>
                       <Pencil size={14} className="mr-2" /> {t("profiles.edit")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => handleDuplicate(p)}>
+                    <DropdownMenuItem onSelect={() => openDuplicateDialog(p)}>
                       <Copy size={14} className="mr-2" /> {t("profiles.duplicate")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => openShareDialog(p)}>
@@ -840,6 +861,31 @@ export default function Profiles() {
             <Button onClick={handleImportSubscription} disabled={!subUrl.trim() || subImporting}>
               {subImporting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Globe size={14} className="mr-1.5" />}
               {subImporting ? t("profiles.importing") : t("profiles.importSub")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate dialog */}
+      <Dialog open={dupDialogOpen} onOpenChange={(v) => { setDupDialogOpen(v); if (!v) { setDupProfile(null); setDupName(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("profiles.duplicateTitle")}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>{t("profiles.duplicateName")}</Label>
+            <Input
+              value={dupName}
+              onChange={(e) => setDupName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && dupName.trim()) handleDuplicateConfirm(); }}
+              autoFocus
+            />
+            {dupNameExists && (
+              <p className="text-xs text-yellow-500">{t("profiles.nameExists")}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">{t("common.cancel")}</Button></DialogClose>
+            <Button onClick={handleDuplicateConfirm} disabled={!dupName.trim()}>
+              {t("profiles.duplicate")}
             </Button>
           </DialogFooter>
         </DialogContent>

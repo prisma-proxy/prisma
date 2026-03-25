@@ -112,7 +112,10 @@
     "importQrFromImage": "Import from Image File",
     "noQrFound": "No QR code found in the image",
     "decodingImage": "Decoding image…",
-    "copyOf": "Copy of {{name}}"
+    "copyOf": "Copy of {{name}}",
+    "duplicateTitle": "Duplicate Profile",
+    "duplicateName": "Profile name",
+    "nameExists": "A profile with this name already exists"
   },
   "rules": {
     "title": "Rules",
@@ -176,7 +179,11 @@
     "providerUpdateFailed": "Failed to update \"{{name}}\": {{error}}",
     "providerLastUpdated": "Updated {{time}}",
     "providerRuleCount": "{{count}} rules",
-    "suggestedProviders": "Suggested Providers"
+    "suggestedProviders": "Suggested Providers",
+    "testInput": "Test domain or IP",
+    "test": "Test",
+    "testResult": "Matched",
+    "noMatch": "No rule matched this input"
   },
   "connections": {
     "title": "Connections",
@@ -204,7 +211,9 @@
     "clearAll": "Clear All",
     "clearAllTitle": "Clear Connections",
     "clearAllMessage": "Clear all tracked connections? This cannot be undone.",
-    "close": "Close connection"
+    "close": "Close connection",
+    "mapTitle": "Connection Map",
+    "mapTooltip": "{{dest}} — {{count}} connection(s)"
   },
   "logs": {
     "search": "Search…",
@@ -366,7 +375,11 @@
     "modeVpnDesc": "System-wide TUN device. All traffic is routed through Prisma.",
     "performance": "Performance",
     "connectionPool": "Connection pooling",
-    "connectionPoolDesc": "Reuse established connections to reduce handshake overhead and improve throughput"
+    "connectionPoolDesc": "Reuse established connections to reduce handshake overhead and improve throughput",
+    "exportConfig": "Export Config",
+    "importConfig": "Import Config",
+    "configExported": "Config exported (settings + rules + providers)",
+    "configImported": "Config imported"
   },
   "wizard": {
     "newProfile": "New Profile",

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ConnectionMap from "@/components/ConnectionMap";
 import { useConnections, type TrackedConnection, type ConnectionAction } from "@/store/connections";
 import { fmtBytes, fmtDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -478,6 +479,9 @@ export default function Connections() {
           )}
         </div>
       )}
+
+      {/* Connection geo map */}
+      <ConnectionMap />
 
       <ConfirmDialog
         open={confirmOpen}

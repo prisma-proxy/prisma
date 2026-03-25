@@ -1,6 +1,7 @@
 import { useSettings, type AppSettings } from "@/store/settings";
 import { useStore } from "@/store";
 import { useRules } from "@/store/rules";
+import { useRuleProviders } from "@/store/ruleProviders";
 import { useSpeedTestHistory } from "@/store/speedTestHistory";
 import { useConnectionHistory } from "@/store/connectionHistory";
 import { useProfileMetrics, type ProfileMetrics } from "@/store/profileMetrics";
@@ -118,6 +119,7 @@ export async function exportFullBackup(t: TFunction) {
     settings: settingsData,
     profiles,
     rules: useRules.getState().rules,
+    ruleProviders: useRuleProviders.getState().providers,
     speedTestHistory: useSpeedTestHistory.getState().entries,
     connectionHistory: useConnectionHistory.getState().events,
     profileMetrics: useProfileMetrics.getState().metrics,
@@ -180,6 +182,13 @@ export async function importFullBackup(
     } catch { errors.push("rules"); }
   }
 
+  // Restore rule providers
+  if (Array.isArray(data.ruleProviders)) {
+    try {
+      useRuleProviders.setState({ providers: data.ruleProviders.filter((p: unknown) => p && typeof p === "object" && (p as Record<string, unknown>).id) });
+    } catch { errors.push("ruleProviders"); }
+  }
+
   // Restore speed test history
   if (Array.isArray(data.speedTestHistory)) {
     try {
@@ -209,8 +218,80 @@ export async function importFullBackup(
   }
 
   if (errors.length > 0) {
-    notify.warning(t("settings.backupImported", { count: 7 - errors.length }));
+    notify.warning(t("settings.backupImported", { count: 8 - errors.length }));
   } else {
-    notify.success(t("settings.backupImported", { count: 7 - errors.length }));
+    notify.success(t("settings.backupImported", { count: 8 - errors.length }));
+  }
+}
+
+/** Export a console-compatible config JSON containing settings, rules, and rule providers. */
+export async function exportConsoleConfig(t: TFunction) {
+  const allSettings = useSettings.getState();
+  const settingsData: Record<string, unknown> = {};
+  for (const k of SETTINGS_KEYS) settingsData[k] = allSettings[k];
+
+  const payload = {
+    version: __APP_VERSION__,
+    exportedAt: new Date().toISOString(),
+    settings: settingsData,
+    rules: useRules.getState().rules,
+    ruleProviders: useRuleProviders.getState().providers,
+  };
+
+  await downloadJson(payload, `prisma-config-${Date.now()}.json`);
+  notify.success(t("settings.configExported"));
+}
+
+/** Import a console-compatible config JSON containing settings, rules, and/or rule providers. */
+export async function importConsoleConfig(
+  t: TFunction,
+  patch: (v: Partial<AppSettings>) => void,
+  changeLanguage: (lang: string) => void,
+) {
+  let data: Record<string, unknown>;
+  try {
+    data = await pickJsonFile() as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  if (!data || typeof data !== "object") {
+    notify.error(t("notifications.error"));
+    return;
+  }
+
+  const errors: string[] = [];
+
+  // Restore settings
+  if (data.settings && typeof data.settings === "object") {
+    try {
+      const s = data.settings as Record<string, unknown>;
+      const imported: Partial<AppSettings> = {};
+      for (const k of SETTINGS_KEYS) {
+        if (k in s) (imported as Record<string, unknown>)[k] = s[k];
+      }
+      patch(imported);
+      if (imported.language) changeLanguage(imported.language);
+    } catch { errors.push("settings"); }
+  }
+
+  // Restore rules
+  if (Array.isArray(data.rules)) {
+    try {
+      useRules.setState({ rules: data.rules.filter((r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).id) });
+    } catch { errors.push("rules"); }
+  }
+
+  // Restore rule providers
+  if (Array.isArray(data.ruleProviders)) {
+    try {
+      useRuleProviders.setState({ providers: data.ruleProviders.filter((p: unknown) => p && typeof p === "object" && (p as Record<string, unknown>).id) });
+    } catch { errors.push("ruleProviders"); }
+  }
+
+  if (errors.length > 0) {
+    notify.warning(t("settings.configImported"));
+  } else {
+    notify.success(t("settings.configImported"));
   }
 }

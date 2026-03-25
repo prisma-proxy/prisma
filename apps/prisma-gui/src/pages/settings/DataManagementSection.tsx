@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { platform as osPlatform } from "@tauri-apps/plugin-os";
-import { FolderOpen, Copy, Trash2, FileDown, FileUp, RotateCcw, Download } from "lucide-react";
+import { FolderOpen, Copy, Trash2, FileDown, FileUp, RotateCcw, Download, FileOutput, FileInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStore } from "@/store";
@@ -13,6 +13,7 @@ import { api } from "@/lib/commands";
 import {
   exportSettings, importSettings, resetSettings,
   clearAllData, exportFullBackup, importFullBackup,
+  exportConsoleConfig, importConsoleConfig,
 } from "@/lib/backup";
 
 export default function DataManagementSection() {
@@ -95,6 +96,15 @@ export default function DataManagementSection() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => importFullBackup(t, patch, changeLanguage)}>
             <FileUp size={14} /> {t("settings.importFullBackup")}
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => exportConsoleConfig(t).catch((e) => notify.error(`Export failed: ${String(e)}`))}>
+            <FileOutput size={14} /> {t("settings.exportConfig")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => importConsoleConfig(t, patch, changeLanguage)}>
+            <FileInput size={14} /> {t("settings.importConfig")}
           </Button>
         </div>
 

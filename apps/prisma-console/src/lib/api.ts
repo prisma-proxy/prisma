@@ -182,4 +182,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ client_id: id }),
     }),
+
+  // ACLs
+  getClientAcls: (id: string) =>
+    apiFetch<import("./types").AclRule[]>(`/api/acls/${id}`),
+  updateClientAcls: (id: string, rules: import("./types").AclRule[]) =>
+    apiFetch<void>(`/api/acls/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ rules }),
+    }),
+
+  // Forwards CRUD
+  createForward: (data: {
+    name: string;
+    bind_addr: string;
+    remote_port: number;
+    protocol: string;
+    allowed_ips: string[];
+  }) =>
+    apiFetch<import("./types").ForwardInfo>("/api/forwards", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateForward: (id: number, data: {
+    name: string;
+    bind_addr: string;
+    remote_port: number;
+    protocol: string;
+    allowed_ips: string[];
+  }) =>
+    apiFetch<void>(`/api/forwards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteForward: (id: number) =>
+    apiFetch<void>(`/api/forwards/${id}`, { method: "DELETE" }),
 };

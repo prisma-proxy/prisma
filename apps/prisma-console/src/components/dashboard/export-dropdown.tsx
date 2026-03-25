@@ -22,7 +22,7 @@ export function ExportDropdown({ onCSV, onJSON, onPNG }: ExportDropdownProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }))} aria-label={t("common.export")}>
         <Download className="h-4 w-4" />
         {t("common.export")}
       </DropdownMenuTrigger>

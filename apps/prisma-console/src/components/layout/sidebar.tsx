@@ -118,6 +118,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
               collapsed ? "mx-auto" : "ml-auto"
             }`}
             onClick={toggleCollapsed}
+            aria-label={collapsed ? t("aria.expandButton") : t("aria.collapseButton")}
           >
             {collapsed ? (
               <PanelLeftOpen className="h-4 w-4" />
@@ -197,6 +198,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
               size="icon-sm"
               onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
               title={t("theme.title")}
+              aria-label={t("aria.toggleTheme")}
             >
               {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
             </Button>
@@ -205,6 +207,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
               size="icon-sm"
               onClick={() => setLocale(locale === "en" ? "zh" : "en")}
               title={locale === "en" ? "中文" : "English"}
+              aria-label={t("aria.toggleLocale")}
             >
               <Globe className="h-4 w-4" />
             </Button>

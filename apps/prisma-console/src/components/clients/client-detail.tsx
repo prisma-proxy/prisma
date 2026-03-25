@@ -33,9 +33,11 @@ import { ClientTrafficChart } from "@/components/clients/client-traffic-chart";
 import { formatBytes } from "@/lib/utils";
 import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { ArrowLeft, Share2 } from "lucide-react";
+import { SkeletonCard } from "@/components/ui/skeleton";
 import { ClientPermissionsForm } from "@/components/clients/client-permissions";
 import { ClientHistory } from "@/components/clients/client-history";
 import { ClientShareDialog } from "@/components/clients/client-share-dialog";
+import { ClientAclEditor } from "@/components/clients/client-acl-editor";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const id = clientId;
@@ -56,8 +58,16 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
 
   if (clientsLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <SkeletonCard className="h-32" />
+          <SkeletonCard className="h-32" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -82,7 +92,7 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/dashboard/clients/">
-          <Button variant="ghost" size="icon-sm">
+          <Button variant="ghost" size="icon-sm" aria-label={t("aria.backToClients")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
@@ -134,6 +144,16 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
         </CardHeader>
         <CardContent>
           <ClientPermissionsForm clientId={id} />
+        </CardContent>
+      </Card>
+
+      {/* Access Control */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("acl.title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ClientAclEditor clientId={id} />
         </CardContent>
       </Card>
 

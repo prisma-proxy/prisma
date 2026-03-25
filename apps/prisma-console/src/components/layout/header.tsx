@@ -24,6 +24,7 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
             size="icon-sm"
             className="md:hidden"
             onClick={onMobileMenuToggle}
+            aria-label={t("aria.mobileMenu")}
           >
             <Menu className="h-4 w-4" />
           </Button>
@@ -39,13 +40,14 @@ export function Header({ title, onMobileMenuToggle }: HeaderProps) {
           }}
           className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
           title={`${t("common.search")} (⌘K)`}
+          aria-label={t("aria.searchPages")}
         >
           <Search className="h-4 w-4" />
         </button>
 
         <div className="h-5 w-px bg-border" />
 
-        <Button variant="ghost" size="icon-sm" onClick={logout} title={t("auth.logout")}>
+        <Button variant="ghost" size="icon-sm" onClick={logout} title={t("auth.logout")} aria-label={t("auth.logout")}>
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
