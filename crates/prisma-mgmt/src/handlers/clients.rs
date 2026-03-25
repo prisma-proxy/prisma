@@ -5,8 +5,10 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use prisma_core::config::server::UserRole;
 use prisma_core::state::ClientEntry;
 
+use crate::auth::UserInfo;
 use crate::MgmtState;
 
 #[derive(Serialize)]
@@ -37,11 +39,31 @@ pub struct UpdateClientRequest {
     pub tags: Option<Vec<String>>,
 }
 
-pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ClientResponse>> {
+/// Get the set of client IDs owned by a user. Returns `None` for admin/operator (no filtering).
+pub async fn owned_client_ids(user: &UserInfo, state: &MgmtState) -> Option<Vec<String>> {
+    if user.role != UserRole::Client {
+        return None; // Admin/Operator see everything
+    }
+    let cfg = state.config.read().await;
+    Some(
+        cfg.authorized_clients
+            .iter()
+            .filter(|c| c.owner.as_deref() == Some(&user.username))
+            .map(|c| c.id.clone())
+            .collect(),
+    )
+}
+
+pub async fn list(State(state): State<MgmtState>, user: UserInfo) -> Json<Vec<ClientResponse>> {
+    let owned = owned_client_ids(&user, &state).await;
     let store = state.auth_store.read().await;
     let clients: Vec<_> = store
         .clients
         .iter()
+        .filter(|(id, _)| match &owned {
+            Some(ids) => ids.iter().any(|oid| oid == &id.to_string()),
+            None => true,
+        })
         .map(|(id, entry)| ClientResponse {
             id: *id,
             name: entry.name.clone(),

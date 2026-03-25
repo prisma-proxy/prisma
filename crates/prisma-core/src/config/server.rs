@@ -106,6 +106,9 @@ pub struct AuthorizedClient {
     /// Arbitrary tags/labels for organizing clients.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Management API user that owns this client (for data scoping).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

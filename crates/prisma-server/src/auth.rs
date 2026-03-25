@@ -83,6 +83,7 @@ mod tests {
             quota_period: None,
             permissions: None,
             tags: Vec::new(),
+            owner: None,
         }
     }
 

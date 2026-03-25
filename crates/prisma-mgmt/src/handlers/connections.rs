@@ -202,16 +202,22 @@ pub async fn download_geoip(State(state): State<MgmtState>) -> impl IntoResponse
 
     tracing::info!(path = %save_path, size = bytes.len(), "GeoIP database downloaded");
 
-    // 4. Update config with geoip_path
+    // 4. Canonicalize to absolute path so it resolves regardless of CWD
+    let save_path = std::path::Path::new(&save_path)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(save_path);
+
+    // 5. Update config with geoip_path
     {
         let mut cfg = state.config.write().await;
         cfg.routing.geoip_path = Some(save_path.clone());
     }
 
-    // 5. Persist config to disk
+    // 6. Persist config to disk
     state.persist_config().await;
 
-    // 6. Return success
+    // 7. Return success
     (
         StatusCode::OK,
         Json(serde_json::json!({

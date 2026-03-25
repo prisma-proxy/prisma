@@ -146,39 +146,9 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
         </CardContent>
       </Card>
 
-      {/* Latency + connections metrics */}
+      {/* Connection metrics (+ latency when available) */}
       {clientMetrics && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-lg font-bold">
-                {clientMetrics.latency_p50_ms != null
-                  ? `${clientMetrics.latency_p50_ms.toFixed(1)} ms`
-                  : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground">Latency p50</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-lg font-bold">
-                {clientMetrics.latency_p95_ms != null
-                  ? `${clientMetrics.latency_p95_ms.toFixed(1)} ms`
-                  : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground">Latency p95</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-lg font-bold">
-                {clientMetrics.latency_p99_ms != null
-                  ? `${clientMetrics.latency_p99_ms.toFixed(1)} ms`
-                  : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground">Latency p99</p>
-            </CardContent>
-          </Card>
           <Card>
             <CardContent className="pt-4">
               <p className="text-lg font-bold">{clientMetrics.active_connections}</p>
@@ -187,6 +157,30 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
               </p>
             </CardContent>
           </Card>
+          {clientMetrics.latency_p50_ms != null && (
+            <Card>
+              <CardContent className="pt-4">
+                <p className="text-lg font-bold">{clientMetrics.latency_p50_ms.toFixed(1)} ms</p>
+                <p className="text-xs text-muted-foreground">Latency p50</p>
+              </CardContent>
+            </Card>
+          )}
+          {clientMetrics.latency_p95_ms != null && (
+            <Card>
+              <CardContent className="pt-4">
+                <p className="text-lg font-bold">{clientMetrics.latency_p95_ms.toFixed(1)} ms</p>
+                <p className="text-xs text-muted-foreground">Latency p95</p>
+              </CardContent>
+            </Card>
+          )}
+          {clientMetrics.latency_p99_ms != null && (
+            <Card>
+              <CardContent className="pt-4">
+                <p className="text-lg font-bold">{clientMetrics.latency_p99_ms.toFixed(1)} ms</p>
+                <p className="text-xs text-muted-foreground">Latency p99</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

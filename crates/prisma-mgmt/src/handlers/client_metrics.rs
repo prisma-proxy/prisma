@@ -11,10 +11,16 @@ use uuid::Uuid;
 
 use prisma_core::state::{ClientMetrics, ClientMetricsHistoryPoint};
 
+use crate::auth::UserInfo;
+use crate::handlers::clients::owned_client_ids;
 use crate::MgmtState;
 
 /// GET /api/metrics/clients -- All client metrics.
-pub async fn list_client_metrics(State(state): State<MgmtState>) -> Json<Vec<ClientMetrics>> {
+pub async fn list_client_metrics(
+    State(state): State<MgmtState>,
+    user: UserInfo,
+) -> Json<Vec<ClientMetrics>> {
+    let owned = owned_client_ids(&user, &state).await;
     let mut result = Vec::new();
 
     // Get client names from the auth store
@@ -22,6 +28,14 @@ pub async fn list_client_metrics(State(state): State<MgmtState>) -> Json<Vec<Cli
 
     for entry in state.state.per_client_metrics.iter() {
         let client_id = *entry.key();
+
+        // Filter by ownership for Client-role users
+        if let Some(ref ids) = owned {
+            if !ids.iter().any(|oid| oid == &client_id.to_string()) {
+                continue;
+            }
+        }
+
         let acc = entry.value();
         let name = auth.clients.get(&client_id).and_then(|e| e.name.clone());
         result.push(acc.snapshot(client_id, name).await);
@@ -37,7 +51,15 @@ pub async fn list_client_metrics(State(state): State<MgmtState>) -> Json<Vec<Cli
 pub async fn get_client_metrics(
     State(state): State<MgmtState>,
     Path(id): Path<Uuid>,
+    user: UserInfo,
 ) -> Result<Json<ClientMetrics>, StatusCode> {
+    // Ownership check for Client-role users
+    if let Some(ids) = owned_client_ids(&user, &state).await {
+        if !ids.iter().any(|oid| oid == &id.to_string()) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     let acc = state
         .state
         .per_client_metrics
@@ -63,7 +85,15 @@ pub async fn get_client_metrics_history(
     State(state): State<MgmtState>,
     Path(id): Path<Uuid>,
     Query(params): Query<HistoryParams>,
+    user: UserInfo,
 ) -> Result<Json<Vec<ClientMetricsHistoryPoint>>, StatusCode> {
+    // Ownership check for Client-role users
+    if let Some(ids) = owned_client_ids(&user, &state).await {
+        if !ids.iter().any(|oid| oid == &id.to_string()) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     let period_secs: i64 = match params.period.as_deref() {
         Some("6h") => 6 * 3600,
         Some("24h") => 24 * 3600,

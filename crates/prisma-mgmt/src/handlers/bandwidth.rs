@@ -105,7 +105,15 @@ pub async fn get_client_quota(
     State(state): State<MgmtState>,
     Path(id): Path<String>,
 ) -> Result<Json<ClientQuotaInfo>, StatusCode> {
-    let quotas = state.quotas.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let Some(quotas) = state.quotas.as_ref() else {
+        // Quota subsystem not configured — return "unlimited" default
+        return Ok(Json(ClientQuotaInfo {
+            client_id: id,
+            quota_bytes: 0,
+            used_bytes: 0,
+            remaining_bytes: 0,
+        }));
+    };
     if let Some(usage) = quotas.get(&id).await {
         Ok(Json(ClientQuotaInfo {
             client_id: id,
@@ -114,7 +122,13 @@ pub async fn get_client_quota(
             remaining_bytes: usage.remaining(),
         }))
     } else {
-        Err(StatusCode::NOT_FOUND)
+        // Client has no quota entry — return unlimited default
+        Ok(Json(ClientQuotaInfo {
+            client_id: id,
+            quota_bytes: 0,
+            used_bytes: 0,
+            remaining_bytes: 0,
+        }))
     }
 }
 

@@ -19,7 +19,7 @@ import { EmptyState } from "@/components/ui/loading-placeholder";
 export default function ClientsPage() {
   const { t } = useI18n();
   const { toast } = useToast();
-  const { isAdmin } = useRole();
+  const { isOperator } = useRole();
   const { data: clients, isLoading } = useClients();
   const { data: metrics } = useAllClientMetrics();
   const updateClient = useUpdateClient();
@@ -83,12 +83,12 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("clients.registeredClients")}</h2>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-1.5" />
-            {t("clients.export")}
-          </Button>
-          {isAdmin && (
+          {isOperator && (
             <>
+              <Button variant="outline" size="sm" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-1.5" />
+                {t("clients.export")}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -128,7 +128,7 @@ export default function ClientsPage() {
               title={t("empty.noClients")}
               description={t("empty.noClientsHint")}
               action={
-                isAdmin ? (
+                isOperator ? (
                   <Link href="/dashboard/clients/new/">
                     <Button size="sm">
                       <UserPlus className="h-4 w-4 mr-1.5" />
@@ -145,7 +145,7 @@ export default function ClientsPage() {
               onToggle={(id, enabled) =>
                 updateClient.mutate({ id, data: { enabled } })
               }
-              onDelete={isAdmin ? (id) => deleteClient.mutate(id) : undefined}
+              onDelete={isOperator ? (id) => deleteClient.mutate(id) : undefined}
             />
           )}
         </CardContent>

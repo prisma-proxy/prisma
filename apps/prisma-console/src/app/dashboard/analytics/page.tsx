@@ -34,6 +34,7 @@ import { exportToCSV } from "@/lib/export";
 import { useMetricsHistory, type TimeRange, type Resolution } from "@/hooks/use-metrics";
 import { useAllClientMetrics } from "@/hooks/use-client-metrics";
 import { useConnections } from "@/hooks/use-connections";
+import { useRole } from "@/components/auth/role-guard";
 import { SkeletonChart, SkeletonTable, SkeletonCard } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/loading-placeholder";
 
@@ -110,6 +111,7 @@ function SortIndicator({
 
 export default function AnalyticsPage() {
   const { t } = useI18n();
+  const { isOperator } = useRole();
   const [period, setPeriod] = useState<TimeRange>("24h");
   const resolution = RESOLUTION_MAP[period];
 
@@ -451,10 +453,12 @@ export default function AnalyticsPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{t("analytics.clientRanking")}</CardTitle>
-                <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                  <Download className="h-4 w-4 mr-1.5" />
-                  {t("analytics.export")}
-                </Button>
+                {isOperator && (
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="h-4 w-4 mr-1.5" />
+                    {t("analytics.export")}
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
