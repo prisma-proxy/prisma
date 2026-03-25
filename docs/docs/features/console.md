@@ -138,10 +138,13 @@ API calls from the console go directly to the same-origin management API endpoin
 
 The main overview dashboard showing:
 - **Metrics cards** — active connections, total bytes up/down, uptime
+- **Sparkline charts** — mini inline sparkline charts on each metric card showing 5-minute trend
+- **Server health score** — circular ring gauge (0-100) based on CPU, memory, cert expiry, error rate, and connection load
 - **Traffic chart** — real-time bytes/sec with time-range selector (Live/1H/6H/24H/7D) and Mbps toggle. Live mode shows the last 60 seconds of data.
 - **Transport pie chart** — connections grouped by transport type
 - **Connection histogram** — connection duration distribution
 - **GeoIP pie chart** — country distribution of active connections. Requires `geoip_path` configured in the server's routing section; shows a placeholder when GeoIP is not configured.
+- **Live connection map** — SVG world map showing active connections by GeoIP country with proportionally-sized dots
 - **Connection table** — active connections with peer IP (port stripped), transport type, mode, byte counters, and a disconnect button
 
 Data sources: WebSocket push (metrics every 1s) + REST polling (connections every 5s).
@@ -187,7 +190,10 @@ System monitoring:
 
 Client management:
 - **Client list** — shows all authorized clients with name, status (enabled/disabled), active connection count, total bytes (up + down), and clickable links to the detail page
+- **Client tags** — tag clients with labels and filter by tags in the list
 - **Client detail** — per-client bandwidth limits (editable), quota utilization bar, latency cards (p50/p95/p99), 1 h traffic history area chart (from `/api/metrics/clients/:id/history`), and a filtered connection table
+- **Connection history** — per-client timeline view showing connection events and traffic spikes over 24h
+- **Bulk import/export** — export all clients as JSON, import clients from file
 - **Add client** — generates a new UUID + auth secret pair and displays the key once
 - **Edit client** — update name, toggle enabled/disabled, configure bandwidth/quota limits
 - **Delete client** — remove a client from the auth store
@@ -201,6 +207,8 @@ Visual routing rules editor:
 - **Inline edit** — click any rule field (condition, value, action) to edit it directly in the table without opening a dialog. Changes are saved immediately via the management API.
 - **Rule editor** — dialog form for creating new rules with condition type, value, and action
 - **Expanded rule types** — supports DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, PORT, and ALL rule types with auto-complete suggestions
+- **Rule presets** — 8 preset templates in 4 categories (Privacy, Network, Regional, Catch-all) with one-click apply
+- **Batch deletion** — select multiple rules and delete in bulk
 - **Toggle/delete** — enable, disable, or remove rules inline
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule types.
@@ -218,11 +226,14 @@ Data source: WebSocket push (real-time log entries).
 ### Settings
 
 Server configuration editor with tabbed sections:
-- **General** — logging level, logging format, max connections, port forwarding toggle
-- **Camouflage & CDN** — camouflage and CDN configuration (read-only)
+- **General** — listen addresses (editable), DNS upstream, connection timeout, port forwarding (with port range, allowed/denied ports, IP whitelist), management API toggle, auto-backup interval
+- **Camouflage & CDN** — ALPN, salamander password, H3 cover, CDN paths, XPorta config (session path, encoding, timeout, sessions, cookie)
 - **Traffic & Performance** — traffic shaping, congestion, port hopping, DNS, anti-RTT settings
 - **TLS & Security** — certificate info, transport-only cipher, protocol version, PrismaTLS status
 - **Alerts** — configure alert thresholds (cert expiry, quota warning, handshake spike)
+- **Config diff preview** — shows changed fields before saving with confirm/cancel
+- **Config validation** — inline validation for ports, addresses, CIDR format
+- **Config export/import** — download/upload entire server config as JSON
 
 ### Config Backups
 
@@ -243,13 +254,16 @@ Traffic shaping and anti-analysis visualization:
 
 ## Additional Features
 
-- **i18n** — full English and Simplified Chinese translations, switchable from the header
-- **Theme toggle** — dark, light, and system mode, switchable from the header. Preference is persisted in localStorage and applied on page load.
+- **i18n** — full English and Simplified Chinese translations, switchable from the sidebar
+- **Theme toggle** — dark, light, and system mode, switchable from the sidebar footer. Preference is persisted in localStorage and applied on page load.
+- **Notification center** — persistent notification drawer with history, accessible from the sidebar bell icon
 - **Toast notification system** — non-blocking toast notifications for operation feedback (success, error, warning, info). Toasts auto-dismiss after 5 seconds and stack vertically when multiple appear. Used for config save confirmations, client operations, rule changes, and API errors.
 - **Global search** — Ctrl+K command palette searching pages, clients, and config keys
+- **Command palette generators** — hex (32/64/128 digit), UUID v4, base64 key generators with clipboard support
 - **Data export** — export tables as CSV/JSON and charts as PNG
-- **Alert badge** — bell icon in header showing active alerts with severity levels
+- **Client permissions** — per-client access control (port forwarding, UDP, destinations, ports, connections, bandwidth) via detail page
 - **Responsive sidebar** — collapsible sidebar (icon-only mode), mobile drawer
+- **Mobile responsive** — bottom tab navigation on mobile browsers with 5 primary tabs + More sheet
 
 ## Development
 
