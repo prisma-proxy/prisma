@@ -35,7 +35,6 @@ export function ClientPermissionsForm({ clientId }: ClientPermissionsFormProps) 
   const [allowPortForwarding, setAllowPortForwarding] = useState(true);
   const [allowUdp, setAllowUdp] = useState(true);
   const [maxConnections, setMaxConnections] = useState(0);
-  const [bandwidthLimit, setBandwidthLimit] = useState<string>("");
   const [allowedDestinations, setAllowedDestinations] = useState("");
   const [blockedDestinations, setBlockedDestinations] = useState("");
   const [allowedPorts, setAllowedPorts] = useState("");
@@ -46,7 +45,6 @@ export function ClientPermissionsForm({ clientId }: ClientPermissionsFormProps) 
     setAllowPortForwarding(p.allow_port_forwarding);
     setAllowUdp(p.allow_udp);
     setMaxConnections(p.max_connections);
-    setBandwidthLimit(p.bandwidth_limit ? String(p.bandwidth_limit) : "");
     setAllowedDestinations(p.allowed_destinations.join("\n"));
     setBlockedDestinations(p.blocked_destinations.join("\n"));
     setAllowedPorts(p.allowed_ports.join(", "));
@@ -58,7 +56,7 @@ export function ClientPermissionsForm({ clientId }: ClientPermissionsFormProps) 
       allow_port_forwarding: allowPortForwarding,
       allow_udp: allowUdp,
       max_connections: maxConnections,
-      bandwidth_limit: bandwidthLimit ? parseInt(bandwidthLimit, 10) || null : null,
+      bandwidth_limit: null,
       allowed_destinations: allowedDestinations.split("\n").map((s) => s.trim()).filter(Boolean),
       blocked_destinations: blockedDestinations.split("\n").map((s) => s.trim()).filter(Boolean),
       allowed_ports: allowedPorts.split(",").map((s) => s.trim()).filter(Boolean),
@@ -103,18 +101,6 @@ export function ClientPermissionsForm({ clientId }: ClientPermissionsFormProps) 
           min={0}
           value={maxConnections}
           onChange={(e) => setMaxConnections(parseInt(e.target.value, 10) || 0)}
-        />
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label>{t("permissions.bandwidthLimit")}</Label>
-        <p className="text-xs text-muted-foreground">{t("permissions.bandwidthLimitDesc")}</p>
-        <Input
-          type="number"
-          min={0}
-          value={bandwidthLimit}
-          onChange={(e) => setBandwidthLimit(e.target.value)}
-          placeholder={t("permissions.unlimited")}
         />
       </div>
 

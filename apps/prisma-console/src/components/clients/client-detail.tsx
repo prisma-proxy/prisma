@@ -37,7 +37,6 @@ import { SkeletonCard } from "@/components/ui/skeleton";
 import { ClientPermissionsForm } from "@/components/clients/client-permissions";
 import { ClientHistory } from "@/components/clients/client-history";
 import { ClientShareDialog } from "@/components/clients/client-share-dialog";
-import { ClientAclEditor } from "@/components/clients/client-acl-editor";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const id = clientId;
@@ -144,16 +143,6 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
         </CardHeader>
         <CardContent>
           <ClientPermissionsForm clientId={id} />
-        </CardContent>
-      </Card>
-
-      {/* Access Control */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("acl.title")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ClientAclEditor clientId={id} />
         </CardContent>
       </Card>
 

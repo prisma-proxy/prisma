@@ -50,10 +50,11 @@ export function ClientShareDialog({
       .finally(() => setLoading(false));
   }, [open, clientId]);
 
+  const tomlText = data?.toml ?? "";
   const tomlLines = useMemo(() => {
-    if (!data?.toml) return [];
-    return data.toml.split("\n");
-  }, [data?.toml]);
+    if (!tomlText) return [];
+    return tomlText.split("\n");
+  }, [tomlText]);
 
   async function handleCopy() {
     if (!data) return;

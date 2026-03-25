@@ -9,11 +9,16 @@ import { EmptyState } from "@/components/ui/loading-placeholder";
 import { useI18n } from "@/lib/i18n";
 import { exportToCSV, exportToJSON } from "@/lib/export";
 import { formatBytes } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function ConnectionsPage() {
   const { t } = useI18n();
   const { data: connections, isLoading } = useConnections();
   const disconnect = useDisconnect();
+
+  const totalUp = connections?.reduce((s, c) => s + c.bytes_up, 0) ?? 0;
+  const totalDown = connections?.reduce((s, c) => s + c.bytes_down, 0) ?? 0;
+  const activeCount = connections?.length ?? 0;
 
   const handleExportCSV = () => {
     if (!connections || connections.length === 0) return;
@@ -48,6 +53,27 @@ export default function ConnectionsPage() {
         {(connections?.length ?? 0) > 0 && (
           <ExportDropdown onCSV={handleExportCSV} onJSON={handleExportJSON} />
         )}
+      </div>
+
+      <div className="grid gap-4 grid-cols-3 mb-4">
+        <Card>
+          <CardContent className="pt-4 pb-4 text-center">
+            <p className="text-2xl font-bold">{activeCount}</p>
+            <p className="text-xs text-muted-foreground">{t("metrics.activeConnections")}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 text-center">
+            <p className="text-2xl font-bold text-blue-500">{formatBytes(totalUp)}</p>
+            <p className="text-xs text-muted-foreground">{t("bandwidth.totalUpload")}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 text-center">
+            <p className="text-2xl font-bold text-green-500">{formatBytes(totalDown)}</p>
+            <p className="text-xs text-muted-foreground">{t("bandwidth.totalDownload")}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {isLoading ? (

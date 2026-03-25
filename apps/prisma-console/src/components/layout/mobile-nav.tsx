@@ -9,7 +9,6 @@ import {
   Users,
   Route,
   MoreHorizontal,
-  ScrollText,
   BarChart3,
   Gauge,
   Activity,
@@ -41,9 +40,7 @@ const primaryTabs: MobileTab[] = [
 ];
 
 const moreTabs: MobileTab[] = [
-  { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText },
   { labelKey: "sidebar.events", href: "/dashboard/events/", icon: Radio },
-  { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3 },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge },
   { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3 },
   { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity },
