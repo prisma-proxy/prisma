@@ -14,10 +14,12 @@
 - **流量整形** — 桶填充、时序抖动、杂音注入、帧合并，抵御封装 TLS 指纹识别
 - **抗审查** — Salamander UDP 混淆、HTTP/3 伪装、端口跳跃、TLS 伪装、熵伪装
 - **端口转发** — 通过加密隧道实现类 frp 的反向代理
-- **Web 管理控制台** — 基于 Next.js + shadcn/ui 的实时监控
+- **Web 管理控制台** — 实时仪表盘、数据分析、客户端分享（TOML/URI/QR）、多服务器管理、可自定义组件、配置历史（Next.js + shadcn/ui）
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
+- **CLI 工具** — `prisma monitor`（TUI 仪表盘）、`prisma validate`（配置检查）、`prisma profile new`（交互式向导）、批量客户端管理
 - **原生 GUI 客户端** — Windows（Win32/GDI）、Android（Jetpack Compose）、iOS（SwiftUI）、macOS（菜单栏）
-- **跨平台 GUI** — 速度测试、完整备份/恢复、系统托盘、键盘快捷键、通知历史、流量统计（Tauri 2 + React）
+- **跨平台 GUI** — 速度测试、分流隧道、网络诊断、连接时间线、QR 摄像头扫描、完整备份/恢复、系统托盘（Tauri 2 + React）
+- **OpenAPI 规范** — 完整 API 文档位于 `/api/docs/openapi.json`，支持第三方集成
 
 ## 快速开始
 
@@ -76,7 +78,7 @@ prisma/
 │   ├── prisma-server/   # 代理服务端（TCP、QUIC、CDN 入站）
 │   ├── prisma-client/   # 代理客户端（SOCKS5、HTTP CONNECT、TUN 入站）
 │   ├── prisma-mgmt/     # 管理 API（基于 axum 的 REST + WebSocket）
-│   ├── prisma-cli/      # CLI 工具：密钥/证书生成、初始化、校验
+│   ├── prisma-cli/      # CLI 工具：服务端/客户端、TUI 监控、配置校验、配置向导
 │   └── prisma-ffi/      # C FFI 库，供 GUI 客户端调用
 ├── apps/
 │   ├── prisma-gui/      # 跨平台 GUI（Tauri 2 + React + TypeScript）

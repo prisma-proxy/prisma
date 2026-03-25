@@ -14,10 +14,12 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **Traffic shaping** — bucket padding, timing jitter, chaff injection, frame coalescing to defeat encapsulated TLS fingerprinting
 - **Anti-censorship** — Salamander UDP obfuscation, HTTP/3 masquerade, port hopping, TLS camouflage, entropy camouflage
 - **Port forwarding** — frp-style reverse proxy over encrypted tunnels
-- **Web console** — real-time monitoring with Next.js + shadcn/ui
+- **Web console** — real-time dashboard with analytics, client sharing (TOML/URI/QR), multi-server management, customizable widgets, config history (Next.js + shadcn/ui)
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
+- **CLI tools** — `prisma monitor` (TUI dashboard), `prisma validate` (config checker), `prisma profile new` (interactive wizard), batch client management
 - **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
-- **Cross-platform GUI** — speed test, full backup/restore, system tray, keyboard shortcuts, notification history, data usage tracking (Tauri 2 + React)
+- **Cross-platform GUI** — speed test, split tunneling, network diagnostics, connection timeline, QR camera scanner, full backup/restore, system tray (Tauri 2 + React)
+- **OpenAPI spec** — full API documentation at `/api/docs/openapi.json` for third-party integration
 
 ## Quick Start
 
@@ -76,7 +78,7 @@ prisma/
 │   ├── prisma-server/   # Proxy server (TCP, QUIC, CDN inbound)
 │   ├── prisma-client/   # Proxy client (SOCKS5, HTTP CONNECT, TUN inbound)
 │   ├── prisma-mgmt/     # Management API (REST + WebSocket via axum)
-│   ├── prisma-cli/      # CLI with key/cert generation, init, validate
+│   ├── prisma-cli/      # CLI: server/client, monitor TUI, config validator, profile wizard
 │   └── prisma-ffi/      # C FFI library for GUI clients
 ├── apps/
 │   ├── prisma-gui/      # Cross-platform GUI (Tauri 2 + React + TypeScript)

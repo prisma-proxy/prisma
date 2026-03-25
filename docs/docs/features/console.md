@@ -145,17 +145,15 @@ The main overview dashboard showing:
 - **Connection histogram** — connection duration distribution
 - **GeoIP pie chart** — country distribution of active connections. Requires `geoip_path` configured in the server's routing section; shows a placeholder when GeoIP is not configured.
 - **Live connection map** — SVG world map showing active connections by GeoIP country with proportionally-sized dots
-- **Connection table** — active connections with peer IP (port stripped), transport type, mode, byte counters, and a disconnect button
+- **Connection table** — active connections with peer IP (port stripped), transport type, mode, byte counters, and a disconnect button. Summary stats cards (active count, total upload, total download) are displayed above the table. Grouped-by-IP view is the default.
 
 Data sources: WebSocket push (metrics every 1s) + REST polling (connections every 5s).
 
-### Bandwidth
+### ~~Bandwidth~~ (removed)
 
-Per-client bandwidth monitoring and quota management:
-- **Metrics summary** — total upload, total download, and total active connections aggregated across all clients (sourced from `/api/metrics/clients`)
-- **Summary table** — all clients with upload/download rate limits, quota allocation, quota used, and usage percentage with color-coded progress bars (green < 70%, yellow 70–90%, red > 90%)
-- **Quota overview chart** — stacked bar chart (Recharts) showing used vs remaining quota per client
-- Data is auto-refreshed every 5 seconds
+:::note
+The Bandwidth page has been removed from the console navigation as of v2.5. Per-client bandwidth monitoring is now integrated into the Clients detail page, and the standalone page was redundant.
+:::
 
 ### Speed Test
 
@@ -176,7 +174,7 @@ Server information:
 - **Configuration** -- listen address, QUIC listen address, protocol version, DNS upstream, max connections, timeout, logging level/format, routing rules count
 - **Feature badges** -- port forwarding, camouflage, CDN, and port hopping status (ON/OFF)
 - **TLS information** -- TLS enabled/disabled status, certificate and key file paths
-- **Port forwards table** -- active port forwards with port, protocol, bind address, active connections, and traffic counters
+- **Port forwards table** -- active port forwards with port, protocol, bind address, active connections, and traffic counters. Full CRUD support: create, edit, and delete port forwards directly from the console.
 
 ### System
 
@@ -186,11 +184,23 @@ System monitoring:
 - **Certificate expiry** — countdown with color coding (green &gt;30d, yellow 7-30d, red &lt;7d)
 - **Active listeners** — table of all listening addresses and protocols
 
+### Connection Events
+
+Real-time WebSocket feed of connect/disconnect events:
+- **Virtualized event list** — high-performance scrolling for thousands of events
+- **Type filter** — filter by event type: All, Connect, Disconnect, Error
+- **Search** — full-text search across event details (peer address, transport, client name)
+- **Auto-scroll** — automatically follows new events; pauses when the user scrolls up
+- **Color-coded badges** — green for connect, red for disconnect, yellow for error events
+
+Data source: WebSocket push (`/api/ws/connections`).
+
 ### Clients
 
 Client management:
 - **Client list** — shows all authorized clients with name, status (enabled/disabled), active connection count, total bytes (up + down), and clickable links to the detail page
-- **Client tags** — tag clients with labels and filter by tags in the list
+- **Client tags and permissions** — tag clients with labels and filter by tags in the list. Manage per-client permissions (port forwarding, UDP, destinations, ports, max connections, bandwidth) from the detail page.
+- **Client share dialog** — generate a ready-to-use client configuration in three formats: TOML config (with syntax highlighting), `prisma://` URI, or QR code. Accessible from the client list or detail page.
 - **Client detail** — per-client bandwidth limits (editable), quota utilization bar, latency cards (p50/p95/p99), 1 h traffic history area chart (from `/api/metrics/clients/:id/history`), and a filtered connection table
 - **Connection history** — per-client timeline view showing connection events and traffic spikes over 24h
 - **Bulk import/export** — export all clients as JSON, import clients from file
@@ -213,15 +223,11 @@ Visual routing rules editor:
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule types.
 
-### Logs
+### ~~Logs~~ (removed)
 
-Real-time log streaming:
-- **Log viewer** — scrollable, monospace log output with colored level badges
-- **Filters** — filter by log level (ERROR, WARN, INFO, DEBUG, TRACE), target string, and message regex search
-- **Auto-scroll** — automatically follows new log entries unless the user scrolls up
-- **Clear** — clear the log buffer
-
-Data source: WebSocket push (real-time log entries).
+:::note
+The Logs page has been removed from the console navigation as of v2.5. Log streaming functionality was unreliable over WebSocket in production environments. Use `prisma logs` via the CLI for real-time log access.
+:::
 
 ### Settings
 
@@ -231,6 +237,7 @@ Server configuration editor with tabbed sections:
 - **Traffic & Performance** — traffic shaping, congestion, port hopping, DNS, anti-RTT settings
 - **TLS & Security** — certificate info, transport-only cipher, protocol version, PrismaTLS status
 - **Alerts** — configure alert thresholds (cert expiry, quota warning, handshake spike)
+- **Config Version History** — timeline of config changes with diff viewer and one-click restore to any previous version
 - **Config diff preview** — shows changed fields before saving with confirm/cancel
 - **Config validation** — inline validation for ports, addresses, CIDR format
 - **Config export/import** — download/upload entire server config as JSON
@@ -264,6 +271,11 @@ Traffic shaping and anti-analysis visualization:
 - **Client permissions** — per-client access control (port forwarding, UDP, destinations, ports, connections, bandwidth) via detail page
 - **Responsive sidebar** — collapsible sidebar (icon-only mode), mobile drawer
 - **Mobile responsive** — bottom tab navigation on mobile browsers with 5 primary tabs + More sheet
+- **Dashboard widget customization** — reorder and hide dashboard cards on the Overview page. Layout preferences are persisted in localStorage.
+- **Multi-server management** — connect to multiple Prisma servers from a single console instance. A server selector in the sidebar allows switching between servers without re-authenticating.
+- **OpenAPI specification** — auto-generated API documentation served at `/api/docs/openapi.json`. Can be imported into Swagger UI or other OpenAPI-compatible tools.
+- **Prometheus metrics** — the Overview page includes a scrape URL card showing the Prometheus-compatible metrics endpoint for Grafana/Prometheus integration.
+- **One-click GeoIP download** — download and auto-configure the GeoIP database from the server settings. The server downloads the database and updates the `geoip_path` configuration automatically.
 
 ## Development
 

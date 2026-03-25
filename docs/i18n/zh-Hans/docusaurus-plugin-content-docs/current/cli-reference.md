@@ -230,6 +230,39 @@ prisma init [--cdn] [--server-only] [--client-only] [--force]
 | `--client-only` | -- | 仅生成客户端配置 |
 | `--force` | -- | 覆盖已有文件 |
 
+### `prisma profile new`
+
+交互式配置文件生成向导，用于创建客户端连接配置。
+
+```bash
+prisma profile new [-o <PATH>] [--format <FORMAT>]
+```
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `-o, --output <PATH>` | stdout | 输出文件路径 |
+| `--format <FORMAT>` | `toml` | 输出格式：`toml`、`uri` 或 `json` |
+
+通过 5 步交互式流程引导：
+1. **服务器地址** -- 主机名/IP 和端口
+2. **传输方式** -- TCP、QUIC、WebSocket、gRPC、XHTTP、XPorta、PrismaTLS 或 WireGuard
+3. **客户端 ID** -- 使用已有 UUID 或生成新的
+4. **认证密钥** -- 粘贴已有密钥或自动生成
+5. **预览** -- 预览配置并确认
+
+**示例：**
+
+```bash
+# 交互式向导，以 TOML 格式输出到 stdout
+prisma profile new
+
+# 以 prisma:// URI 格式输出到文件
+prisma profile new --format uri -o profile.txt
+
+# 以 JSON 格式输出
+prisma profile new --format json -o profile.json
+```
+
 ### `prisma validate`
 
 在不启动服务的情况下验证配置文件。
@@ -242,6 +275,20 @@ prisma validate -c <PATH> [-t <TYPE>]
 |------|--------|------|
 | `-c, --config <PATH>` | -- | 配置文件路径 |
 | `-t, --type <TYPE>` | `server` | 配置类型：`server` 或 `client` |
+
+解析 TOML 文件并执行结构和语义双重验证：
+- **结构检查** -- TOML 语法、必填字段、类型正确性
+- **语义检查** -- 端口范围（1-65535）、认证密钥长度、TLS 证书文件是否存在、地址格式
+- **安全警告** -- 弱认证密钥、生产环境缺少 TLS、过于宽松的 ACL 规则
+
+输出使用彩色格式：绿色表示通过、红色表示错误、黄色表示警告。验证通过时退出码为 0，否则打印错误并以非零退出码退出。
+
+**示例：**
+
+```bash
+prisma validate -c server.toml
+prisma validate -c client.toml -t client
+```
 
 ---
 
@@ -343,6 +390,31 @@ prisma test-transport [-c <PATH>]
 prisma diagnose [-c <PATH>]
 ```
 
+### `prisma monitor`
+
+交互式 TUI 仪表盘，用于实时服务器监控，基于 [ratatui](https://github.com/ratatui-org/ratatui) 构建。
+
+```bash
+prisma monitor [--interval <MS>]
+```
+
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `--interval <MS>` | `1000` | 刷新间隔（毫秒） |
+
+连接管理 API 并显示全屏终端仪表盘：
+- **实时指标** -- 活跃连接数、上传/下载字节数、运行时间、CPU/内存
+- **可滚动连接表格** -- 所有活跃连接，显示目标地址、传输方式、速度和数据计数
+- **键盘控制** -- `q` 退出、`Tab` 切换面板、方向键滚动、`d` 断开所选连接
+
+**示例：**
+
+```bash
+prisma monitor
+prisma monitor --interval 500
+prisma monitor --mgmt-url https://my-server.com:9090 --mgmt-token my-token
+```
+
 ### `prisma completions`
 
 生成 Shell 自动补全脚本。
@@ -377,6 +449,22 @@ prisma completions <SHELL>
 | `delete <ID> [--yes]` | 删除客户端（`--yes` 跳过确认） |
 | `enable <ID>` | 启用客户端 |
 | `disable <ID>` | 禁用客户端 |
+| `batch-create --count N --prefix <NAME>` | 批量创建客户端，自动编号命名 |
+| `export [-o <FILE>]` | 将所有客户端导出为 JSON（默认：stdout） |
+| `import <FILE>` | 从 JSON 文件导入客户端 |
+
+**示例：**
+
+```bash
+# 批量创建 10 个客户端，前缀为 "device-"
+prisma clients batch-create --count 10 --prefix "device-"
+
+# 导出所有客户端
+prisma clients export -o clients.json
+
+# 从文件导入客户端
+prisma clients import clients.json
+```
 
 ### `prisma connections`
 
@@ -490,7 +578,10 @@ prisma logs [--level <LEVEL>] [--lines <N>]
 | `prisma test-transport` | 测试所有传输方式 |
 | `prisma diagnose` | 运行连接性诊断 |
 | `prisma completions <SHELL>` | 生成 Shell 自动补全 |
+| `prisma monitor` | 交互式 TUI 仪表盘 |
+| `prisma profile new` | 交互式配置文件生成向导 |
 | `prisma clients list/show/create/delete/enable/disable` | 管理授权客户端 |
+| `prisma clients batch-create/export/import` | 批量客户端操作 |
 | `prisma connections list/disconnect/watch` | 管理活跃连接 |
 | `prisma metrics [--watch/--history/--system]` | 查看服务器指标 |
 | `prisma bandwidth summary/get/set/quota` | 管理带宽限制 |

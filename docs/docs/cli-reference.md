@@ -289,6 +289,39 @@ prisma init --cdn
 prisma init --client-only --force
 ```
 
+### `prisma profile new`
+
+Interactive profile generator wizard for creating client connection profiles.
+
+```bash
+prisma profile new [-o <PATH>] [--format <FORMAT>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-o, --output <PATH>` | stdout | Output file path |
+| `--format <FORMAT>` | `toml` | Output format: `toml`, `uri`, or `json` |
+
+Walks through a 5-step interactive flow:
+1. **Server address** — hostname/IP and port
+2. **Transport** — TCP, QUIC, WebSocket, gRPC, XHTTP, XPorta, PrismaTLS, or WireGuard
+3. **Client ID** — existing UUID or generate a new one
+4. **Auth secret** — paste existing secret or auto-generate
+5. **Review** — preview the profile and confirm
+
+**Examples:**
+
+```bash
+# Interactive wizard, output to stdout as TOML
+prisma profile new
+
+# Output as prisma:// URI to file
+prisma profile new --format uri -o profile.txt
+
+# Output as JSON
+prisma profile new --format json -o profile.json
+```
+
 ### `prisma validate`
 
 Validate a config file without starting the server or client.
@@ -302,7 +335,12 @@ prisma validate -c <PATH> [-t <TYPE>]
 | `-c, --config <PATH>` | -- | Path to config file |
 | `-t, --type <TYPE>` | `server` | Config type: `server` or `client` |
 
-Parses the TOML file and runs all validation rules (via `garde`). Exits with code 0 if valid, or prints errors and exits with a non-zero code.
+Parses the TOML file and runs both structural parsing and semantic validation rules:
+- **Structural checks** — TOML syntax, required fields, correct types
+- **Semantic checks** — port ranges (1-65535), auth secret length, TLS certificate file existence, address format
+- **Security warnings** — weak auth secrets, missing TLS in production, overly permissive ACLs
+
+Output uses colored formatting: green for pass, red for errors, yellow for warnings. Exits with code 0 if valid, or prints errors and exits with a non-zero code.
 
 **Examples:**
 
@@ -508,6 +546,31 @@ prisma diagnose [-c <PATH>]
 prisma diagnose -c client.toml
 ```
 
+### `prisma monitor`
+
+Interactive TUI dashboard for real-time server monitoring, built with [ratatui](https://github.com/ratatui-org/ratatui).
+
+```bash
+prisma monitor [--interval <MS>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--interval <MS>` | `1000` | Refresh interval in milliseconds |
+
+Connects to the management API and displays a full-screen terminal dashboard with:
+- **Live metrics** — active connections, bytes up/down, uptime, CPU/memory
+- **Scrollable connections table** — all active connections with destination, transport, speed, and data counters
+- **Keyboard controls** — `q` quit, `Tab` cycle panels, arrow keys scroll, `d` disconnect selected
+
+**Examples:**
+
+```bash
+prisma monitor
+prisma monitor --interval 500
+prisma monitor --mgmt-url https://my-server.com:9090 --mgmt-token my-token
+```
+
 ### `prisma completions`
 
 Generate shell completion scripts.
@@ -562,6 +625,9 @@ prisma clients <SUBCOMMAND>
 | `delete <ID> [--yes]` | Delete a client (`--yes` skips confirmation) |
 | `enable <ID>` | Enable a client |
 | `disable <ID>` | Disable a client |
+| `batch-create --count N --prefix <NAME>` | Create multiple clients at once with auto-numbered names |
+| `export [-o <FILE>]` | Export all clients as JSON (default: stdout) |
+| `import <FILE>` | Import clients from a JSON file |
 
 **Examples:**
 
@@ -571,6 +637,15 @@ prisma clients show a1b2c3d4-e5f6-7890-abcd-ef1234567890
 prisma clients create --name "new-laptop"
 prisma clients disable a1b2c3d4-e5f6-7890-abcd-ef1234567890
 prisma clients delete a1b2c3d4-e5f6-7890-abcd-ef1234567890 --yes
+
+# Batch create 10 clients with prefix "device-"
+prisma clients batch-create --count 10 --prefix "device-"
+
+# Export all clients
+prisma clients export -o clients.json
+
+# Import clients from file
+prisma clients import clients.json
 ```
 
 ### `prisma connections`
@@ -795,7 +870,10 @@ prisma logs --level DEBUG --json  # JSON-formatted debug logs
 | `prisma test-transport` | Test all transports |
 | `prisma diagnose` | Run connectivity diagnostics |
 | `prisma completions <SHELL>` | Generate shell completions |
+| `prisma monitor` | Interactive TUI dashboard |
+| `prisma profile new` | Interactive profile generator wizard |
 | `prisma clients list/show/create/delete/enable/disable` | Manage authorized clients |
+| `prisma clients batch-create/export/import` | Bulk client operations |
 | `prisma connections list/disconnect/watch` | Manage active connections |
 | `prisma metrics [--watch/--history/--system]` | View server metrics |
 | `prisma bandwidth summary/get/set/quota` | Manage bandwidth limits |

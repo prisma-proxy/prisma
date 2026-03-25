@@ -61,6 +61,20 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
 | `POST` | `/api/clients` | Generate a new client (returns UUID + auth secret) |
 | `PUT` | `/api/clients/:id` | Update client name or enabled status |
 | `DELETE` | `/api/clients/:id` | Remove a client |
+| `GET` | `/api/clients/:id/secret` | Get client auth secret (returns the hex-encoded secret) |
+| `POST` | `/api/clients/share` | Generate a share config for a client (TOML, `prisma://` URI, or QR code) |
+
+**Generating a share config:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"client_id": "uuid", "format": "toml"}' \
+  http://127.0.0.1:9090/api/clients/share
+# {"format":"toml","content":"[identity]\nclient_id = \"uuid\"\nauth_secret = \"...\"\n..."}
+```
+
+Supported formats: `toml`, `uri` (returns `prisma://` link), `qr` (returns SVG QR code).
 
 **Creating a client at runtime:**
 
@@ -135,6 +149,8 @@ curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/reload
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/forwards` | List all active port forward sessions |
+| `POST` | `/api/forwards` | Create a new port forward |
+| `PUT` | `/api/forwards/:port` | Update an existing port forward |
 | `DELETE` | `/api/forwards/:port` | Close a forward by remote port |
 | `GET` | `/api/forwards/:port/connections` | List active connections for a specific forward |
 
@@ -207,6 +223,29 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
   -d '{"can_forward": true, "can_udp": true, "max_connections": 50}' \
   http://127.0.0.1:9090/api/clients/uuid-here/permissions
 ```
+
+### GeoIP
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/geoip/download` | Download GeoIP database and auto-configure `geoip_path` |
+
+Triggers a server-side download of the GeoIP database. The server downloads the database file, stores it in the configured data directory, and automatically updates the `geoip_path` in the running configuration. Returns download progress and final status.
+
+**Example:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/geoip/download
+# {"status":"ok","path":"/opt/prisma/data/geoip.mmdb","size_bytes":4521984}
+```
+
+### Documentation
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/docs/openapi.json` | OpenAPI 3.0 specification for the management API |
+
+Returns the complete OpenAPI 3.0 specification document. Can be imported into Swagger UI, Postman, or other OpenAPI-compatible tools for interactive API exploration.
 
 ### Routing Rules
 
@@ -309,7 +348,7 @@ All endpoints at a glance (v2.6.0):
 |----------|-----------|-------------|
 | Health & Metrics | 3 REST + 1 WS | Server status, snapshots, history, real-time stream |
 | Connections | 3 REST + 1 WS | List, disconnect, GeoIP distribution, real-time events |
-| Clients | 4 REST | CRUD for authorized clients |
+| Clients | 6 REST | CRUD for authorized clients, secret retrieval, share config |
 | Client Permissions | 4 REST | Permissions, kick, block |
 | Client Metrics | 3 REST | Per-client metrics snapshot, single-client, and history |
 | System | 1 REST | Platform and resource info |
@@ -317,7 +356,9 @@ All endpoints at a glance (v2.6.0):
 | Config Backups | 5 REST | Backup, restore, diff |
 | Bandwidth & Quotas | 5 REST | Per-client limits and usage |
 | Alerts | 2 REST | Alert threshold management |
-| Port Forwards | 3 REST | List, close, per-forward connections |
+| Port Forwards | 5 REST | CRUD, close, per-forward connections |
 | ACLs | 4 REST | Per-client access control rules |
+| GeoIP | 1 REST | GeoIP database download and configuration |
+| Documentation | 1 REST | OpenAPI 3.0 specification |
 | Routing Rules | 4 REST | Server-side routing rule management |
 | Logs | 1 WS | Real-time log streaming |

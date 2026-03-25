@@ -35,12 +35,12 @@ The frontend uses **Zustand** for state management, **Recharts** for graphs, **R
 
 ### Pages
 
-The app has **10 pages** accessible via sidebar navigation (collapsible) or bottom navigation on narrow viewports:
+The app has **11 pages** accessible via sidebar navigation (collapsible) or bottom navigation on narrow viewports:
 
 | Page | Description |
 |------|-------------|
 | **Home** | Connection toggle, real-time speed graph with current speed labels (&#8593;/&#8595; MB/s), session stats (upload/download speed, data transferred, uptime), proxy mode selector (SOCKS5/System Proxy/TUN/Per-App), connection quality indicator, daily data usage, connection history |
-| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). The Transport step supports all 8 modes: **TCP**, **QUIC**, **WebSocket**, **gRPC**, **XHTTP**, **XPorta**, **PrismaTLS**, and **WireGuard**. QUIC-exclusive settings (port hopping, entropy camouflage, SNI slicing, Salamander) are only visible when QUIC is selected. Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate and bulk export/import. Mobile-optimized toolbar with overflow menu. **Latency testing** — tap a server to run a real-time latency test; results are displayed inline and persisted for sorting |
+| **Profiles** | Profile list with search, sort (by name/last used/latency), per-profile metrics (latency, total data, session count, peak speed). Create/edit via a 5-step wizard (Connection, Auth, Transport, Routing & TUN, Review). The Transport step supports all 8 modes: **TCP**, **QUIC**, **WebSocket**, **gRPC**, **XHTTP**, **XPorta**, **PrismaTLS**, and **WireGuard**. QUIC-exclusive settings (port hopping, entropy camouflage, SNI slicing, Salamander) are only visible when QUIC is selected. Share profiles as TOML, prisma:// URI, or QR code. Import from QR or JSON file. Duplicate dialog with name editing, and bulk export/import. Mobile-optimized toolbar with overflow menu. **Latency testing** — tap a server to run a real-time latency test; results are displayed inline and persisted for sorting |
 | **Subscriptions** | Manage subscription URLs that auto-update server profiles. Add/edit/delete subscriptions with custom update intervals (1h-7d). Manual refresh, auto-refresh on launch, import from clipboard or QR. Subscription status indicators (last updated, server count, expiry date). Supports Prisma, Clash, and base64 subscription formats |
 | **Proxy Groups** | Visual proxy group manager matching the [Routing Rules](/docs/features/routing-rules#proxy-groups-v200) configuration. Create Select/AutoUrl/Fallback/LoadBalance groups. Drag-and-drop server ordering. Real-time latency indicators per server. Manual server selection for Select groups. URL test configuration for AutoUrl/Fallback groups |
 | **Import** | Unified import page for adding servers and profiles from multiple sources: QR code scan (camera on mobile, paste on desktop), `prisma://` URI, clipboard detection, TOML file, JSON file, subscription URL, and Clash YAML. Batch import with preview and selective add |
@@ -48,7 +48,8 @@ The app has **10 pages** accessible via sidebar navigation (collapsible) or bott
 | **Rules** | Routing rules editor with DOMAIN, IP-CIDR, GEOIP, and FINAL rule types. Actions: PROXY, DIRECT, REJECT, or proxy group name. Import/export rules as JSON. Rule provider management (add remote rule set URLs). Mobile-responsive table (match column hidden on small screens) |
 | **Logs** | Real-time log viewer with virtualized scrolling, search with text highlighting, level filter (ALL/ERROR/WARN/INFO/DEBUG), level statistics badges, pause/resume auto-scroll, export to text file |
 | **Speed Test** | Run speed tests through the proxy with configurable server (Cloudflare/Google) and duration (5-60s). Measures download, upload, and latency. Persistent test history with list and chart views, summary statistics (average/best) |
-| **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install |
+| **Settings** | Language (English/Chinese), theme (system/light/dark), start on boot, minimize to tray, proxy ports (HTTP/SOCKS5), DNS settings (direct/tunnel/fake-IP/smart), auto-reconnect with configurable delay and max attempts, data management (export/import settings and full backups), auto-update check and install. **Split Tunneling** — visual two-column editor for proxy/direct domain routing, with drag-and-drop between columns. |
+| **Diagnostics** | Built-in network diagnostic tools — latency test, DNS lookup, and connection test. Three cards with input field and test button for each tool. Results displayed inline with color-coded pass/fail indicators |
 | **Analytics** | Connection analytics, top domains, daily trend, rule breakdown, CSV export |
 
 ### System tray integration
@@ -87,6 +88,14 @@ All shortcuts use `Cmd` (macOS) or `Ctrl` (Windows/Linux) as the modifier:
 - **Speed graph** — real-time speed graph now shows current speed labels and a disconnected placeholder when not connected
 - **Notification history** — bell icon with unread badge; click to view full notification history with timestamps and severity levels (error, warning, success, info)
 - **Desktop notifications** — via Tauri notification plugin
+
+### QR Camera Scanner
+
+In addition to importing QR codes from image files and pasting URIs, prisma-gui supports live webcam scanning for profile QR codes on desktop platforms. Click the camera icon on the Import or Profiles page to activate the webcam feed. Detected QR codes are parsed immediately and the profile is offered for import.
+
+### Connection Timeline
+
+The Connections page includes an SVG horizontal timeline showing active connection bars over a 5-minute sliding window. Each bar represents an active connection's lifespan. Hover over any bar to see a tooltip with destination, transport, rule matched, and data transferred.
 
 ### Clipboard import
 
@@ -145,6 +154,10 @@ Download the appropriate installer for your platform from the [releases page](ht
 | Full backup/restore | ✓ | ✓ | ✓ |
 | Connection history | ✓ | ✓ | ✓ |
 | Daily data usage tracking | ✓ | ✓ | ✓ |
+| Diagnostics (latency/DNS/connection test) | ✓ | ✓ | ✓ |
+| Split tunneling editor | ✓ | ✓ | ✓ |
+| QR camera scanner | ✓ | ✓ (camera) | ✓ (camera) |
+| Connection timeline | ✓ | ✓ | ✓ |
 
 ---
 

@@ -61,6 +61,20 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
 | `POST` | `/api/clients` | 生成新客户端（返回 UUID + 认证密钥） |
 | `PUT` | `/api/clients/:id` | 更新客户端名称或启用状态 |
 | `DELETE` | `/api/clients/:id` | 删除客户端 |
+| `GET` | `/api/clients/:id/secret` | 获取客户端认证密钥（返回十六进制编码的密钥） |
+| `POST` | `/api/clients/share` | 生成客户端分享配置（TOML、`prisma://` URI 或二维码） |
+
+**生成分享配置：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"client_id": "uuid", "format": "toml"}' \
+  http://127.0.0.1:9090/api/clients/share
+# {"format":"toml","content":"[identity]\nclient_id = \"uuid\"\nauth_secret = \"...\"\n..."}
+```
+
+支持的格式：`toml`、`uri`（返回 `prisma://` 链接）、`qr`（返回 SVG 二维码）。
 
 **运行时创建客户端：**
 
@@ -135,6 +149,8 @@ curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/reload
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/forwards` | 列出所有活跃的端口转发会话 |
+| `POST` | `/api/forwards` | 创建新的端口转发 |
+| `PUT` | `/api/forwards/:port` | 更新现有端口转发 |
 | `DELETE` | `/api/forwards/:port` | 按远程端口关闭转发 |
 | `GET` | `/api/forwards/:port/connections` | 列出特定转发的活跃连接 |
 
@@ -205,6 +221,29 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
   -d '{"can_forward": true, "can_udp": true, "max_connections": 50}' \
   http://127.0.0.1:9090/api/clients/uuid-here/permissions
 ```
+
+### GeoIP
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/geoip/download` | 下载 GeoIP 数据库并自动配置 `geoip_path` |
+
+触发服务端 GeoIP 数据库下载。服务器下载数据库文件后存储到配置的数据目录，并自动更新运行配置中的 `geoip_path`。返回下载进度和最终状态。
+
+**示例：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/geoip/download
+# {"status":"ok","path":"/opt/prisma/data/geoip.mmdb","size_bytes":4521984}
+```
+
+### 文档
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/docs/openapi.json` | 管理 API 的 OpenAPI 3.0 规范 |
+
+返回完整的 OpenAPI 3.0 规范文档。可导入 Swagger UI、Postman 或其他 OpenAPI 兼容工具进行交互式 API 探索。
 
 ### 路由规则
 
@@ -307,7 +346,7 @@ WS /api/ws/reload
 |------|--------|------|
 | 健康与指标 | 3 REST + 1 WS | 服务器状态、快照、历史、实时流 |
 | 连接 | 3 REST + 1 WS | 列表、断开、GeoIP 分布、实时事件 |
-| 客户端 | 4 REST | 授权客户端的 CRUD |
+| 客户端 | 6 REST | 授权客户端的 CRUD、密钥获取、分享配置 |
 | 客户端权限 | 4 REST | 权限、踢出、封禁 |
 | 客户端指标 | 3 REST | 所有客户端快照、单客户端快照、时序历史 |
 | 系统 | 1 REST | 平台和资源信息 |
@@ -315,7 +354,9 @@ WS /api/ws/reload
 | 配置备份 | 5 REST | 备份、恢复、差异对比 |
 | 带宽与配额 | 5 REST | 每客户端限制和使用情况 |
 | 告警 | 2 REST | 告警阈值管理 |
-| 端口转发 | 3 REST | 列表、关闭、每转发连接 |
+| 端口转发 | 5 REST | CRUD、关闭、每转发连接 |
 | ACL | 4 REST | 每客户端访问控制规则 |
+| GeoIP | 1 REST | GeoIP 数据库下载和配置 |
+| 文档 | 1 REST | OpenAPI 3.0 规范 |
 | 路由规则 | 4 REST | 服务端路由规则管理 |
 | 日志 | 1 WS | 实时日志流 |
