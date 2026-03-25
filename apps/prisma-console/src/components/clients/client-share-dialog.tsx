@@ -127,7 +127,7 @@ export function ClientShareDialog({
             </div>
           ) : tab === "toml" ? (
             <div className="space-y-2">
-              <div className="overflow-y-auto max-h-[50vh] rounded-lg border bg-muted/20 p-3 font-mono text-xs leading-5">
+              <div className="overflow-y-auto max-h-[50vh] rounded-lg border bg-muted p-3 font-mono text-xs leading-5">
                 {tomlLines.map((line, idx) => (
                   <div key={idx} className="whitespace-pre">
                     {highlightToml(line)}

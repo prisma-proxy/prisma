@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { createWebSocket, type WSStatus } from "@/lib/ws";
+import { api } from "@/lib/api";
+import type { ConnectionInfo } from "@/lib/types";
 
-const MAX_EVENTS = 1000;
+const MAX_EVENTS = 500;
+const POLL_INTERVAL = 5000;
 
 let eventIdCounter = 0;
 
@@ -21,8 +23,6 @@ export interface ConnectionEvent {
   duration_secs?: number;
 }
 
-type RawEvent = Omit<ConnectionEvent, "_id">;
-
 interface EventFilter {
   type?: EventType | "all";
   search?: string;
@@ -31,34 +31,75 @@ interface EventFilter {
 export function useEvents() {
   const [allEvents, setAllEvents] = useState<ConnectionEvent[]>([]);
   const [filter, setFilter] = useState<EventFilter>({});
-  const [connectionStatus, setConnectionStatus] = useState<WSStatus>("connecting");
-  const wsRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const prevConnectionsRef = useRef<Map<string, ConnectionInfo>>(new Map());
 
   const clearEvents = useCallback(() => {
     setAllEvents([]);
   }, []);
 
   useEffect(() => {
-    wsRef.current = createWebSocket<RawEvent>(
-      "/api/ws/events",
-      (raw) => {
-        const event: ConnectionEvent = { ...raw, _id: ++eventIdCounter };
-        setAllEvents((prev) => {
-          if (prev.length >= MAX_EVENTS) {
-            const trimmed = prev.slice(-(MAX_EVENTS - 1));
-            trimmed.push(event);
-            return trimmed;
-          }
-          return [...prev, event];
-        });
-      },
-      undefined,
-      setConnectionStatus,
-    );
+    let active = true;
 
-    return () => {
-      wsRef.current?.close();
-    };
+    async function poll() {
+      try {
+        const connections = await api.getConnections();
+        if (!active) return;
+
+        setConnectionStatus("connected");
+        const currentMap = new Map(connections.map((c) => [c.session_id, c]));
+        const prevMap = prevConnectionsRef.current;
+
+        const newEvents: ConnectionEvent[] = [];
+
+        // Detect new connections (connect events)
+        for (const [id, conn] of currentMap) {
+          if (!prevMap.has(id)) {
+            newEvents.push({
+              _id: ++eventIdCounter,
+              timestamp: conn.connected_at || new Date().toISOString(),
+              type: "connect",
+              client_name: conn.client_name ?? undefined,
+              peer_addr: conn.peer_addr,
+              destination: conn.destination,
+              transport: conn.transport,
+              matched_rule: conn.matched_rule,
+            });
+          }
+        }
+
+        // Detect removed connections (disconnect events)
+        for (const [id, conn] of prevMap) {
+          if (!currentMap.has(id)) {
+            newEvents.push({
+              _id: ++eventIdCounter,
+              timestamp: new Date().toISOString(),
+              type: "disconnect",
+              client_name: conn.client_name ?? undefined,
+              peer_addr: conn.peer_addr,
+              destination: conn.destination,
+              transport: conn.transport,
+              duration_secs: conn.duration_secs,
+            });
+          }
+        }
+
+        prevConnectionsRef.current = currentMap;
+
+        if (newEvents.length > 0) {
+          setAllEvents((prev) => {
+            const updated = [...prev, ...newEvents];
+            return updated.length > MAX_EVENTS ? updated.slice(-MAX_EVENTS) : updated;
+          });
+        }
+      } catch {
+        if (active) setConnectionStatus("disconnected");
+      }
+    }
+
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL);
+    return () => { active = false; clearInterval(interval); };
   }, []);
 
   const events = useMemo(() => {

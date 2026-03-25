@@ -124,8 +124,7 @@ export default function EventsPage() {
                 "inline-block h-2 w-2 rounded-full",
                 connectionStatus === "connected" && "bg-green-500",
                 connectionStatus === "disconnected" && "bg-red-500",
-                (connectionStatus === "connecting" || connectionStatus === "reconnecting") &&
-                  "bg-yellow-500 animate-pulse",
+                connectionStatus === "connecting" && "bg-yellow-500 animate-pulse",
               )}
               aria-hidden="true"
             />
@@ -133,9 +132,7 @@ export default function EventsPage() {
               ? t("logs.wsConnected")
               : connectionStatus === "disconnected"
                 ? t("logs.wsDisconnected")
-                : connectionStatus === "reconnecting"
-                  ? t("logs.wsReconnecting")
-                  : t("logs.wsConnecting")}
+                : t("logs.wsConnecting")}
           </span>
           {events.length > 0 && (
             <span className="text-xs text-muted-foreground tabular-nums">

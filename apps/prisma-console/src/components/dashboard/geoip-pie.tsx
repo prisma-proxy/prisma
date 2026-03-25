@@ -53,10 +53,14 @@ export function GeoIPPie() {
     setDownloading(true);
     try {
       await api.downloadGeoIP();
+      // Reload server config so the GeoIP matcher picks up the new file
+      await api.reloadConfig().catch(() => {});
       toast(t("geoip.downloadSuccess"), "success");
       localStorage.setItem("prisma-geoip-configured", "true");
       setConfigured(true);
+      // Refresh all geo-related queries
       await queryClient.invalidateQueries({ queryKey: ["connections-geo"] });
+      await queryClient.invalidateQueries({ queryKey: ["connections"] });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Download failed";
       toast(message, "error");

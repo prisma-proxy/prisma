@@ -1,12 +1,15 @@
 "use client";
 
 import { Network } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useConnections, useDisconnect } from "@/hooks/use-connections";
 import { ConnectionTable } from "@/components/dashboard/connection-table";
 import { ExportDropdown } from "@/components/dashboard/export-dropdown";
 import { SkeletonTable } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/loading-placeholder";
+import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
+import { api } from "@/lib/api";
 import { exportToCSV, exportToJSON } from "@/lib/export";
 import { formatBytes } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +18,12 @@ export default function ConnectionsPage() {
   const { t } = useI18n();
   const { data: connections, isLoading } = useConnections();
   const disconnect = useDisconnect();
+
+  const { data: geoData } = useQuery({
+    queryKey: ["connections-geo"],
+    queryFn: () => api.getConnectionGeo(),
+    refetchInterval: 15000,
+  });
 
   const totalUp = connections?.reduce((s, c) => s + c.bytes_up, 0) ?? 0;
   const totalDown = connections?.reduce((s, c) => s + c.bytes_down, 0) ?? 0;
@@ -75,6 +84,17 @@ export default function ConnectionsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* GeoIP distribution badges */}
+      {geoData && geoData.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {geoData.slice(0, 10).map((entry) => (
+            <Badge key={entry.country} variant="outline" className="text-xs font-mono">
+              {entry.country}: {entry.count}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {isLoading ? (
         <SkeletonTable rows={8} />
