@@ -1,5 +1,10 @@
 import { getToken, clearToken } from "./auth";
 
+function getApiBase(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("prisma-api-base") || "";
+}
+
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -9,7 +14,8 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(path, { ...init, headers });
+  const base = getApiBase();
+  const res = await fetch(`${base}${path}`, { ...init, headers });
   if (res.status === 401) {
     clearToken();
     if (typeof window !== "undefined") {
@@ -167,4 +173,13 @@ export const api = {
       `/api/metrics/clients/${id}/history${qs}`
     );
   },
+
+  // Client sharing
+  getClientSecret: (id: string) =>
+    apiFetch<{ client_id: string; auth_secret: string }>(`/api/clients/${id}/secret`),
+  shareClient: (id: string) =>
+    apiFetch<import("./types").ShareClientResponse>(`/api/clients/share`, {
+      method: "POST",
+      body: JSON.stringify({ client_id: id }),
+    }),
 };

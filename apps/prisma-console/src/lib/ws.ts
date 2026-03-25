@@ -19,9 +19,10 @@ export function createWebSocket<T>(
   function connect() {
     const token = getToken();
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    const base = localStorage.getItem("prisma-api-base") || "";
     onStatusChange?.(isFirstConnect ? "connecting" : "reconnecting");
     isFirstConnect = false;
-    ws = new WebSocket(`${protocol}//${window.location.host}${path}${tokenParam}`);
+    ws = new WebSocket(`${protocol}//${window.location.host}${base}${path}${tokenParam}`);
 
     ws.onopen = () => {
       reconnectDelay = 1000;

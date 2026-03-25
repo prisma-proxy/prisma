@@ -17,7 +17,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useI18n } from "@/lib/i18n";
 import { formatBytes } from "@/lib/utils";
-import { Trash2 } from "lucide-react";
+import { Trash2, Share2 } from "lucide-react";
+import { ClientShareDialog } from "@/components/clients/client-share-dialog";
 import type { ClientInfo, ClientMetricsEntry } from "@/lib/types";
 
 interface ClientTableProps {
@@ -44,6 +45,8 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [shareClientId, setShareClientId] = useState<string | null>(null);
+  const [shareClientName, setShareClientName] = useState("");
 
   const metricsMap = new Map(metrics.map((m) => [m.client_id, m]));
 
@@ -189,6 +192,17 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShareClientId(client.id);
+                        setShareClientName(client.name || t("clients.unnamed"));
+                      }}
+                    >
+                      <Share2 className="h-3.5 w-3.5" data-icon="inline-start" />
+                      {t("clients.share")}
+                    </Button>
                     <Switch
                       checked={client.enabled}
                       onCheckedChange={(checked: boolean) =>
@@ -236,6 +250,14 @@ export function ClientTable({ clients, metrics = [], onToggle, onDelete }: Clien
         cancelLabel={t("common.cancel")}
         variant="destructive"
         onConfirm={handleBatchDelete}
+      />
+
+      {/* Share dialog */}
+      <ClientShareDialog
+        open={shareClientId !== null}
+        onOpenChange={(open) => { if (!open) setShareClientId(null); }}
+        clientId={shareClientId ?? ""}
+        clientName={shareClientName}
       />
     </>
   );

@@ -311,3 +311,9 @@ export interface GeoEntry {
   count: number;
 }
 
+export interface ShareClientResponse {
+  toml: string;
+  uri: string;
+  qr_svg: string;
+}
+

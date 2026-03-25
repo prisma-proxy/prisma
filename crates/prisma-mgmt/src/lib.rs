@@ -142,12 +142,23 @@ fn spawn_periodic_backup(state: MgmtState) {
     });
 }
 
-/// Start the management API server (HTTPS when TLS is configured, HTTP otherwise).
+/// Start the management API server (HTTPS when TLS is enabled and configured, HTTP otherwise).
+///
+/// TLS is only activated when **both** `config.tls_enabled` is `true` **and**
+/// `config.tls` contains valid cert/key paths. This prevents accidental HTTPS
+/// when `tls_enabled` is false but a `tls` section is present, and provides a
+/// clear error when `tls_enabled` is true but no certificate is configured.
 pub async fn serve(config: ManagementApiConfig, state: MgmtState) -> Result<()> {
     let app = router::build_router(config.clone(), state.clone());
     spawn_periodic_backup(state);
 
-    if let Some(ref tls) = config.tls {
+    if config.tls_enabled {
+        let tls = config.tls.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Management API tls_enabled = true but no TLS certificate configured. \
+                 Set [management_api.tls] or the top-level [tls] section."
+            )
+        })?;
         let rustls_config =
             axum_server::tls_rustls::RustlsConfig::from_pem_file(&tls.cert_path, &tls.key_path)
                 .await?;
@@ -157,6 +168,9 @@ pub async fn serve(config: ManagementApiConfig, state: MgmtState) -> Result<()> 
             .serve(app.into_make_service())
             .await?;
     } else {
+        if config.tls.is_some() {
+            info!("Management API has TLS cert configured but tls_enabled = false; starting HTTP");
+        }
         let listener = tokio::net::TcpListener::bind(&config.listen_addr).await?;
         info!(addr = %config.listen_addr, "Management API started (HTTP)");
         axum::serve(listener, app).await?;

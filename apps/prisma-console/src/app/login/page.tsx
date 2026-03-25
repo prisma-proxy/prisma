@@ -9,6 +9,11 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { t } = useI18n();
   const [token, setToken] = useState("");
+  const [apiBase, setApiBase] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("prisma-api-base") || ""
+      : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,9 +22,18 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
+    // Persist the API base path before making the validation request
+    const trimmedBase = apiBase.trim().replace(/\/+$/, "");
+    if (trimmedBase) {
+      localStorage.setItem("prisma-api-base", trimmedBase);
+    } else {
+      localStorage.removeItem("prisma-api-base");
+    }
+
     try {
       // Validate the token by calling the health endpoint
-      const res = await fetch("/api/health", {
+      const base = trimmedBase;
+      const res = await fetch(`${base}/api/health`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -81,6 +95,27 @@ export default function LoginPage() {
               />
               <p className="text-xs text-muted-foreground">
                 {t("auth.tokenHint")}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="apiBase"
+                className="text-sm font-medium text-foreground"
+              >
+                {t("auth.apiBase")}
+              </label>
+              <input
+                id="apiBase"
+                type="text"
+                value={apiBase}
+                onChange={(e) => setApiBase(e.target.value)}
+                autoComplete="off"
+                placeholder="/prisma-mgmt"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("auth.apiBaseHint")}
               </p>
             </div>
 

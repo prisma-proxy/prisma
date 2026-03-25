@@ -52,8 +52,10 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         // Clients
         .route("/api/clients", get(clients::list))
         .route("/api/clients", post(clients::create))
+        .route("/api/clients/share", post(clients::share))
         .route("/api/clients/{id}", put(clients::update))
         .route("/api/clients/{id}", delete(clients::remove))
+        .route("/api/clients/{id}/secret", get(clients::get_secret))
         // Bandwidth & quotas
         .route(
             "/api/clients/{id}/bandwidth",

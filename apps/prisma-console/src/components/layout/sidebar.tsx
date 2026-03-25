@@ -50,6 +50,7 @@ const navItems: NavItem[] = [
   { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText, group: "monitoring" },
   { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3, group: "monitoring" },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },
+  { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3, group: "monitoring" },
   { labelKey: "sidebar.routing", href: "/dashboard/routing/", icon: Route, group: "config" },
   { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity, group: "config" },
   { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor, group: "config" },

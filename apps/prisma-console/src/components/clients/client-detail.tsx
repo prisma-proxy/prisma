@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useClients } from "@/hooks/use-clients";
 import { useClientBandwidth, useUpdateClientBandwidth, useClientQuota, useUpdateClientQuota } from "@/hooks/use-bandwidth";
@@ -31,9 +32,10 @@ import { QuotaCard } from "@/components/clients/quota-card";
 import { ClientTrafficChart } from "@/components/clients/client-traffic-chart";
 import { formatBytes } from "@/lib/utils";
 import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Share2 } from "lucide-react";
 import { ClientPermissionsForm } from "@/components/clients/client-permissions";
 import { ClientHistory } from "@/components/clients/client-history";
+import { ClientShareDialog } from "@/components/clients/client-share-dialog";
 
 export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const id = clientId;
@@ -47,6 +49,7 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
   const { data: metricsHistory } = useClientMetricsHistory(id, "1h");
   const updateBandwidth = useUpdateClientBandwidth();
   const updateQuota = useUpdateClientQuota();
+  const [shareOpen, setShareOpen] = useState(false);
 
   const client = clients?.find((c) => c.id === id);
   const clientConnections = connections?.filter((c) => c.client_id === id) ?? [];
@@ -96,6 +99,14 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
               {t("clients.disabled")}
             </Badge>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShareOpen(true)}
+          >
+            <Share2 className="h-3.5 w-3.5" data-icon="inline-start" />
+            {t("clients.share")}
+          </Button>
         </div>
       </div>
 
@@ -242,6 +253,13 @@ export default function ClientDetailPage({ clientId }: { clientId: string }) {
           )}
         </CardContent>
       </Card>
+
+      <ClientShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        clientId={id}
+        clientName={client.name || t("clients.unnamed")}
+      />
     </div>
   );
 }

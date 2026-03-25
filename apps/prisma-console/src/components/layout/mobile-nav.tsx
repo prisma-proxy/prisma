@@ -43,6 +43,7 @@ const moreTabs: MobileTab[] = [
   { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText },
   { labelKey: "sidebar.bandwidth", href: "/dashboard/bandwidth/", icon: BarChart3 },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge },
+  { labelKey: "sidebar.analytics", href: "/dashboard/analytics/", icon: BarChart3 },
   { labelKey: "sidebar.trafficShaping", href: "/dashboard/traffic-shaping/", icon: Activity },
   { labelKey: "sidebar.system", href: "/dashboard/system/", icon: Monitor },
   { labelKey: "sidebar.settings", href: "/dashboard/settings/", icon: Settings },
