@@ -471,7 +471,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Prisma Console v2.10.0
+          Prisma Console v2.12.0
         </p>
       </div>
     </div>
