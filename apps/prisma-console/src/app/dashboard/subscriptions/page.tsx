@@ -13,7 +13,68 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SkeletonCard } from "@/components/ui/skeleton";
-import { Plus, Trash2, ShieldAlert, Ticket, Link2, CreditCard } from "lucide-react";
+import { Plus, Trash2, Pencil, ShieldAlert, Ticket, Link2, CreditCard } from "lucide-react";
+
+const INPUT_CLASS =
+  "w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm";
+
+/** Shared permissions state used by both code and invite create forms. */
+interface PermissionsState {
+  allowPortForwarding: boolean;
+  setAllowPortForwarding: (v: boolean) => void;
+  allowUdp: boolean;
+  setAllowUdp: (v: boolean) => void;
+  maxConnections: number;
+  setMaxConnections: (v: number) => void;
+  quotaPeriod: string;
+  setQuotaPeriod: (v: string) => void;
+  allowedDestinations: string;
+  setAllowedDestinations: (v: string) => void;
+  blockedDestinations: string;
+  setBlockedDestinations: (v: string) => void;
+}
+
+/** Advanced permissions panel shared between code and invite create forms. */
+function AdvancedPermissions({ state, t }: { state: PermissionsState; t: (k: string) => string }) {
+  return (
+    <details className="mt-4">
+      <summary className="text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground">
+        {t("subscriptions.advancedPermissions")}
+      </summary>
+      <div className="grid grid-cols-2 gap-4 mt-3">
+        <div className="flex items-center gap-2">
+          <input type="checkbox" checked={state.allowPortForwarding} onChange={(e) => state.setAllowPortForwarding(e.target.checked)} className="rounded" />
+          <label className="text-xs font-medium">{t("subscriptions.allowPortForwarding")}</label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="checkbox" checked={state.allowUdp} onChange={(e) => state.setAllowUdp(e.target.checked)} className="rounded" />
+          <label className="text-xs font-medium">{t("subscriptions.allowUdp")}</label>
+        </div>
+        <div>
+          <label className="text-xs font-medium">{t("subscriptions.maxConnections")}</label>
+          <input type="number" min={0} value={state.maxConnections} onChange={(e) => state.setMaxConnections(parseInt(e.target.value, 10) || 0)} className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className="text-xs font-medium">{t("subscriptions.quotaPeriod")}</label>
+          <select value={state.quotaPeriod} onChange={(e) => state.setQuotaPeriod(e.target.value)} className={INPUT_CLASS}>
+            <option value="">{t("subscriptions.quotaPeriodNone")}</option>
+            <option value="Daily">{t("subscriptions.quotaPeriodDaily")}</option>
+            <option value="Weekly">{t("subscriptions.quotaPeriodWeekly")}</option>
+            <option value="Monthly">{t("subscriptions.quotaPeriodMonthly")}</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium">{t("subscriptions.allowedDestinations")}</label>
+          <input type="text" value={state.allowedDestinations} onChange={(e) => state.setAllowedDestinations(e.target.value)} className={INPUT_CLASS} placeholder={t("subscriptions.optional")} />
+        </div>
+        <div>
+          <label className="text-xs font-medium">{t("subscriptions.blockedDestinations")}</label>
+          <input type="text" value={state.blockedDestinations} onChange={(e) => state.setBlockedDestinations(e.target.value)} className={INPUT_CLASS} placeholder={t("subscriptions.optional")} />
+        </div>
+      </div>
+    </details>
+  );
+}
 
 export default function SubscriptionsPage() {
   const { t } = useI18n();
@@ -26,6 +87,8 @@ export default function SubscriptionsPage() {
     queryKey: ["codes"],
     queryFn: api.getCodes,
     enabled: isAdmin,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const createCode = useMutation({
@@ -51,6 +114,8 @@ export default function SubscriptionsPage() {
     queryKey: ["invites"],
     queryFn: api.getInvites,
     enabled: isAdmin,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const createInvite = useMutation({
@@ -77,6 +142,8 @@ export default function SubscriptionsPage() {
     queryKey: ["plans"],
     queryFn: api.getPlans,
     enabled: isAdmin,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const createPlan = useMutation({
@@ -85,6 +152,18 @@ export default function SubscriptionsPage() {
       queryClient.invalidateQueries({ queryKey: ["plans"] });
       toast(t("subscriptions.planCreated"), "success");
       setShowCreatePlan(false);
+      setEditingPlan(null);
+    },
+    onError: (error: Error) => toast(error.message || t("subscriptions.createFailed"), "error"),
+  });
+
+  const updatePlan = useMutation({
+    mutationFn: (data: Omit<SubscriptionPlan, "created_at">) => api.updatePlan(data.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      toast(t("subscriptions.planSaved"), "success");
+      setShowCreatePlan(false);
+      setEditingPlan(null);
     },
     onError: (error: Error) => toast(error.message || t("subscriptions.createFailed"), "error"),
   });
@@ -102,6 +181,7 @@ export default function SubscriptionsPage() {
   const [showCreateInvite, setShowCreateInvite] = React.useState(false);
   const [showCreatePlan, setShowCreatePlan] = React.useState(false);
   const [lastInviteToken, setLastInviteToken] = React.useState<string | null>(null);
+  const [editingPlan, setEditingPlan] = React.useState<SubscriptionPlan | null>(null);
 
   // ── Create code form state ──
   const [codeMaxUses, setCodeMaxUses] = React.useState(10);
@@ -110,12 +190,26 @@ export default function SubscriptionsPage() {
   const [codeBandwidthDown, setCodeBandwidthDown] = React.useState("");
   const [codeQuota, setCodeQuota] = React.useState("");
   const [codePlanId, setCodePlanId] = React.useState<number | undefined>(undefined);
+  const [codeExpiresAt, setCodeExpiresAt] = React.useState("");
+  const [codeAllowPortForwarding, setCodeAllowPortForwarding] = React.useState(true);
+  const [codeAllowUdp, setCodeAllowUdp] = React.useState(true);
+  const [codeMaxConnections, setCodeMaxConnections] = React.useState(0);
+  const [codeAllowedDestinations, setCodeAllowedDestinations] = React.useState("");
+  const [codeBlockedDestinations, setCodeBlockedDestinations] = React.useState("");
+  const [codeQuotaPeriod, setCodeQuotaPeriod] = React.useState("");
 
   // ── Create invite form state ──
   const [inviteMaxUses, setInviteMaxUses] = React.useState(10);
   const [inviteMaxClients, setInviteMaxClients] = React.useState(1);
   const [inviteDefaultRole, setInviteDefaultRole] = React.useState("client");
   const [invitePlanId, setInvitePlanId] = React.useState<number | undefined>(undefined);
+  const [inviteExpiresAt, setInviteExpiresAt] = React.useState("");
+  const [inviteAllowPortForwarding, setInviteAllowPortForwarding] = React.useState(true);
+  const [inviteAllowUdp, setInviteAllowUdp] = React.useState(true);
+  const [inviteMaxConnections, setInviteMaxConnections] = React.useState(0);
+  const [inviteAllowedDestinations, setInviteAllowedDestinations] = React.useState("");
+  const [inviteBlockedDestinations, setInviteBlockedDestinations] = React.useState("");
+  const [inviteQuotaPeriod, setInviteQuotaPeriod] = React.useState("");
 
   // ── Create plan form state ──
   const [planName, setPlanName] = React.useState("");
@@ -128,8 +222,81 @@ export default function SubscriptionsPage() {
   const [planExpiryDays, setPlanExpiryDays] = React.useState(30);
   const [planAllowPortForwarding, setPlanAllowPortForwarding] = React.useState(true);
   const [planAllowUdp, setPlanAllowUdp] = React.useState(true);
+  const [planAllowedDestinations, setPlanAllowedDestinations] = React.useState("");
+  const [planBlockedDestinations, setPlanBlockedDestinations] = React.useState("");
+  const [planQuotaPeriod, setPlanQuotaPeriod] = React.useState("");
 
-  const [deleteTarget, setDeleteTarget] = React.useState<{ type: "code" | "invite" | "plan"; id: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<{ type: "code" | "invite" | "plan"; id: number; label: string; detail: string } | null>(null);
+
+  /** Populate plan form from an existing plan for editing */
+  function startEditPlan(p: SubscriptionPlan) {
+    setEditingPlan(p);
+    setPlanName(p.name);
+    setPlanDisplayName(p.display_name);
+    setPlanBandwidthUp(p.bandwidth_up || "");
+    setPlanBandwidthDown(p.bandwidth_down || "");
+    setPlanQuota(p.quota || "");
+    setPlanMaxClients(p.max_clients);
+    setPlanMaxConnections(p.max_connections);
+    setPlanExpiryDays(p.expiry_days);
+    setPlanAllowPortForwarding(p.allow_port_forwarding);
+    setPlanAllowUdp(p.allow_udp);
+    setPlanAllowedDestinations(p.allowed_destinations);
+    setPlanBlockedDestinations(p.blocked_destinations);
+    setPlanQuotaPeriod(p.quota_period || "");
+    setShowCreatePlan(true);
+  }
+
+  /** Reset plan form to defaults */
+  function resetPlanForm() {
+    setEditingPlan(null);
+    setPlanName("");
+    setPlanDisplayName("");
+    setPlanBandwidthUp("");
+    setPlanBandwidthDown("");
+    setPlanQuota("");
+    setPlanMaxClients(1);
+    setPlanMaxConnections(0);
+    setPlanExpiryDays(30);
+    setPlanAllowPortForwarding(true);
+    setPlanAllowUdp(true);
+    setPlanAllowedDestinations("");
+    setPlanBlockedDestinations("");
+    setPlanQuotaPeriod("");
+    setShowCreatePlan(false);
+  }
+
+  /** Build plan data object from form state (shared between create and update) */
+  function buildPlanData(): Omit<SubscriptionPlan, "id" | "created_at"> {
+    return {
+      name: planName,
+      display_name: planDisplayName,
+      bandwidth_up: planBandwidthUp || null,
+      bandwidth_down: planBandwidthDown || null,
+      quota: planQuota || null,
+      quota_period: planQuotaPeriod || null,
+      max_connections: planMaxConnections,
+      max_clients: planMaxClients,
+      allow_port_forwarding: planAllowPortForwarding,
+      allow_udp: planAllowUdp,
+      allowed_destinations: planAllowedDestinations,
+      blocked_destinations: planBlockedDestinations,
+      expiry_days: planExpiryDays,
+    };
+  }
+
+  /** Resolve the delete confirmation title based on target type */
+  function deleteTitle(): string {
+    if (deleteTarget?.type === "code") return t("subscriptions.deleteCode");
+    if (deleteTarget?.type === "invite") return t("subscriptions.deleteInvite");
+    return t("subscriptions.deletePlan");
+  }
+
+  /** Convert datetime-local value to UTC string for API */
+  function toUtcString(val: string): string | undefined {
+    if (!val) return undefined;
+    return new Date(val).toISOString().replace("T", " ").slice(0, 19);
+  }
 
   if (!isAdmin) {
     return (
@@ -216,7 +383,7 @@ export default function SubscriptionsPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              onClick={() => setDeleteTarget({ type: "code", id: c.id })}
+                              onClick={() => setDeleteTarget({ type: "code", id: c.id, label: c.code, detail: `${c.used_count}/${c.max_uses} used` })}
                             >
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
@@ -240,34 +407,52 @@ export default function SubscriptionsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxUses")}</label>
-                    <input type="number" min={1} value={codeMaxUses} onChange={(e) => setCodeMaxUses(parseInt(e.target.value, 10) || 1)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={1} max={10000} value={codeMaxUses} onChange={(e) => setCodeMaxUses(parseInt(e.target.value, 10) || 1)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxClientsPerUser")}</label>
-                    <input type="number" min={1} value={codeMaxClients} onChange={(e) => setCodeMaxClients(parseInt(e.target.value, 10) || 1)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={1} max={10000} value={codeMaxClients} onChange={(e) => setCodeMaxClients(parseInt(e.target.value, 10) || 1)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.bandwidthUp")}</label>
-                    <input type="text" value={codeBandwidthUp} onChange={(e) => setCodeBandwidthUp(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={codeBandwidthUp} onChange={(e) => setCodeBandwidthUp(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 100mbps" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.bandwidthDown")}</label>
-                    <input type="text" value={codeBandwidthDown} onChange={(e) => setCodeBandwidthDown(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={codeBandwidthDown} onChange={(e) => setCodeBandwidthDown(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 100mbps" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.quota")}</label>
-                    <input type="text" value={codeQuota} onChange={(e) => setCodeQuota(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={codeQuota} onChange={(e) => setCodeQuota(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 10gb" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">{t("subscriptions.expiresAt")}</label>
+                    <input type="datetime-local" value={codeExpiresAt} onChange={(e) => setCodeExpiresAt(e.target.value)} className={INPUT_CLASS} />
                   </div>
                   {plans && plans.length > 0 && (
                     <div>
                       <label className="text-xs font-medium">{t("subscriptions.plan")}</label>
-                      <select value={codePlanId ?? ""} onChange={(e) => setCodePlanId(e.target.value ? Number(e.target.value) : undefined)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <select value={codePlanId ?? ""} onChange={(e) => setCodePlanId(e.target.value ? Number(e.target.value) : undefined)} className={INPUT_CLASS}>
                         <option value="">{t("subscriptions.noPlan")}</option>
                         {plans.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
                       </select>
                     </div>
                   )}
                 </div>
+                <AdvancedPermissions t={t} state={{
+                  allowPortForwarding: codeAllowPortForwarding,
+                  setAllowPortForwarding: setCodeAllowPortForwarding,
+                  allowUdp: codeAllowUdp,
+                  setAllowUdp: setCodeAllowUdp,
+                  maxConnections: codeMaxConnections,
+                  setMaxConnections: setCodeMaxConnections,
+                  quotaPeriod: codeQuotaPeriod,
+                  setQuotaPeriod: setCodeQuotaPeriod,
+                  allowedDestinations: codeAllowedDestinations,
+                  setAllowedDestinations: setCodeAllowedDestinations,
+                  blockedDestinations: codeBlockedDestinations,
+                  setBlockedDestinations: setCodeBlockedDestinations,
+                }} />
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" size="sm" onClick={() => setShowCreateCode(false)}>
                     {t("common.cancel")}
@@ -280,7 +465,14 @@ export default function SubscriptionsPage() {
                       bandwidth_up: codeBandwidthUp || undefined,
                       bandwidth_down: codeBandwidthDown || undefined,
                       quota: codeQuota || undefined,
+                      expires_at: toUtcString(codeExpiresAt),
                       plan_id: codePlanId,
+                      allow_port_forwarding: codeAllowPortForwarding,
+                      allow_udp: codeAllowUdp,
+                      max_connections: codeMaxConnections,
+                      allowed_destinations: codeAllowedDestinations || undefined,
+                      blocked_destinations: codeBlockedDestinations || undefined,
+                      quota_period: codeQuotaPeriod || undefined,
                     })}
                     disabled={createCode.isPending}
                   >
@@ -338,7 +530,7 @@ export default function SubscriptionsPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              onClick={() => setDeleteTarget({ type: "invite", id: inv.id })}
+                              onClick={() => setDeleteTarget({ type: "invite", id: inv.id, label: inv.token.slice(0, 8) + "...", detail: `${inv.used_count}/${inv.max_uses} used` })}
                             >
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
@@ -374,29 +566,47 @@ export default function SubscriptionsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxUses")}</label>
-                    <input type="number" min={1} value={inviteMaxUses} onChange={(e) => setInviteMaxUses(parseInt(e.target.value, 10) || 1)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={1} max={10000} value={inviteMaxUses} onChange={(e) => setInviteMaxUses(parseInt(e.target.value, 10) || 1)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxClientsPerUser")}</label>
-                    <input type="number" min={1} value={inviteMaxClients} onChange={(e) => setInviteMaxClients(parseInt(e.target.value, 10) || 1)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={1} max={10000} value={inviteMaxClients} onChange={(e) => setInviteMaxClients(parseInt(e.target.value, 10) || 1)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.defaultRole")}</label>
-                    <select value={inviteDefaultRole} onChange={(e) => setInviteDefaultRole(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <select value={inviteDefaultRole} onChange={(e) => setInviteDefaultRole(e.target.value)} className={INPUT_CLASS}>
                       <option value="client">{t("users.client")}</option>
                       <option value="operator">{t("users.operator")}</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="text-xs font-medium">{t("subscriptions.expiresAt")}</label>
+                    <input type="datetime-local" value={inviteExpiresAt} onChange={(e) => setInviteExpiresAt(e.target.value)} className={INPUT_CLASS} />
+                  </div>
                   {plans && plans.length > 0 && (
                     <div>
                       <label className="text-xs font-medium">{t("subscriptions.plan")}</label>
-                      <select value={invitePlanId ?? ""} onChange={(e) => setInvitePlanId(e.target.value ? Number(e.target.value) : undefined)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <select value={invitePlanId ?? ""} onChange={(e) => setInvitePlanId(e.target.value ? Number(e.target.value) : undefined)} className={INPUT_CLASS}>
                         <option value="">{t("subscriptions.noPlan")}</option>
                         {plans.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
                       </select>
                     </div>
                   )}
                 </div>
+                <AdvancedPermissions t={t} state={{
+                  allowPortForwarding: inviteAllowPortForwarding,
+                  setAllowPortForwarding: setInviteAllowPortForwarding,
+                  allowUdp: inviteAllowUdp,
+                  setAllowUdp: setInviteAllowUdp,
+                  maxConnections: inviteMaxConnections,
+                  setMaxConnections: setInviteMaxConnections,
+                  quotaPeriod: inviteQuotaPeriod,
+                  setQuotaPeriod: setInviteQuotaPeriod,
+                  allowedDestinations: inviteAllowedDestinations,
+                  setAllowedDestinations: setInviteAllowedDestinations,
+                  blockedDestinations: inviteBlockedDestinations,
+                  setBlockedDestinations: setInviteBlockedDestinations,
+                }} />
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" size="sm" onClick={() => setShowCreateInvite(false)}>
                     {t("common.cancel")}
@@ -407,7 +617,14 @@ export default function SubscriptionsPage() {
                       max_uses: inviteMaxUses,
                       max_clients: inviteMaxClients,
                       default_role: inviteDefaultRole,
+                      expires_at: toUtcString(inviteExpiresAt),
                       plan_id: invitePlanId,
+                      allow_port_forwarding: inviteAllowPortForwarding,
+                      allow_udp: inviteAllowUdp,
+                      max_connections: inviteMaxConnections,
+                      allowed_destinations: inviteAllowedDestinations || undefined,
+                      blocked_destinations: inviteBlockedDestinations || undefined,
+                      quota_period: inviteQuotaPeriod || undefined,
                     })}
                     disabled={createInvite.isPending}
                   >
@@ -424,7 +641,7 @@ export default function SubscriptionsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium">{t("subscriptions.plans")}</CardTitle>
-              <Button size="sm" onClick={() => setShowCreatePlan(true)}>
+              <Button size="sm" onClick={() => { resetPlanForm(); setShowCreatePlan(true); }}>
                 <Plus className="h-4 w-4 mr-1" /> {t("subscriptions.createPlan")}
               </Button>
             </CardHeader>
@@ -463,13 +680,22 @@ export default function SubscriptionsPage() {
                           <td className="py-2 pr-4">{p.max_clients}</td>
                           <td className="py-2 pr-4">{p.expiry_days === 0 ? t("subscriptions.never") : p.expiry_days}</td>
                           <td className="py-2">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => setDeleteTarget({ type: "plan", id: p.id })}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => startEditPlan(p)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => setDeleteTarget({ type: "plan", id: p.id, label: p.display_name, detail: p.name })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -480,45 +706,49 @@ export default function SubscriptionsPage() {
             </CardContent>
           </Card>
 
-          {/* Create plan dialog */}
+          {/* Create / Edit plan dialog */}
           {showCreatePlan && (
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle className="text-sm">{t("subscriptions.createPlan")}</CardTitle>
+                <CardTitle className="text-sm">
+                  {editingPlan ? t("subscriptions.editPlan") : t("subscriptions.createPlan")}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.planName")}</label>
-                    <input type="text" value={planName} onChange={(e) => setPlanName(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder="e.g. basic" />
+                    <input type="text" value={planName} onChange={(e) => setPlanName(e.target.value)} className={INPUT_CLASS} placeholder="e.g. basic" />
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("subscriptions.planNameHint")}</p>
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.displayName")}</label>
-                    <input type="text" value={planDisplayName} onChange={(e) => setPlanDisplayName(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder="e.g. Basic" />
+                    <input type="text" value={planDisplayName} onChange={(e) => setPlanDisplayName(e.target.value)} className={INPUT_CLASS} placeholder="e.g. Basic" />
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("subscriptions.displayNameHint")}</p>
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.bandwidthUp")}</label>
-                    <input type="text" value={planBandwidthUp} onChange={(e) => setPlanBandwidthUp(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={planBandwidthUp} onChange={(e) => setPlanBandwidthUp(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 100mbps" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.bandwidthDown")}</label>
-                    <input type="text" value={planBandwidthDown} onChange={(e) => setPlanBandwidthDown(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={planBandwidthDown} onChange={(e) => setPlanBandwidthDown(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 100mbps" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.quota")}</label>
-                    <input type="text" value={planQuota} onChange={(e) => setPlanQuota(e.target.value)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" placeholder={t("subscriptions.optional")} />
+                    <input type="text" value={planQuota} onChange={(e) => setPlanQuota(e.target.value)} className={INPUT_CLASS} placeholder="e.g. 10gb" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxClients")}</label>
-                    <input type="number" min={1} value={planMaxClients} onChange={(e) => setPlanMaxClients(parseInt(e.target.value, 10) || 1)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={1} max={10000} value={planMaxClients} onChange={(e) => setPlanMaxClients(parseInt(e.target.value, 10) || 1)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.maxConnections")}</label>
-                    <input type="number" min={0} value={planMaxConnections} onChange={(e) => setPlanMaxConnections(parseInt(e.target.value, 10) || 0)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={0} value={planMaxConnections} onChange={(e) => setPlanMaxConnections(parseInt(e.target.value, 10) || 0)} className={INPUT_CLASS} />
                   </div>
                   <div>
                     <label className="text-xs font-medium">{t("subscriptions.expiryDays")}</label>
-                    <input type="number" min={0} value={planExpiryDays} onChange={(e) => setPlanExpiryDays(parseInt(e.target.value, 10) || 0)} className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <input type="number" min={0} value={planExpiryDays} onChange={(e) => setPlanExpiryDays(parseInt(e.target.value, 10) || 0)} className={INPUT_CLASS} />
                   </div>
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={planAllowPortForwarding} onChange={(e) => setPlanAllowPortForwarding(e.target.checked)} className="rounded" />
@@ -528,32 +758,45 @@ export default function SubscriptionsPage() {
                     <input type="checkbox" checked={planAllowUdp} onChange={(e) => setPlanAllowUdp(e.target.checked)} className="rounded" />
                     <label className="text-xs font-medium">{t("subscriptions.allowUdp")}</label>
                   </div>
+                  <div>
+                    <label className="text-xs font-medium">{t("subscriptions.quotaPeriod")}</label>
+                    <select value={planQuotaPeriod} onChange={(e) => setPlanQuotaPeriod(e.target.value)} className={INPUT_CLASS}>
+                      <option value="">{t("subscriptions.quotaPeriodNone")}</option>
+                      <option value="Daily">{t("subscriptions.quotaPeriodDaily")}</option>
+                      <option value="Weekly">{t("subscriptions.quotaPeriodWeekly")}</option>
+                      <option value="Monthly">{t("subscriptions.quotaPeriodMonthly")}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">{t("subscriptions.allowedDestinations")}</label>
+                    <input type="text" value={planAllowedDestinations} onChange={(e) => setPlanAllowedDestinations(e.target.value)} className={INPUT_CLASS} placeholder={t("subscriptions.optional")} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium">{t("subscriptions.blockedDestinations")}</label>
+                    <input type="text" value={planBlockedDestinations} onChange={(e) => setPlanBlockedDestinations(e.target.value)} className={INPUT_CLASS} placeholder={t("subscriptions.optional")} />
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" size="sm" onClick={() => setShowCreatePlan(false)}>
+                  <Button variant="outline" size="sm" onClick={() => resetPlanForm()}>
                     {t("common.cancel")}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => createPlan.mutate({
-                      name: planName,
-                      display_name: planDisplayName,
-                      bandwidth_up: planBandwidthUp || null,
-                      bandwidth_down: planBandwidthDown || null,
-                      quota: planQuota || null,
-                      quota_period: null,
-                      max_connections: planMaxConnections,
-                      max_clients: planMaxClients,
-                      allow_port_forwarding: planAllowPortForwarding,
-                      allow_udp: planAllowUdp,
-                      allowed_destinations: "",
-                      blocked_destinations: "",
-                      expiry_days: planExpiryDays,
-                    })}
-                    disabled={createPlan.isPending || !planName || !planDisplayName}
-                  >
-                    {createPlan.isPending ? t("subscriptions.creating") : t("common.create")}
-                  </Button>
+                  {editingPlan ? (
+                    <Button
+                      size="sm"
+                      onClick={() => updatePlan.mutate({ id: editingPlan.id, ...buildPlanData() })}
+                      disabled={updatePlan.isPending || !planName || !planDisplayName}
+                    >
+                      {updatePlan.isPending ? t("subscriptions.creating") : t("subscriptions.savePlan")}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => createPlan.mutate(buildPlanData())}
+                      disabled={createPlan.isPending || !planName || !planDisplayName}
+                    >
+                      {createPlan.isPending ? t("subscriptions.creating") : t("common.create")}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -565,14 +808,12 @@ export default function SubscriptionsPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
-        title={
-          deleteTarget?.type === "code"
-            ? t("subscriptions.deleteCode")
-            : deleteTarget?.type === "invite"
-            ? t("subscriptions.deleteInvite")
-            : t("subscriptions.deletePlan")
+        title={deleteTitle()}
+        description={
+          deleteTarget
+            ? `${deleteTarget.label} (${deleteTarget.detail}) -- ${t("subscriptions.deleteConfirm")}`
+            : t("subscriptions.deleteConfirm")
         }
-        description={t("subscriptions.deleteConfirm")}
         confirmLabel={t("common.delete")}
         cancelLabel={t("common.cancel")}
         variant="destructive"

@@ -34,7 +34,9 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
       const json = await res.json();
       detail = json.error || json.message || detail;
     } catch { /* response body not JSON */ }
-    throw new Error(detail);
+    const err = new Error(detail) as Error & { status: number };
+    err.status = res.status;
+    throw err;
   }
   return res;
 }

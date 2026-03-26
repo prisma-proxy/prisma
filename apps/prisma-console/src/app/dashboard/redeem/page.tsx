@@ -24,6 +24,8 @@ export default function RedeemPage() {
   const { data: subscriptions, isLoading: subsLoading } = useQuery({
     queryKey: ["subscription"],
     queryFn: api.getSubscription,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const redeemMutation = useMutation({
@@ -35,13 +37,13 @@ export default function RedeemPage() {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast(t("redeem.redeemSuccess"), "success");
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { status?: number }) => {
       let msg = t("redeem.redeemFailed");
-      if (error.message.includes("Gone")) {
+      if (error.status === 410) {
         msg = t("redeem.codeExpired");
-      } else if (error.message.includes("Conflict")) {
+      } else if (error.status === 409) {
         msg = t("redeem.maxRedeemed");
-      } else if (error.message.includes("Not Found")) {
+      } else if (error.status === 404) {
         msg = t("redeem.invalidCode");
       }
       toast(msg, "error");
