@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::db;
 use crate::MgmtState;
 
 #[derive(Serialize)]
@@ -65,18 +66,29 @@ pub async fn auto_backup(state: &MgmtState) -> Result<(), StatusCode> {
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_name = format!("auto_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
-    fs::copy(config_path, dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Keep only last 50 auto-backups
+    // Also dump SQLite data alongside the TOML backup
+    if let Some(ref database) = state.db {
+        let sql = db::dump_sql(database);
+        let sql_path = dir.join(format!("auto_{}.sql", timestamp));
+        fs::write(sql_path, sql).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // Keep only last 50 auto-backups (TOML files)
     let mut entries: Vec<_> = fs::read_dir(&dir)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_name().to_string_lossy().starts_with("auto_"))
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".toml"))
         .collect();
     entries.sort_by_key(|e| e.file_name());
     if entries.len() > 50 {
         for entry in &entries[..entries.len() - 50] {
             let _ = fs::remove_file(entry.path());
+            // Also remove matching .sql file
+            let sql_name = entry.file_name().to_string_lossy().replace(".toml", ".sql");
+            let _ = fs::remove_file(entry.path().with_file_name(sql_name));
         }
     }
 
@@ -97,6 +109,10 @@ pub async fn list_backups(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if meta.is_file() {
             let name = entry.file_name().to_string_lossy().to_string();
+            // Only show .toml files in the list (SQL files are companions)
+            if !name.ends_with(".toml") {
+                continue;
+            }
             let modified = meta
                 .modified()
                 .map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339())
@@ -124,6 +140,14 @@ pub async fn create_backup(State(state): State<MgmtState>) -> Result<Json<Backup
     let backup_name = format!("manual_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
     fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Also dump SQLite data
+    if let Some(ref database) = state.db {
+        let sql = db::dump_sql(database);
+        let sql_path = dir.join(format!("manual_{}.sql", timestamp));
+        fs::write(sql_path, sql).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
     let meta = fs::metadata(&dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(BackupInfo {
@@ -166,6 +190,19 @@ pub async fn restore_backup(
         toml::from_str(&content).map_err(|_| StatusCode::BAD_REQUEST)?;
     *state.config.write().await = new_config;
 
+    // Restore companion SQL file if it exists
+    if let Some(ref database) = state.db {
+        let sql_name = name.replace(".toml", ".sql");
+        let sql_path = dir.join(&sql_name);
+        if sql_path.exists() {
+            if let Ok(sql) = fs::read_to_string(&sql_path) {
+                if let Err(e) = db::restore_sql(database, &sql) {
+                    tracing::warn!(error = %e, "Failed to restore SQL data from backup");
+                }
+            }
+        }
+    }
+
     Ok(StatusCode::OK)
 }
 
@@ -176,7 +213,13 @@ pub async fn delete_backup(
 ) -> Result<StatusCode, StatusCode> {
     let dir = backup_dir(&state)?;
     let path = validated_backup_path(&dir, &name)?;
-    fs::remove_file(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    fs::remove_file(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Also remove companion SQL file
+    let sql_name = name.replace(".toml", ".sql");
+    let sql_path = dir.join(&sql_name);
+    let _ = fs::remove_file(sql_path);
+
     Ok(StatusCode::OK)
 }
 

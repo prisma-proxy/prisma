@@ -255,6 +255,7 @@ pub async fn run(config_path: &str) -> Result<()> {
             quotas: Some(ctx.quotas.clone()),
             config_path: Some(config_path_buf),
             alert_config: std::sync::Arc::new(tokio::sync::RwLock::new(alert_config)),
+            db: None,
         };
 
         let mgmt_addr = mgmt_config.listen_addr.clone();

@@ -73,6 +73,8 @@ const navItems: NavItem[] = [
   { labelKey: "sidebar.connections", href: "/dashboard/connections/", icon: Network, group: "main", minRole: "operator" },
   { labelKey: "sidebar.server", href: "/dashboard/servers/", icon: Server, group: "main", minRole: "operator" },
   { labelKey: "sidebar.clients", href: "/dashboard/clients/", icon: Users, group: "main", minRole: "client" },
+  { labelKey: "sidebar.redeem", href: "/dashboard/redeem/", icon: KeyRound, group: "main", minRole: "client" },
+  { labelKey: "sidebar.subscriptions", href: "/dashboard/subscriptions/", icon: Gauge, group: "main", minRole: "admin" },
   { labelKey: "sidebar.events", href: "/dashboard/events/", icon: Radio, group: "monitoring", minRole: "operator" },
   { labelKey: "sidebar.logs", href: "/dashboard/logs/", icon: ScrollText, group: "monitoring", minRole: "operator" },
   { labelKey: "sidebar.speedTest", href: "/dashboard/speed-test/", icon: Gauge, group: "monitoring" },

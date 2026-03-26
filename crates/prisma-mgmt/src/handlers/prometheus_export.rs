@@ -197,6 +197,7 @@ mod tests {
             quotas: None,
             config_path: None,
             alert_config: Arc::new(RwLock::new(crate::AlertConfig::default())),
+            db: None,
         }
     }
 

@@ -331,3 +331,105 @@ export interface UserInfo {
   enabled: boolean;
 }
 
+// ── Console Settings ──────────────────────────────────────────────────
+
+export interface ConsoleSettings {
+  settings: Record<string, string>;
+}
+
+// ── Subscription / Redemption ─────────────────────────────────────────
+
+export interface RedemptionCode {
+  id: number;
+  code: string;
+  max_uses: number;
+  used_count: number;
+  max_clients: number;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  expires_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CreateCodeRequest {
+  max_uses?: number;
+  max_clients?: number;
+  bandwidth_up?: string;
+  bandwidth_down?: string;
+  quota?: string;
+  quota_period?: string;
+  expires_at?: string;
+}
+
+export interface CreateCodeResponse {
+  id: number;
+  code: string;
+}
+
+export interface RedeemResponse {
+  client_id: string;
+  auth_secret_hex: string;
+  name: string;
+}
+
+export interface SubscriptionInfo {
+  code: string;
+  client_id: string;
+  redeemed_at: string;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+}
+
+// ── Invites ───────────────────────────────────────────────────────────
+
+export interface InviteInfo {
+  id: number;
+  token: string;
+  max_uses: number;
+  used_count: number;
+  max_clients: number;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  default_role: string;
+  expires_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CreateInviteRequest {
+  max_uses?: number;
+  max_clients?: number;
+  bandwidth_up?: string;
+  bandwidth_down?: string;
+  quota?: string;
+  quota_period?: string;
+  default_role?: string;
+  expires_at?: string;
+}
+
+export interface CreateInviteResponse {
+  id: number;
+  token: string;
+}
+
+export interface InviteInfoPublic {
+  valid: boolean;
+  default_role: string;
+  max_clients: number;
+}
+
+export interface InviteRedeemResponse {
+  token: string;
+  user: { username: string; role: string };
+  expires_at: string;
+  client_id: string;
+  auth_secret_hex: string;
+}
+

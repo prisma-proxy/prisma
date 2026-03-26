@@ -13,7 +13,7 @@ use prisma_core::config::server::ManagementApiConfig;
 use crate::auth::{auth_middleware, AuthToken, JwtSecret};
 use crate::handlers::{
     acls, alerts, backup, bandwidth, client_metrics, clients, config, connections, forwards,
-    health, permissions, prometheus_export, reload, routes, system, users,
+    health, permissions, prometheus_export, reload, routes, settings, subscriptions, system, users,
 };
 use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
@@ -164,6 +164,31 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
             "/api/users/{username}",
             put(users::update_user).delete(users::delete_user),
         )
+        // Console settings
+        .route(
+            "/api/settings",
+            get(settings::get_all).put(settings::update_all),
+        )
+        .route(
+            "/api/settings/{key}",
+            get(settings::get_one).put(settings::update_one),
+        )
+        // Redemption codes (admin)
+        .route(
+            "/api/codes",
+            get(subscriptions::list_codes).post(subscriptions::create_code),
+        )
+        .route("/api/codes/{id}", delete(subscriptions::delete_code))
+        // Redeem (any authenticated user)
+        .route("/api/redeem", post(subscriptions::redeem_code))
+        // Subscription status (any authenticated user)
+        .route("/api/subscription", get(subscriptions::subscription_status))
+        // Invites (admin)
+        .route(
+            "/api/invites",
+            get(subscriptions::list_invites).post(subscriptions::create_invite),
+        )
+        .route("/api/invites/{id}", delete(subscriptions::delete_invite))
         // Auth middleware — protects everything above
         .layer(middleware::from_fn(auth_middleware))
         .layer({
@@ -186,7 +211,10 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/auth/login", post(users::login))
         .route("/api/auth/register", post(users::register))
         .route("/api/setup/status", get(users::setup_status))
-        .route("/api/setup/init", post(users::setup_init));
+        .route("/api/setup/init", post(users::setup_init))
+        // Public invite endpoints
+        .route("/api/invite/{token}/info", get(subscriptions::invite_info))
+        .route("/api/invite/{token}", post(subscriptions::redeem_invite));
 
     // Prometheus metrics endpoint — outside auth middleware for scraper access
     let prometheus_route = Router::new().route(

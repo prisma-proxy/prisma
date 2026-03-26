@@ -162,6 +162,7 @@ fn build_cdn_router(
             alert_config: std::sync::Arc::new(tokio::sync::RwLock::new(
                 prisma_mgmt::AlertConfig::default(),
             )),
+            db: None,
         };
         let mgmt = prisma_mgmt::router::build_router(config.management_api.clone(), mgmt_state);
         app = app.nest(&cdn.management_api_path, mgmt);

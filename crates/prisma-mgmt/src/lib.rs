@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod db;
 mod handlers;
 pub mod router;
 mod ws;
@@ -40,6 +41,8 @@ pub struct MgmtState {
     pub quotas: Option<Arc<QuotaStore>>,
     pub config_path: Option<PathBuf>,
     pub alert_config: Arc<RwLock<AlertConfig>>,
+    /// SQLite database for dynamic data (users, clients, routing rules, subscriptions, settings).
+    pub db: Option<db::Db>,
 }
 
 impl Deref for MgmtState {
@@ -50,6 +53,13 @@ impl Deref for MgmtState {
 }
 
 impl MgmtState {
+    /// Return a reference to the SQLite database, or 503 Service Unavailable.
+    pub fn require_db(&self) -> Result<&db::Db, axum::http::StatusCode> {
+        self.db
+            .as_ref()
+            .ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+    }
+
     /// Persist the current in-memory ServerConfig to the TOML file.
     /// No-op if `config_path` is not set (e.g., running without a config file).
     pub async fn persist_config(&self) {
@@ -156,7 +166,30 @@ fn spawn_periodic_backup(state: MgmtState) {
 /// `config.tls` contains valid cert/key paths. This prevents accidental HTTPS
 /// when `tls_enabled` is false but a `tls` section is present, and provides a
 /// clear error when `tls_enabled` is true but no certificate is configured.
-pub async fn serve(config: ManagementApiConfig, state: MgmtState) -> Result<()> {
+pub async fn serve(config: ManagementApiConfig, mut state: MgmtState) -> Result<()> {
+    // Initialize SQLite database alongside the config file
+    if let Some(ref config_path) = state.config_path {
+        let db_path = config_path.with_extension("db");
+        match db::init_db(&db_path) {
+            Ok(database) => {
+                // Migrate existing TOML data into SQLite on first run
+                {
+                    let cfg = state.config.read().await;
+                    db::migrate_from_config(
+                        &database,
+                        &cfg.management_api.users,
+                        &cfg.authorized_clients,
+                        &cfg.management_rules,
+                    );
+                }
+                state.db = Some(database);
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to initialize SQLite database; continuing without DB");
+            }
+        }
+    }
+
     let app = router::build_router(config.clone(), state.clone());
     spawn_periodic_backup(state);
 

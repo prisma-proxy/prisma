@@ -30,6 +30,7 @@ jsonwebtoken = { workspace = true }
 bcrypt = { workspace = true }
 hex = { workspace = true }
 maxminddb = { workspace = true }
+rusqlite = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true }

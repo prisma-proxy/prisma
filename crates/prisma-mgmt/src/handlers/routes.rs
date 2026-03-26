@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use prisma_core::config::server::{RoutingRule, RuleAction, RuleCondition};
 
+use crate::db;
 use crate::MgmtState;
 
 #[derive(Deserialize)]
@@ -42,6 +43,11 @@ pub async fn create(
         enabled: req.enabled,
     };
 
+    // Persist to SQLite
+    if let Some(ref database) = state.db {
+        db::insert_routing_rule(database, &rule).ok();
+    }
+
     let json = Json(rule.clone());
     state.routing_rules.write().await.push(rule);
     state.sync_rules_to_config().await;
@@ -54,20 +60,33 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateRouteRequest>,
 ) -> StatusCode {
+    let rule = RoutingRule {
+        id,
+        name: req.name.clone(),
+        priority: req.priority,
+        condition: req.condition.clone(),
+        action: req.action,
+        enabled: req.enabled,
+    };
+
     let found = {
         let mut rules = state.routing_rules.write().await;
-        if let Some(rule) = rules.iter_mut().find(|r| r.id == id) {
-            rule.name = req.name;
-            rule.priority = req.priority;
-            rule.condition = req.condition;
-            rule.action = req.action;
-            rule.enabled = req.enabled;
+        if let Some(r) = rules.iter_mut().find(|r| r.id == id) {
+            r.name = req.name;
+            r.priority = req.priority;
+            r.condition = req.condition;
+            r.action = req.action;
+            r.enabled = req.enabled;
             true
         } else {
             false
         }
     };
     if found {
+        // Sync to SQLite
+        if let Some(ref database) = state.db {
+            db::update_routing_rule(database, &rule);
+        }
         state.sync_rules_to_config().await;
         state.persist_config().await;
         StatusCode::OK
@@ -84,6 +103,10 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
         rules.len() < len_before
     };
     if removed {
+        // Remove from SQLite
+        if let Some(ref database) = state.db {
+            db::delete_routing_rule(database, &id);
+        }
         state.sync_rules_to_config().await;
         state.persist_config().await;
         StatusCode::OK
@@ -92,7 +115,7 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
     }
 }
 
-// ── POST /api/routes/test — test a domain/IP against routing rules ──
+// -- POST /api/routes/test — test a domain/IP against routing rules ──
 
 #[derive(Deserialize)]
 pub struct TestRequest {

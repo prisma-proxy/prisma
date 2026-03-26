@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use prisma_core::config::server::{UserConfig, UserRole};
 
 use crate::auth::UserInfo;
+use crate::db;
 use crate::MgmtState;
 
 // ---------------------------------------------------------------------------
@@ -86,16 +87,13 @@ pub async fn login(
     State(state): State<MgmtState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let cfg = state.config.read().await;
-    let mgmt = &cfg.management_api;
+    let user = resolve_user(&state, &req.username).ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let user = mgmt
-        .users
-        .iter()
-        .find(|u| u.username == req.username && u.enabled)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    if !user.enabled {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
 
-    // Verify password against bcrypt hash — runs blocking work on a thread pool
+    // Verify password against bcrypt hash
     let hash = user.password_hash.clone();
     let password = req.password.clone();
     let valid = tokio::task::spawn_blocking(move || bcrypt::verify(password, &hash))
@@ -108,10 +106,20 @@ pub async fn login(
     }
 
     let role_str = user.role.to_string();
-    let jwt_secret = mgmt.jwt_secret.clone();
-    drop(cfg);
+    let jwt_secret = {
+        let cfg = state.config.read().await;
+        cfg.management_api.jwt_secret.clone()
+    };
 
-    let (token, expires_at) = issue_jwt(&req.username, &role_str, &jwt_secret)?;
+    // Session expiry from SQLite settings (if available), else default 24h
+    let expiry_hours = state
+        .db
+        .as_ref()
+        .map(|d| db::get_setting_i64(d, "session_expiry_hours"))
+        .unwrap_or(24);
+    let expiry_hours = if expiry_hours > 0 { expiry_hours } else { 24 };
+
+    let (token, expires_at) = issue_jwt(&req.username, &role_str, &jwt_secret, expiry_hours)?;
 
     Ok(Json(LoginResponse {
         token,
@@ -125,8 +133,13 @@ pub async fn login(
 }
 
 /// Issue a JWT token for the given user. Returns (token, expires_at_rfc3339).
-fn issue_jwt(username: &str, role: &str, jwt_secret: &str) -> Result<(String, String), StatusCode> {
-    let expires_at = Utc::now() + chrono::Duration::hours(24);
+pub fn issue_jwt(
+    username: &str,
+    role: &str,
+    jwt_secret: &str,
+    expiry_hours: i64,
+) -> Result<(String, String), StatusCode> {
+    let expires_at = Utc::now() + chrono::Duration::hours(expiry_hours);
     let claims = Claims {
         sub: username.to_owned(),
         role: role.to_owned(),
@@ -146,12 +159,15 @@ fn issue_jwt(username: &str, role: &str, jwt_secret: &str) -> Result<(String, St
 // ---------------------------------------------------------------------------
 
 pub async fn setup_status(State(state): State<MgmtState>) -> Json<serde_json::Value> {
-    let cfg = state.config.read().await;
-    let has_admin = cfg
-        .management_api
-        .users
-        .iter()
-        .any(|u| u.role == UserRole::Admin);
+    let has_admin = if let Some(ref database) = state.db {
+        db::has_admin(database)
+    } else {
+        let cfg = state.config.read().await;
+        cfg.management_api
+            .users
+            .iter()
+            .any(|u| u.role == UserRole::Admin)
+    };
     Json(serde_json::json!({
         "needs_setup": !has_admin
     }))
@@ -175,15 +191,29 @@ pub async fn setup_init(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Hash password before acquiring write lock
+    // Hash password before acquiring any lock
     let password = req.password.clone();
     let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Atomically check + create inside a single write lock to prevent TOCTOU
-    let (username, jwt_secret) = {
+    // Check admin doesn't already exist
+    if let Some(ref database) = state.db {
+        if db::has_admin(database) {
+            return Err(StatusCode::CONFLICT);
+        }
+        let user = UserConfig {
+            username: req.username.clone(),
+            password_hash: hash.clone(),
+            role: UserRole::Admin,
+            enabled: true,
+        };
+        db::insert_user(database, &user).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // Also update the TOML config for backwards compatibility
+    {
         let mut cfg = state.config.write().await;
         if cfg
             .management_api
@@ -191,27 +221,28 @@ pub async fn setup_init(
             .iter()
             .any(|u| u.role == UserRole::Admin)
         {
-            return Err(StatusCode::CONFLICT);
+            // Already exists in config, skip
+        } else {
+            cfg.management_api.users.push(UserConfig {
+                username: req.username.clone(),
+                password_hash: hash,
+                role: UserRole::Admin,
+                enabled: true,
+            });
         }
-        let username = req.username.clone();
-        cfg.management_api.users.push(UserConfig {
-            username: username.clone(),
-            password_hash: hash,
-            role: UserRole::Admin,
-            enabled: true,
-        });
-        let secret = cfg.management_api.jwt_secret.clone();
-        (username, secret)
-    };
-
+    }
     state.persist_config().await;
 
-    let (token, expires_at) = issue_jwt(&username, "admin", &jwt_secret)?;
+    let jwt_secret = {
+        let cfg = state.config.read().await;
+        cfg.management_api.jwt_secret.clone()
+    };
+    let (token, expires_at) = issue_jwt(&req.username, "admin", &jwt_secret, 24)?;
 
     Ok(Json(LoginResponse {
         token,
         user: UserPublic {
-            username,
+            username: req.username,
             role: "admin".to_owned(),
             enabled: None,
         },
@@ -227,17 +258,25 @@ pub async fn register(
     State(state): State<MgmtState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<RegisterResponse>), StatusCode> {
-    // Require at least one admin to exist before allowing registration
-    {
+    // Check registration is enabled (SQLite setting)
+    if let Some(ref database) = state.db {
+        if !db::get_setting_bool(database, "registration_enabled") {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    // Require at least one admin
+    let admin_exists = if let Some(ref database) = state.db {
+        db::has_admin(database)
+    } else {
         let cfg = state.config.read().await;
-        if !cfg
-            .management_api
+        cfg.management_api
             .users
             .iter()
             .any(|u| u.role == UserRole::Admin)
-        {
-            return Err(StatusCode::FORBIDDEN); // Setup required first
-        }
+    };
+    if !admin_exists {
+        return Err(StatusCode::FORBIDDEN);
     }
 
     if req.username.is_empty() || req.password.is_empty() {
@@ -245,7 +284,11 @@ pub async fn register(
     }
 
     // Check uniqueness
-    {
+    if let Some(ref database) = state.db {
+        if db::user_exists(database, &req.username) {
+            return Err(StatusCode::CONFLICT);
+        }
+    } else {
         let cfg = state.config.read().await;
         if cfg
             .management_api
@@ -257,31 +300,51 @@ pub async fn register(
         }
     }
 
-    // Hash password on a blocking thread
+    // Determine default role from settings
+    let default_role = if let Some(ref database) = state.db {
+        db::get_setting(database, "default_user_role")
+            .as_deref()
+            .map(db::parse_role)
+            .unwrap_or(UserRole::Client)
+    } else {
+        UserRole::Client
+    };
+
+    // Hash password
     let password = req.password.clone();
     let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Add user with Client role
+    let user_config = UserConfig {
+        username: req.username.clone(),
+        password_hash: hash.clone(),
+        role: default_role,
+        enabled: true,
+    };
+
+    if let Some(ref database) = state.db {
+        db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // Also keep TOML in sync
     {
         let mut cfg = state.config.write().await;
         cfg.management_api.users.push(UserConfig {
             username: req.username.clone(),
             password_hash: hash,
-            role: UserRole::Client,
+            role: default_role,
             enabled: true,
         });
     }
-
     state.persist_config().await;
 
     Ok((
         StatusCode::CREATED,
         Json(RegisterResponse {
             username: req.username,
-            role: "client".to_owned(),
+            role: default_role.to_string(),
             message: "User created. Please login to obtain a token.".to_owned(),
         }),
     ))
@@ -309,17 +372,27 @@ pub async fn list_users(
 ) -> Result<Json<Vec<UserPublic>>, StatusCode> {
     require_admin(&user)?;
 
-    let cfg = state.config.read().await;
-    let users: Vec<UserPublic> = cfg
-        .management_api
-        .users
-        .iter()
-        .map(|u| UserPublic {
-            username: u.username.clone(),
-            role: u.role.to_string(),
-            enabled: Some(u.enabled),
-        })
-        .collect();
+    let users = if let Some(ref database) = state.db {
+        db::list_users(database)
+            .into_iter()
+            .map(|u| UserPublic {
+                username: u.username,
+                role: u.role.to_string(),
+                enabled: Some(u.enabled),
+            })
+            .collect()
+    } else {
+        let cfg = state.config.read().await;
+        cfg.management_api
+            .users
+            .iter()
+            .map(|u| UserPublic {
+                username: u.username.clone(),
+                role: u.role.to_string(),
+                enabled: Some(u.enabled),
+            })
+            .collect()
+    };
     Ok(Json(users))
 }
 
@@ -339,7 +412,11 @@ pub async fn create_user(
     }
 
     // Check uniqueness
-    {
+    if let Some(ref database) = state.db {
+        if db::user_exists(database, &req.username) {
+            return Err(StatusCode::CONFLICT);
+        }
+    } else {
         let cfg = state.config.read().await;
         if cfg
             .management_api
@@ -360,6 +437,17 @@ pub async fn create_user(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let user_config = UserConfig {
+        username: req.username.clone(),
+        password_hash: hash.clone(),
+        role,
+        enabled: true,
+    };
+
+    if let Some(ref database) = state.db {
+        db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
     {
         let mut cfg = state.config.write().await;
         cfg.management_api.users.push(UserConfig {
@@ -369,7 +457,6 @@ pub async fn create_user(
             enabled: true,
         });
     }
-
     state.persist_config().await;
 
     Ok((
@@ -394,6 +481,13 @@ pub async fn update_user(
 ) -> Result<Json<UserPublic>, StatusCode> {
     require_admin(&user)?;
 
+    if let Some(ref database) = state.db {
+        if !db::update_user_role_enabled(database, &username, req.role, req.enabled) {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    // Sync to TOML
     let mut cfg = state.config.write().await;
     let target = cfg
         .management_api
@@ -437,13 +531,19 @@ pub async fn delete_user(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    if let Some(ref database) = state.db {
+        if !db::delete_user(database, &username) {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
     let mut cfg = state.config.write().await;
     let before = cfg.management_api.users.len();
     cfg.management_api.users.retain(|u| u.username != username);
     let removed = cfg.management_api.users.len() < before;
     drop(cfg);
 
-    if !removed {
+    if !removed && state.db.is_none() {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -466,15 +566,9 @@ pub async fn change_password(
     }
 
     // Verify current password
-    let current_hash = {
-        let cfg = state.config.read().await;
-        cfg.management_api
-            .users
-            .iter()
-            .find(|u| u.username == user.username && u.enabled)
-            .map(|u| u.password_hash.clone())
-            .ok_or(StatusCode::NOT_FOUND)?
-    };
+    let current_hash = resolve_user(&state, &user.username)
+        .map(|u| u.password_hash)
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let current_password = req.current_password.clone();
     let valid =
@@ -493,18 +587,22 @@ pub async fn change_password(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Update password
+    if let Some(ref database) = state.db {
+        db::update_user_password(database, &user.username, &new_hash);
+    }
+
+    // Sync to TOML
     {
         let mut cfg = state.config.write().await;
-        let target = cfg
+        if let Some(target) = cfg
             .management_api
             .users
             .iter_mut()
             .find(|u| u.username == user.username)
-            .ok_or(StatusCode::NOT_FOUND)?;
-        target.password_hash = new_hash;
+        {
+            target.password_hash = new_hash;
+        }
     }
-
     state.persist_config().await;
 
     Ok(StatusCode::NO_CONTENT)
@@ -520,4 +618,15 @@ pub fn require_admin(user: &UserInfo) -> Result<(), StatusCode> {
         return Err(StatusCode::FORBIDDEN);
     }
     Ok(())
+}
+
+/// Resolve a user from SQLite first, falling back to in-memory config.
+fn resolve_user(state: &MgmtState, username: &str) -> Option<UserConfig> {
+    if let Some(ref database) = state.db {
+        if let Some(u) = db::get_user(database, username) {
+            return Some(u);
+        }
+    }
+    // Fallback: read from config (blocking-safe because we return a sync fn)
+    None
 }

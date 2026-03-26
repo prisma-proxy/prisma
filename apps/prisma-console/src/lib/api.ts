@@ -290,4 +290,55 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  // Console settings
+  getSettings: () =>
+    apiFetch<import("./types").ConsoleSettings>("/api/settings"),
+  updateSettings: (data: Record<string, string>) =>
+    apiFetch<void>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ settings: data }),
+    }),
+
+  // Redemption codes
+  getCodes: () =>
+    apiFetch<import("./types").RedemptionCode[]>("/api/codes"),
+  createCode: (data: import("./types").CreateCodeRequest) =>
+    apiFetch<import("./types").CreateCodeResponse>("/api/codes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteCode: (id: number) =>
+    apiFetch<void>(`/api/codes/${id}`, { method: "DELETE" }),
+
+  // Redeem
+  redeemCode: (code: string) =>
+    apiFetch<import("./types").RedeemResponse>("/api/redeem", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  // Subscription status
+  getSubscription: () =>
+    apiFetch<import("./types").SubscriptionInfo[]>("/api/subscription"),
+
+  // Invites
+  getInvites: () =>
+    apiFetch<import("./types").InviteInfo[]>("/api/invites"),
+  createInvite: (data: import("./types").CreateInviteRequest) =>
+    apiFetch<import("./types").CreateInviteResponse>("/api/invites", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteInvite: (id: number) =>
+    apiFetch<void>(`/api/invites/${id}`, { method: "DELETE" }),
+
+  // Invite (public)
+  getInviteInfo: (token: string) =>
+    apiFetch<import("./types").InviteInfoPublic>(`/api/invite/${token}/info`),
+  redeemInvite: (token: string, data: { username: string; password: string }) =>
+    apiFetch<import("./types").InviteRedeemResponse>(`/api/invite/${token}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

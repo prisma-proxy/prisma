@@ -186,6 +186,9 @@ webpki-roots = "0.26"
 hex = "0.4"
 kem = "0.3.0-pre.0"
 
+# SQLite
+rusqlite = { version = "0.31", features = ["bundled"] }
+
 [profile.release]
 strip = true
 lto = "thin"

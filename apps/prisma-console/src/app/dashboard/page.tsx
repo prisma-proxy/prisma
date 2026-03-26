@@ -33,6 +33,10 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { SkeletonMetrics, SkeletonChart, SkeletonTable } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
 import { useDashboardStore } from "@/lib/dashboard-store";
+import { useRole } from "@/components/auth/role-guard";
+import { api } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import type { SubscriptionInfo } from "@/lib/types";
 
 /** Widget wrapper that adds edit-mode controls */
 function WidgetWrapper({
@@ -96,8 +100,102 @@ function WidgetWrapper({
   );
 }
 
+/** Client-role dashboard: shows only owned clients + subscription status */
+function ClientDashboard() {
+  const { t } = useI18n();
+  const { data: clients } = useClients();
+  const { data: subscriptions } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: api.getSubscription,
+  });
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-lg font-semibold">{t("dashboard.overview")}</h1>
+
+      {/* My Clients */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">My Clients</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!clients?.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No clients yet. Redeem a code to get started.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {clients.map((c) => (
+                <div key={c.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <div>
+                    <span className="font-medium">{c.name || "Unnamed"}</span>
+                    <code className="ml-2 text-xs text-muted-foreground">{c.id.slice(0, 8)}...</code>
+                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${c.enabled ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-red-500/10 text-red-700 dark:text-red-400"}`}>
+                    {c.enabled ? "Active" : "Disabled"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Subscription Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Subscription Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!subscriptions?.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No active subscriptions.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-4 font-medium">Code</th>
+                    <th className="py-2 pr-4 font-medium">Client</th>
+                    <th className="py-2 pr-4 font-medium">Quota</th>
+                    <th className="py-2 font-medium">Redeemed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptions.map((sub: SubscriptionInfo, i: number) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-2 pr-4"><code className="text-xs">{sub.code}</code></td>
+                      <td className="py-2 pr-4 text-xs font-mono">{sub.client_id.slice(0, 8)}...</td>
+                      <td className="py-2 pr-4 text-xs">{sub.quota || "Unlimited"}</td>
+                      <td className="py-2 text-xs">{new Date(sub.redeemed_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      <div className="flex gap-2 flex-wrap">
+        <Link href="/dashboard/redeem/">
+          <Button variant="outline" size="sm">
+            Redeem Code
+          </Button>
+        </Link>
+        <Link href="/dashboard/clients/">
+          <Button variant="outline" size="sm">
+            My Clients
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function OverviewPage() {
   const { t } = useI18n();
+  const { role } = useRole();
   const { current, history, connected, loading } = useMetricsContext();
   const { data: connections, isLoading: connectionsLoading } = useConnections();
   const disconnect = useDisconnect();
@@ -119,6 +217,11 @@ export default function OverviewPage() {
   }, []);
 
   const showWizard = !wizardDismissed && clients !== undefined && clients.length === 0;
+
+  // Client-role users get a simplified dashboard
+  if (role === "client") {
+    return <ClientDashboard />;
+  }
 
   /** Build a map of widget ID -> JSX for ordered rendering */
   const widgetMap = useMemo(() => {

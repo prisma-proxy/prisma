@@ -9,6 +9,7 @@ use prisma_core::config::server::UserRole;
 use prisma_core::state::ClientEntry;
 
 use crate::auth::UserInfo;
+use crate::db;
 use crate::MgmtState;
 
 #[derive(Serialize)]
@@ -43,6 +44,9 @@ pub struct UpdateClientRequest {
 pub async fn owned_client_ids(user: &UserInfo, state: &MgmtState) -> Option<Vec<String>> {
     if user.role != UserRole::Client {
         return None; // Admin/Operator see everything
+    }
+    if let Some(ref database) = state.db {
+        return Some(db::clients_by_owner(database, &user.username));
     }
     let cfg = state.config.read().await;
     Some(
@@ -81,9 +85,7 @@ pub async fn create(
     let id = Uuid::new_v4();
 
     // Generate random auth secret
-    let mut secret = [0u8; 32];
-    rand::Rng::fill(&mut rand::thread_rng(), &mut secret);
-    let hex = prisma_core::util::hex_encode(&secret);
+    let (secret, hex) = db::generate_client_secret();
 
     let entry = ClientEntry {
         auth_secret: secret,
@@ -93,6 +95,23 @@ pub async fn create(
     };
 
     state.auth_store.write().await.clients.insert(id, entry);
+
+    // Persist to SQLite
+    if let Some(ref database) = state.db {
+        let db_client = db::DbClient {
+            id: id.to_string(),
+            auth_secret: hex.clone(),
+            name: req.name.clone(),
+            enabled: true,
+            owner: None,
+            bandwidth_up: None,
+            bandwidth_down: None,
+            quota: None,
+            quota_period: None,
+            tags: req.tags.clone().unwrap_or_default(),
+        };
+        db::insert_client(database, &db_client).ok();
+    }
 
     // Persist to config file
     state.sync_clients_to_config().await;
@@ -114,14 +133,14 @@ pub async fn update(
         let mut store = state.auth_store.write().await;
         match store.clients.get_mut(&id) {
             Some(entry) => {
-                if let Some(name) = req.name {
-                    entry.name = Some(name);
+                if let Some(ref name) = req.name {
+                    entry.name = Some(name.clone());
                 }
                 if let Some(enabled) = req.enabled {
                     entry.enabled = enabled;
                 }
-                if let Some(tags) = req.tags {
-                    entry.tags = tags;
+                if let Some(ref tags) = req.tags {
+                    entry.tags = tags.clone();
                 }
                 true
             }
@@ -130,6 +149,17 @@ pub async fn update(
     };
 
     if result {
+        // Sync to SQLite
+        if let Some(ref database) = state.db {
+            db::update_client(
+                database,
+                &id.to_string(),
+                req.name.as_deref(),
+                req.enabled,
+                req.tags.as_deref(),
+            );
+        }
+
         state.sync_clients_to_config().await;
         state.persist_config().await;
         StatusCode::OK
@@ -145,6 +175,11 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
     };
 
     if removed {
+        // Remove from SQLite
+        if let Some(ref database) = state.db {
+            db::delete_client(database, &id.to_string());
+        }
+
         state.sync_clients_to_config().await;
         state.persist_config().await;
         StatusCode::OK
@@ -153,7 +188,7 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
     }
 }
 
-// ── GET /api/clients/{id}/secret ─────────────────────────────────────────
+// -- GET /api/clients/{id}/secret ─────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct ClientSecretResponse {
@@ -165,6 +200,16 @@ pub async fn get_secret(
     State(state): State<MgmtState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ClientSecretResponse>, StatusCode> {
+    // Try SQLite first
+    if let Some(ref database) = state.db {
+        if let Some(c) = db::get_client(database, &id.to_string()) {
+            return Ok(Json(ClientSecretResponse {
+                client_id: c.id,
+                auth_secret: c.auth_secret,
+            }));
+        }
+    }
+
     let cfg = state.config.read().await;
     let id_str = id.to_string();
 
@@ -180,7 +225,7 @@ pub async fn get_secret(
     }))
 }
 
-// ── POST /api/clients/share ──────────────────────────────────────────────
+// -- POST /api/clients/share ──────────────────────────────────────────────
 
 #[derive(Deserialize)]
 pub struct ShareClientRequest {
@@ -201,26 +246,36 @@ pub async fn share(
     let cfg = state.config.read().await;
     let id_str = req.client_id.to_string();
 
-    // Find the client's auth_secret from the server config
-    let client = cfg
-        .authorized_clients
-        .iter()
-        .find(|c| c.id == id_str)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    // Find the client's auth_secret — try SQLite first, then config
+    let (client_id, auth_secret) = if let Some(ref database) = state.db {
+        if let Some(c) = db::get_client(database, &id_str) {
+            (c.id, c.auth_secret)
+        } else {
+            let c = cfg
+                .authorized_clients
+                .iter()
+                .find(|c| c.id == id_str)
+                .ok_or(StatusCode::NOT_FOUND)?;
+            (c.id.clone(), c.auth_secret.clone())
+        }
+    } else {
+        let c = cfg
+            .authorized_clients
+            .iter()
+            .find(|c| c.id == id_str)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        (c.id.clone(), c.auth_secret.clone())
+    };
 
     // Determine transport from server config
     let transport = if cfg.cdn.enabled { "websocket" } else { "quic" };
-
-    // Determine the best server address for client config:
-    // prefer explicit public_address, fall back to listen_addr.
     let server_addr = cfg.public_address.as_deref().unwrap_or(&cfg.listen_addr);
 
-    // Build a minimal ClientConfig JSON for sharing
     let config_json = serde_json::json!({
         "server_addr": server_addr,
         "identity": {
-            "client_id": client.id,
-            "auth_secret": client.auth_secret,
+            "client_id": client_id,
+            "auth_secret": auth_secret,
         },
         "transport": transport,
     });
@@ -228,18 +283,15 @@ pub async fn share(
     let config_json_str =
         serde_json::to_string(&config_json).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Generate TOML: deserialize into ClientConfig then serialize to TOML
     let client_config: prisma_core::config::client::ClientConfig =
         serde_json::from_value(config_json.clone())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let toml_str =
         toml::to_string_pretty(&client_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Generate prisma:// URI (base64url-encoded JSON)
     let encoded = URL_SAFE_NO_PAD.encode(config_json_str.as_bytes());
     let uri = format!("prisma://{}", encoded);
 
-    // Generate QR SVG from the URI
     let qr_code =
         qrcode::QrCode::new(uri.as_bytes()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let qr_svg = qr_code

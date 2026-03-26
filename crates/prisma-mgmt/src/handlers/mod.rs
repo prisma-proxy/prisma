@@ -12,5 +12,7 @@ pub mod permissions;
 pub mod prometheus_export;
 pub mod reload;
 pub mod routes;
+pub mod settings;
+pub mod subscriptions;
 pub mod system;
 pub mod users;
