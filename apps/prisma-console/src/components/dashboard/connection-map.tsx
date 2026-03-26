@@ -13,17 +13,14 @@ import {
   COUNTRY_CENTROIDS,
 } from "@/lib/world-map-paths";
 
-const SERVER_COLOR = "hsl(142, 71%, 55%)";
+const SERVER_COLOR = "#4CAF50";
 const DEFAULT_SERVER_POS: [number, number] = [500, 200];
 
-// Map styling constants -- always light background for readability
-const OCEAN_BG = "hsl(210, 40%, 98%)";
-const LAND_FILL = "hsl(210, 20%, 88%)";
-const LAND_OPACITY = 0.3;
-const BORDER_COLOR = "hsl(210, 15%, 75%)";
-const BORDER_OPACITY = 0.4;
-const CITY_DOT_COLOR = "hsl(217, 91%, 55%)";
-const GRID_COLOR = "hsl(210, 15%, 80%)";
+// AnyChart-style map constants — clean, professional, always light
+const OCEAN_BG = "#F7F7F7";
+const LAND_BASE = "#E2E2E2";
+const BORDER_COLOR = "#CCCCCC";
+const CITY_DOT_BORDER = "#3D8BC9";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -34,12 +31,13 @@ function geoToSvg(lon: number, lat: number): [number, number] {
   return [(lon + 180) * (1000 / 360), (90 - lat) * (500 / 180)];
 }
 
-/** Pick a choropleth fill color + opacity based on connection count */
+/** AnyChart-style choropleth fill by connection count */
 function countToFill(count: number): { fill: string; opacity: number } {
-  if (count <= 0) return { fill: LAND_FILL, opacity: LAND_OPACITY };
-  if (count <= 5) return { fill: "hsl(217, 91%, 75%)", opacity: 0.45 };
-  if (count <= 20) return { fill: "hsl(217, 91%, 60%)", opacity: 0.6 };
-  return { fill: "hsl(217, 91%, 45%)", opacity: 0.75 };
+  if (count <= 0) return { fill: LAND_BASE, opacity: 1 };
+  if (count <= 5) return { fill: "#C8DCEF", opacity: 1 };
+  if (count <= 20) return { fill: "#7DB5E0", opacity: 1 };
+  if (count <= 50) return { fill: "#3D8BC9", opacity: 1 };
+  return { fill: "#1A5A96", opacity: 1 };
 }
 
 export function ConnectionMap() {
@@ -285,53 +283,43 @@ export function ConnectionMap() {
             onMouseLeave={handleMouseUp}
           >
             <defs>
-              <radialGradient id="server-gradient">
-                <stop offset="0%" stopColor="hsl(142, 71%, 65%)" />
-                <stop offset="100%" stopColor={SERVER_COLOR} />
-              </radialGradient>
+              <filter id="marker-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.2" />
+              </filter>
             </defs>
 
             {/* Ocean background */}
             <rect x="0" y="0" width="1000" height="500" fill={OCEAN_BG} rx="8" />
 
-            {/* Subtle graticule grid */}
-            {[83, 139, 194, 250, 306, 361, 417].map((y) => (
-              <line
-                key={`h-${y}`}
-                x1="0" y1={y} x2="1000" y2={y}
-                stroke={GRID_COLOR}
-                strokeWidth="0.3" opacity="0.15"
-              />
-            ))}
-            {[139, 278, 417, 556, 694, 833].map((x) => (
-              <line
-                key={`v-${x}`}
-                x1={x} y1="0" x2={x} y2="500"
-                stroke={GRID_COLOR}
-                strokeWidth="0.3" opacity="0.15"
-              />
-            ))}
+            {/* AnyChart style: no grid lines — clean professional look */}
 
-            {/* Country shapes -- choropleth colored by connection count */}
+            {/* Country shapes — AnyChart choropleth */}
             {WORLD_COUNTRIES.map((country) => {
               const total = countryTotals[country.id] || 0;
               const { fill, opacity } = countToFill(total);
+              const isHovered = tooltip?.key === `country-${country.id}`;
               return (
                 <path
                   key={country.id}
                   d={country.path}
-                  fill={fill}
+                  fill={isHovered ? "#FFC107" : fill}
                   fillOpacity={opacity}
-                  stroke={BORDER_COLOR}
-                  strokeWidth={0.5}
-                  strokeOpacity={BORDER_OPACITY}
+                  stroke={isHovered ? "#999" : BORDER_COLOR}
+                  strokeWidth={isHovered ? 1 : 0.8}
                   strokeLinejoin="round"
-                  className="pointer-events-none"
+                  className="cursor-pointer transition-colors duration-150"
+                  onMouseEnter={() => {
+                    const centroid = COUNTRY_CENTROIDS[country.id];
+                    if (centroid && total > 0) {
+                      setTooltip({ key: `country-${country.id}`, x: centroid[0], y: centroid[1], label: `${country.name}: ${total} connections` });
+                    }
+                  }}
+                  onMouseLeave={() => setTooltip((t) => t?.key === `country-${country.id}` ? null : t)}
                 />
               );
             })}
 
-            {/* City dots -- Google Analytics style: solid blue with white ring */}
+            {/* City markers — AnyChart style: white fill + colored border ring */}
             {cityEntries.map((entry) => {
               const [cx, cy] = geoToSvg(entry.lon!, entry.lat!);
               const minR = 2.5;
@@ -357,11 +345,14 @@ export function ConnectionMap() {
                     opacity={isHovered ? 1 : 0.9}
                     className="transition-opacity duration-200"
                   />
-                  {/* Solid blue dot */}
+                  {/* AnyChart-style: white fill + colored border */}
                   <circle
                     cx={cx} cy={cy} r={r}
-                    fill={CITY_DOT_COLOR}
-                    opacity={isHovered ? 1 : 0.85}
+                    fill="white"
+                    stroke={CITY_DOT_BORDER}
+                    strokeWidth={1.5}
+                    opacity={isHovered ? 1 : 0.9}
+                    filter="url(#marker-shadow)"
                     className="transition-opacity duration-200"
                   />
                   {/* Hit area */}
@@ -373,20 +364,23 @@ export function ConnectionMap() {
               );
             })}
 
-            {/* Server marker -- green dot with white ring and label */}
+            {/* Server marker — AnyChart-style green diamond */}
             <g className="pointer-events-none">
-              {/* White ring */}
-              <circle cx={serverPos[0]} cy={serverPos[1]} r="6" fill="white" opacity="0.9" />
-              {/* Green dot */}
-              <circle cx={serverPos[0]} cy={serverPos[1]} r="4.5" fill="url(#server-gradient)" />
+              <rect
+                x={serverPos[0] - 5} y={serverPos[1] - 5}
+                width="10" height="10"
+                fill={SERVER_COLOR} stroke="white" strokeWidth="1.5"
+                transform={`rotate(45, ${serverPos[0]}, ${serverPos[1]})`}
+                filter="url(#marker-shadow)"
+              />
               <text
-                x={serverPos[0]} y={serverPos[1] - 10}
+                x={serverPos[0]} y={serverPos[1] - 12}
                 textAnchor="middle"
-                fill="hsl(210, 15%, 40%)"
+                fill="#666"
                 className="pointer-events-none select-none"
-                style={{ fontSize: "7px", fontWeight: 600, letterSpacing: "0.5px" }}
+                style={{ fontSize: "8px", fontWeight: 600, letterSpacing: "0.3px" }}
               >
-                SERVER
+                Server
               </text>
             </g>
 
