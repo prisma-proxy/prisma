@@ -69,27 +69,29 @@ impl<'de> serde::Deserialize<'de> for RuleCondition {
     where
         D: serde::Deserializer<'de>,
     {
-        let value = toml::Value::deserialize(deserializer)?;
+        // Use serde_json::Value which handles JSON, TOML, and #[serde(flatten)] correctly.
+        // The previous toml::Value broke deserialization when config came from JSON (GUI FFI).
+        let value = serde_json::Value::deserialize(deserializer)?;
 
-        let table = match &value {
-            toml::Value::Table(t) => t,
-            toml::Value::String(s) => {
-                return match s.as_str() {
-                    "all" | "All" => Ok(RuleCondition::All),
-                    _ => Ok(RuleCondition::Unknown),
-                };
-            }
-            _ => return Ok(RuleCondition::Unknown),
+        if let Some(s) = value.as_str() {
+            return match s {
+                "all" | "All" => Ok(RuleCondition::All),
+                _ => Ok(RuleCondition::Unknown),
+            };
+        }
+
+        let obj = match value.as_object() {
+            Some(o) => o,
+            None => return Ok(RuleCondition::Unknown),
         };
 
-        let type_str = match table.get("type").and_then(|v| v.as_str()) {
+        let type_str = match obj.get("type").and_then(|v| v.as_str()) {
             Some(s) => s,
             None => return Ok(RuleCondition::Unknown),
         };
 
         let val_str = || {
-            table
-                .get("value")
+            obj.get("value")
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string()
