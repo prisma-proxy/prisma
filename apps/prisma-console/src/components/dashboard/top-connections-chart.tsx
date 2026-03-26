@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { exportToCsv } from "@/lib/utils";
-import { CHART_THEME, LINE_PALETTE, useChartColors } from "@/lib/chart-theme";
+import { LINE_PALETTE, useChartColors } from "@/lib/chart-theme";
 import { useConnections } from "@/hooks/use-connections";
 
 const MAX_SNAPSHOTS = 60; // 5 minutes at 5s intervals
