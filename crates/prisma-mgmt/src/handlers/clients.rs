@@ -246,18 +246,14 @@ pub async fn share(
     let cfg = state.config.read().await;
     let id_str = req.client_id.to_string();
 
-    // Find the client's auth_secret — try SQLite first, then config
-    let (client_id, auth_secret) = if let Some(ref database) = state.db {
-        if let Some(c) = db::get_client(database, &id_str) {
-            (c.id, c.auth_secret)
-        } else {
-            let c = cfg
-                .authorized_clients
-                .iter()
-                .find(|c| c.id == id_str)
-                .ok_or(StatusCode::NOT_FOUND)?;
-            (c.id.clone(), c.auth_secret.clone())
-        }
+    // Find the client's auth_secret — try SQLite first, then fall back to config
+    let db_client = state
+        .db
+        .as_ref()
+        .and_then(|database| db::get_client(database, &id_str));
+
+    let (client_id, auth_secret) = if let Some(c) = db_client {
+        (c.id, c.auth_secret)
     } else {
         let c = cfg
             .authorized_clients

@@ -40,6 +40,21 @@ fn backup_dir(state: &MgmtState) -> Result<PathBuf, StatusCode> {
     Ok(dir)
 }
 
+/// Dump the SQLite database as a companion .sql file alongside a TOML backup.
+fn dump_sql_companion(
+    state: &MgmtState,
+    dir: &std::path::Path,
+    prefix: &str,
+    timestamp: &impl std::fmt::Display,
+) -> Result<(), StatusCode> {
+    if let Some(ref database) = state.db {
+        let sql = db::dump_sql(database);
+        let sql_path = dir.join(format!("{}_{}.sql", prefix, timestamp));
+        fs::write(sql_path, sql).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    Ok(())
+}
+
 fn validated_backup_path(dir: &std::path::Path, name: &str) -> Result<PathBuf, StatusCode> {
     let name = std::path::Path::new(name)
         .file_name()
@@ -67,13 +82,7 @@ pub async fn auto_backup(state: &MgmtState) -> Result<(), StatusCode> {
     let backup_name = format!("auto_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
     fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Also dump SQLite data alongside the TOML backup
-    if let Some(ref database) = state.db {
-        let sql = db::dump_sql(database);
-        let sql_path = dir.join(format!("auto_{}.sql", timestamp));
-        fs::write(sql_path, sql).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    dump_sql_companion(state, &dir, "auto", &timestamp)?;
 
     // Keep only last 50 auto-backups (TOML files)
     let mut entries: Vec<_> = fs::read_dir(&dir)
@@ -140,13 +149,7 @@ pub async fn create_backup(State(state): State<MgmtState>) -> Result<Json<Backup
     let backup_name = format!("manual_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
     fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Also dump SQLite data
-    if let Some(ref database) = state.db {
-        let sql = db::dump_sql(database);
-        let sql_path = dir.join(format!("manual_{}.sql", timestamp));
-        fs::write(sql_path, sql).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    dump_sql_companion(&state, &dir, "manual", &timestamp)?;
 
     let meta = fs::metadata(&dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

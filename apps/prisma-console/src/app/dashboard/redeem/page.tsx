@@ -36,13 +36,14 @@ export default function RedeemPage() {
       toast("Code redeemed successfully!", "success");
     },
     onError: (error: Error) => {
-      const msg = error.message.includes("Gone")
-        ? "Code expired or fully used"
-        : error.message.includes("Conflict")
-          ? "You have already redeemed the maximum clients for this code"
-          : error.message.includes("Not Found")
-            ? "Invalid code"
-            : "Redemption failed";
+      let msg = "Redemption failed";
+      if (error.message.includes("Gone")) {
+        msg = "Code expired or fully used";
+      } else if (error.message.includes("Conflict")) {
+        msg = "You have already redeemed the maximum clients for this code";
+      } else if (error.message.includes("Not Found")) {
+        msg = "Invalid code";
+      }
       toast(msg, "error");
     },
   });

@@ -361,11 +361,7 @@ pub async fn redeem_invite(
     }
 
     // Hash password
-    let password = req.password.clone();
-    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let hash = db::hash_password(req.password.clone()).await?;
 
     let role = db::parse_role(&inv.default_role);
 
@@ -436,8 +432,7 @@ pub async fn redeem_invite(
         let cfg = state.config.read().await;
         cfg.management_api.jwt_secret.clone()
     };
-    let expiry_hours = db::get_setting_i64(database, "session_expiry_hours");
-    let expiry_hours = if expiry_hours > 0 { expiry_hours } else { 24 };
+    let expiry_hours = db::session_expiry_hours(Some(database));
 
     let role_str = role.to_string();
     let (jwt, expires_at) =

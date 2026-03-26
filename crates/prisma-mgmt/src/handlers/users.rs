@@ -111,14 +111,7 @@ pub async fn login(
         cfg.management_api.jwt_secret.clone()
     };
 
-    // Session expiry from SQLite settings (if available), else default 24h
-    let expiry_hours = state
-        .db
-        .as_ref()
-        .map(|d| db::get_setting_i64(d, "session_expiry_hours"))
-        .unwrap_or(24);
-    let expiry_hours = if expiry_hours > 0 { expiry_hours } else { 24 };
-
+    let expiry_hours = db::session_expiry_hours(state.db.as_ref());
     let (token, expires_at) = issue_jwt(&req.username, &role_str, &jwt_secret, expiry_hours)?;
 
     Ok(Json(LoginResponse {
@@ -192,11 +185,7 @@ pub async fn setup_init(
     }
 
     // Hash password before acquiring any lock
-    let password = req.password.clone();
-    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let hash = db::hash_password(req.password.clone()).await?;
 
     // Check admin doesn't already exist
     if let Some(ref database) = state.db {
@@ -311,11 +300,7 @@ pub async fn register(
     };
 
     // Hash password
-    let password = req.password.clone();
-    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let hash = db::hash_password(req.password.clone()).await?;
 
     let user_config = UserConfig {
         username: req.username.clone(),
@@ -431,11 +416,7 @@ pub async fn create_user(
     let role = req.role.unwrap_or(UserRole::Client);
 
     // Hash password
-    let password = req.password.clone();
-    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let hash = db::hash_password(req.password.clone()).await?;
 
     let user_config = UserConfig {
         username: req.username.clone(),
@@ -582,10 +563,7 @@ pub async fn change_password(
     }
 
     // Hash new password
-    let new_hash = tokio::task::spawn_blocking(move || bcrypt::hash(req.new_password, 10))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let new_hash = db::hash_password(req.new_password).await?;
 
     if let Some(ref database) = state.db {
         db::update_user_password(database, &user.username, &new_hash);

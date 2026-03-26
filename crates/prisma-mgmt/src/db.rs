@@ -988,3 +988,23 @@ pub fn generate_client_secret() -> ([u8; 32], String) {
     let hex = prisma_core::util::hex_encode(&secret);
     (secret, hex)
 }
+
+/// Hash a password using bcrypt on a blocking thread.
+pub async fn hash_password(password: String) -> Result<String, axum::http::StatusCode> {
+    tokio::task::spawn_blocking(move || bcrypt::hash(password, 10))
+        .await
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Retrieve the configured session expiry in hours, falling back to 24.
+pub fn session_expiry_hours(db: Option<&Db>) -> i64 {
+    let hours = db
+        .map(|d| get_setting_i64(d, "session_expiry_hours"))
+        .unwrap_or(24);
+    if hours > 0 {
+        hours
+    } else {
+        24
+    }
+}
