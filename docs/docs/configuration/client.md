@@ -7,7 +7,7 @@ sidebar_position: 2
 The client is configured via a TOML file (default: `client.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.21.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.24.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields

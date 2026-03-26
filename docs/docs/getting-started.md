@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Getting Started
 
-This guide walks you through setting up Prisma v2.21.0 and running your first proxy session — from pre-built binaries or from source.
+This guide walks you through setting up Prisma v2.24.0 and running your first proxy session — from pre-built binaries or from source.
 
 ## Prerequisites
 
@@ -14,17 +14,17 @@ This guide walks you through setting up Prisma v2.21.0 and running your first pr
 
 ## Option A: Pre-Built Binaries (Recommended)
 
-Download the latest v2.21.0 release for your platform:
+Download the latest v2.24.0 release for your platform:
 
 ```bash
 # Linux x86_64
-curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.21.0/prisma-linux-amd64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.24.0/prisma-linux-amd64 -o prisma && chmod +x prisma
 
 # macOS (Apple Silicon)
-curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.21.0/prisma-darwin-arm64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.24.0/prisma-darwin-arm64 -o prisma && chmod +x prisma
 
 # macOS (Intel)
-curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.21.0/prisma-darwin-amd64 -o prisma && chmod +x prisma
+curl -fsSL https://github.com/prisma-proxy/prisma/releases/download/v2.24.0/prisma-darwin-amd64 -o prisma && chmod +x prisma
 ```
 
 Or use the one-line installer:
@@ -42,7 +42,7 @@ prisma version
 Expected output:
 
 ```
-Prisma v2.21.0
+Prisma v2.24.0
 Protocol: PrismaVeil v5
 Ciphers:  ChaCha20-Poly1305, AES-256-GCM, Transport-Only
 Transports: QUIC, TCP, WebSocket, gRPC, XHTTP, XPorta, SSH, WireGuard
