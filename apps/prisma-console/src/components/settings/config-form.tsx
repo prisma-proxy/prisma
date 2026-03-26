@@ -43,6 +43,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
   const [portRangeStart, setPortRangeStart] = useState(config.port_forwarding.port_range_start);
   const [portRangeEnd, setPortRangeEnd] = useState(config.port_forwarding.port_range_end);
   const [managementApiEnabled, setManagementApiEnabled] = useState(config.management_api?.enabled ?? true);
+  const [publicAddress, setPublicAddress] = useState(config.public_address ?? "");
 
   const listenAddrValidation = useValidation(listenAddr, ["address"]);
   const quicListenAddrValidation = useValidation(quicListenAddr, ["address"]);
@@ -69,6 +70,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
       port_forwarding_port_range_start: portRangeStart,
       port_forwarding_port_range_end: portRangeEnd,
       management_api_enabled: managementApiEnabled,
+      public_address: publicAddress || undefined,
     });
   }
 
@@ -96,6 +98,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
           {listenAddrValidation.error && (
             <p className="text-xs text-destructive mt-1">{listenAddrValidation.error}</p>
           )}
+          <p className="text-xs text-muted-foreground">{t("settings.listenAddrDesc")}</p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="quic-listen-addr">{t("settings.quicListenAddr")}</Label>
@@ -108,6 +111,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
           {quicListenAddrValidation.error && (
             <p className="text-xs text-destructive mt-1">{quicListenAddrValidation.error}</p>
           )}
+          <p className="text-xs text-muted-foreground">{t("settings.quicListenAddrDesc")}</p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="dns-upstream">{t("settings.dnsUpstream")}</Label>
@@ -117,6 +121,17 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
             onChange={(e) => setDnsUpstream(e.target.value)}
             placeholder="8.8.8.8:53"
           />
+          <p className="text-xs text-muted-foreground">{t("settings.dnsUpstreamDesc")}</p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="public-address">{t("settings.publicAddress")}</Label>
+          <Input
+            id="public-address"
+            value={publicAddress}
+            onChange={(e) => setPublicAddress(e.target.value)}
+            placeholder="example.com:443"
+          />
+          <p className="text-xs text-muted-foreground">{t("settings.publicAddressDesc")}</p>
         </div>
       </div>
 
@@ -139,6 +154,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">{t("settings.loggingLevelDesc")}</p>
         </div>
         <div className="grid gap-1.5">
           <Label>{t("settings.loggingFormat")}</Label>
@@ -154,6 +170,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">{t("settings.loggingFormatDesc")}</p>
         </div>
       </div>
 
@@ -170,7 +187,10 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
             value={maxConnections}
             onChange={(e) => setMaxConnections(parseInt(e.target.value, 10) || 0)}
             min={0}
+            step={1}
+            placeholder="10000"
           />
+          <p className="text-xs text-muted-foreground">{t("settings.maxConnectionsDesc")}</p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="connection-timeout">
@@ -183,7 +203,10 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
             value={connectionTimeout}
             onChange={(e) => setConnectionTimeout(parseInt(e.target.value, 10) || 30)}
             min={1}
+            step={1}
+            placeholder="30"
           />
+          <p className="text-xs text-muted-foreground">{t("settings.connectionTimeoutDesc")}</p>
         </div>
       </div>
 
@@ -193,7 +216,10 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
           {t("settings.portForwarding")}
         </h3>
         <div className="flex items-center justify-between">
-          <Label htmlFor="port-forwarding">{t("settings.portForwarding")}</Label>
+          <div>
+            <Label htmlFor="port-forwarding">{t("settings.portForwarding")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("settings.portForwardingDesc")}</p>
+          </div>
           <Switch
             id="port-forwarding"
             checked={portForwardingEnabled}
@@ -211,6 +237,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
                 onChange={(e) => setPortRangeStart(parseInt(e.target.value, 10) || 0)}
                 min={1}
                 max={65535}
+                step={1}
               />
               {portRangeStartValidation.error && (
                 <p className="text-xs text-destructive mt-1">{portRangeStartValidation.error}</p>
@@ -225,6 +252,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
                 onChange={(e) => setPortRangeEnd(parseInt(e.target.value, 10) || 0)}
                 min={1}
                 max={65535}
+                step={1}
               />
               {portRangeEndValidation.error && (
                 <p className="text-xs text-destructive mt-1">{portRangeEndValidation.error}</p>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
   const [fallbackAddr, setFallbackAddr] = useState(config.camouflage.fallback_addr ?? "");
   const [alpnProtocols, setAlpnProtocols] = useState(config.camouflage.alpn_protocols?.join(", ") ?? "h2, http/1.1");
   const [salamanderPassword, setSalamanderPassword] = useState(config.camouflage.salamander_password ?? "");
+  const [showSalamanderPassword, setShowSalamanderPassword] = useState(false);
   const [h3CoverSite, setH3CoverSite] = useState(config.camouflage.h3_cover_site ?? "");
   const [h3StaticDir, setH3StaticDir] = useState(config.camouflage.h3_static_dir ?? "");
 
@@ -57,6 +59,9 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
   const [xportaSessionTimeout, setXportaSessionTimeout] = useState(Number(xportaConfig?.session_timeout_secs ?? 300));
   const [xportaMaxSessions, setXportaMaxSessions] = useState(Number(xportaConfig?.max_sessions_per_client ?? 8));
   const [xportaCookieName, setXportaCookieName] = useState(String(xportaConfig?.cookie_name ?? "_sess"));
+
+  // CDN Advanced collapsible
+  const [cdnAdvancedOpen, setCdnAdvancedOpen] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,32 +111,60 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
-            <Label>{t("settings.status")}</Label>
+            <div>
+              <Label>{t("settings.status")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.camouflageEnabledDesc")}</p>
+            </div>
             <Switch checked={camouflageEnabled} onCheckedChange={(v: boolean) => setCamouflageEnabled(v)} />
           </div>
           <div className="flex items-center justify-between">
-            <Label>{t("settings.tlsOnTcp")}</Label>
+            <div>
+              <Label>{t("settings.tlsOnTcp")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.tlsOnTcpDesc")}</p>
+            </div>
             <Switch checked={tlsOnTcp} onCheckedChange={(v: boolean) => setTlsOnTcp(v)} />
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.fallbackAddr")}</Label>
             <Input value={fallbackAddr} onChange={(e) => setFallbackAddr(e.target.value)} placeholder="127.0.0.1:8080" />
+            <p className="text-xs text-muted-foreground">{t("settings.fallbackAddrDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.alpnProtocols")}</Label>
             <Input value={alpnProtocols} onChange={(e) => setAlpnProtocols(e.target.value)} placeholder="h2, http/1.1" className="font-mono text-xs" />
+            <p className="text-xs text-muted-foreground">{t("settings.alpnProtocolsDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.camouflageSalamander")}</Label>
-            <Input value={salamanderPassword} onChange={(e) => setSalamanderPassword(e.target.value)} placeholder={t("settings.notConfigured")} type="password" className="font-mono text-xs" />
+            <div className="relative">
+              <Input
+                value={salamanderPassword}
+                onChange={(e) => setSalamanderPassword(e.target.value)}
+                placeholder={t("settings.notConfigured")}
+                type={showSalamanderPassword ? "text" : "password"}
+                className="font-mono text-xs pr-9"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setShowSalamanderPassword(!showSalamanderPassword)}
+              >
+                {showSalamanderPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("settings.salamanderDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.camouflageH3")}</Label>
             <Input value={h3CoverSite} onChange={(e) => setH3CoverSite(e.target.value)} placeholder="https://example.com" />
+            <p className="text-xs text-muted-foreground">{t("settings.h3CoverSiteDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.h3StaticDir")}</Label>
             <Input value={h3StaticDir} onChange={(e) => setH3StaticDir(e.target.value)} placeholder="/var/www/html" />
+            <p className="text-xs text-muted-foreground">{t("settings.h3StaticDirDesc")}</p>
           </div>
         </CardContent>
       </Card>
@@ -143,52 +176,82 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
-            <Label>{t("settings.cdnEnabled")}</Label>
+            <div>
+              <Label>{t("settings.cdnEnabled")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.cdnEnabledDesc")}</p>
+            </div>
             <Switch checked={cdnEnabled} onCheckedChange={(v: boolean) => setCdnEnabled(v)} />
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.cdnListenAddr")}</Label>
-            <Input value={cdnListenAddr} onChange={(e) => setCdnListenAddr(e.target.value)} />
+            <Input value={cdnListenAddr} onChange={(e) => setCdnListenAddr(e.target.value)} placeholder="0.0.0.0:8080" />
+            <p className="text-xs text-muted-foreground">{t("settings.cdnListenAddrDesc")}</p>
           </div>
           <div className="flex items-center justify-between">
-            <Label>{t("settings.exposeManagementApi")}</Label>
+            <div>
+              <Label>{t("settings.exposeManagementApi")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.exposeManagementApiDesc")}</p>
+            </div>
             <Switch checked={cdnExposeManagementApi} onCheckedChange={(v: boolean) => setCdnExposeManagementApi(v)} />
           </div>
           <div className="flex items-center justify-between">
-            <Label>{t("settings.paddingHeader")}</Label>
+            <div>
+              <Label>{t("settings.paddingHeader")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.paddingHeaderDesc")}</p>
+            </div>
             <Switch checked={cdnPaddingHeader} onCheckedChange={(v: boolean) => setCdnPaddingHeader(v)} />
           </div>
           <div className="flex items-center justify-between">
-            <Label>{t("settings.sseDisguise")}</Label>
+            <div>
+              <Label>{t("settings.sseDisguise")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.sseDisguiseDesc")}</p>
+            </div>
             <Switch checked={cdnEnableSseDisguise} onCheckedChange={(v: boolean) => setCdnEnableSseDisguise(v)} />
           </div>
 
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-2">{t("settings.cdnPaths")}</h4>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">{t("settings.cdnWsPath")}</Label>
-            <Input value={cdnWsPath} onChange={(e) => setCdnWsPath(e.target.value)} className="font-mono text-xs" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">{t("settings.cdnGrpcPath")}</Label>
-            <Input value={cdnGrpcPath} onChange={(e) => setCdnGrpcPath(e.target.value)} className="font-mono text-xs" />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="grid gap-1.5">
-              <Label className="text-xs">{t("settings.cdnXhttpUpload")}</Label>
-              <Input value={cdnXhttpUpload} onChange={(e) => setCdnXhttpUpload(e.target.value)} className="font-mono text-xs" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs">{t("settings.cdnXhttpDownload")}</Label>
-              <Input value={cdnXhttpDownload} onChange={(e) => setCdnXhttpDownload(e.target.value)} className="font-mono text-xs" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs">{t("settings.cdnXhttpStream")}</Label>
-              <Input value={cdnXhttpStream} onChange={(e) => setCdnXhttpStream(e.target.value)} className="font-mono text-xs" />
-            </div>
-          </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">{t("settings.cdnCoverSite")}</Label>
-            <Input value={cdnCoverUpstream} onChange={(e) => setCdnCoverUpstream(e.target.value)} placeholder="https://example.com" className="font-mono text-xs" />
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              onClick={() => setCdnAdvancedOpen(!cdnAdvancedOpen)}
+            >
+              {cdnAdvancedOpen ? "-" : "+"} {t("settings.cdnPaths")}
+            </Button>
+            {cdnAdvancedOpen && (
+              <div className="space-y-3 pt-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">{t("settings.cdnWsPath")}</Label>
+                  <Input value={cdnWsPath} onChange={(e) => setCdnWsPath(e.target.value)} className="font-mono text-xs" placeholder="/ws" />
+                  <p className="text-xs text-muted-foreground">{t("settings.cdnWsPathDesc")}</p>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">{t("settings.cdnGrpcPath")}</Label>
+                  <Input value={cdnGrpcPath} onChange={(e) => setCdnGrpcPath(e.target.value)} className="font-mono text-xs" placeholder="/grpc" />
+                  <p className="text-xs text-muted-foreground">{t("settings.cdnGrpcPathDesc")}</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">{t("settings.cdnXhttpUpload")}</Label>
+                    <Input value={cdnXhttpUpload} onChange={(e) => setCdnXhttpUpload(e.target.value)} className="font-mono text-xs" placeholder="/upload" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">{t("settings.cdnXhttpDownload")}</Label>
+                    <Input value={cdnXhttpDownload} onChange={(e) => setCdnXhttpDownload(e.target.value)} className="font-mono text-xs" placeholder="/download" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">{t("settings.cdnXhttpStream")}</Label>
+                    <Input value={cdnXhttpStream} onChange={(e) => setCdnXhttpStream(e.target.value)} className="font-mono text-xs" placeholder="/stream" />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">{t("settings.cdnCoverSite")}</Label>
+                  <Input value={cdnCoverUpstream} onChange={(e) => setCdnCoverUpstream(e.target.value)} placeholder="https://example.com" className="font-mono text-xs" />
+                  <p className="text-xs text-muted-foreground">{t("settings.cdnCoverSiteDesc")}</p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -200,14 +263,17 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
-            <Label>{t("settings.status")}</Label>
+            <div>
+              <Label>{t("settings.status")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.xportaEnabledDesc")}</p>
+            </div>
             <Switch checked={xportaEnabled} onCheckedChange={(v: boolean) => setXportaEnabled(v)} />
           </div>
           {xportaEnabled && (
             <div className="space-y-3 p-3 rounded-lg bg-muted/30 border">
               <div className="grid gap-1.5">
                 <Label className="text-xs">{t("settings.xportaSessionPath")}</Label>
-                <Input value={xportaSessionPath} onChange={(e) => setXportaSessionPath(e.target.value)} className="font-mono text-xs" />
+                <Input value={xportaSessionPath} onChange={(e) => setXportaSessionPath(e.target.value)} className="font-mono text-xs" placeholder="/api/auth" />
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">{t("settings.xportaEncoding")}</Label>
@@ -224,16 +290,18 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">{t("settings.xportaSessionTimeout")}</Label>
-                  <Input type="number" min={1} value={xportaSessionTimeout} onChange={(e) => setXportaSessionTimeout(parseInt(e.target.value, 10) || 300)} />
+                  <Input type="number" min={1} value={xportaSessionTimeout} onChange={(e) => setXportaSessionTimeout(parseInt(e.target.value, 10) || 300)} placeholder="300" />
+                  <p className="text-xs text-muted-foreground">{t("settings.xportaSessionTimeoutDesc")}</p>
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">{t("settings.xportaMaxSessions")}</Label>
-                  <Input type="number" min={1} value={xportaMaxSessions} onChange={(e) => setXportaMaxSessions(parseInt(e.target.value, 10) || 8)} />
+                  <Input type="number" min={1} value={xportaMaxSessions} onChange={(e) => setXportaMaxSessions(parseInt(e.target.value, 10) || 8)} placeholder="8" />
+                  <p className="text-xs text-muted-foreground">{t("settings.xportaMaxSessionsDesc")}</p>
                 </div>
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">{t("settings.xportaCookieName")}</Label>
-                <Input value={xportaCookieName} onChange={(e) => setXportaCookieName(e.target.value)} className="font-mono text-xs" />
+                <Input value={xportaCookieName} onChange={(e) => setXportaCookieName(e.target.value)} className="font-mono text-xs" placeholder="_sess" />
               </div>
             </div>
           )}

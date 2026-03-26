@@ -68,7 +68,6 @@ const PAGES: { label: string; href: string; i18nKey: string }[] = [
   { label: "Logs", href: "/dashboard/logs", i18nKey: "sidebar.logs" },
   { label: "Settings", href: "/dashboard/settings", i18nKey: "sidebar.settings" },
   { label: "System", href: "/dashboard/system", i18nKey: "sidebar.system" },
-  { label: "Traffic Shaping", href: "/dashboard/traffic-shaping", i18nKey: "sidebar.trafficShaping" },
   { label: "Config Backup", href: "/dashboard/backups", i18nKey: "sidebar.backups" },
   { label: "Speed Test", href: "/dashboard/speed-test", i18nKey: "sidebar.speedTest" },
   { label: "Bandwidth", href: "/dashboard/bandwidth", i18nKey: "sidebar.bandwidth" },

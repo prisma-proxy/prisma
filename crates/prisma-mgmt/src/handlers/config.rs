@@ -60,8 +60,34 @@ pub struct AntiRttInfo {
 #[derive(Serialize)]
 pub struct PrismaTlsInfo {
     pub enabled: bool,
-    pub mask_server_count: usize,
+    pub auth_secret: String,
+    pub mask_servers: Vec<MaskServerInfoEntry>,
     pub auth_rotation_hours: u64,
+}
+
+#[derive(Serialize)]
+pub struct MaskServerInfoEntry {
+    pub addr: String,
+    pub names: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct SshInfo {
+    pub enabled: bool,
+    pub listen_addr: String,
+}
+
+#[derive(Serialize)]
+pub struct WireGuardInfo {
+    pub enabled: bool,
+    pub listen_addr: String,
+}
+
+#[derive(Serialize)]
+pub struct FallbackInfo {
+    pub enabled: bool,
+    pub max_consecutive_failures: u32,
+    pub health_check_interval: u64,
 }
 
 #[derive(Serialize)]
@@ -111,6 +137,14 @@ pub struct ConfigResponse {
     pub management_api: ManagementApiInfo,
     pub routing_rules_count: usize,
     pub auto_backup_interval_mins: u32,
+    // Advanced sections
+    pub ssh: SshInfo,
+    pub wireguard: WireGuardInfo,
+    pub fallback: FallbackInfo,
+    pub config_watch: bool,
+    pub shutdown_drain_timeout_secs: u64,
+    pub ticket_rotation_hours: u64,
+    pub public_address: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -190,7 +224,16 @@ pub async fn get_config(State(state): State<MgmtState>) -> Json<ConfigResponse> 
         },
         prisma_tls: PrismaTlsInfo {
             enabled: cfg.prisma_tls.enabled,
-            mask_server_count: cfg.prisma_tls.mask_servers.len(),
+            auth_secret: cfg.prisma_tls.auth_secret.clone(),
+            mask_servers: cfg
+                .prisma_tls
+                .mask_servers
+                .iter()
+                .map(|m| MaskServerInfoEntry {
+                    addr: m.addr.clone(),
+                    names: m.names.clone(),
+                })
+                .collect(),
             auth_rotation_hours: cfg.prisma_tls.auth_rotation_hours,
         },
         padding: PaddingInfo {
@@ -212,6 +255,23 @@ pub async fn get_config(State(state): State<MgmtState>) -> Json<ConfigResponse> 
         },
         routing_rules_count: routing_count,
         auto_backup_interval_mins: cfg.management_api.auto_backup_interval_mins,
+        ssh: SshInfo {
+            enabled: cfg.ssh.enabled,
+            listen_addr: cfg.ssh.listen_addr.clone(),
+        },
+        wireguard: WireGuardInfo {
+            enabled: cfg.wireguard.enabled,
+            listen_addr: cfg.wireguard.listen_addr.clone(),
+        },
+        fallback: FallbackInfo {
+            enabled: cfg.fallback.enabled,
+            max_consecutive_failures: cfg.fallback.max_consecutive_failures,
+            health_check_interval: cfg.fallback.health_check_interval,
+        },
+        config_watch: cfg.config_watch,
+        shutdown_drain_timeout_secs: cfg.shutdown_drain_timeout_secs,
+        ticket_rotation_hours: cfg.ticket_rotation_hours,
+        public_address: cfg.public_address.clone(),
     })
 }
 
@@ -265,10 +325,33 @@ pub struct PatchConfigRequest {
     // PrismaTLS
     pub prisma_tls_enabled: Option<bool>,
     pub prisma_tls_auth_rotation_hours: Option<u64>,
+    pub prisma_tls_auth_secret: Option<String>,
+    pub prisma_tls_mask_servers: Option<Vec<PatchMaskServerEntry>>,
     // Management API
     pub management_api_enabled: Option<bool>,
     // Auto-backup interval
     pub auto_backup_interval_mins: Option<u32>,
+    // SSH
+    pub ssh_enabled: Option<bool>,
+    pub ssh_listen_addr: Option<String>,
+    // WireGuard
+    pub wireguard_enabled: Option<bool>,
+    pub wireguard_listen_addr: Option<String>,
+    // Fallback
+    pub fallback_enabled: Option<bool>,
+    pub fallback_max_consecutive_failures: Option<u32>,
+    pub fallback_health_check_interval: Option<u64>,
+    // Misc
+    pub config_watch: Option<bool>,
+    pub shutdown_drain_timeout_secs: Option<u64>,
+    pub ticket_rotation_hours: Option<u64>,
+    pub public_address: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PatchMaskServerEntry {
+    pub addr: String,
+    pub names: Vec<String>,
 }
 
 pub async fn patch_config(
@@ -421,6 +504,18 @@ pub async fn patch_config(
     if let Some(hours) = req.prisma_tls_auth_rotation_hours {
         cfg.prisma_tls.auth_rotation_hours = hours;
     }
+    if let Some(secret) = req.prisma_tls_auth_secret {
+        cfg.prisma_tls.auth_secret = secret;
+    }
+    if let Some(servers) = req.prisma_tls_mask_servers {
+        cfg.prisma_tls.mask_servers = servers
+            .into_iter()
+            .map(|s| prisma_core::config::server::MaskServerEntry {
+                addr: s.addr,
+                names: s.names,
+            })
+            .collect();
+    }
 
     // Management API
     if let Some(enabled) = req.management_api_enabled {
@@ -428,6 +523,47 @@ pub async fn patch_config(
     }
     if let Some(interval) = req.auto_backup_interval_mins {
         cfg.management_api.auto_backup_interval_mins = interval;
+    }
+
+    // SSH
+    if let Some(enabled) = req.ssh_enabled {
+        cfg.ssh.enabled = enabled;
+    }
+    if let Some(addr) = req.ssh_listen_addr {
+        cfg.ssh.listen_addr = addr;
+    }
+
+    // WireGuard
+    if let Some(enabled) = req.wireguard_enabled {
+        cfg.wireguard.enabled = enabled;
+    }
+    if let Some(addr) = req.wireguard_listen_addr {
+        cfg.wireguard.listen_addr = addr;
+    }
+
+    // Fallback
+    if let Some(enabled) = req.fallback_enabled {
+        cfg.fallback.enabled = enabled;
+    }
+    if let Some(max) = req.fallback_max_consecutive_failures {
+        cfg.fallback.max_consecutive_failures = max;
+    }
+    if let Some(interval) = req.fallback_health_check_interval {
+        cfg.fallback.health_check_interval = interval;
+    }
+
+    // Misc
+    if let Some(watch) = req.config_watch {
+        cfg.config_watch = watch;
+    }
+    if let Some(timeout) = req.shutdown_drain_timeout_secs {
+        cfg.shutdown_drain_timeout_secs = timeout;
+    }
+    if let Some(hours) = req.ticket_rotation_hours {
+        cfg.ticket_rotation_hours = hours;
+    }
+    if let Some(addr) = req.public_address {
+        cfg.public_address = if addr.is_empty() { None } else { Some(addr) };
     }
 
     drop(cfg); // Release write lock before disk I/O

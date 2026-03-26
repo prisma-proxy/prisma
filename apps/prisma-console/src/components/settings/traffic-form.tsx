@@ -113,6 +113,7 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">{t("settings.paddingModeDesc")}</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
@@ -123,7 +124,11 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={ePaddingMin}
                 onChange={(e) => setPaddingMin(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                max={65535}
+                step={1}
+                placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">{t("settings.paddingMinDesc")}</p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="padding-max">{t("settings.paddingMax")}</Label>
@@ -133,7 +138,11 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={ePaddingMax}
                 onChange={(e) => setPaddingMax(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                max={65535}
+                step={1}
+                placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">{t("settings.paddingMaxDesc")}</p>
             </div>
           </div>
           <div className="grid gap-1.5">
@@ -144,7 +153,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
               value={eTimingJitterMs}
               onChange={(e) => setTimingJitterMs(parseInt(e.target.value, 10) || 0)}
               min={0}
+              step={1}
+              placeholder="0"
             />
+            <p className="text-xs text-muted-foreground">{t("settings.jitterDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="chaff-ms">{t("settings.chaffInterval")}</Label>
@@ -154,6 +166,8 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
               value={eChaffIntervalMs}
               onChange={(e) => setChaffIntervalMs(parseInt(e.target.value, 10) || 0)}
               min={0}
+              step={1}
+              placeholder="0"
             />
             <p className="text-xs text-muted-foreground">{t("settings.chaffDisableHint")}</p>
           </div>
@@ -165,7 +179,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
               value={eCoalesceWindowMs}
               onChange={(e) => setCoalesceWindowMs(parseInt(e.target.value, 10) || 0)}
               min={0}
+              step={1}
+              placeholder="0"
             />
+            <p className="text-xs text-muted-foreground">{t("settings.coalescingWindowDesc")}</p>
           </div>
         </CardContent>
       </Card>
@@ -187,6 +204,7 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">{t("settings.congestionModeDesc")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="congestion-bandwidth">{t("settings.congestionBandwidth")}</Label>
@@ -196,6 +214,7 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
               onChange={(e) => setCongestionTargetBandwidth(e.target.value)}
               placeholder={t("trafficShaping.targetBandwidthPlaceholder")}
             />
+            <p className="text-xs text-muted-foreground">{t("settings.congestionBandwidthDesc")}</p>
           </div>
         </CardContent>
       </Card>
@@ -206,7 +225,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
-            <Label htmlFor="port-hopping-enabled">{t("settings.status")}</Label>
+            <div>
+              <Label htmlFor="port-hopping-enabled">{t("settings.status")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("settings.portHoppingDesc")}</p>
+            </div>
             <Switch
               id="port-hopping-enabled"
               checked={ePortHoppingEnabled}
@@ -221,7 +243,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 type="number"
                 value={ePortHoppingBasePort}
                 onChange={(e) => setPortHoppingBasePort(parseInt(e.target.value, 10) || 0)}
-                min={0}
+                min={1}
+                max={65535}
+                step={1}
+                placeholder="10000"
               />
             </div>
             <div className="grid gap-1.5">
@@ -232,6 +257,9 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={ePortHoppingRange}
                 onChange={(e) => setPortHoppingRange(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                max={65535}
+                step={1}
+                placeholder="100"
               />
             </div>
           </div>
@@ -244,6 +272,8 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={ePortHoppingIntervalSecs}
                 onChange={(e) => setPortHoppingIntervalSecs(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                step={1}
+                placeholder="30"
               />
             </div>
             <div className="grid gap-1.5">
@@ -254,6 +284,8 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={ePortHoppingGracePeriodSecs}
                 onChange={(e) => setPortHoppingGracePeriodSecs(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                step={1}
+                placeholder="5"
               />
             </div>
           </div>
@@ -267,7 +299,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div className="flex items-center justify-between">
-              <Label htmlFor="anti-rtt-enabled">{t("settings.status")}</Label>
+              <div>
+                <Label htmlFor="anti-rtt-enabled">{t("settings.status")}</Label>
+                <p className="text-xs text-muted-foreground mt-1">{t("settings.antiRttDesc")}</p>
+              </div>
               <Switch
                 id="anti-rtt-enabled"
                 checked={eAntiRttEnabled}
@@ -282,7 +317,10 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
                 value={eAntiRttNormalizationMs}
                 onChange={(e) => setAntiRttNormalizationMs(parseInt(e.target.value, 10) || 0)}
                 min={0}
+                step={1}
+                placeholder="100"
               />
+              <p className="text-xs text-muted-foreground">{t("settings.normalizationDesc")}</p>
             </div>
           </CardContent>
         </Card>

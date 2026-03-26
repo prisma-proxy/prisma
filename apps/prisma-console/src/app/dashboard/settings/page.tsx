@@ -10,6 +10,7 @@ import { ConfigForm } from "@/components/settings/config-form";
 import { CamouflageForm } from "@/components/settings/camouflage-form";
 import { TrafficForm } from "@/components/settings/traffic-form";
 import { SecurityForm } from "@/components/settings/security-form";
+import { AdvancedForm } from "@/components/settings/advanced-form";
 import { AlertsForm } from "@/components/settings/alerts-form";
 import { ConfigDiffDialog } from "@/components/settings/config-diff-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,10 +113,22 @@ export default function SettingsPage() {
         anti_rtt_normalization_ms: config.anti_rtt.normalization_ms,
         allow_transport_only_cipher: config.allow_transport_only_cipher,
         prisma_tls_enabled: config.prisma_tls.enabled,
-        prisma_tls_mask_server_count: config.prisma_tls.mask_server_count,
+        prisma_tls_auth_secret: config.prisma_tls.auth_secret,
+        prisma_tls_mask_servers: config.prisma_tls.mask_servers,
         prisma_tls_auth_rotation_hours: config.prisma_tls.auth_rotation_hours,
         padding_min: config.padding.min,
         padding_max: config.padding.max,
+        ssh_enabled: config.ssh?.enabled,
+        ssh_listen_addr: config.ssh?.listen_addr,
+        wireguard_enabled: config.wireguard?.enabled,
+        wireguard_listen_addr: config.wireguard?.listen_addr,
+        fallback_enabled: config.fallback?.enabled,
+        fallback_max_consecutive_failures: config.fallback?.max_consecutive_failures,
+        fallback_health_check_interval: config.fallback?.health_check_interval,
+        config_watch: config.config_watch,
+        shutdown_drain_timeout_secs: config.shutdown_drain_timeout_secs,
+        ticket_rotation_hours: config.ticket_rotation_hours,
+        public_address: config.public_address,
       };
       // Only keep keys that appear in the update
       const result: Record<string, unknown> = {};
@@ -257,6 +270,7 @@ export default function SettingsPage() {
           <TabsTrigger value="camouflage">{t("settings.camouflage")}</TabsTrigger>
           <TabsTrigger value="traffic">{t("settings.traffic")}</TabsTrigger>
           <TabsTrigger value="security">{t("settings.security")}</TabsTrigger>
+          <TabsTrigger value="advanced">{t("settings.advanced")}</TabsTrigger>
           <TabsTrigger value="alerts">{t("settings.alerts")}</TabsTrigger>
           <TabsTrigger value="console">{t("settings.console") || "Console"}</TabsTrigger>
           <TabsTrigger value="history">{t("settings.history")}</TabsTrigger>
@@ -308,6 +322,17 @@ export default function SettingsPage() {
               key={`security-${config.allow_transport_only_cipher}-${config.prisma_tls.enabled}`}
               config={config}
               tls={tls}
+              onSave={handleSaveWithDiff}
+              isLoading={patchConfig.isPending}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="advanced">
+          {config && (
+            <AdvancedForm
+              key={`advanced-${config.ssh?.enabled}-${config.wireguard?.enabled}-${config.fallback?.enabled}`}
+              config={config}
               onSave={handleSaveWithDiff}
               isLoading={patchConfig.isPending}
             />

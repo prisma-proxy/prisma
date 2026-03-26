@@ -104,10 +104,32 @@ export interface AntiRttInfo {
   normalization_ms: number;
 }
 
+export interface MaskServerEntry {
+  addr: string;
+  names: string[];
+}
+
 export interface PrismaTlsInfo {
   enabled: boolean;
-  mask_server_count: number;
+  auth_secret: string;
+  mask_servers: MaskServerEntry[];
   auth_rotation_hours: number;
+}
+
+export interface SshInfo {
+  enabled: boolean;
+  listen_addr: string;
+}
+
+export interface WireGuardInfo {
+  enabled: boolean;
+  listen_addr: string;
+}
+
+export interface FallbackInfo {
+  enabled: boolean;
+  max_consecutive_failures: number;
+  health_check_interval: number;
 }
 
 export interface PaddingInfo {
@@ -152,6 +174,14 @@ export interface ConfigResponse {
   management_api: ManagementApiInfo;
   routing_rules_count: number;
   auto_backup_interval_mins: number;
+  // Advanced sections
+  ssh: SshInfo;
+  wireguard: WireGuardInfo;
+  fallback: FallbackInfo;
+  config_watch: boolean;
+  shutdown_drain_timeout_secs: number;
+  ticket_rotation_hours: number;
+  public_address: string | null;
 }
 
 export interface TlsInfoResponse {
