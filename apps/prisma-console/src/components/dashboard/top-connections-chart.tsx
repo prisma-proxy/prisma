@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useMemo, useCallback } from "react";
+import { useRef, useMemo, useCallback, useState, useEffect } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -19,7 +19,6 @@ import { useI18n } from "@/lib/i18n";
 import { exportToCsv } from "@/lib/utils";
 import { CHART_THEME, CHART_AXIS_TICK, LINE_PALETTE } from "@/lib/chart-theme";
 import { useConnections } from "@/hooks/use-connections";
-import type { ConnectionInfo } from "@/lib/types";
 
 const MAX_SNAPSHOTS = 60; // 5 minutes at 5s intervals
 const TOP_N = 10;
@@ -72,8 +71,13 @@ export function TopConnectionsChart() {
   const snapshotsRef = useRef<Snapshot[]>([]);
 
   // Compute rates from current connections vs previous snapshot
-  const currentRates = useMemo<DestRate[]>(() => {
-    if (!connections || connections.length === 0) return [];
+  const [currentRates, setCurrentRates] = useState<DestRate[]>([]);
+
+  useEffect(() => {
+    if (!connections || connections.length === 0) {
+      setCurrentRates([]);
+      return;
+    }
 
     const now = Date.now();
     const dt = prevTsRef.current > 0 ? (now - prevTsRef.current) / 1000 : 0;
@@ -129,26 +133,33 @@ export function TopConnectionsChart() {
       }
     }
 
-    return rates.sort((a, b) => b.totalRate - a.totalRate).slice(0, TOP_N);
+    setCurrentRates(rates.sort((a, b) => b.totalRate - a.totalRate).slice(0, TOP_N));
   }, [connections]);
 
   // Top destinations (from latest snapshot)
   const topDests = useMemo(() => currentRates.map((r) => r.destination), [currentRates]);
 
   // Build chart data from snapshot buffer
-  const chartData = useMemo<ChartRow[]>(() => {
-    const snapshots = snapshotsRef.current;
-    if (snapshots.length === 0 || topDests.length === 0) return [];
+  const [chartData, setChartData] = useState<ChartRow[]>([]);
 
-    return snapshots.map((snap) => {
-      const row: ChartRow = { time: snap.relativeLabel };
-      for (const dest of topDests) {
-        const r = snap.rates.get(dest);
-        row[dest] = r ? Math.round((r.up + r.down) * 100) / 100 : 0;
-      }
-      return row;
-    });
-  }, [topDests, connections]); // re-derive when connections update
+  useEffect(() => {
+    const snapshots = snapshotsRef.current;
+    if (snapshots.length === 0 || topDests.length === 0) {
+      setChartData([]);
+      return;
+    }
+
+    setChartData(
+      snapshots.map((snap) => {
+        const row: ChartRow = { time: snap.relativeLabel };
+        for (const dest of topDests) {
+          const r = snap.rates.get(dest);
+          row[dest] = r ? Math.round((r.up + r.down) * 100) / 100 : 0;
+        }
+        return row;
+      })
+    );
+  }, [topDests, connections]);
 
   const handleExportCsv = useCallback(() => {
     if (chartData.length === 0 || topDests.length === 0) return;
