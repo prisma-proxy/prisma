@@ -218,11 +218,6 @@ export default function OverviewPage() {
 
   const showWizard = !wizardDismissed && clients !== undefined && clients.length === 0;
 
-  // Client-role users get a simplified dashboard
-  if (role === "client") {
-    return <ClientDashboard />;
-  }
-
   /** Build a map of widget ID -> JSX for ordered rendering */
   const widgetMap = useMemo(() => {
     const map: Record<string, ReactNode> = {};
@@ -334,6 +329,11 @@ export default function OverviewPage() {
 
     return map;
   }, [current, history, connections, connectionsLoading, disconnect, t]);
+
+  // Client-role users get a simplified dashboard
+  if (role === "client") {
+    return <ClientDashboard />;
+  }
 
   // Visible widget IDs in order (for indexing in edit mode)
   const visibleOrder = editMode
