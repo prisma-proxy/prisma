@@ -119,6 +119,7 @@ pub fn run() {
             commands::update_tray_stats,
             commands::update_tray_recent,
             commands::sync_tray_toggles,
+            commands::check_elevation,
             commands::set_per_app_filter,
             commands::clear_per_app_filter,
             commands::get_running_apps,

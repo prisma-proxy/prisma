@@ -4971,6 +4971,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "webpki-roots 0.26.11",
+ "windows-sys 0.59.0",
  "wintun",
 ]
 
@@ -5060,6 +5061,7 @@ dependencies = [
 name = "prisma-gui"
 version = "2.16.0"
 dependencies = [
+ "libc",
  "prisma-ffi",
  "reqwest 0.12.28",
  "serde",

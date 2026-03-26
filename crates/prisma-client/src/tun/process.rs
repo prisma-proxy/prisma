@@ -89,7 +89,15 @@ impl ProcessResolver {
         resolve_linux(protocol, local_port)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    fn platform_resolve(&self, _protocol: u8, _local_port: u16) -> Option<String> {
+        // Windows process resolution by port is handled via GetExtendedTcpTable
+        // which requires iphlpapi. For now, return None — the list_running_apps()
+        // function below provides the app browser functionality.
+        None
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     fn platform_resolve(&self, _protocol: u8, _local_port: u16) -> Option<String> {
         None // Not supported on this platform
     }
@@ -373,7 +381,62 @@ fn platform_list_apps() -> Vec<String> {
     apps
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(target_os = "windows")]
+fn platform_list_apps() -> Vec<String> {
+    use std::collections::HashSet;
+
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let mut apps = Vec::new();
+    let mut seen = HashSet::new();
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+            return apps;
+        }
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                // Convert the wide-char exe name to a String.
+                let name_len = entry
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+
+                // Filter out system-level / uninteresting processes.
+                let lower = name.to_lowercase();
+                if !lower.is_empty()
+                    && lower != "[system process]"
+                    && lower != "system"
+                    && lower != "idle"
+                    && seen.insert(lower)
+                {
+                    apps.push(name);
+                }
+
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+
+        CloseHandle(snapshot);
+    }
+
+    apps
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 fn platform_list_apps() -> Vec<String> {
     Vec::new()
 }

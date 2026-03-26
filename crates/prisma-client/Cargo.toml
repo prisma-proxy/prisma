@@ -37,6 +37,10 @@ russh = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 wintun = { workspace = true }
+windows-sys = { version = "0.59", features = [
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_Foundation",
+] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

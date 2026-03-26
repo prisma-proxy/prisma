@@ -314,6 +314,31 @@ pub fn get_pac_url(state: tauri::State<AppState>, pac_port: u16) -> Result<Strin
     unsafe { read_owned_cstr(ptr) }.ok_or_else(|| "Failed to get PAC URL".into())
 }
 
+// ── elevation check ───────────────────────────────────────────────────────────
+
+/// Check whether the process is running with elevated privileges.
+/// On Windows this always returns false (per-app proxy injection doesn't need elevation).
+/// On macOS/Linux, it checks if the process is running as root.
+#[tauri::command]
+pub fn check_elevation() -> bool {
+    check_elevation_impl()
+}
+
+#[cfg(unix)]
+fn check_elevation_impl() -> bool {
+    // On Unix, check if running as root (uid 0).
+    // std::process::id() returns PID, not UID — use the nix-style raw syscall.
+    #[allow(unsafe_code)]
+    unsafe {
+        libc::getuid() == 0
+    }
+}
+
+#[cfg(not(unix))]
+fn check_elevation_impl() -> bool {
+    false
+}
+
 // ── per-app proxy ─────────────────────────────────────────────────────────────
 
 #[tauri::command]

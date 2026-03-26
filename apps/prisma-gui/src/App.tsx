@@ -24,6 +24,7 @@ const Logs = lazy(() => import("./pages/Logs"));
 const SpeedTest = lazy(() => import("./pages/SpeedTest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const Analytics = lazy(() => import("./pages/Analytics"));
+const PerApp = lazy(() => import("./pages/PerApp"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="/speedtest" element={<SpeedTest />} />
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/per-app"   element={<PerApp />} />
               <Route path="/settings"  element={<Settings />} />
             </Routes>
           </Suspense>
