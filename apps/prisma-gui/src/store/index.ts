@@ -22,6 +22,7 @@ interface PrismaStore {
   // Update
   updateAvailable: UpdateInfo | null;
   updateProgress: number | null;
+  updatePhase: "downloading" | "installing" | "done" | null;
 
   // Speed test
   speedTestRunning: boolean;
@@ -41,6 +42,7 @@ interface PrismaStore {
   clearLogs: () => void;
   setUpdateAvailable: (info: UpdateInfo | null) => void;
   setUpdateProgress: (p: number | null) => void;
+  setUpdatePhase: (phase: "downloading" | "installing" | "done" | null) => void;
   setSpeedTestRunning: (v: boolean) => void;
   setSpeedTestResult: (r: SpeedTestResult | null) => void;
 }
@@ -65,6 +67,7 @@ export const useStore = create<PrismaStore>((set) => ({
 
   updateAvailable: null,
   updateProgress: null,
+  updatePhase: null,
 
   speedTestRunning: false,
   speedTestResult: null,
@@ -113,6 +116,7 @@ export const useStore = create<PrismaStore>((set) => ({
 
   setUpdateAvailable: (info) => set({ updateAvailable: info }),
   setUpdateProgress:  (p)       => set({ updateProgress: p }),
+  setUpdatePhase:     (phase)   => set({ updatePhase: phase }),
 
   setSpeedTestRunning: (v) => set({ speedTestRunning: v }),
   setSpeedTestResult:  (r) => set({ speedTestResult: r, speedTestRunning: false }),

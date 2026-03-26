@@ -3,6 +3,7 @@ use std::os::raw::c_char;
 
 use crate::state::AppState;
 use prisma_ffi::{PRISMA_ERR_NOT_CONNECTED, PRISMA_OK};
+use tauri::Emitter;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,15 +188,40 @@ pub fn check_update() -> Result<Option<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-pub fn apply_update(url: String, sha: String) -> Result<(), String> {
-    let url_c = CString::new(url).map_err(|e| e.to_string())?;
-    let sha_c = CString::new(sha).map_err(|e| e.to_string())?;
-    let rc = unsafe { prisma_ffi::prisma_apply_update(url_c.as_ptr(), sha_c.as_ptr()) };
-    if rc == PRISMA_OK {
-        Ok(())
-    } else {
-        Err(format!("prisma_apply_update error {rc}"))
-    }
+pub async fn apply_update(app: tauri::AppHandle, url: String, sha: String) -> Result<(), String> {
+    let app_clone = app.clone();
+    tokio::task::spawn_blocking(move || {
+        // Emit downloading phase
+        let _ = app_clone.emit(
+            "update-progress",
+            serde_json::json!({"phase": "downloading"}),
+        );
+
+        let bytes = if sha.is_empty() {
+            prisma_core::auto_update::download(&url)
+        } else {
+            prisma_core::auto_update::download_and_verify(&url, &sha)
+        }
+        .map_err(|e| e.to_string())?;
+
+        // Emit installing phase
+        let _ = app_clone.emit(
+            "update-progress",
+            serde_json::json!({"phase": "installing"}),
+        );
+
+        prisma_core::auto_update::self_replace(&bytes).map_err(|e| e.to_string())?;
+
+        // Emit done
+        let _ = app_clone.emit(
+            "update-progress",
+            serde_json::json!({"phase": "done"}),
+        );
+
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ── tray ──────────────────────────────────────────────────────────────────────

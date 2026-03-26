@@ -51,6 +51,12 @@ dashmap = { workspace = true }
 ureq = { workspace = true }
 semver = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Storage_FileSystem",
+    "Win32_Foundation",
+] }
+
 [dev-dependencies]
 proptest = { workspace = true }
 insta = { workspace = true }

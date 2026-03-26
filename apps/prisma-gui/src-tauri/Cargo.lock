@@ -4939,7 +4939,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "2.16.0"
+version = "2.18.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -4977,7 +4977,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "2.16.0"
+version = "2.18.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5022,13 +5022,14 @@ dependencies = [
  "ureq",
  "uuid",
  "webpki-roots 0.26.11",
+ "windows-sys 0.59.0",
  "x25519-dalek",
  "zeroize",
 ]
 
 [[package]]
 name = "prisma-ffi"
-version = "2.16.0"
+version = "2.18.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5059,9 +5060,10 @@ dependencies = [
 
 [[package]]
 name = "prisma-gui"
-version = "2.16.0"
+version = "2.18.0"
 dependencies = [
  "libc",
+ "prisma-core",
  "prisma-ffi",
  "reqwest 0.12.28",
  "serde",

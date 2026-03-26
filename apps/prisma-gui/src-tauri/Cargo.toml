@@ -27,7 +27,8 @@ tauri-plugin-dialog   = "2"
 tauri-plugin-fs       = "2"
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
-prisma-ffi = { path = "../../../crates/prisma-ffi" }
+prisma-ffi  = { path = "../../../crates/prisma-ffi" }
+prisma-core = { path = "../../../crates/prisma-core" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "socks"] }
 tokio   = { version = "1", features = ["rt", "fs"] }
 tracing = "0.1"

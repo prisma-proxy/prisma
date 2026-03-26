@@ -113,30 +113,80 @@ pub fn download(download_url: &str) -> Result<Vec<u8>> {
 }
 
 /// Replace the currently running binary with new content.
+///
+/// On Windows the running exe is file-locked by the OS, so a simple rename
+/// may fail.  The strategy is:
+///   1. Write the new binary to `<exe>.new` (does not touch the running exe).
+///   2. Try to rename `<exe>` -> `<exe>.old`.
+///   3. If rename succeeds: rename `<exe>.new` -> `<exe>`, clean up `.old`.
+///   4. If rename fails (Windows lock): use `MoveFileExW` with
+///      `MOVEFILE_DELAY_UNTIL_REBOOT` to stage the replacement for next restart.
 pub fn self_replace(new_binary: &[u8]) -> Result<()> {
     let current_exe = std::env::current_exe()?;
     let backup = current_exe.with_extension("old");
+    let tmp_new = current_exe.with_extension("new");
 
-    // Remove stale backup
+    // Remove stale artefacts from previous attempts
     if backup.exists() {
         std::fs::remove_file(&backup).ok();
     }
-
-    // Rename current → .old
-    std::fs::rename(&current_exe, &backup)?;
-
-    // Write new binary
-    if let Err(e) = std::fs::write(&current_exe, new_binary) {
-        // Restore backup on failure
-        std::fs::rename(&backup, &current_exe).ok();
-        return Err(e.into());
+    if tmp_new.exists() {
+        std::fs::remove_file(&tmp_new).ok();
     }
+
+    // Step 1: write new binary to .new (does not touch running exe)
+    std::fs::write(&tmp_new, new_binary)?;
 
     // Set executable permission on Unix
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&current_exe, std::fs::Permissions::from_mode(0o755)).ok();
+        std::fs::set_permissions(&tmp_new, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    // Step 2: try rename current → .old
+    if std::fs::rename(&current_exe, &backup).is_err() {
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows: schedule replacement on next reboot via MoveFileExW
+            use std::os::windows::ffi::OsStrExt;
+            let src: Vec<u16> = tmp_new
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            let dst: Vec<u16> = current_exe
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            // MOVEFILE_REPLACE_EXISTING (0x01) | MOVEFILE_DELAY_UNTIL_REBOOT (0x04)
+            let ok = unsafe {
+                windows_sys::Win32::Storage::FileSystem::MoveFileExW(
+                    src.as_ptr(),
+                    dst.as_ptr(),
+                    0x01 | 0x04,
+                )
+            };
+            if ok == 0 {
+                anyhow::bail!("MoveFileExW failed: {}", std::io::Error::last_os_error());
+            }
+            tracing::info!("Update staged for next restart (Windows file lock)");
+            return Ok(());
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // On Unix: if rename fails, try harder
+            std::fs::remove_file(&backup).ok();
+            std::fs::rename(&current_exe, &backup)?;
+        }
+    }
+
+    // Step 3: rename .new → current exe
+    if let Err(e) = std::fs::rename(&tmp_new, &current_exe) {
+        // Restore backup on failure
+        std::fs::rename(&backup, &current_exe).ok();
+        return Err(e.into());
     }
 
     // Clean up backup
