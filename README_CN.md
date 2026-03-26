@@ -14,7 +14,9 @@
 - **流量整形** — 桶填充、时序抖动、杂音注入、帧合并，抵御封装 TLS 指纹识别
 - **抗审查** — Salamander UDP 混淆、HTTP/3 伪装、端口跳跃、TLS 伪装、熵伪装
 - **端口转发** — 通过加密隧道实现类 frp 的反向代理
-- **Web 管理控制台** — 实时仪表盘、首次运行设置向导、数据分析、客户端分享（TOML/URI/QR）、多服务器管理、路由模板、配置历史（Next.js + shadcn/ui）
+- **SQLite 后端** — 用户、客户端、路由规则和订阅存储在 SQLite 数据库中，支持从 TOML 自动迁移
+- **订阅系统** — 兑换码（`PRISMA-XXXX`）和邀请链接，简化客户端接入流程
+- **Web 管理控制台** — 实时仪表盘、首次运行设置向导、数据分析、客户端分享（TOML/URI/QR）、多服务器管理、路由模板、订阅管理、角色化仪表盘、配置历史（Next.js + shadcn/ui）
 - **智能 DNS** — Fake IP、隧道、智能（GeoSite）和直连模式
 - **CLI 工具** — `prisma monitor`（TUI 仪表盘）、`prisma validate`（配置检查）、`prisma profile new`（交互式向导）、批量客户端管理
 - **CLI 自更新** — `prisma update` 检查 GitHub Releases 并自动替换二进制文件

@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.10.0** ships with a first-run setup wizard, CLI self-update, city-level GeoIP analytics, routing redesign with templates, per-client metrics API, auto-backup, QUIC hostname support, console dashboards, GUI LAN mode, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.13.0** ships with a SQLite database backend, subscription system with redemption codes and invite links, role-based console dashboard, Cloudflare-style connection map, congestion "auto" mode, cross-platform GeoIP text badges, and many more production-grade features.
 
 ## Features
 
@@ -144,6 +144,29 @@ graph LR
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```
+
+## What's New in 2.13.0
+
+- **React hydration fix** — fix hydration error on all console pages caused by client/server mismatch
+- **GeoIP text badges** — replace emoji country flags with cross-platform text badges for consistent display across all operating systems
+- **Routing rule matching fixes** — fix DomainKeyword matching and GeoIP skip logic in server-side routing
+- **Server-side route test endpoint** — `POST /api/routes/test` to test a domain or IP against configured routing rules
+- **Congestion mode "auto"** — `congestion.mode = "auto"` now maps to the adaptive congestion controller
+
+## What's New in 2.12.0
+
+- **SQLite database** — users, clients, routing rules, and subscriptions are now stored in a SQLite database (`data.sql`) with automatic migration from TOML config on first run
+- **Subscription system** — redemption codes (`PRISMA-XXXX`) and invite links for streamlined client onboarding
+- **Console settings tab** — admin-configurable settings: registration toggle, default role, session expiry, backup interval
+- **Role-based dashboard** — client-role users see a simplified view with My Clients and Subscription pages only
+- **SQLite-aware backups** — backup and restore now includes both TOML config and SQLite data
+
+## What's New in 2.11.0
+
+- **Cloudflare-style connection map** — redesigned live connection map with arc lines and server marker
+- **Share dialog TOML overflow fix** — fix long TOML content overflowing the share dialog
+- **Congestion "auto" mode** — support `congestion.mode = "auto"` in server and client config
+- **Rule provider download mode** — GUI selector for rule provider download mode (Auto/Direct/Proxy)
 
 ## What's New in 2.10.0
 

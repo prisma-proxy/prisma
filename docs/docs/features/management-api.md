@@ -133,7 +133,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.10.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.13.0"}
 ```
 
 ### Connections
@@ -349,6 +349,126 @@ Returns the complete OpenAPI 3.0 specification document. Can be imported into Sw
 
 See [Routing Rules](/docs/features/routing-rules) for details on rule conditions and actions.
 
+### Route Testing (v2.13.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/routes/test` | Test a domain or IP address against configured routing rules |
+
+**Example:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"target": "google.com"}' \
+  http://127.0.0.1:9090/api/routes/test
+# {"matched":true,"rule":{"type":"domain-suffix","value":"google.com","action":"proxy"},"index":3}
+```
+
+### Server GeoIP (v2.13.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/server/geo` | Get the server's own GeoIP location |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/server/geo
+# {"country":"US","city":"San Francisco","lat":37.7749,"lon":-122.4194}
+```
+
+### Console Settings (v2.12.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/settings` | Get console settings (registration, default role, session expiry, backup interval) |
+| `PUT` | `/api/settings` | Update console settings (admin only) |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/settings
+# {"registration_enabled":true,"default_role":"client","session_expiry_hours":24,"backup_interval_mins":60}
+
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"registration_enabled":false,"default_role":"client","session_expiry_hours":48,"backup_interval_mins":120}' \
+  http://127.0.0.1:9090/api/settings
+# {"status":"ok"}
+```
+
+### Redemption Codes (v2.12.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/codes` | Generate redemption codes (admin only) |
+| `GET` | `/api/codes` | List all redemption codes (admin only) |
+| `DELETE` | `/api/codes/:code` | Delete a redemption code (admin only) |
+| `POST` | `/api/redeem` | Redeem a code to get client credentials |
+
+**Generate codes:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"count": 5, "prefix": "PRISMA"}' \
+  http://127.0.0.1:9090/api/codes
+# {"codes":["PRISMA-A1B2","PRISMA-C3D4","PRISMA-E5F6","PRISMA-G7H8","PRISMA-I9J0"]}
+```
+
+**Redeem a code:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "PRISMA-A1B2"}' \
+  http://127.0.0.1:9090/api/redeem
+# {"client_id":"uuid","auth_secret":"hex","name":"redeemed-PRISMA-A1B2"}
+```
+
+### Subscription (v2.12.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/subscription` | Get current user's subscription status |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/subscription
+# {"active":true,"clients":["uuid-1","uuid-2"],"redeemed_codes":["PRISMA-A1B2"],"expires_at":null}
+```
+
+### Invite Links (v2.12.0+)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/invites` | Create an invite link (admin only) |
+| `GET` | `/api/invites` | List all invite links (admin only) |
+| `DELETE` | `/api/invites/:id` | Delete an invite link (admin only) |
+| `GET` | `/api/invite/{token}/info` | Check invite link validity (no auth required) |
+| `POST` | `/api/invite/{token}` | Redeem an invite link (no auth required) |
+
+**Create an invite link:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"max_uses": 10, "expires_hours": 72}' \
+  http://127.0.0.1:9090/api/invites
+# {"id":"uuid","token":"abc123","url":"https://server:9090/invite/abc123","max_uses":10,"uses":0}
+```
+
+**Redeem an invite (no auth):**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/invite/abc123
+# {"token":"eyJhbGciOi...","user":{"username":"newuser","role":"client"}}
+```
+
 ## WebSocket Endpoints
 
 ### Metrics stream
@@ -433,7 +553,7 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.10.0):
+All endpoints at a glance (v2.13.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|
@@ -453,4 +573,10 @@ All endpoints at a glance (v2.10.0):
 | GeoIP | 1 REST | GeoIP database download and configuration |
 | Documentation | 1 REST | OpenAPI 3.0 specification |
 | Routing Rules | 4 REST | Server-side routing rule management |
+| Route Testing | 1 REST | Test domain/IP against routing rules |
+| Server GeoIP | 1 REST | Server GeoIP location |
+| Console Settings | 2 REST | Console settings read/write |
+| Redemption Codes | 4 REST | Code generation, listing, deletion, redemption |
+| Subscription | 1 REST | User subscription status |
+| Invite Links | 5 REST | Invite link CRUD and public redemption |
 | Logs | 1 WS | Real-time log streaming |

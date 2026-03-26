@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.10.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.13.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段
@@ -180,6 +180,22 @@ enabled = true
 :::
 
 **自动备份**：将 `auto_backup_interval_mins` 设置为非零值，即可按固定间隔自动创建配置快照。备份任务在后台运行，不会影响活跃连接。备份与手动备份一同存储，可在控制台的"配置备份"页面查看或恢复。
+
+## SQLite 数据库（v2.12.0+）
+
+从 v2.12.0 起，动态数据——用户、授权客户端、路由规则和订阅——存储在 **SQLite 数据库**（`data.sql`）中，而非 TOML 配置文件。升级后首次启动时，服务器自动将 `server.toml` 中的现有数据迁移到数据库中。
+
+关键行为：
+
+- **自动迁移** — 现有的 `[[authorized_clients]]`、`[[management_api.users]]` 和 `[[routing.rules]]` 条目在首次运行时导入 SQLite。原始 TOML 条目保留但迁移后不再读取。
+- **文件位置** — 数据库创建在 `server.toml` 同级目录（如 `/etc/prisma/data.sql`）。
+- **运行时变更** — 通过管理 API 或控制台对客户端、用户、路由规则和订阅的所有更改立即持久化到 SQLite。
+- **备份** — `POST /api/config/backup` 端点和自动备份功能现在同时包含 TOML 配置和 SQLite 数据库（`data.sql`）。
+- **静态配置** — 服务器设置（监听地址、TLS、伪装、流量整形、性能等）仍保留在 `server.toml` 中。
+
+:::tip
+您仍可以在 `server.toml` 中预配置用户和客户端用于初始部署。它们将在首次运行时导入 SQLite。之后请通过控制台或 API 管理。
+:::
 
 ## `[port_forwarding]` -- 反向代理
 
@@ -403,7 +419,7 @@ migrate_back_on_recovery = true
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` |
+| `mode` | string | `"bbr"` | 拥塞控制：`"brutal"` / `"bbr"` / `"adaptive"` / `"auto"`（映射为 `"adaptive"`） |
 | `target_bandwidth` | string? | -- | brutal/adaptive 模式的目标带宽（如 `"100mbps"`） |
 
 ## `[port_hopping]` -- QUIC 端口跳变

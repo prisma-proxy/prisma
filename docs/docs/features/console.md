@@ -164,7 +164,7 @@ The main overview dashboard showing:
 - **Transport pie chart** — connections grouped by transport type
 - **Connection histogram** — connection duration distribution
 - **GeoIP pie chart** — country distribution of active connections. Requires `geoip_path` configured in the server's routing section; shows a placeholder when GeoIP is not configured.
-- **Live connection map** — SVG world map showing active connections by GeoIP country with proportionally-sized dots
+- **Live connection map** — Cloudflare-style SVG world map with arc lines from the server marker to client locations by GeoIP, proportionally-sized dots, and real-time animation
 - **Connection table** — active connections with peer IP (port stripped), transport type, mode, byte counters, and a disconnect button. Summary stats cards (active count, total upload, total download) are displayed above the table. Grouped-by-IP view is the default.
 
 Data sources: WebSocket push (metrics every 1s) + REST polling (connections every 5s).
@@ -282,6 +282,31 @@ Server configuration editor with tabbed sections:
 - **Config validation** — inline validation for ports, addresses, CIDR format
 - **Config export/import** — download/upload entire server config as JSON
 
+### Console Settings (v2.12.0+)
+
+Admin-configurable settings that control console behavior:
+- **Registration toggle** — enable or disable self-registration for new users
+- **Default role** — set the default role assigned to self-registered users (Client / Operator)
+- **Session expiry** — configure JWT session expiry duration in hours
+- **Backup interval** — set automatic backup interval in minutes (0 = disabled)
+
+These settings are stored in the SQLite database and take effect immediately.
+
+### Subscription Management (v2.12.0+)
+
+*(Admin only)* Manage subscription codes and invite links for client onboarding:
+- **Redemption codes** — generate batch codes in `PRISMA-XXXX` format. Codes are single-use and grant the redeemer a new client credential.
+- **Code table** — list all generated codes with status (unused / redeemed / expired), creation date, and redeemed-by info
+- **Invite links** — create shareable invite URLs with configurable max uses and expiry. Recipients can register and receive client credentials in one step.
+- **Invite table** — list all invite links with usage count, max uses, expiry, and a copy-to-clipboard action
+
+### Redeem Code (v2.12.0+)
+
+*(Client users)* Enter a redemption code to receive client credentials:
+- **Code input** — enter a `PRISMA-XXXX` code to redeem
+- **Result display** — on success, displays the new client ID, auth secret, and a ready-to-use config snippet
+- **My Clients** — view all clients associated with the current user's account
+
 ### Config Backups
 
 Config backup and restore:
@@ -301,7 +326,7 @@ Traffic shaping and anti-analysis visualization:
 
 ## Additional Features
 
-- **Role-based access control** — three roles control what each user can see and do: **Admin** (full access to all pages and settings), **Operator** (monitoring only — can view dashboards and metrics but cannot modify configuration or manage users), **Client** (can only view their own connection statistics and speed test). Navigation items and UI elements adapt automatically based on the logged-in user's role.
+- **Role-based access control** — three roles control what each user can see and do: **Admin** (full access to all pages and settings, including subscription management and console settings), **Operator** (monitoring only — can view dashboards and metrics but cannot modify configuration or manage users), **Client** (simplified dashboard showing only My Clients, Subscription/Redeem, and Speed Test pages). Navigation items and UI elements adapt automatically based on the logged-in user's role.
 - **i18n** — full English and Simplified Chinese translations, switchable from the sidebar
 - **Theme toggle** — dark, light, and system mode, switchable from the sidebar footer. Preference is persisted in localStorage and applied on page load.
 - **Notification center** — persistent notification drawer with history, accessible from the sidebar bell icon

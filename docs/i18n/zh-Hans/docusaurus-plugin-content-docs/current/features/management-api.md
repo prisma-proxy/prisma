@@ -129,7 +129,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.10.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.13.0"}
 ```
 
 ### 连接
@@ -343,6 +343,126 @@ curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/geoip/d
 
 详见[路由规则](/docs/features/routing-rules)了解规则条件和操作。
 
+### 路由测试（v2.13.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/routes/test` | 测试域名或 IP 地址是否匹配已配置的路由规则 |
+
+**示例：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"target": "google.com"}' \
+  http://127.0.0.1:9090/api/routes/test
+# {"matched":true,"rule":{"type":"domain-suffix","value":"google.com","action":"proxy"},"index":3}
+```
+
+### 服务器 GeoIP（v2.13.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/server/geo` | 获取服务器自身的 GeoIP 位置 |
+
+**示例：**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/server/geo
+# {"country":"US","city":"San Francisco","lat":37.7749,"lon":-122.4194}
+```
+
+### 控制台设置（v2.12.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/settings` | 获取控制台设置（注册开关、默认角色、会话过期、备份间隔） |
+| `PUT` | `/api/settings` | 更新控制台设置（仅管理员） |
+
+**示例：**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/settings
+# {"registration_enabled":true,"default_role":"client","session_expiry_hours":24,"backup_interval_mins":60}
+
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"registration_enabled":false,"default_role":"client","session_expiry_hours":48,"backup_interval_mins":120}' \
+  http://127.0.0.1:9090/api/settings
+# {"status":"ok"}
+```
+
+### 兑换码（v2.12.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/codes` | 生成兑换码（仅管理员） |
+| `GET` | `/api/codes` | 列出所有兑换码（仅管理员） |
+| `DELETE` | `/api/codes/:code` | 删除兑换码（仅管理员） |
+| `POST` | `/api/redeem` | 兑换码以获取客户端凭证 |
+
+**生成兑换码：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"count": 5, "prefix": "PRISMA"}' \
+  http://127.0.0.1:9090/api/codes
+# {"codes":["PRISMA-A1B2","PRISMA-C3D4","PRISMA-E5F6","PRISMA-G7H8","PRISMA-I9J0"]}
+```
+
+**兑换码：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "PRISMA-A1B2"}' \
+  http://127.0.0.1:9090/api/redeem
+# {"client_id":"uuid","auth_secret":"hex","name":"redeemed-PRISMA-A1B2"}
+```
+
+### 订阅（v2.12.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/subscription` | 获取当前用户的订阅状态 |
+
+**示例：**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/subscription
+# {"active":true,"clients":["uuid-1","uuid-2"],"redeemed_codes":["PRISMA-A1B2"],"expires_at":null}
+```
+
+### 邀请链接（v2.12.0+）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/invites` | 创建邀请链接（仅管理员） |
+| `GET` | `/api/invites` | 列出所有邀请链接（仅管理员） |
+| `DELETE` | `/api/invites/:id` | 删除邀请链接（仅管理员） |
+| `GET` | `/api/invite/{token}/info` | 检查邀请链接有效性（无需认证） |
+| `POST` | `/api/invite/{token}` | 通过邀请链接注册（无需认证） |
+
+**创建邀请链接：**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"max_uses": 10, "expires_hours": 72}' \
+  http://127.0.0.1:9090/api/invites
+# {"id":"uuid","token":"abc123","url":"https://server:9090/invite/abc123","max_uses":10,"uses":0}
+```
+
+**通过邀请注册（无需认证）：**
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "strong-password"}' \
+  http://127.0.0.1:9090/api/invite/abc123
+# {"token":"eyJhbGciOi...","user":{"username":"newuser","role":"client"}}
+```
+
 ## WebSocket 端点
 
 ### 指标流
@@ -427,7 +547,7 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.10.0）：
+所有端点一览（v2.13.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|
@@ -447,4 +567,10 @@ WS /api/ws/reload
 | GeoIP | 1 REST | GeoIP 数据库下载和配置 |
 | 文档 | 1 REST | OpenAPI 3.0 规范 |
 | 路由规则 | 4 REST | 服务端路由规则管理 |
+| 路由测试 | 1 REST | 测试域名/IP 是否匹配路由规则 |
+| 服务器 GeoIP | 1 REST | 服务器 GeoIP 位置 |
+| 控制台设置 | 2 REST | 控制台设置读写 |
+| 兑换码 | 4 REST | 兑换码生成、列出、删除、兑换 |
+| 订阅 | 1 REST | 用户订阅状态 |
+| 邀请链接 | 5 REST | 邀请链接 CRUD 和公开兑换 |
 | 日志 | 1 WS | 实时日志流 |

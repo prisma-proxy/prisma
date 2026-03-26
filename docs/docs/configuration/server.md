@@ -7,7 +7,7 @@ sidebar_position: 1
 The server is configured via a TOML file (default: `server.toml`). Configuration is resolved in three layers -- compiled defaults, then TOML file, then environment variables. See [Environment Variables](./environment-variables.md) for override details.
 
 :::info Version
-This page reflects Prisma **v2.10.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
+This page reflects Prisma **v2.13.0**. Protocol v4 support has been removed; only PrismaVeil v5 (0x05) is accepted.
 :::
 
 ## Top-level fields
@@ -180,6 +180,22 @@ You can either pre-configure users in `server.toml` or let them self-register vi
 **Console**: Set `console_dir` to the path containing the built console static files. The server will serve the console at the management API address. Download pre-built files from the [latest release](https://github.com/Yamimega/prisma/releases/latest) or build from source with `cd apps/prisma-console && npm ci && npm run build`.
 
 **CORS origins**: Only needed when running the console dev server on a different origin (e.g. `http://localhost:3000`). Not needed in production when the console is served by the server itself.
+
+## SQLite Database (v2.12.0+)
+
+As of v2.12.0, dynamic data — users, authorized clients, routing rules, and subscriptions — is stored in a **SQLite database** (`data.sql`) instead of the TOML config file. On first startup after upgrading, the server automatically migrates existing data from `server.toml` into the database.
+
+Key behaviors:
+
+- **Automatic migration** — existing `[[authorized_clients]]`, `[[management_api.users]]`, and `[[routing.rules]]` entries are imported into SQLite on first run. The original TOML entries are preserved but no longer read after migration.
+- **File location** — the database is created alongside `server.toml` (e.g., `/etc/prisma/data.sql`).
+- **Runtime changes** — all client, user, routing rule, and subscription changes via the Management API or Console are persisted to SQLite immediately.
+- **Backups** — the `POST /api/config/backup` endpoint and auto-backup feature now include both the TOML config and the SQLite database (`data.sql`).
+- **Static config** — server settings (listen addresses, TLS, camouflage, traffic shaping, performance, etc.) remain in `server.toml`.
+
+:::tip
+You can still pre-seed users and clients in `server.toml` for initial deployment. They will be imported into SQLite on first run. After that, manage them through the Console or API.
+:::
 
 ## `[port_forwarding]` -- Reverse proxy
 
@@ -403,7 +419,7 @@ Each `[[prisma_tls.mask_servers]]`:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` |
+| `mode` | string | `"bbr"` | Congestion control: `"brutal"` / `"bbr"` / `"adaptive"` / `"auto"` (maps to `"adaptive"`) |
 | `target_bandwidth` | string? | -- | Target bandwidth for brutal/adaptive (e.g., `"100mbps"`) |
 
 ## `[port_hopping]` -- QUIC port hopping
