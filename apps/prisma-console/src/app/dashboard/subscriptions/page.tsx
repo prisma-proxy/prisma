@@ -35,7 +35,7 @@ export default function SubscriptionsPage() {
       toast(t("subscriptions.codeCreated", { code: data.code }), "success");
       setShowCreateCode(false);
     },
-    onError: () => toast(t("subscriptions.createFailed"), "error"),
+    onError: (error: Error) => toast(error.message || t("subscriptions.createFailed"), "error"),
   });
 
   const deleteCode = useMutation({
@@ -61,7 +61,7 @@ export default function SubscriptionsPage() {
       setLastInviteToken(data.token);
       setShowCreateInvite(false);
     },
-    onError: () => toast(t("subscriptions.createFailed"), "error"),
+    onError: (error: Error) => toast(error.message || t("subscriptions.createFailed"), "error"),
   });
 
   const deleteInvite = useMutation({
@@ -86,7 +86,7 @@ export default function SubscriptionsPage() {
       toast(t("subscriptions.planCreated"), "success");
       setShowCreatePlan(false);
     },
-    onError: () => toast(t("subscriptions.createFailed"), "error"),
+    onError: (error: Error) => toast(error.message || t("subscriptions.createFailed"), "error"),
   });
 
   const deletePlan = useMutation({

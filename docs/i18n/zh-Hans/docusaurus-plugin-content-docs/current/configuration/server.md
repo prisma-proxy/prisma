@@ -7,7 +7,7 @@ sidebar_position: 1
 服务端通过 TOML 文件配置（默认：`server.toml`）。配置按三层解析——编译默认值、TOML 文件、环境变量。详见[环境变量](./environment-variables.md)了解覆盖机制。
 
 :::info 版本
-此页面反映 Prisma **v2.15.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
+此页面反映 Prisma **v2.21.0**。协议 v4 支持已移除；仅接受 PrismaVeil v5 (0x05)。
 :::
 
 ## 顶级字段

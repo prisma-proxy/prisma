@@ -1,5 +1,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,6 +11,52 @@ use crate::auth::UserInfo;
 use crate::db;
 use crate::handlers::users::require_admin;
 use crate::MgmtState;
+
+// ─────────────────────── Error helper ──────────────────────────────────
+
+/// Structured error response for subscription handlers.
+/// Wraps a status code + JSON body so that database errors propagate
+/// a human-readable message instead of a bare 500.
+pub struct SubError(StatusCode, Json<serde_json::Value>);
+
+impl IntoResponse for SubError {
+    fn into_response(self) -> axum::response::Response {
+        (self.0, self.1).into_response()
+    }
+}
+
+/// Convert a bare `StatusCode` (from `require_admin`, `hash_password`, etc.)
+/// into a `SubError` so that the `?` operator still works.
+impl From<StatusCode> for SubError {
+    fn from(status: StatusCode) -> Self {
+        Self(
+            status,
+            Json(
+                serde_json::json!({ "error": status.canonical_reason().unwrap_or("Unknown error") }),
+            ),
+        )
+    }
+}
+
+/// Build a [`SubError`] from any displayable error (typically `rusqlite::Error`).
+fn db_error(e: impl std::fmt::Display) -> SubError {
+    tracing::warn!(error = %e, "Database operation failed");
+    SubError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({ "error": e.to_string() })),
+    )
+}
+
+/// Wrapper around [`MgmtState::require_db`] that returns a descriptive error.
+fn require_db(state: &MgmtState) -> Result<&db::Db, SubError> {
+    state.db.as_ref().ok_or_else(|| {
+        tracing::warn!("Database not initialized");
+        SubError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": "Database not initialized" })),
+        )
+    })
+}
 
 // ─────────────────────── Code generation ────────────────────────────────
 
@@ -69,9 +116,9 @@ pub async fn create_code(
     user: UserInfo,
     State(state): State<MgmtState>,
     Json(req): Json<CreateCodeRequest>,
-) -> Result<Json<CreateCodeResponse>, StatusCode> {
+) -> Result<Json<CreateCodeResponse>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
 
     let code = generate_code();
     let rc = db::RedemptionCode {
@@ -95,8 +142,7 @@ pub async fn create_code(
         blocked_destinations: req.blocked_destinations.unwrap_or_default(),
     };
 
-    let id =
-        db::insert_redemption_code(database, &rc).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let id = db::insert_redemption_code(database, &rc).map_err(db_error)?;
 
     Ok(Json(CreateCodeResponse { id, code }))
 }
@@ -105,9 +151,9 @@ pub async fn create_code(
 pub async fn list_codes(
     user: UserInfo,
     State(state): State<MgmtState>,
-) -> Result<Json<Vec<db::RedemptionCode>>, StatusCode> {
+) -> Result<Json<Vec<db::RedemptionCode>>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
     Ok(Json(db::list_redemption_codes(database)))
 }
 
@@ -116,13 +162,13 @@ pub async fn delete_code(
     user: UserInfo,
     State(state): State<MgmtState>,
     Path(id): Path<i64>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
     if db::delete_redemption_code(database, id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(StatusCode::NOT_FOUND.into())
     }
 }
 
@@ -145,26 +191,27 @@ pub async fn redeem_code(
     user: UserInfo,
     State(state): State<MgmtState>,
     Json(req): Json<RedeemRequest>,
-) -> Result<Json<RedeemResponse>, StatusCode> {
-    let database = state.require_db()?;
+) -> Result<Json<RedeemResponse>, SubError> {
+    let database = require_db(&state)?;
 
     let code_upper = req.code.trim().to_uppercase();
-    let rc = db::get_redemption_code_by_code(database, &code_upper).ok_or(StatusCode::NOT_FOUND)?;
+    let rc = db::get_redemption_code_by_code(database, &code_upper)
+        .ok_or(SubError::from(StatusCode::NOT_FOUND))?;
 
     // Validate: not exhausted
     if rc.used_count >= rc.max_uses {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     // Validate: not expired
     if db::is_expired(rc.expires_at.as_deref()) {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     // Check user hasn't exceeded max_clients for this code
     let existing = db::count_redemptions_for_user_code(database, rc.id, &user.username);
     if existing >= rc.max_clients {
-        return Err(StatusCode::CONFLICT);
+        return Err(StatusCode::CONFLICT.into());
     }
 
     // Create new client
@@ -184,7 +231,7 @@ pub async fn redeem_code(
         quota_period: rc.quota_period.clone(),
         tags: vec!["redeemed".into()],
     };
-    db::insert_client(database, &db_client).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::insert_client(database, &db_client).map_err(db_error)?;
 
     // Insert into auth store
     let entry = ClientEntry {
@@ -221,8 +268,8 @@ pub async fn redeem_code(
 pub async fn subscription_status(
     user: UserInfo,
     State(state): State<MgmtState>,
-) -> Result<Json<Vec<db::SubscriptionInfo>>, StatusCode> {
-    let database = state.require_db()?;
+) -> Result<Json<Vec<db::SubscriptionInfo>>, SubError> {
+    let database = require_db(&state)?;
     Ok(Json(db::user_subscriptions(database, &user.username)))
 }
 
@@ -257,9 +304,9 @@ pub async fn create_invite(
     user: UserInfo,
     State(state): State<MgmtState>,
     Json(req): Json<CreateInviteRequest>,
-) -> Result<Json<CreateInviteResponse>, StatusCode> {
+) -> Result<Json<CreateInviteResponse>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
 
     let token = generate_invite_token();
     let inv = db::Invite {
@@ -284,7 +331,7 @@ pub async fn create_invite(
         blocked_destinations: req.blocked_destinations.unwrap_or_default(),
     };
 
-    let id = db::insert_invite(database, &inv).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let id = db::insert_invite(database, &inv).map_err(db_error)?;
 
     Ok(Json(CreateInviteResponse { id, token }))
 }
@@ -293,9 +340,9 @@ pub async fn create_invite(
 pub async fn list_invites(
     user: UserInfo,
     State(state): State<MgmtState>,
-) -> Result<Json<Vec<db::Invite>>, StatusCode> {
+) -> Result<Json<Vec<db::Invite>>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
     Ok(Json(db::list_invites(database)))
 }
 
@@ -304,13 +351,13 @@ pub async fn delete_invite(
     user: UserInfo,
     State(state): State<MgmtState>,
     Path(id): Path<i64>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
     if db::delete_invite(database, id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(StatusCode::NOT_FOUND.into())
     }
 }
 
@@ -320,9 +367,10 @@ pub async fn delete_invite(
 pub async fn invite_info(
     State(state): State<MgmtState>,
     Path(token): Path<String>,
-) -> Result<Json<InviteInfoResponse>, StatusCode> {
-    let database = state.require_db()?;
-    let inv = db::get_invite_by_token(database, &token).ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<Json<InviteInfoResponse>, SubError> {
+    let database = require_db(&state)?;
+    let inv =
+        db::get_invite_by_token(database, &token).ok_or(SubError::from(StatusCode::NOT_FOUND))?;
 
     let valid = inv.used_count < inv.max_uses && !db::is_expired(inv.expires_at.as_deref());
 
@@ -360,28 +408,29 @@ pub async fn redeem_invite(
     State(state): State<MgmtState>,
     Path(invite_token): Path<String>,
     Json(req): Json<InviteRedeemRequest>,
-) -> Result<Json<InviteRedeemResponse>, StatusCode> {
-    let database = state.require_db()?;
+) -> Result<Json<InviteRedeemResponse>, SubError> {
+    let database = require_db(&state)?;
 
     if req.username.is_empty() || req.password.len() < 8 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST.into());
     }
 
-    let inv = db::get_invite_by_token(database, &invite_token).ok_or(StatusCode::NOT_FOUND)?;
+    let inv = db::get_invite_by_token(database, &invite_token)
+        .ok_or(SubError::from(StatusCode::NOT_FOUND))?;
 
     // Validate not exhausted
     if inv.used_count >= inv.max_uses {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     // Validate not expired
     if db::is_expired(inv.expires_at.as_deref()) {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     // Check username not taken
     if db::user_exists(database, &req.username) {
-        return Err(StatusCode::CONFLICT);
+        return Err(StatusCode::CONFLICT.into());
     }
 
     // Hash password
@@ -396,7 +445,7 @@ pub async fn redeem_invite(
         role,
         enabled: true,
     };
-    db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::insert_user(database, &user_config).map_err(db_error)?;
 
     // Also sync user to TOML
     {
@@ -428,7 +477,7 @@ pub async fn redeem_invite(
         quota_period: inv.quota_period,
         tags: vec!["invite".into()],
     };
-    db::insert_client(database, &db_client).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::insert_client(database, &db_client).map_err(db_error)?;
 
     // Insert into auth store
     let entry = ClientEntry {
@@ -482,11 +531,11 @@ pub async fn create_plan(
     user: UserInfo,
     State(state): State<MgmtState>,
     Json(req): Json<db::SubscriptionPlan>,
-) -> Result<Json<db::SubscriptionPlan>, StatusCode> {
+) -> Result<Json<db::SubscriptionPlan>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
 
-    let id = db::insert_plan(database, &req).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let id = db::insert_plan(database, &req).map_err(db_error)?;
 
     let mut plan = req;
     plan.id = id;
@@ -497,9 +546,9 @@ pub async fn create_plan(
 pub async fn list_plans(
     user: UserInfo,
     State(state): State<MgmtState>,
-) -> Result<Json<Vec<db::SubscriptionPlan>>, StatusCode> {
+) -> Result<Json<Vec<db::SubscriptionPlan>>, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
     Ok(Json(db::list_plans(database)))
 }
 
@@ -509,15 +558,15 @@ pub async fn update_plan(
     State(state): State<MgmtState>,
     Path(id): Path<i64>,
     Json(mut req): Json<db::SubscriptionPlan>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
 
     req.id = id;
     if db::update_plan(database, &req) {
         Ok(StatusCode::OK)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(StatusCode::NOT_FOUND.into())
     }
 }
 
@@ -526,13 +575,13 @@ pub async fn delete_plan(
     user: UserInfo,
     State(state): State<MgmtState>,
     Path(id): Path<i64>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, SubError> {
     require_admin(&user)?;
-    let database = state.require_db()?;
+    let database = require_db(&state)?;
 
     if db::delete_plan(database, id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(StatusCode::NOT_FOUND.into())
     }
 }

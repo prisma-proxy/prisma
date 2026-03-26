@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.15.0** ships with GeoSite filter support, choropleth connection map with city-level dots, subscription plan system, rule match breakdown analytics, SQLite database backend, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.21.0** ships with improved error propagation, connection map enhancements, routing rule fixes, extended analytics, enriched system tray, consolidated settings, and many more production-grade features.
 
 ## Features
 
@@ -144,6 +144,48 @@ graph LR
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```
+
+## What's New in 2.21.0
+
+- **Subscription error propagation** — backend handlers now return real SQL/database error messages as structured JSON instead of opaque 500 errors, making debugging subscription creation failures straightforward
+- **Connection map polish** — AnyChart-style connection map with improved zoom, pan, and city-level dot rendering
+- **Routing rules root cause fix** — fixed TOML-to-JSON deserializer that caused routing rules to silently drop conditions
+
+## What's New in 2.20.0
+
+- **Update proxy/direct option** — auto-update can now route through proxy or direct connection
+- **Routing test fix** — fixed false negatives in the route test endpoint for domain-suffix rules
+- **Connections cleanup** — stale connection entries are now pruned on disconnect
+- **Chart polish** — improved axis labels, tooltips, and dark-mode colors across all analytics charts
+- **Map zoom** — connection map supports scroll-wheel zoom and pinch-to-zoom on mobile
+
+## What's New in 2.19.0
+
+- **Routing diagnostic logging** — verbose log output for each routing rule evaluation, enabled via `PRISMA_ROUTE_DEBUG=1`
+- **Server GeoIP matching** — server-side routing rules now perform live MMDB lookups for GeoIP conditions
+- **Serde round-trip tests** — comprehensive serialization/deserialization tests for all config structs
+- **Markdown changelog** — machine-readable `CHANGELOG.md` generated from conventional commits
+- **Async update install** — GUI auto-update downloads and installs asynchronously without blocking the UI
+- **Windows MoveFileEx** — update binary replacement uses `MoveFileEx` with `MOVEFILE_DELAY_UNTIL_REBOOT` for locked files
+
+## What's New in 2.18.0
+
+- **Extended time ranges** — analytics charts support 1h, 6h, 12h, 24h, 7d, and 30d time windows
+- **Top-10 traffic chart** — new chart showing the top 10 clients by bandwidth consumption
+- **Zoom and pan** — all time-series charts support click-drag zoom and pan navigation
+- **CSV export** — export analytics data to CSV from any chart view
+- **Dark chart theme** — charts follow the system/app dark mode with proper contrast and grid colors
+
+## What's New in 2.17.0
+
+- **Enriched system tray** — tray menu now shows live upload/download speed, quick toggles for proxy modes, update availability, and recent connections
+- **Per-app proxy page** — dedicated page for configuring per-application proxy rules with presets for common apps (browsers, terminals, development tools)
+
+## What's New in 2.16.0
+
+- **Consolidated settings** — unified settings page combining server, client, and console configuration
+- **Complete config fields** — all transport-specific fields (PrismaTLS, CDN, SSH, WireGuard, Fallback) are now exposed in the GUI with validated forms
+- **Polished forms** — improved form layouts, inline validation, and contextual help tooltips
 
 ## What's New in 2.15.0
 

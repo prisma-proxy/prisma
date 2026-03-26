@@ -129,7 +129,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.15.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.21.0"}
 ```
 
 ### 连接
@@ -547,7 +547,7 @@ WS /api/ws/reload
 
 ## 端点总览
 
-所有端点一览（v2.15.0）：
+所有端点一览（v2.21.0）：
 
 | 类别 | 端点数 | 描述 |
 |------|--------|------|
