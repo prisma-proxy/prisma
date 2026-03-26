@@ -1,6 +1,6 @@
 # Prisma
 
-Encrypted proxy system built in Rust. Workspace version 2.14.0, edition 2021.
+Encrypted proxy system built in Rust. Workspace version 2.15.0, edition 2021.
 
 ## Workspace Layout
 
