@@ -269,6 +269,43 @@ async fn run_inner(
                 }
             }
 
+            info!(
+                total = all_rules.len(),
+                domain = all_rules
+                    .iter()
+                    .filter(|r| matches!(
+                        r.condition,
+                        prisma_core::router::RuleCondition::Domain(_)
+                    ))
+                    .count(),
+                suffix = all_rules
+                    .iter()
+                    .filter(|r| matches!(
+                        r.condition,
+                        prisma_core::router::RuleCondition::DomainSuffix(_)
+                    ))
+                    .count(),
+                keyword = all_rules
+                    .iter()
+                    .filter(|r| matches!(
+                        r.condition,
+                        prisma_core::router::RuleCondition::DomainKeyword(_)
+                    ))
+                    .count(),
+                ip_cidr = all_rules
+                    .iter()
+                    .filter(|r| matches!(
+                        r.condition,
+                        prisma_core::router::RuleCondition::IpCidr(_)
+                    ))
+                    .count(),
+                geoip = all_rules
+                    .iter()
+                    .filter(|r| matches!(r.condition, prisma_core::router::RuleCondition::GeoIp(_)))
+                    .count(),
+                "Routing rules loaded"
+            );
+
             let has_geoip_rules = all_rules
                 .iter()
                 .any(|r| matches!(r.condition, prisma_core::router::RuleCondition::GeoIp(_)));

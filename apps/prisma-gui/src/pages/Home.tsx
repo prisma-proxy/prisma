@@ -11,6 +11,7 @@ import StatusBadge from "@/components/StatusBadge";
 import SpeedGraph from "@/components/SpeedGraph";
 import { useStore } from "@/store";
 import { useSettings } from "@/store/settings";
+import { useRules } from "@/store/rules";
 import { useConnection } from "@/hooks/useConnection";
 import { useConnectionHistory } from "@/store/connectionHistory";
 import { fmtBytes, fmtRelativeTime, fmtSpeed, fmtUptime } from "@/lib/format";
@@ -34,6 +35,7 @@ export default function Home() {
   const setProfiles = useStore((s) => s.setProfiles);
 
   const speedSamplesDown = useStore((s) => s.speedSamplesDown);
+  const rules = useRules((s) => s.rules);
   const { toggle, switchProxyMode } = useConnection();
   const events = useConnectionHistory((s) => s.events);
   const todayUsage = useDataUsage((s) => {
@@ -120,7 +122,14 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">Prisma</h1>
-          <StatusBadge />
+          <div className="flex items-center gap-1.5">
+            <StatusBadge />
+            {rules.length > 0 && (
+              <Badge variant="outline" className="text-[10px]">
+                {rules.length} {rules.length === 1 ? "rule" : "rules"}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Profile picker */}

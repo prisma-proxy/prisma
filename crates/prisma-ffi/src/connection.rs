@@ -61,6 +61,12 @@ impl ConnectionManager {
         // Serialize config to a per-profile TOML file for config isolation.
         // Using TOML provides CLI compatibility and human-readable configs.
         // The client_id uniquely identifies each profile, giving each its own file.
+        tracing::info!(
+            rules = config.routing.rules.len(),
+            providers = config.routing.rule_providers.len(),
+            "Client config loaded"
+        );
+
         let config_toml = toml::to_string(&config)?;
         let client_id = config.identity.client_id.clone();
         // Sanitize: keep alphanumeric and hyphens only (client_id is hex so always safe)

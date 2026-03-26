@@ -114,7 +114,9 @@ async fn handle_connect(
         RouteAction::Direct => {
             debug!(dest = %destination, "Smart DNS overriding Direct route to Proxy");
         }
-        RouteAction::Proxy | RouteAction::Unknown => {}
+        RouteAction::Proxy | RouteAction::Unknown => {
+            debug!(dest = %destination, "Routing: proxy (default or matched)");
+        }
     }
 
     info!(dest = %destination, "HTTP CONNECT");
@@ -246,7 +248,9 @@ async fn handle_http_forward(
         RouteAction::Direct => {
             debug!(dest = %destination, method, "Smart DNS overriding Direct route to Proxy");
         }
-        RouteAction::Proxy | RouteAction::Unknown => {}
+        RouteAction::Proxy | RouteAction::Unknown => {
+            debug!(dest = %destination, method, "Routing: proxy (default or matched)");
+        }
     }
 
     info!(dest = %destination, method, "HTTP forward via proxy");

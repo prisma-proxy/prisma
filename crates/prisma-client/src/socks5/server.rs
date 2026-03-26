@@ -157,7 +157,7 @@ async fn handle_connect(
             debug!(dest = %destination, "Smart DNS overriding Direct route to Proxy");
         }
         RouteAction::Proxy | RouteAction::Unknown => {
-            // Fall through to tunnel
+            debug!(dest = %destination, "Routing: proxy (default or matched)");
         }
     }
 

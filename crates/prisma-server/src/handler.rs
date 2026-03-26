@@ -14,7 +14,7 @@ use prisma_core::types::{PaddingRange, ProxyAddress, ProxyDestination, PRISMA_PR
 use prisma_core::util;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use prisma_core::state::{ConnectionInfo, ServerState, SessionMode, Transport};
 
@@ -845,8 +845,54 @@ async fn check_routing_rules(
                 _ => false,
             },
             RuleCondition::IpCidr(cidr) => {
-                if cidr.starts_with("geoip:") || cidr.starts_with("geosite:") {
-                    false // GeoIP/GeoSite rules cannot be evaluated in management rule context
+                if let Some(code) = cidr.strip_prefix("geoip:") {
+                    // Look up destination IP in MMDB for GeoIP matching
+                    match &dest.address {
+                        ProxyAddress::Ipv4(ip) => {
+                            let cfg = state.config.read().await;
+                            if let Some(path) = cfg.routing.geoip_path.as_deref() {
+                                match maxminddb::Reader::open_readfile(path) {
+                                    Ok(reader) => {
+                                        let ip_addr = std::net::IpAddr::V4(*ip);
+                                        let country: Option<String> = reader
+                                            .lookup::<maxminddb::geoip2::Country>(ip_addr)
+                                            .ok()
+                                            .and_then(|c| {
+                                                c.country
+                                                    .and_then(|co| co.iso_code.map(String::from))
+                                            });
+                                        country
+                                            .as_deref()
+                                            .map(|c| c.eq_ignore_ascii_case(code))
+                                            .unwrap_or(false)
+                                    }
+                                    Err(e) => {
+                                        debug!(
+                                            rule = %rule.name,
+                                            error = %e,
+                                            "GeoIP rule skipped (MMDB open failed)"
+                                        );
+                                        false
+                                    }
+                                }
+                            } else {
+                                debug!(
+                                    rule = %rule.name,
+                                    code,
+                                    "GeoIP rule skipped (no geoip_path configured)"
+                                );
+                                false
+                            }
+                        }
+                        _ => false,
+                    }
+                } else if let Some(category) = cidr.strip_prefix("geosite:") {
+                    debug!(
+                        rule = %rule.name,
+                        category,
+                        "GeoSite rule skipped in server routing"
+                    );
+                    false
                 } else {
                     match &dest.address {
                         ProxyAddress::Ipv4(ip) => cidr_match_v4(cidr, *ip),

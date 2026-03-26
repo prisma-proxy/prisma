@@ -31,6 +31,8 @@ export function useConnection() {
         useRules.getState().rules,
         enabledProviders.length > 0 ? enabledProviders : undefined,
       );
+      const routing = config.routing as { rules?: unknown[] } | undefined;
+      console.log(`[connect] ${routing?.rules?.length ?? 0} routing rules, ${enabledProviders.length} providers`);
 
       await api.connect(JSON.stringify(config), modes);
       api.setActiveProfileId(profile.id).catch(() => {});

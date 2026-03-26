@@ -702,4 +702,36 @@ mod tests {
         assert!(parse_port_match("8000-9000", 8000));
         assert!(parse_port_match("8000-9000", 9000));
     }
+
+    #[test]
+    fn test_gui_rule_deserialization() {
+        let json = r#"{"type":"domain","value":"example.com","action":"direct"}"#;
+        let rule: Rule = serde_json::from_str(json).unwrap();
+        assert!(matches!(rule.condition, RuleCondition::Domain(ref d) if d == "example.com"));
+        assert_eq!(rule.action, RouteAction::Direct);
+    }
+
+    #[test]
+    fn test_domain_suffix_deserialization() {
+        let json = r#"{"type":"domain-suffix","value":"google.com","action":"proxy"}"#;
+        let rule: Rule = serde_json::from_str(json).unwrap();
+        assert!(matches!(rule.condition, RuleCondition::DomainSuffix(ref d) if d == "google.com"));
+        assert_eq!(rule.action, RouteAction::Proxy);
+    }
+
+    #[test]
+    fn test_geoip_deserialization() {
+        let json = r#"{"type":"geoip","value":"cn","action":"direct"}"#;
+        let rule: Rule = serde_json::from_str(json).unwrap();
+        assert!(matches!(rule.condition, RuleCondition::GeoIp(ref c) if c == "cn"));
+        assert_eq!(rule.action, RouteAction::Direct);
+    }
+
+    #[test]
+    fn test_unknown_type_fallback() {
+        let json = r#"{"type":"future-type","value":"x","action":"proxy"}"#;
+        let rule: Rule = serde_json::from_str(json).unwrap();
+        assert!(matches!(rule.condition, RuleCondition::Unknown));
+        assert_eq!(rule.action, RouteAction::Proxy);
+    }
 }
