@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use crate::db;
 use crate::MgmtState;
 
+/// Current backup schema version. Embedded as a comment in backup files.
+const BACKUP_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Serialize)]
 pub struct BackupInfo {
     pub name: String,
@@ -81,7 +84,7 @@ pub async fn auto_backup(state: &MgmtState) -> Result<(), StatusCode> {
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_name = format!("auto_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
-    fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    write_versioned_backup(config_path, &dest)?;
     dump_sql_companion(state, &dir, "auto", &timestamp)?;
 
     // Keep only last 50 auto-backups (TOML files)
@@ -148,7 +151,7 @@ pub async fn create_backup(State(state): State<MgmtState>) -> Result<Json<Backup
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_name = format!("manual_{}.toml", timestamp);
     let dest = dir.join(&backup_name);
-    fs::copy(config_path, &dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    write_versioned_backup(config_path, &dest)?;
     dump_sql_companion(&state, &dir, "manual", &timestamp)?;
 
     let meta = fs::metadata(&dest).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -185,13 +188,30 @@ pub async fn restore_backup(
     // Auto-backup current before restore
     auto_backup(&state).await?;
 
-    fs::copy(&backup_path, config_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Read backup content and check version
+    let backup_content =
+        fs::read_to_string(&backup_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let backup_version = parse_backup_version(&backup_content);
+    if backup_version > BACKUP_SCHEMA_VERSION {
+        tracing::warn!(
+            backup_version,
+            current_version = BACKUP_SCHEMA_VERSION,
+            "Restoring backup from a newer version -- some fields may be unknown"
+        );
+    }
+
+    // Strip the version comment before writing the config file
+    let toml_content = strip_version_comment(&backup_content);
+    fs::write(config_path, &toml_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Reload config
-    let content = fs::read_to_string(config_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let new_config: prisma_core::config::server::ServerConfig =
-        toml::from_str(&content).map_err(|_| StatusCode::BAD_REQUEST)?;
+        toml::from_str(&toml_content).map_err(|_| StatusCode::BAD_REQUEST)?;
     *state.config.write().await = new_config;
+
+    // Update raw config TOML for merge-based persistence
+    *state.raw_config_toml.write().await = toml_content;
 
     // Restore companion SQL file if it exists
     if let Some(ref database) = state.db {
@@ -203,6 +223,11 @@ pub async fn restore_backup(
                     tracing::warn!(error = %e, "Failed to restore SQL data from backup");
                 }
             }
+        } else {
+            tracing::info!(
+                backup = %name,
+                "Backup predates SQLite -- skipping data restore"
+            );
         }
     }
 
@@ -261,4 +286,42 @@ pub async fn diff_backup(
         .collect();
 
     Ok(Json(BackupDiff { changes }))
+}
+
+/// Write a config file as a versioned backup: prepend version comment, then TOML content.
+fn write_versioned_backup(
+    source_path: &std::path::Path,
+    dest_path: &std::path::Path,
+) -> Result<(), StatusCode> {
+    let content = fs::read_to_string(source_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let versioned = format!(
+        "# prisma_backup_version = {}\n{}",
+        BACKUP_SCHEMA_VERSION, content
+    );
+    fs::write(dest_path, versioned).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Parse the backup version from the first line comment.
+/// Returns 0 if no version marker is found (pre-versioned backup).
+fn parse_backup_version(content: &str) -> u32 {
+    if let Some(first_line) = content.lines().next() {
+        if let Some(rest) = first_line.strip_prefix("# prisma_backup_version = ") {
+            return rest.trim().parse().unwrap_or(0);
+        }
+    }
+    0
+}
+
+/// Strip the version comment line from backup content, returning clean TOML.
+fn strip_version_comment(content: &str) -> String {
+    if content.starts_with("# prisma_backup_version = ") {
+        // Skip the first line
+        content
+            .split_once('\n')
+            .map(|x| x.1)
+            .unwrap_or("")
+            .to_string()
+    } else {
+        content.to_string()
+    }
 }

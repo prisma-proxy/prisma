@@ -836,10 +836,14 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
                 }
             }
             RuleCondition::PortRange(start, end) => dest.port >= *start && dest.port <= *end,
+            RuleCondition::Unknown => false, // Unknown conditions never match
         };
 
         if matches {
-            return rule.action == RuleAction::Allow || rule.action == RuleAction::Direct;
+            return matches!(
+                rule.action,
+                RuleAction::Allow | RuleAction::Direct | RuleAction::Unknown
+            );
         }
     }
 

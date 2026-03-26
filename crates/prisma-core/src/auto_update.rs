@@ -56,13 +56,22 @@ pub fn check() -> Result<Option<UpdateInfo>> {
     }
 }
 
+/// Maximum download size: 200 MB (release binaries can be 30-50 MB).
+const MAX_DOWNLOAD_SIZE: u64 = 200 * 1024 * 1024;
+
 /// Download a binary from `download_url` and verify its SHA256 hash.
 pub fn download_and_verify(download_url: &str, expected_sha256: &str) -> Result<Vec<u8>> {
-    let mut resp = ureq::get(download_url)
+    let agent = ureq::Agent::new_with_defaults();
+    let mut resp = agent
+        .get(download_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
         .call()?;
 
-    let buf = resp.body_mut().read_to_vec()?;
+    let buf = resp
+        .body_mut()
+        .with_config()
+        .limit(MAX_DOWNLOAD_SIZE)
+        .read_to_vec()?;
 
     // Verify SHA256
     let mut hasher = Sha256::new();
@@ -90,10 +99,16 @@ pub fn apply(download_url: &str, expected_sha256: &str) -> Result<()> {
 
 /// Download a binary from `download_url` without hash verification.
 pub fn download(download_url: &str) -> Result<Vec<u8>> {
-    let mut resp = ureq::get(download_url)
+    let agent = ureq::Agent::new_with_defaults();
+    let mut resp = agent
+        .get(download_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
         .call()?;
-    let buf = resp.body_mut().read_to_vec()?;
+    let buf = resp
+        .body_mut()
+        .with_config()
+        .limit(MAX_DOWNLOAD_SIZE)
+        .read_to_vec()?;
     Ok(buf)
 }
 

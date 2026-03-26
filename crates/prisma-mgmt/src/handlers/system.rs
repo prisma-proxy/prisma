@@ -160,6 +160,23 @@ pub async fn server_geo(State(state): State<MgmtState>) -> Json<Option<ServerGeo
     Json(country.map(|c| ServerGeoResponse { country: c }))
 }
 
+/// GET /api/system/update-check — check GitHub for a newer version.
+pub async fn check_update() -> Json<Option<prisma_core::auto_update::UpdateInfo>> {
+    // Run blocking GitHub API call on the blocking threadpool
+    let result = tokio::task::spawn_blocking(prisma_core::auto_update::check).await;
+    match result {
+        Ok(Ok(info)) => Json(info),
+        Ok(Err(e)) => {
+            tracing::warn!(error = %e, "Update check failed");
+            Json(None)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Update check task panicked");
+            Json(None)
+        }
+    }
+}
+
 fn get_cert_expiry_days(cert_path: &str) -> Option<i64> {
     let pem = std::fs::read(cert_path).ok()?;
     let (_, pem_parsed) = x509_parser::pem::parse_x509_pem(&pem).ok()?;

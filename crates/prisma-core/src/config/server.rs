@@ -7,6 +7,10 @@ use super::LoggingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    /// Config schema version — bumped on breaking config changes.
+    /// Used for forward/backward compatibility detection.
+    #[serde(default = "default_config_version")]
+    pub config_version: u32,
     pub listen_addr: String,
     pub quic_listen_addr: String,
     pub tls: Option<TlsConfig>,
@@ -78,6 +82,11 @@ pub struct ServerConfig {
     /// API-managed routing rules (persisted separately from router traffic rules).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub management_rules: Vec<RoutingRule>,
+}
+
+/// Current config schema version.
+fn default_config_version() -> u32 {
+    13
 }
 
 fn default_dns_upstream() -> String {
@@ -268,6 +277,9 @@ pub enum UserRole {
     Admin,
     Operator,
     Client,
+    /// Unknown role from a future config version — treated as lowest privilege (Client).
+    #[serde(other)]
+    Unknown,
 }
 
 impl std::fmt::Display for UserRole {
@@ -275,7 +287,7 @@ impl std::fmt::Display for UserRole {
         match self {
             Self::Admin => write!(f, "admin"),
             Self::Operator => write!(f, "operator"),
-            Self::Client => write!(f, "client"),
+            Self::Client | Self::Unknown => write!(f, "client"),
         }
     }
 }
@@ -346,7 +358,7 @@ pub struct RoutingRule {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "value")]
 pub enum RuleCondition {
     DomainMatch(String),
@@ -354,6 +366,73 @@ pub enum RuleCondition {
     IpCidr(String),
     PortRange(u16, u16),
     All,
+    /// Unknown condition from a future config version — never matches.
+    Unknown,
+}
+
+impl<'de> serde::Deserialize<'de> for RuleCondition {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize as a generic TOML/JSON value first, then match manually.
+        // This allows unknown "type" values to be caught gracefully.
+        let value = toml::Value::deserialize(deserializer)?;
+
+        // Handle the adjacently tagged format: { type = "...", value = ... }
+        let table = match &value {
+            toml::Value::Table(t) => t,
+            toml::Value::String(s) => {
+                // Simple string case (e.g., "All")
+                return match s.as_str() {
+                    "All" => Ok(RuleCondition::All),
+                    _ => Ok(RuleCondition::Unknown),
+                };
+            }
+            _ => return Ok(RuleCondition::Unknown),
+        };
+
+        let type_str = match table.get("type").and_then(|v| v.as_str()) {
+            Some(s) => s,
+            None => return Ok(RuleCondition::Unknown),
+        };
+
+        match type_str {
+            "DomainMatch" => {
+                let val = table
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                Ok(RuleCondition::DomainMatch(val.to_string()))
+            }
+            "DomainExact" => {
+                let val = table
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                Ok(RuleCondition::DomainExact(val.to_string()))
+            }
+            "IpCidr" => {
+                let val = table
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                Ok(RuleCondition::IpCidr(val.to_string()))
+            }
+            "PortRange" => {
+                // PortRange value is a 2-element array [u16, u16]
+                if let Some(arr) = table.get("value").and_then(|v| v.as_array()) {
+                    let a = arr.first().and_then(|v| v.as_integer()).unwrap_or(0) as u16;
+                    let b = arr.get(1).and_then(|v| v.as_integer()).unwrap_or(0) as u16;
+                    Ok(RuleCondition::PortRange(a, b))
+                } else {
+                    Ok(RuleCondition::PortRange(0, 0))
+                }
+            }
+            "All" => Ok(RuleCondition::All),
+            _ => Ok(RuleCondition::Unknown),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -361,6 +440,9 @@ pub enum RuleAction {
     Allow,
     Direct,
     Block,
+    /// Unknown action from a future config version — treated as Allow (default).
+    #[serde(other)]
+    Unknown,
 }
 
 impl RoutingRule {
@@ -386,6 +468,7 @@ impl RoutingRule {
                 }
             }
             router::RuleCondition::All => RuleCondition::All,
+            router::RuleCondition::Unknown => RuleCondition::Unknown,
         };
         let action = match rule.action {
             router::RouteAction::Block => RuleAction::Block,

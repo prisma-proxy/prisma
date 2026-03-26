@@ -43,6 +43,9 @@ pub struct MgmtState {
     pub alert_config: Arc<RwLock<AlertConfig>>,
     /// SQLite database for dynamic data (users, clients, routing rules, subscriptions, settings).
     pub db: Option<db::Db>,
+    /// Raw TOML text from the config file. Used for merge-based persistence
+    /// that preserves unknown fields from future config versions.
+    pub raw_config_toml: Arc<RwLock<String>>,
 }
 
 impl Deref for MgmtState {
@@ -61,21 +64,49 @@ impl MgmtState {
     }
 
     /// Persist the current in-memory ServerConfig to the TOML file.
+    /// Uses a merge-based approach: known fields from the struct are overlaid onto
+    /// the raw TOML table, preserving any unknown fields from future config versions.
     /// No-op if `config_path` is not set (e.g., running without a config file).
     pub async fn persist_config(&self) {
         let Some(ref path) = self.config_path else {
             return;
         };
+
+        // 1. Serialize the current ServerConfig to a TOML table
         let cfg = self.state.config.read().await;
-        let toml_str = match toml::to_string_pretty(&*cfg) {
-            Ok(s) => s,
+        let struct_table = match toml::to_string_pretty(&*cfg) {
+            Ok(s) => match s.parse::<toml::Table>() {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to parse serialized config as TOML table");
+                    return;
+                }
+            },
             Err(e) => {
                 tracing::warn!(error = %e, "Failed to serialize config for persistence");
                 return;
             }
         };
         drop(cfg);
-        // Atomic write: .tmp then rename for crash safety
+
+        // 2. Parse the stored raw TOML as a table (preserves unknown keys)
+        let raw = self.raw_config_toml.read().await;
+        let mut merged_table = match raw.parse::<toml::Table>() {
+            Ok(t) => t,
+            Err(_) => {
+                // If raw text can't be parsed, start fresh from the struct
+                toml::Table::new()
+            }
+        };
+        drop(raw);
+
+        // 3. Deep-merge: overlay known keys from struct into raw table
+        deep_merge_toml(&mut merged_table, &struct_table);
+
+        // 4. Serialize merged result
+        let toml_str = toml::to_string_pretty(&merged_table).unwrap_or_default();
+
+        // 5. Atomic write: .tmp then rename for crash safety
         let tmp = path.with_extension("toml.tmp");
         if let Err(e) = tokio::fs::write(&tmp, &toml_str).await {
             tracing::warn!(error = %e, "Failed to write config temp file");
@@ -83,7 +114,11 @@ impl MgmtState {
         }
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
             tracing::warn!(error = %e, "Failed to rename config file");
+            return;
         }
+
+        // 6. Update stored raw TOML with the new merged text
+        *self.raw_config_toml.write().await = toml_str;
     }
 
     /// Sync the in-memory routing rules back to `ServerConfig.management_rules`.
@@ -218,4 +253,22 @@ pub async fn serve(config: ManagementApiConfig, mut state: MgmtState) -> Result<
     }
 
     Ok(())
+}
+
+/// Deep-merge `source` into `target`. For each key in `source`:
+/// - If both values are tables, recurse.
+/// - Otherwise, overwrite the value in `target` with the value from `source`.
+///
+/// Keys in `target` that are NOT in `source` are preserved (unknown fields).
+fn deep_merge_toml(target: &mut toml::Table, source: &toml::Table) {
+    for (key, src_val) in source {
+        match (target.get_mut(key), src_val) {
+            (Some(toml::Value::Table(dst_table)), toml::Value::Table(src_table)) => {
+                deep_merge_toml(dst_table, src_table);
+            }
+            _ => {
+                target.insert(key.clone(), src_val.clone());
+            }
+        }
+    }
 }

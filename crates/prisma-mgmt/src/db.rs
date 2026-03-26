@@ -50,18 +50,75 @@ fn run_migrations(conn: &Connection) -> anyhow::Result<()> {
         )
         .unwrap_or(0);
 
-    if current < 1 {
-        conn.execute_batch(include_str!("db_migrations/v1.sql"))?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [1])?;
-        info!("Applied SQLite migration v1");
+    if current < SCHEMA_VERSION {
+        // Forward migrations: apply each step up to the current code version
+        for v in (current + 1)..=SCHEMA_VERSION {
+            apply_up_migration(conn, v)?;
+        }
+    } else if current > SCHEMA_VERSION {
+        // Downgrade: database is newer than code — apply down migrations in reverse
+        warn!(
+            db_version = current,
+            code_version = SCHEMA_VERSION,
+            "Database is newer than code -- applying down migrations"
+        );
+        for v in ((SCHEMA_VERSION + 1)..=current).rev() {
+            apply_down_migration(conn, v)?;
+        }
+        // Update schema_version to reflect the new version
+        conn.execute_batch("DELETE FROM schema_version;")?;
+        if SCHEMA_VERSION > 0 {
+            conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?1)",
+                [SCHEMA_VERSION],
+            )?;
+        }
     }
 
     Ok(())
 }
 
+/// Apply a forward (up) migration for the given version.
+fn apply_up_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
+    match version {
+        1 => {
+            conn.execute_batch(include_str!("db_migrations/v1.sql"))?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [1])?;
+            info!("Applied SQLite migration v1 (up)");
+        }
+        other => {
+            warn!(version = other, "No up migration found for version");
+        }
+    }
+    Ok(())
+}
+
+/// Apply a reverse (down) migration for the given version.
+fn apply_down_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
+    match version {
+        1 => {
+            conn.execute_batch(include_str!("db_migrations/v1_down.sql"))?;
+            info!("Applied SQLite migration v1 (down)");
+        }
+        other => {
+            warn!(
+                version = other,
+                "No down migration found for version -- skipping"
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Insert default console settings if the settings table is empty.
+/// No-op if the settings table does not exist (e.g., after a down migration to v0).
 fn seed_default_settings(conn: &Connection) -> anyhow::Result<()> {
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM settings", [], |r| r.get(0))?;
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM settings", [], |r| r.get(0))
+        .unwrap_or(-1);
+    if count < 0 {
+        return Ok(()); // Table doesn't exist
+    }
     if count == 0 {
         let defaults = [
             ("registration_enabled", "true"),
@@ -927,6 +984,7 @@ fn serialize_condition(cond: &RuleCondition) -> (String, Option<String>) {
         RuleCondition::IpCidr(v) => ("IpCidr".into(), Some(v.clone())),
         RuleCondition::PortRange(a, b) => ("PortRange".into(), Some(format!("{a}-{b}"))),
         RuleCondition::All => ("All".into(), None),
+        RuleCondition::Unknown => ("Unknown".into(), None),
     }
 }
 
@@ -940,13 +998,14 @@ fn deserialize_condition(cond_type: &str, value: Option<&str>) -> RuleCondition 
             let (a, b) = v.split_once('-').unwrap_or(("0", "0"));
             RuleCondition::PortRange(a.parse().unwrap_or(0), b.parse().unwrap_or(0))
         }
-        _ => RuleCondition::All,
+        "All" => RuleCondition::All,
+        _ => RuleCondition::Unknown,
     }
 }
 
 fn serialize_action(action: &RuleAction) -> String {
     match action {
-        RuleAction::Allow => "Allow".into(),
+        RuleAction::Allow | RuleAction::Unknown => "Allow".into(),
         RuleAction::Direct => "Direct".into(),
         RuleAction::Block => "Block".into(),
     }

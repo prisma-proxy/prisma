@@ -190,11 +190,12 @@ pub async fn test_rules(
                     false
                 }
             }
+            RuleCondition::Unknown => false, // Unknown conditions never match
         };
 
         if matches {
             let action_str = match rule.action {
-                RuleAction::Allow => "PROXY",
+                RuleAction::Allow | RuleAction::Unknown => "PROXY",
                 RuleAction::Direct => "DIRECT",
                 RuleAction::Block => "REJECT",
             };
@@ -218,6 +219,7 @@ pub async fn test_rules(
                 }
                 RuleCondition::PortRange(..) => "PORT-RANGE",
                 RuleCondition::All => "FINAL",
+                RuleCondition::Unknown => "UNKNOWN",
             };
             return Json(TestResponse {
                 matched: true,

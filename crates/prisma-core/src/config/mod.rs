@@ -39,7 +39,29 @@ fn default_format() -> String {
 
 /// Load server config from file path with layered overrides:
 /// defaults → TOML file → env vars (PRISMA_*)
+///
+/// Returns the parsed config. Use [`load_server_config_with_raw`] when the
+/// original TOML text is also needed (e.g., for merge-based persistence).
 pub fn load_server_config(path: &str) -> Result<server::ServerConfig, ConfigError> {
+    let (config, _raw) = load_server_config_with_raw(path)?;
+    Ok(config)
+}
+
+/// Load server config from file path with layered overrides.
+/// Returns both the parsed config AND the raw TOML string from disk,
+/// which can be used for merge-based persistence that preserves unknown fields.
+pub fn load_server_config_with_raw(
+    path: &str,
+) -> Result<(server::ServerConfig, String), ConfigError> {
+    // Read the raw TOML text for merge-based persistence.
+    // Try the exact path first, then with ".toml" extension (matching `config::File::with_name` behavior).
+    let raw_toml = std::fs::read_to_string(path)
+        .or_else(|_| {
+            let with_ext = format!("{path}.toml");
+            std::fs::read_to_string(with_ext)
+        })
+        .map_err(|e| ConfigError::ParseError(format!("Cannot read config file: {e}")))?;
+
     let builder = config::Config::builder()
         .set_default("listen_addr", "0.0.0.0:8443")
         .map_err(|e| ConfigError::Invalid(e.to_string()))?
@@ -70,7 +92,7 @@ pub fn load_server_config(path: &str) -> Result<server::ServerConfig, ConfigErro
 
     validation::validate_server_config(&server_config)?;
 
-    Ok(server_config)
+    Ok((server_config, raw_toml))
 }
 
 /// Load client config from file path with layered overrides.

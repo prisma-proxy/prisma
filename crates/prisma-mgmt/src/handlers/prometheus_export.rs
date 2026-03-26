@@ -198,6 +198,7 @@ mod tests {
             config_path: None,
             alert_config: Arc::new(RwLock::new(crate::AlertConfig::default())),
             db: None,
+            raw_config_toml: Arc::new(RwLock::new(String::new())),
         }
     }
 

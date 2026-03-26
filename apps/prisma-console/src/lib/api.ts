@@ -142,6 +142,10 @@ export const api = {
       body: JSON.stringify({ query }),
     }),
 
+  // Update check
+  checkUpdate: () =>
+    apiFetch<{ version: string; url: string; changelog: string } | null>("/api/system/update-check"),
+
   // Reload
   reloadConfig: () =>
     apiFetch<{ success: boolean; message: string; changes: string[] }>("/api/reload", { method: "POST" }),

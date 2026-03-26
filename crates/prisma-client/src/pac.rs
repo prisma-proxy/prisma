@@ -99,7 +99,7 @@ pub fn generate_pac(rules: &[Rule], proxy_addr: &str, default_action: RouteActio
 /// Convert a route action to a PAC return string.
 fn pac_action_str(action: RouteAction, proxy_addr: &str) -> &str {
     match action {
-        RouteAction::Proxy => proxy_addr,
+        RouteAction::Proxy | RouteAction::Unknown => proxy_addr,
         RouteAction::Direct => "DIRECT",
         RouteAction::Block => "DIRECT", // PAC has no "block"; closest is DIRECT
     }

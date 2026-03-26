@@ -156,7 +156,7 @@ async fn handle_connect(
             // override Direct routing and proxy it anyway
             debug!(dest = %destination, "Smart DNS overriding Direct route to Proxy");
         }
-        RouteAction::Proxy => {
+        RouteAction::Proxy | RouteAction::Unknown => {
             // Fall through to tunnel
         }
     }

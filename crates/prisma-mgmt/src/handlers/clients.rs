@@ -42,7 +42,7 @@ pub struct UpdateClientRequest {
 
 /// Get the set of client IDs owned by a user. Returns `None` for admin/operator (no filtering).
 pub async fn owned_client_ids(user: &UserInfo, state: &MgmtState) -> Option<Vec<String>> {
-    if user.role != UserRole::Client {
+    if matches!(user.role, UserRole::Admin | UserRole::Operator) {
         return None; // Admin/Operator see everything
     }
     if let Some(ref database) = state.db {

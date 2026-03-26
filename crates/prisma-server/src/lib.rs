@@ -249,6 +249,9 @@ pub async fn run(config_path: &str) -> Result<()> {
             }
         };
 
+        // Load raw TOML for merge-based persistence (preserves unknown fields)
+        let raw_toml = std::fs::read_to_string(&config_path_buf).unwrap_or_default();
+
         let mgmt_state = prisma_mgmt::MgmtState {
             state: state.clone(),
             bandwidth: Some(ctx.bandwidth.clone()),
@@ -256,6 +259,7 @@ pub async fn run(config_path: &str) -> Result<()> {
             config_path: Some(config_path_buf),
             alert_config: std::sync::Arc::new(tokio::sync::RwLock::new(alert_config)),
             db: None,
+            raw_config_toml: std::sync::Arc::new(tokio::sync::RwLock::new(raw_toml)),
         };
 
         let mgmt_addr = mgmt_config.listen_addr.clone();

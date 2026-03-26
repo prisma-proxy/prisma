@@ -46,6 +46,7 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/metrics/history", get(health::metrics_history))
         // System info
         .route("/api/system/info", get(system::get_system_info))
+        .route("/api/system/update-check", get(system::check_update))
         .route("/api/server/geo", get(system::server_geo))
         // Connections
         .route("/api/connections", get(connections::list))

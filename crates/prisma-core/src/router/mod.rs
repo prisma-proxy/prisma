@@ -22,6 +22,9 @@ pub enum RouteAction {
     Direct,
     #[serde(alias = "reject", alias = "REJECT", alias = "BLOCK")]
     Block,
+    /// Unknown action from a future config version — treated as Proxy (default).
+    #[serde(other)]
+    Unknown,
 }
 
 /// A single routing rule.
@@ -33,7 +36,7 @@ pub struct Rule {
 }
 
 /// Rule matching conditions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "value")]
 pub enum RuleCondition {
     /// Exact domain match.
@@ -57,6 +60,52 @@ pub enum RuleCondition {
     /// Match all connections (catch-all).
     #[serde(rename = "all")]
     All,
+    /// Unknown condition from a future config version -- never matches.
+    Unknown,
+}
+
+impl<'de> serde::Deserialize<'de> for RuleCondition {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = toml::Value::deserialize(deserializer)?;
+
+        let table = match &value {
+            toml::Value::Table(t) => t,
+            toml::Value::String(s) => {
+                return match s.as_str() {
+                    "all" | "All" => Ok(RuleCondition::All),
+                    _ => Ok(RuleCondition::Unknown),
+                };
+            }
+            _ => return Ok(RuleCondition::Unknown),
+        };
+
+        let type_str = match table.get("type").and_then(|v| v.as_str()) {
+            Some(s) => s,
+            None => return Ok(RuleCondition::Unknown),
+        };
+
+        let val_str = || {
+            table
+                .get("value")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        match type_str {
+            "domain" => Ok(RuleCondition::Domain(val_str())),
+            "domain-suffix" => Ok(RuleCondition::DomainSuffix(val_str())),
+            "domain-keyword" => Ok(RuleCondition::DomainKeyword(val_str())),
+            "ip-cidr" => Ok(RuleCondition::IpCidr(val_str())),
+            "geoip" => Ok(RuleCondition::GeoIp(val_str())),
+            "port" => Ok(RuleCondition::Port(val_str())),
+            "all" | "All" => Ok(RuleCondition::All),
+            _ => Ok(RuleCondition::Unknown),
+        }
+    }
 }
 
 /// Pre-parsed CIDR for either IPv4 or IPv6.
@@ -174,6 +223,7 @@ impl Router {
             }
             RuleCondition::Port(p) => parse_port_match(p, port),
             RuleCondition::All => true,
+            RuleCondition::Unknown => false, // Unknown conditions never match
         }
     }
 }
