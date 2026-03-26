@@ -8,11 +8,10 @@ mod tray;
 use std::ffi::CStr;
 use tauri::Emitter;
 
-unsafe extern "C" fn on_ffi_event(
-    json: *const std::ffi::c_char,
-    _userdata: *mut std::ffi::c_void,
-) {
-    if json.is_null() { return; }
+unsafe extern "C" fn on_ffi_event(json: *const std::ffi::c_char, _userdata: *mut std::ffi::c_void) {
+    if json.is_null() {
+        return;
+    }
     let s = CStr::from_ptr(json).to_string_lossy().to_string();
     if let Some(handle) = state::APP_HANDLE.get() {
         // Update tray (desktop only) — parse before emit to avoid clone
@@ -54,11 +53,7 @@ pub fn run() {
     let client = prisma_ffi::prisma_create();
     if !client.is_null() {
         unsafe {
-            prisma_ffi::prisma_set_callback(
-                client,
-                Some(on_ffi_event),
-                std::ptr::null_mut(),
-            );
+            prisma_ffi::prisma_set_callback(client, Some(on_ffi_event), std::ptr::null_mut());
         }
     }
 

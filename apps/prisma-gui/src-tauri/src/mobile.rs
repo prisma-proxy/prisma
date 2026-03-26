@@ -66,10 +66,7 @@ pub fn get_network_type(state: tauri::State<AppState>) -> Result<i32, String> {
 ///
 /// `network_type`: 0 = disconnected, 1 = WiFi, 2 = cellular, 3 = ethernet.
 #[tauri::command]
-pub fn on_network_change(
-    state: tauri::State<AppState>,
-    network_type: i32,
-) -> Result<(), String> {
+pub fn on_network_change(state: tauri::State<AppState>, network_type: i32) -> Result<(), String> {
     let client = client_ptr(&state)?;
     let rc = unsafe { prisma_ffi::prisma_on_network_change(client, network_type) };
     if rc == PRISMA_OK {

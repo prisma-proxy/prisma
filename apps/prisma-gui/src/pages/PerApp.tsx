@@ -59,6 +59,67 @@ const APP_CATEGORIES: AppCategory[] = [
   },
 ];
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+interface AppsListProps {
+  loading: boolean;
+  filteredApps: string[];
+  hasRunningApps: boolean;
+  selectedApps: string[];
+  onToggle: (app: string) => void;
+  t: (key: string) => string;
+}
+
+function AppsList({ loading, filteredApps, hasRunningApps, selectedApps, onToggle, t }: AppsListProps) {
+  if (loading) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        {t("perApp.loading")}
+      </p>
+    );
+  }
+
+  if (filteredApps.length === 0 && !hasRunningApps) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        {t("perApp.noApps")}
+      </p>
+    );
+  }
+
+  if (filteredApps.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        {t("perApp.noMatch")}
+      </p>
+    );
+  }
+
+  const selectedSet = new Set(selectedApps);
+
+  return (
+    <ScrollArea className="h-64 rounded-md border">
+      <div className="p-2 space-y-0.5">
+        {filteredApps.map((app) => (
+          <label
+            key={app}
+            className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-input accent-primary"
+              checked={selectedSet.has(app)}
+              onChange={() => onToggle(app)}
+            />
+            <AppWindow size={14} className="text-muted-foreground shrink-0" />
+            <span className="truncate">{app}</span>
+          </label>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PerApp() {
@@ -252,39 +313,14 @@ export default function PerApp() {
                 </Button>
               </div>
 
-              {appsLoading ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">
-                  {t("perApp.loading")}
-                </p>
-              ) : filteredApps.length === 0 && runningApps.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">
-                  {t("perApp.noApps")}
-                </p>
-              ) : filteredApps.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">
-                  {t("perApp.noMatch")}
-                </p>
-              ) : (
-                <ScrollArea className="h-64 rounded-md border">
-                  <div className="p-2 space-y-0.5">
-                    {filteredApps.map((app) => (
-                      <label
-                        key={app}
-                        className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-input accent-primary"
-                          checked={perApp.apps.includes(app)}
-                          onChange={() => perApp.toggleApp(app)}
-                        />
-                        <AppWindow size={14} className="text-muted-foreground shrink-0" />
-                        <span className="truncate">{app}</span>
-                      </label>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
+              <AppsList
+                loading={appsLoading}
+                filteredApps={filteredApps}
+                hasRunningApps={runningApps.length > 0}
+                selectedApps={perApp.apps}
+                onToggle={perApp.toggleApp}
+                t={t}
+              />
 
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">

@@ -30,12 +30,12 @@ function countToFill(count: number): { fill: string; opacity: number } {
 
 export function ConnectionMap() {
   const { t } = useI18n();
-  const [hoveredCity, setHoveredCity] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({
-    x: 0,
-    y: 0,
-  });
-  const [tooltipLabel, setTooltipLabel] = useState("");
+  const [tooltip, setTooltip] = useState<{
+    key: string;
+    x: number;
+    y: number;
+    label: string;
+  } | null>(null);
 
   const { data: geo } = useQuery({
     queryKey: ["connections-geo"],
@@ -90,15 +90,13 @@ export function ConnectionMap() {
 
   const handleCityEnter = useCallback(
     (key: string, cx: number, cy: number, label: string) => {
-      setHoveredCity(key);
-      setTooltipPos({ x: cx, y: cy });
-      setTooltipLabel(label);
+      setTooltip({ key, x: cx, y: cy, label });
     },
     []
   );
 
   const handleCityLeave = useCallback(() => {
-    setHoveredCity(null);
+    setTooltip(null);
   }, []);
 
   if (!geo || geo.length === 0) {
@@ -206,7 +204,7 @@ export function ConnectionMap() {
               const maxR = 5;
               const r = minR + (entry.count / maxCityCount) * (maxR - minR);
               const key = `${entry.country}-${entry.city ?? "unknown"}-${entry.lat}-${entry.lon}`;
-              const isHovered = hoveredCity === key;
+              const isHovered = tooltip?.key === key;
               const label = entry.city
                 ? `${entry.city}, ${entry.country}: ${entry.count}`
                 : `${entry.country}: ${entry.count}`;
@@ -258,7 +256,7 @@ export function ConnectionMap() {
             </g>
 
             {/* Floating tooltip */}
-            {hoveredCity && <MapTooltip label={tooltipLabel} pos={tooltipPos} />}
+            {tooltip && <MapTooltip label={tooltip.label} pos={{ x: tooltip.x, y: tooltip.y }} />}
           </svg>
         </div>
       </CardContent>

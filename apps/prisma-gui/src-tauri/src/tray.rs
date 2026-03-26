@@ -68,6 +68,7 @@ fn build_proxy_mode_submenu<M: tauri::Manager<tauri::Wry>>(
 ) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
     let current = crate::state::PROXY_MODE
         .lock()
+        .ok()
         .map(|g| *g)
         .unwrap_or(0x02);
     let check = |flag: u32| if current == flag { "\u{2713} " } else { "  " };
@@ -114,13 +115,7 @@ fn build_speed_stats_submenu<M: tauri::Manager<tauri::Wry>>(
         false,
         None::<&str>,
     )?;
-    let total_up = MenuItem::with_id(
-        mgr,
-        "stat:total-up",
-        "Total Up: 0 B",
-        false,
-        None::<&str>,
-    )?;
+    let total_up = MenuItem::with_id(mgr, "stat:total-up", "Total Up: 0 B", false, None::<&str>)?;
     let total_down = MenuItem::with_id(
         mgr,
         "stat:total-down",
@@ -168,14 +163,17 @@ fn build_quick_toggles_submenu<M: tauri::Manager<tauri::Wry>>(
 ) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
     let auto_connect = crate::state::TOGGLE_AUTO_CONNECT
         .lock()
+        .ok()
         .map(|g| *g)
         .unwrap_or(false);
     let allow_lan = crate::state::TOGGLE_ALLOW_LAN
         .lock()
+        .ok()
         .map(|g| *g)
         .unwrap_or(false);
     let tun = crate::state::TOGGLE_TUN
         .lock()
+        .ok()
         .map(|g| *g)
         .unwrap_or(false);
 
@@ -310,9 +308,7 @@ fn build_full_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .build()
 }
 
-fn build_profiles_submenu(
-    app: &AppHandle,
-) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
+fn build_profiles_submenu(app: &AppHandle) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
     let ptr = prisma_ffi::prisma_profiles_list_json();
     let profiles: Vec<serde_json::Value> = if ptr.is_null() {
         Vec::new()
@@ -442,86 +438,8 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 pub fn setup(app: &App) -> tauri::Result<()> {
-    let connect = MenuItem::with_id(app, "tray-connect", "Connect", true, None::<&str>)?;
-    if let Ok(mut guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
-        *guard = Some(connect.clone());
-    }
-
-    let show = MenuItem::with_id(app, "tray-show", "Show Window", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "tray-quit", "Quit Prisma", true, None::<&str>)?;
-    let copy_addr = MenuItem::with_id(
-        app,
-        "tray-copy-addr",
-        "Copy Proxy Address",
-        true,
-        None::<&str>,
-    )?;
-    let copy_terminal = MenuItem::with_id(
-        app,
-        "copy-terminal-proxy",
-        "Copy Terminal Proxy",
-        true,
-        None::<&str>,
-    )?;
-    let check_updates = MenuItem::with_id(
-        app,
-        "tray-check-update",
-        "Check for Updates",
-        true,
-        None::<&str>,
-    )?;
-    let update_providers = MenuItem::with_id(
-        app,
-        "tray-update-providers",
-        "Update Rule Providers",
-        true,
-        None::<&str>,
-    )?;
-
-    let mode_sub = build_proxy_mode_submenu(app)?;
-
-    let profiles_sub = SubmenuBuilder::new(app, "Profiles")
-        .item(&MenuItem::with_id(
-            app,
-            "profile:none",
-            "(no profiles)",
-            false,
-            None::<&str>,
-        )?)
-        .build()?;
-
-    let stats_sub = build_speed_stats_submenu(app)?;
-    let recent_sub = SubmenuBuilder::new(app, "Recent Connections")
-        .item(&MenuItem::with_id(
-            app,
-            "recent:empty",
-            "(empty)",
-            false,
-            None::<&str>,
-        )?)
-        .build()?;
-    let toggles_sub = build_quick_toggles_submenu(app)?;
-
-    let menu = MenuBuilder::new(app)
-        .item(&connect)
-        .separator()
-        .item(&mode_sub)
-        .item(&profiles_sub)
-        .separator()
-        .item(&stats_sub)
-        .item(&recent_sub)
-        .separator()
-        .item(&toggles_sub)
-        .separator()
-        .item(&update_providers)
-        .item(&check_updates)
-        .separator()
-        .item(&copy_addr)
-        .item(&copy_terminal)
-        .separator()
-        .item(&show)
-        .item(&quit)
-        .build()?;
+    let handle = app.handle();
+    let menu = build_full_menu(handle)?;
 
     TrayIconBuilder::with_id("prisma-tray")
         .tooltip("Prisma")
@@ -601,10 +519,7 @@ pub fn update_tooltip(handle: &AppHandle, stats: &TrayStatsUpdate<'_>) {
     }
     if let Ok(g) = crate::state::TRAY_STAT_DOWNLOAD.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!(
-                "\u{2193} Download: {}",
-                fmt_speed(stats.down_bps)
-            ));
+            let _ = item.set_text(format!("\u{2193} Download: {}", fmt_speed(stats.down_bps)));
         }
     }
     if let Ok(g) = crate::state::TRAY_STAT_TOTAL_UP.lock() {

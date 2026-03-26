@@ -2,12 +2,14 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
 use crate::state::AppState;
-use prisma_ffi::{PRISMA_OK, PRISMA_ERR_NOT_CONNECTED};
+use prisma_ffi::{PRISMA_ERR_NOT_CONNECTED, PRISMA_OK};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 unsafe fn read_owned_cstr(ptr: *mut c_char) -> Option<String> {
-    if ptr.is_null() { return None; }
+    if ptr.is_null() {
+        return None;
+    }
     let s = CStr::from_ptr(ptr).to_string_lossy().to_string();
     prisma_ffi::prisma_free_string(ptr);
     Some(s)
@@ -15,7 +17,9 @@ unsafe fn read_owned_cstr(ptr: *mut c_char) -> Option<String> {
 
 fn client_ptr(state: &tauri::State<AppState>) -> Result<*mut prisma_ffi::PrismaClient, String> {
     let raw = *state.client.lock().unwrap();
-    if raw == 0 { return Err("no client".into()); }
+    if raw == 0 {
+        return Err("no client".into());
+    }
     Ok(raw as *mut prisma_ffi::PrismaClient)
 }
 
@@ -30,15 +34,22 @@ pub fn connect(
     let client = client_ptr(&state)?;
     let cfg = CString::new(config_json).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_connect(client, cfg.as_ptr(), modes) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_connect error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_connect error {rc}"))
+    }
 }
 
 #[tauri::command]
 pub fn disconnect(state: tauri::State<AppState>) -> Result<(), String> {
     let client = client_ptr(&state)?;
     let rc = unsafe { prisma_ffi::prisma_disconnect(client) };
-    if rc == PRISMA_OK || rc == PRISMA_ERR_NOT_CONNECTED { Ok(()) }
-    else { Err(format!("prisma_disconnect error {rc}")) }
+    if rc == PRISMA_OK || rc == PRISMA_ERR_NOT_CONNECTED {
+        Ok(())
+    } else {
+        Err(format!("prisma_disconnect error {rc}"))
+    }
 }
 
 #[tauri::command]
@@ -72,14 +83,22 @@ pub fn list_profiles() -> Result<serde_json::Value, String> {
 pub fn save_profile(profile_json: String) -> Result<(), String> {
     let cstr = CString::new(profile_json).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_profile_save(cstr.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_profile_save error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_profile_save error {rc}"))
+    }
 }
 
 #[tauri::command]
 pub fn delete_profile(id: String) -> Result<(), String> {
     let cstr = CString::new(id).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_profile_delete(cstr.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_profile_delete error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_profile_delete error {rc}"))
+    }
 }
 
 // ── QR ────────────────────────────────────────────────────────────────────────
@@ -137,13 +156,21 @@ pub fn profile_config_to_toml(config_json: String) -> Result<String, String> {
 pub fn set_system_proxy(host: String, port: u16) -> Result<(), String> {
     let host_c = CString::new(host).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_set_system_proxy(host_c.as_ptr(), port) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_set_system_proxy error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_set_system_proxy error {rc}"))
+    }
 }
 
 #[tauri::command]
 pub fn clear_system_proxy() -> Result<(), String> {
     let rc = prisma_ffi::prisma_clear_system_proxy();
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_clear_system_proxy error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_clear_system_proxy error {rc}"))
+    }
 }
 
 // ── auto-update ───────────────────────────────────────────────────────────────
@@ -153,7 +180,9 @@ pub fn check_update() -> Result<Option<serde_json::Value>, String> {
     let ptr = prisma_ffi::prisma_check_update_json();
     match unsafe { read_owned_cstr(ptr) } {
         None => Ok(None),
-        Some(s) => serde_json::from_str(&s).map(Some).map_err(|e| e.to_string()),
+        Some(s) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| e.to_string()),
     }
 }
 
@@ -162,7 +191,11 @@ pub fn apply_update(url: String, sha: String) -> Result<(), String> {
     let url_c = CString::new(url).map_err(|e| e.to_string())?;
     let sha_c = CString::new(sha).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_apply_update(url_c.as_ptr(), sha_c.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_apply_update error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_apply_update error {rc}"))
+    }
 }
 
 // ── tray ──────────────────────────────────────────────────────────────────────
@@ -219,7 +252,11 @@ pub fn get_active_profile_id() -> Option<String> {
 
 #[tauri::command]
 pub fn get_proxy_mode() -> u32 {
-    crate::state::PROXY_MODE.lock().map(|g| *g).unwrap_or(0x02)
+    crate::state::PROXY_MODE
+        .lock()
+        .ok()
+        .map(|g| *g)
+        .unwrap_or(0x02)
 }
 
 /// Update tray speed stats and tooltip with live bandwidth data.
@@ -292,8 +329,7 @@ pub fn ping_server(addr: String) -> Result<u64, String> {
     match unsafe { read_owned_cstr(ptr) } {
         None => Err("ping returned null".into()),
         Some(json) => {
-            let val: serde_json::Value =
-                serde_json::from_str(&json).map_err(|e| e.to_string())?;
+            let val: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
             if let Some(ms) = val["latency_ms"].as_u64() {
                 Ok(ms)
             } else if let Some(err) = val["error"].as_str() {
@@ -326,12 +362,7 @@ pub fn check_elevation() -> bool {
 
 #[cfg(unix)]
 fn check_elevation_impl() -> bool {
-    // On Unix, check if running as root (uid 0).
-    // std::process::id() returns PID, not UID — use the nix-style raw syscall.
-    #[allow(unsafe_code)]
-    unsafe {
-        libc::getuid() == 0
-    }
+    unsafe { libc::getuid() == 0 }
 }
 
 #[cfg(not(unix))]
@@ -345,13 +376,21 @@ fn check_elevation_impl() -> bool {
 pub fn set_per_app_filter(filter_json: String) -> Result<(), String> {
     let cstr = CString::new(filter_json).map_err(|e| e.to_string())?;
     let rc = unsafe { prisma_ffi::prisma_set_per_app_filter(cstr.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_set_per_app_filter error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_set_per_app_filter error {rc}"))
+    }
 }
 
 #[tauri::command]
 pub fn clear_per_app_filter() -> Result<(), String> {
     let rc = unsafe { prisma_ffi::prisma_set_per_app_filter(std::ptr::null()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_clear_per_app_filter error {rc}")) }
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_clear_per_app_filter error {rc}"))
+    }
 }
 
 #[tauri::command]
@@ -368,7 +407,9 @@ pub fn get_per_app_filter() -> Result<Option<serde_json::Value>, String> {
     let ptr = prisma_ffi::prisma_get_per_app_filter();
     match unsafe { read_owned_cstr(ptr) } {
         None => Ok(None),
-        Some(s) => serde_json::from_str(&s).map(Some).map_err(|e| e.to_string()),
+        Some(s) => serde_json::from_str(&s)
+            .map(Some)
+            .map_err(|e| e.to_string()),
     }
 }
 
@@ -416,11 +457,7 @@ pub fn open_folder(path: String) -> Result<(), String> {
 // ── file download ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn download_file(
-    url: String,
-    dest_path: String,
-    proxy_port: u16,
-) -> Result<(), String> {
+pub async fn download_file(url: String, dest_path: String, proxy_port: u16) -> Result<(), String> {
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .redirect(reqwest::redirect::Policy::limited(10));
@@ -438,7 +475,9 @@ pub async fn download_file(
         return Err(format!("HTTP {}", resp.status()));
     }
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    tokio::fs::write(&dest_path, &bytes).await.map_err(|e| e.to_string())?;
+    tokio::fs::write(&dest_path, &bytes)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -460,8 +499,13 @@ pub fn speed_test(
     let client = client_ptr(&state)?;
     let srv = CString::new(server).map_err(|e| e.to_string())?;
     let dir = CString::new("both").map_err(|e| e.to_string())?;
-    let rc = unsafe { prisma_ffi::prisma_speed_test(client, srv.as_ptr(), duration_secs, dir.as_ptr()) };
-    if rc == PRISMA_OK { Ok(()) } else { Err(format!("prisma_speed_test error {rc}")) }
+    let rc =
+        unsafe { prisma_ffi::prisma_speed_test(client, srv.as_ptr(), duration_secs, dir.as_ptr()) };
+    if rc == PRISMA_OK {
+        Ok(())
+    } else {
+        Err(format!("prisma_speed_test error {rc}"))
+    }
 }
 
 // ── rule providers ────────────────────────────────────────────────────────
@@ -475,8 +519,7 @@ pub async fn update_rule_provider(
     action: String,
     proxy_port: u16,
 ) -> Result<serde_json::Value, String> {
-    let mut builder = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30));
+    let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30));
     if proxy_port > 0 {
         let proxy = reqwest::Proxy::all(format!("http://127.0.0.1:{}", proxy_port))
             .map_err(|e| e.to_string())?;

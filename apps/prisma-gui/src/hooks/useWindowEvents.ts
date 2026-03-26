@@ -46,49 +46,6 @@ export function useWindowEvents() {
     return () => { unlisten.then((f) => f()); };
   }, [toggle]);
 
-  // Handle tray "Copy Proxy Address"
-  useEffect(() => {
-    const unlisten = listen("tray://copy-proxy-address", async () => {
-      const socks5Port = useSettings.getState().socks5Port;
-      const httpPort = useSettings.getState().httpPort;
-      const host = useSettings.getState().allowLan ? "0.0.0.0" : "127.0.0.1";
-      const lines: string[] = [];
-      if (socks5Port > 0) lines.push(`socks5://${host}:${socks5Port}`);
-      if (httpPort && httpPort > 0) lines.push(`http://${host}:${httpPort}`);
-      const text = lines.join("\n") || `${host}:${socks5Port || 1080}`;
-      try {
-        await writeText(text);
-        notify.success(`${i18n.t("profiles.copiedToClipboard")}: ${text.replace("\n", ", ")}`);
-      } catch {
-        notify.error(i18n.t("notifications.error"));
-      }
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, []);
-
-  // Handle tray "Copy Terminal Proxy"
-  useEffect(() => {
-    const unlisten = listen("tray://copy-terminal-proxy", async () => {
-      const httpPort = useSettings.getState().httpPort;
-      if (!httpPort || httpPort <= 0) {
-        notify.warning(i18n.t("tray.httpPortNotSet"));
-        return;
-      }
-      const host = useSettings.getState().allowLan ? "0.0.0.0" : "127.0.0.1";
-      const isWin = navigator.userAgent.includes("Windows");
-      const cmd = isWin
-        ? `set http_proxy=http://${host}:${httpPort} && set https_proxy=http://${host}:${httpPort}`
-        : `export http_proxy=http://${host}:${httpPort}; export https_proxy=http://${host}:${httpPort}`;
-      try {
-        await writeText(cmd);
-        notify.success(i18n.t("tray.copiedTerminalProxy"));
-      } catch {
-        notify.error(i18n.t("notifications.error"));
-      }
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, []);
-
   // Handle tray proxy mode change
   useEffect(() => {
     const unlisten = listen<number>("tray://proxy-mode-change", (event) => {
@@ -110,65 +67,79 @@ export function useWindowEvents() {
     return () => { unlisten.then((f) => f()); };
   }, [switchTo]);
 
-  // Handle tray "Check for Updates" (Item 3)
+  // Stateless tray event listeners (all read latest state via getState())
   useEffect(() => {
-    const unlisten = listen("tray://check-update", async () => {
-      try {
-        const info = await api.checkUpdate();
-        if (info && info.version) {
-          useStore.getState().setUpdateAvailable(info);
-          notify.info(i18n.t("tray.updateAvailable", { version: info.version }));
-        } else {
-          notify.success(i18n.t("tray.upToDate"));
-        }
-      } catch {
-        notify.error(i18n.t("tray.updateCheckFailed"));
-      }
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, []);
-
-  // Handle tray "Update Rule Providers" (Item 4)
-  useEffect(() => {
-    const unlisten = listen("tray://update-providers", async () => {
-      const providers = useRuleProviders.getState().providers.filter((p) => p.enabled);
-      if (providers.length === 0) {
-        notify.info(i18n.t("tray.noEnabledProviders"));
-        return;
-      }
-      let successCount = 0;
-      const store = useStore.getState();
-      const proxyPort = store.connected ? (useSettings.getState().httpPort || 0) : 0;
-      for (const p of providers) {
+    const unlisteners = [
+      listen("tray://copy-proxy-address", async () => {
+        const s = useSettings.getState();
+        const host = s.allowLan ? "0.0.0.0" : "127.0.0.1";
+        const lines: string[] = [];
+        if (s.socks5Port > 0) lines.push(`socks5://${host}:${s.socks5Port}`);
+        if (s.httpPort && s.httpPort > 0) lines.push(`http://${host}:${s.httpPort}`);
+        const text = lines.join("\n") || `${host}:${s.socks5Port || 1080}`;
         try {
-          const result = await api.updateRuleProvider(
-            p.id,
-            p.name,
-            p.url,
-            p.behavior,
-            p.action,
-            proxyPort,
-          );
-          useRuleProviders.getState().updateProviderStatus(
-            p.id,
-            result.rule_count,
-            new Date().toISOString(),
-          );
-          successCount++;
+          await writeText(text);
+          notify.success(`${i18n.t("profiles.copiedToClipboard")}: ${text.replace("\n", ", ")}`);
         } catch {
-          // Continue updating remaining providers
+          notify.error(i18n.t("notifications.error"));
         }
-      }
-      notify.success(i18n.t("tray.providersUpdated", { count: successCount }));
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, []);
-
-  // Handle tray "Quick Toggles" (Item 2)
-  useEffect(() => {
-    const unlisten = listen<{ key: string; value: boolean }>(
-      "tray://toggle-setting",
-      (event) => {
+      }),
+      listen("tray://copy-terminal-proxy", async () => {
+        const s = useSettings.getState();
+        if (!s.httpPort || s.httpPort <= 0) {
+          notify.warning(i18n.t("tray.httpPortNotSet"));
+          return;
+        }
+        const host = s.allowLan ? "0.0.0.0" : "127.0.0.1";
+        const isWin = navigator.userAgent.includes("Windows");
+        const cmd = isWin
+          ? `set http_proxy=http://${host}:${s.httpPort} && set https_proxy=http://${host}:${s.httpPort}`
+          : `export http_proxy=http://${host}:${s.httpPort}; export https_proxy=http://${host}:${s.httpPort}`;
+        try {
+          await writeText(cmd);
+          notify.success(i18n.t("tray.copiedTerminalProxy"));
+        } catch {
+          notify.error(i18n.t("notifications.error"));
+        }
+      }),
+      listen("tray://check-update", async () => {
+        try {
+          const info = await api.checkUpdate();
+          if (info && info.version) {
+            useStore.getState().setUpdateAvailable(info);
+            notify.info(i18n.t("tray.updateAvailable", { version: info.version }));
+          } else {
+            notify.success(i18n.t("tray.upToDate"));
+          }
+        } catch {
+          notify.error(i18n.t("tray.updateCheckFailed"));
+        }
+      }),
+      listen("tray://update-providers", async () => {
+        const providers = useRuleProviders.getState().providers.filter((p) => p.enabled);
+        if (providers.length === 0) {
+          notify.info(i18n.t("tray.noEnabledProviders"));
+          return;
+        }
+        let successCount = 0;
+        const store = useStore.getState();
+        const proxyPort = store.connected ? (useSettings.getState().httpPort || 0) : 0;
+        for (const p of providers) {
+          try {
+            const result = await api.updateRuleProvider(
+              p.id, p.name, p.url, p.behavior, p.action, proxyPort,
+            );
+            useRuleProviders.getState().updateProviderStatus(
+              p.id, result.rule_count, new Date().toISOString(),
+            );
+            successCount++;
+          } catch {
+            // Continue updating remaining providers
+          }
+        }
+        notify.success(i18n.t("tray.providersUpdated", { count: successCount }));
+      }),
+      listen<{ key: string; value: boolean }>("tray://toggle-setting", (event) => {
         const { key, value } = event.payload;
         const settings = useSettings.getState();
         switch (key) {
@@ -182,8 +153,8 @@ export function useWindowEvents() {
             settings.patch({ tunEnabled: value });
             break;
         }
-      },
-    );
-    return () => { unlisten.then((f) => f()); };
+      }),
+    ];
+    return () => { for (const u of unlisteners) u.then((f) => f()); };
   }, []);
 }
