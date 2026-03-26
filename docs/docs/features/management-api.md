@@ -133,7 +133,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/users
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:9090/api/health
-# {"status":"ok","uptime_secs":3600,"version":"2.13.0"}
+# {"status":"ok","uptime_secs":3600,"version":"2.15.0"}
 ```
 
 ### Connections
@@ -553,7 +553,7 @@ Pushes notifications when the server configuration is reloaded (via `POST /api/r
 
 ## Endpoint Summary
 
-All endpoints at a glance (v2.13.0):
+All endpoints at a glance (v2.15.0):
 
 | Category | Endpoints | Description |
 |----------|-----------|-------------|

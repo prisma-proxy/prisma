@@ -4,7 +4,7 @@ sidebar_position: 9
 
 # 故障排除
 
-Prisma v2.13.0 的常见问题及其解决方案。
+Prisma v2.15.0 的常见问题及其解决方案。
 
 ## 认证失败
 
@@ -265,7 +265,7 @@ Prisma v2.13.0 的常见问题及其解决方案。
 | 错误消息 | 原因 | 解决方法 |
 |---------|------|---------|
 | `AcceptStatus::AuthFailed` | 客户端 ID 或认证密钥不匹配 | 重新运行 `prisma gen-key` 并更新两端配置 |
-| `AcceptStatus::VersionMismatch` | 客户端和服务端协议版本不同 | 确保两端都是 v2.13.0（仅 PrismaVeil v5） |
+| `AcceptStatus::VersionMismatch` | 客户端和服务端协议版本不同 | 确保两端都是 v2.15.0（仅 PrismaVeil v5） |
 | `AcceptStatus::ServerBusy` | 服务端 `max_connections` 限制已达 | 增加 `performance.max_connections` |
 | `AcceptStatus::QuotaExceeded` | 客户端流量配额已用尽 | 通过 `prisma bandwidth quota <ID> --limit <BYTES>` 增加配额 |
 | `Connection refused` | 服务器未运行或端口错误 | 检查 `prisma server status` 并验证端口 |

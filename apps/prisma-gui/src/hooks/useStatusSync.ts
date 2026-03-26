@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useStore } from "../store";
 import { useSettings } from "../store/settings";
 import { api } from "../lib/commands";
@@ -6,7 +7,7 @@ import { api } from "../lib/commands";
 const STATUS_CONNECTING = 1;
 const STATUS_CONNECTED = 2;
 
-async function syncStatus() {
+export async function syncStatus() {
   try {
     const status = await api.getStatus();
     const store = useStore.getState();
@@ -56,16 +57,35 @@ export function useStatusSync() {
     // Re-sync when app regains focus (covers macOS background/resume).
     // Debounce to avoid spamming backend on rapid tab switches.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    function debouncedSync() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(syncStatus, 300);
+    }
+
     function handleVisibility() {
       if (document.visibilityState === "visible") {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(syncStatus, 500);
+        debouncedSync();
       }
     }
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // Tauri desktop window focus listener — visibilitychange does not fire
+    // when a desktop window is minimized/restored or loses/gains focus.
+    let unlistenFocus: (() => void) | null = null;
+    getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) {
+          debouncedSync();
+        }
+      })
+      .then((fn) => {
+        unlistenFocus = fn;
+      });
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       if (debounceTimer) clearTimeout(debounceTimer);
+      if (unlistenFocus) unlistenFocus();
     };
   }, []);
 }

@@ -19,6 +19,7 @@ import { api } from "@/lib/commands";
 import { notify } from "@/store/notifications";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useDataUsage } from "@/store/dataUsage";
+import { syncStatus } from "@/hooks/useStatusSync";
 import { MODE_SOCKS5, MODE_SYSTEM_PROXY, MODE_TUN, MODE_PER_APP } from "@/lib/types";
 
 export default function Home() {
@@ -52,6 +53,11 @@ export default function Home() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [setProfiles]);
+
+  // Sync connection status when Home page mounts (covers navigation back to Home)
+  useEffect(() => {
+    syncStatus();
+  }, []);
 
   // Derive server address from active profile (stable string, avoids profiles array dep)
   const serverAddr = useMemo(() => {

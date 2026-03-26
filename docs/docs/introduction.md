@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.13.0** ships with a SQLite database backend, subscription system with redemption codes and invite links, role-based console dashboard, Cloudflare-style connection map, congestion "auto" mode, cross-platform GeoIP text badges, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.15.0** ships with GeoSite filter support, choropleth connection map with city-level dots, subscription plan system, rule match breakdown analytics, SQLite database backend, and many more production-grade features.
 
 ## Features
 
@@ -144,6 +144,26 @@ graph LR
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```
+
+## What's New in 2.15.0
+
+- **GeoSite filter support** — auto-download GeoSite domain lists with category presets for routing rules
+- **Routing GeoIP test** — server-side route test endpoint now performs actual MMDB lookup for GeoIP rules
+- **Rule Match Breakdown** — analytics chart now shows matched rule names for all connections (Default, Bypass, or named rule)
+- **Header controls** — notification, theme, and language controls moved to the app bar
+- **Settings cleanup** — removed duplicate auto-backup field from settings page
+- **Sidebar logo polish** — sidebar logo refined for both light and dark themes
+- **Connection map visibility** — increased base country visibility on the choropleth connection map
+
+## What's New in 2.14.0
+
+- **Choropleth connection map** — redesigned connection map with city-level dots at lat/lon coordinates
+- **City-level GeoIP data** — connection GeoIP now includes city name and coordinates from MMDB
+- **Full country name display** — connection table shows full country names instead of ISO codes
+- **Subscription plan system** — Free, Basic, and Pro plan presets with configurable limits
+- **Permission controls** — fine-grained controls on codes/invites (port-forwarding, UDP, max connections, allowed destinations)
+- **i18n expansion** — subscription, redeem, and settings pages fully internationalized (EN + ZH)
+- **SQLite migration v2** — database schema migration for plans and permissions tables
 
 ## What's New in 2.13.0
 

@@ -571,6 +571,10 @@ where
                 return Err(anyhow::anyhow!("Blocked by routing rule"));
             }
 
+            // Ensure matched_rule is always populated for analytics.
+            // If no rule matched (default allow), label as "Default".
+            let matched_rule_name = matched_rule_name.or_else(|| Some("Default".to_string()));
+
             // Check per-client ACL
             {
                 if !state.acl_store.check(&client_id_str, dest).await {
@@ -657,6 +661,7 @@ where
                 .get_mut(&session_keys.session_id)
             {
                 conn.mode = SessionMode::Forward;
+                conn.matched_rule = Some("Bypass".to_string());
             }
 
             info!(port = remote_port, name = %name, "Client requesting port forwarding mode");
@@ -782,6 +787,7 @@ where
                 .get_mut(&session_keys.session_id)
             {
                 conn.mode = SessionMode::UdpRelay;
+                conn.matched_rule = Some("Bypass".to_string());
             }
 
             info!("Client requesting UDP relay mode");
