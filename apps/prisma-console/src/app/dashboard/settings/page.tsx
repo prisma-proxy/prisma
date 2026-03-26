@@ -36,7 +36,7 @@ export default function SettingsPage() {
   const [pendingOriginal, setPendingOriginal] = React.useState<Record<string, unknown>>({});
   const [pendingUpdate, setPendingUpdate] = React.useState<Record<string, unknown>>({});
 
-  const handleReload = async () => {
+  async function handleReload() {
     setReloading(true);
     try {
       await api.reloadConfig();
@@ -47,7 +47,7 @@ export default function SettingsPage() {
     } finally {
       setReloading(false);
     }
-  };
+  }
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["config"],

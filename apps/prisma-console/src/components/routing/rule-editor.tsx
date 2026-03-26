@@ -50,6 +50,14 @@ type FriendlyType = (typeof FRIENDLY_TYPES)[number];
 const FRIENDLY_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 type FriendlyAction = (typeof FRIENDLY_ACTIONS)[number];
 
+/* ── GeoSite preset categories shown in the dropdown ── */
+const GEOSITE_PRESETS = [
+  "cn", "geolocation-cn", "geolocation-!cn", "tld-cn", "tld-!cn",
+  "google", "facebook", "twitter", "youtube", "netflix", "amazon",
+  "apple", "microsoft", "telegram", "category-ads", "category-ads-all",
+  "private",
+] as const;
+
 /* ── Convert backend condition → friendly type + match string ── */
 export function parseConditionType(condition: RuleCondition): { type: FriendlyType; match: string } {
   if (condition.type === "All") return { type: "FINAL", match: "" };
@@ -252,10 +260,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
                     {match || conditionPlaceholder()}
                   </SelectTrigger>
                   <SelectContent>
-                    {["cn", "geolocation-cn", "geolocation-!cn", "tld-cn", "tld-!cn",
-                      "google", "facebook", "twitter", "youtube", "netflix", "amazon",
-                      "apple", "microsoft", "telegram", "category-ads", "category-ads-all",
-                      "private"].map((cat) => (
+                    {GEOSITE_PRESETS.map((cat) => (
                       <SelectItem key={cat} value={cat}>
                         <span className="font-mono text-xs">{cat}</span>
                       </SelectItem>

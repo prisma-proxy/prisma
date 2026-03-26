@@ -243,65 +243,59 @@ export function ConnectionMap() {
             })}
 
             {/* Server marker */}
-            {(() => {
-              const [sx, sy] = serverPos;
-              return (
-                <g className="pointer-events-none">
-                  <circle cx={sx} cy={sy} r="8" fill={SERVER_COLOR} opacity="0.12" />
-                  <circle cx={sx} cy={sy} r="4" fill="url(#server-gradient)" filter="url(#server-glow)" />
-                  <circle cx={sx} cy={sy} r="6" fill="none" stroke={SERVER_COLOR} strokeWidth="0.8" opacity="0.5" />
-                  <text
-                    x={sx} y={sy - 12}
-                    textAnchor="middle"
-                    className="fill-muted-foreground pointer-events-none select-none"
-                    style={{ fontSize: "7px", letterSpacing: "0.5px" }}
-                  >
-                    SERVER
-                  </text>
-                </g>
-              );
-            })()}
+            <g className="pointer-events-none">
+              <circle cx={serverPos[0]} cy={serverPos[1]} r="8" fill={SERVER_COLOR} opacity="0.12" />
+              <circle cx={serverPos[0]} cy={serverPos[1]} r="4" fill="url(#server-gradient)" filter="url(#server-glow)" />
+              <circle cx={serverPos[0]} cy={serverPos[1]} r="6" fill="none" stroke={SERVER_COLOR} strokeWidth="0.8" opacity="0.5" />
+              <text
+                x={serverPos[0]} y={serverPos[1] - 12}
+                textAnchor="middle"
+                className="fill-muted-foreground pointer-events-none select-none"
+                style={{ fontSize: "7px", letterSpacing: "0.5px" }}
+              >
+                SERVER
+              </text>
+            </g>
 
             {/* Floating tooltip */}
-            {hoveredCity && (
-              <g className="pointer-events-none">
-                {(() => {
-                  const textWidth = tooltipLabel.length * 5.5 + 16;
-                  const boxH = 24;
-                  let tx = tooltipPos.x + 18;
-                  let ty = tooltipPos.y - 14;
-                  if (tx + textWidth > 990) tx = tooltipPos.x - textWidth - 8;
-                  if (ty < 4) ty = tooltipPos.y + 20;
-                  if (ty + boxH > 496) ty = tooltipPos.y - boxH - 4;
-
-                  return (
-                    <>
-                      <rect
-                        x={tx} y={ty}
-                        width={textWidth} height={boxH}
-                        rx="4"
-                        fill="hsl(var(--popover))"
-                        stroke="hsl(var(--border))"
-                        strokeWidth="0.6"
-                        opacity="0.95"
-                      />
-                      <text
-                        x={tx + 8}
-                        y={ty + boxH / 2 + 1}
-                        dominantBaseline="central"
-                        className="fill-foreground"
-                        style={{ fontSize: "10px" }}
-                      >
-                        {tooltipLabel}
-                      </text>
-                    </>
-                  );
-                })()}
-              </g>
-            )}
+            {hoveredCity && <MapTooltip label={tooltipLabel} pos={tooltipPos} />}
           </svg>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+const TOOLTIP_BOX_H = 24;
+
+function MapTooltip({ label, pos }: { label: string; pos: { x: number; y: number } }) {
+  const textWidth = label.length * 5.5 + 16;
+  let tx = pos.x + 18;
+  let ty = pos.y - 14;
+  if (tx + textWidth > 990) tx = pos.x - textWidth - 8;
+  if (ty < 4) ty = pos.y + 20;
+  if (ty + TOOLTIP_BOX_H > 496) ty = pos.y - TOOLTIP_BOX_H - 4;
+
+  return (
+    <g className="pointer-events-none">
+      <rect
+        x={tx} y={ty}
+        width={textWidth} height={TOOLTIP_BOX_H}
+        rx="4"
+        fill="hsl(var(--popover))"
+        stroke="hsl(var(--border))"
+        strokeWidth="0.6"
+        opacity="0.95"
+      />
+      <text
+        x={tx + 8}
+        y={ty + TOOLTIP_BOX_H / 2 + 1}
+        dominantBaseline="central"
+        className="fill-foreground"
+        style={{ fontSize: "10px" }}
+      >
+        {label}
+      </text>
+    </g>
   );
 }

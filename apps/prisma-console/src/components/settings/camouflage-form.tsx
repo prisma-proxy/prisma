@@ -115,14 +115,14 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
               <Label>{t("settings.status")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.camouflageEnabledDesc")}</p>
             </div>
-            <Switch checked={camouflageEnabled} onCheckedChange={(v: boolean) => setCamouflageEnabled(v)} />
+            <Switch checked={camouflageEnabled} onCheckedChange={setCamouflageEnabled} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <Label>{t("settings.tlsOnTcp")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.tlsOnTcpDesc")}</p>
             </div>
-            <Switch checked={tlsOnTcp} onCheckedChange={(v: boolean) => setTlsOnTcp(v)} />
+            <Switch checked={tlsOnTcp} onCheckedChange={setTlsOnTcp} />
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.fallbackAddr")}</Label>
@@ -180,7 +180,7 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
               <Label>{t("settings.cdnEnabled")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.cdnEnabledDesc")}</p>
             </div>
-            <Switch checked={cdnEnabled} onCheckedChange={(v: boolean) => setCdnEnabled(v)} />
+            <Switch checked={cdnEnabled} onCheckedChange={setCdnEnabled} />
           </div>
           <div className="grid gap-1.5">
             <Label>{t("settings.cdnListenAddr")}</Label>
@@ -192,21 +192,21 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
               <Label>{t("settings.exposeManagementApi")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.exposeManagementApiDesc")}</p>
             </div>
-            <Switch checked={cdnExposeManagementApi} onCheckedChange={(v: boolean) => setCdnExposeManagementApi(v)} />
+            <Switch checked={cdnExposeManagementApi} onCheckedChange={setCdnExposeManagementApi} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <Label>{t("settings.paddingHeader")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.paddingHeaderDesc")}</p>
             </div>
-            <Switch checked={cdnPaddingHeader} onCheckedChange={(v: boolean) => setCdnPaddingHeader(v)} />
+            <Switch checked={cdnPaddingHeader} onCheckedChange={setCdnPaddingHeader} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <Label>{t("settings.sseDisguise")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.sseDisguiseDesc")}</p>
             </div>
-            <Switch checked={cdnEnableSseDisguise} onCheckedChange={(v: boolean) => setCdnEnableSseDisguise(v)} />
+            <Switch checked={cdnEnableSseDisguise} onCheckedChange={setCdnEnableSseDisguise} />
           </div>
 
           <div>
@@ -267,7 +267,7 @@ export function CamouflageForm({ config, onSave, isLoading: saving, readOnly }: 
               <Label>{t("settings.status")}</Label>
               <p className="text-xs text-muted-foreground mt-1">{t("settings.xportaEnabledDesc")}</p>
             </div>
-            <Switch checked={xportaEnabled} onCheckedChange={(v: boolean) => setXportaEnabled(v)} />
+            <Switch checked={xportaEnabled} onCheckedChange={setXportaEnabled} />
           </div>
           {xportaEnabled && (
             <div className="space-y-3 p-3 rounded-lg bg-muted/30 border">

@@ -223,7 +223,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
           <Switch
             id="port-forwarding"
             checked={portForwardingEnabled}
-            onCheckedChange={(checked: boolean) => setPortForwardingEnabled(checked)}
+            onCheckedChange={setPortForwardingEnabled}
           />
         </div>
         {portForwardingEnabled && (
@@ -274,7 +274,7 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
           </div>
           <Switch
             checked={managementApiEnabled}
-            onCheckedChange={(checked: boolean) => setManagementApiEnabled(checked)}
+            onCheckedChange={setManagementApiEnabled}
           />
         </div>
       </div>

@@ -232,7 +232,7 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
             <Switch
               id="port-hopping-enabled"
               checked={ePortHoppingEnabled}
-              onCheckedChange={(v: boolean) => setPortHoppingEnabled(v)}
+              onCheckedChange={setPortHoppingEnabled}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -306,7 +306,7 @@ export function TrafficForm({ config, onSave, isLoading: saving, readOnly }: Tra
               <Switch
                 id="anti-rtt-enabled"
                 checked={eAntiRttEnabled}
-                onCheckedChange={(v: boolean) => setAntiRttEnabled(v)}
+                onCheckedChange={setAntiRttEnabled}
               />
             </div>
             <div className="grid gap-1.5">

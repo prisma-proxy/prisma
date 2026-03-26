@@ -127,7 +127,7 @@ export function SecurityForm({ config, tls, onSave, isLoading: saving, readOnly 
             <Switch
               id="transport-cipher"
               checked={eAllowTransportOnlyCipher}
-              onCheckedChange={(v: boolean) => setAllowTransportOnlyCipher(v)}
+              onCheckedChange={setAllowTransportOnlyCipher}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -138,7 +138,7 @@ export function SecurityForm({ config, tls, onSave, isLoading: saving, readOnly 
             <Switch
               id="prisma-tls-enabled"
               checked={ePrismaTlsEnabled}
-              onCheckedChange={(v: boolean) => setPrismaTlsEnabled(v)}
+              onCheckedChange={setPrismaTlsEnabled}
             />
           </div>
           <div className="grid gap-1.5">

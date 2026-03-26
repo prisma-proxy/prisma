@@ -29,6 +29,12 @@ use crate::udp_relay;
 /// Default server features bitmask.
 const DEFAULT_SERVER_FEATURES: u32 = FEATURE_UDP_RELAY | FEATURE_SPEED_TEST | FEATURE_DNS_TUNNEL;
 
+/// Label for connections that match no routing rule (default allow).
+const DEFAULT_RULE_LABEL: &str = "Default";
+
+/// Label for non-proxy sessions (port forwarding, UDP relay) that bypass routing.
+const BYPASS_RULE_LABEL: &str = "Bypass";
+
 /// Handle an incoming TCP connection through the PrismaVeil protocol.
 pub async fn handle_tcp_connection(
     mut stream: TcpStream,
@@ -573,7 +579,8 @@ where
 
             // Ensure matched_rule is always populated for analytics.
             // If no rule matched (default allow), label as "Default".
-            let matched_rule_name = matched_rule_name.or_else(|| Some("Default".to_string()));
+            let matched_rule_name =
+                matched_rule_name.or_else(|| Some(DEFAULT_RULE_LABEL.to_string()));
 
             // Check per-client ACL
             {
@@ -661,7 +668,7 @@ where
                 .get_mut(&session_keys.session_id)
             {
                 conn.mode = SessionMode::Forward;
-                conn.matched_rule = Some("Bypass".to_string());
+                conn.matched_rule = Some(BYPASS_RULE_LABEL.to_string());
             }
 
             info!(port = remote_port, name = %name, "Client requesting port forwarding mode");
@@ -787,7 +794,7 @@ where
                 .get_mut(&session_keys.session_id)
             {
                 conn.mode = SessionMode::UdpRelay;
-                conn.matched_rule = Some("Bypass".to_string());
+                conn.matched_rule = Some(BYPASS_RULE_LABEL.to_string());
             }
 
             info!("Client requesting UDP relay mode");

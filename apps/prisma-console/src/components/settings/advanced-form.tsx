@@ -80,7 +80,7 @@ export function AdvancedForm({ config, onSave, isLoading: saving, readOnly }: Ad
             <Switch
               id="ssh-enabled"
               checked={sshEnabled}
-              onCheckedChange={(v: boolean) => setSshEnabled(v)}
+              onCheckedChange={setSshEnabled}
             />
           </div>
           {sshEnabled && (
@@ -112,7 +112,7 @@ export function AdvancedForm({ config, onSave, isLoading: saving, readOnly }: Ad
             <Switch
               id="wireguard-enabled"
               checked={wireguardEnabled}
-              onCheckedChange={(v: boolean) => setWireguardEnabled(v)}
+              onCheckedChange={setWireguardEnabled}
             />
           </div>
           {wireguardEnabled && (
@@ -144,7 +144,7 @@ export function AdvancedForm({ config, onSave, isLoading: saving, readOnly }: Ad
             <Switch
               id="fallback-enabled"
               checked={fallbackEnabled}
-              onCheckedChange={(v: boolean) => setFallbackEnabled(v)}
+              onCheckedChange={setFallbackEnabled}
             />
           </div>
           {fallbackEnabled && (
@@ -194,7 +194,7 @@ export function AdvancedForm({ config, onSave, isLoading: saving, readOnly }: Ad
             <Switch
               id="config-watch"
               checked={configWatch}
-              onCheckedChange={(v: boolean) => setConfigWatch(v)}
+              onCheckedChange={setConfigWatch}
             />
           </div>
           <div className="grid gap-1.5">
