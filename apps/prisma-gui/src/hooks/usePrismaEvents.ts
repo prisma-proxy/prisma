@@ -48,6 +48,12 @@ let suppressedErrors = 0;
 let pendingLogs: LogEntry[] = [];
 let logRafId: number | null = null;
 
+// Track recent unique destinations for tray submenu (Item 6).
+const MAX_RECENT = 5;
+let recentDestinations: string[] = [];
+let recentDirty = false;
+let recentRafId: number | null = null;
+
 export function usePrismaEvents() {
   useEffect(() => {
     const unlisten = listen<string>("prisma://event", (event) => {
@@ -114,6 +120,12 @@ export function usePrismaEvents() {
               logRafId = null;
               pendingLogs = [];
             }
+            if (recentRafId !== null) {
+              cancelAnimationFrame(recentRafId);
+              recentRafId = null;
+            }
+            recentDestinations = [];
+            recentDirty = false;
 
             // Disconnected — record session bytes + uptime
             {
@@ -159,12 +171,12 @@ export function usePrismaEvents() {
                 useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
               }
               // Track data usage deltas
+              const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
               if (prevStats) {
                 const deltaUp = Math.max(0, s.bytes_up - prevStats.bytes_up);
                 const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
                 if (deltaUp > 0 || deltaDown > 0) {
                   useDataUsage.getState().recordUsage(deltaUp, deltaDown);
-                  const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
                   const analytics = useAnalytics.getState();
                   if (activeConns.length > 0) {
                     const perUp = Math.floor(deltaUp / activeConns.length);
@@ -178,6 +190,17 @@ export function usePrismaEvents() {
                   }
                 }
               }
+              // Update tray speed stats + tooltip (Items 1 & 5)
+              const profileName = activeProf?.name ?? "";
+              api.updateTrayStats(
+                s.speed_up_bps,
+                s.speed_down_bps,
+                s.bytes_up,
+                s.bytes_down,
+                activeConns.length,
+                profileName,
+                s.uptime_secs,
+              ).catch(() => {});
             });
           }
           break;
@@ -202,6 +225,30 @@ export function usePrismaEvents() {
             });
           }
           parseLogForConnection(logMsg);
+
+          // Track recent destinations for tray submenu (Item 6).
+          // After parseLogForConnection may have added a new connection,
+          // check if the latest connection destination is new.
+          {
+            const conns = useConnections.getState().connections;
+            if (conns.length > 0) {
+              const latest = conns[conns.length - 1];
+              const dest = latest.destination.replace(/:\d+$/, "");
+              if (dest && !recentDestinations.includes(dest)) {
+                recentDestinations = [dest, ...recentDestinations].slice(0, MAX_RECENT);
+                recentDirty = true;
+                if (recentRafId === null) {
+                  recentRafId = requestAnimationFrame(() => {
+                    recentRafId = null;
+                    if (recentDirty) {
+                      recentDirty = false;
+                      api.updateTrayRecent([...recentDestinations]).catch(() => {});
+                    }
+                  });
+                }
+              }
+            }
+          }
           break;
         }
 

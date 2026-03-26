@@ -222,6 +222,67 @@ pub fn get_proxy_mode() -> u32 {
     crate::state::PROXY_MODE.lock().map(|g| *g).unwrap_or(0x02)
 }
 
+/// Update tray speed stats and tooltip with live bandwidth data.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub fn update_tray_stats(
+    app: tauri::AppHandle,
+    up_bps: f64,
+    down_bps: f64,
+    bytes_up: f64,
+    bytes_down: f64,
+    connections: u32,
+    profile_name: String,
+    uptime_secs: u64,
+) {
+    #[cfg(desktop)]
+    crate::tray::update_tooltip(
+        &app,
+        &crate::tray::TrayStatsUpdate {
+            up_bps,
+            down_bps,
+            bytes_up,
+            bytes_down,
+            connections,
+            profile_name: &profile_name,
+            uptime_secs,
+        },
+    );
+    let _ = &app;
+}
+
+/// Update the Recent Connections submenu with the last N destinations.
+#[tauri::command]
+pub fn update_tray_recent(app: tauri::AppHandle, destinations: Vec<String>) -> Result<(), String> {
+    #[cfg(desktop)]
+    crate::tray::refresh_recent_connections(&app, destinations).map_err(|e| e.to_string())?;
+    let _ = &app;
+    Ok(())
+}
+
+/// Sync toggle states from the frontend settings store into tray state.
+/// Called once at startup so the tray checkmarks match the persisted settings.
+#[tauri::command]
+pub fn sync_tray_toggles(
+    app: tauri::AppHandle,
+    auto_connect: bool,
+    allow_lan: bool,
+    tun_enabled: bool,
+) {
+    if let Ok(mut g) = crate::state::TOGGLE_AUTO_CONNECT.lock() {
+        *g = auto_connect;
+    }
+    if let Ok(mut g) = crate::state::TOGGLE_ALLOW_LAN.lock() {
+        *g = allow_lan;
+    }
+    if let Ok(mut g) = crate::state::TOGGLE_TUN.lock() {
+        *g = tun_enabled;
+    }
+    #[cfg(desktop)]
+    let _ = crate::tray::refresh_profiles(&app);
+    let _ = &app;
+}
+
 // ── ping ──────────────────────────────────────────────────────────────────────
 
 #[tauri::command]

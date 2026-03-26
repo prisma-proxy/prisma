@@ -85,6 +85,31 @@ export const api = {
   getProxyMode: () =>
     invoke<number>("get_proxy_mode"),
 
+  updateTrayStats: (
+    upBps: number,
+    downBps: number,
+    bytesUp: number,
+    bytesDown: number,
+    connections: number,
+    profileName: string,
+    uptimeSecs: number,
+  ) =>
+    invoke<void>("update_tray_stats", {
+      upBps,
+      downBps,
+      bytesUp,
+      bytesDown,
+      connections,
+      profileName,
+      uptimeSecs,
+    }),
+
+  updateTrayRecent: (destinations: string[]) =>
+    invoke<void>("update_tray_recent", { destinations }),
+
+  syncTrayToggles: (autoConnect: boolean, allowLan: boolean, tunEnabled: boolean) =>
+    invoke<void>("sync_tray_toggles", { autoConnect, allowLan, tunEnabled }),
+
   // Per-app proxy
   setPerAppFilter: (filterJson: string) =>
     invoke<void>("set_per_app_filter", { filterJson }),

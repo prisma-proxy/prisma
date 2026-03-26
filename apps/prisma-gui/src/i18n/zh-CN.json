@@ -670,7 +670,25 @@
   "tray": {
     "copyTerminalProxy": "复制终端代理命令",
     "copiedTerminalProxy": "终端代理命令已复制到剪贴板",
-    "httpPortNotSet": "HTTP代理端口未配置"
+    "httpPortNotSet": "HTTP代理端口未配置",
+    "updateAvailable": "有新版本可用: v{{version}}",
+    "upToDate": "已是最新版本！",
+    "updateCheckFailed": "检查更新失败",
+    "noEnabledProviders": "没有已启用的规则提供者可更新",
+    "providersUpdated": "已更新 {{count}} 个规则提供者",
+    "speedStats": "速度统计",
+    "upload": "上传",
+    "download": "下载",
+    "totalUp": "总上传",
+    "totalDown": "总下载",
+    "connections": "连接数",
+    "recentConnections": "最近连接",
+    "quickToggles": "快捷开关",
+    "autoConnect": "开机自启动",
+    "allowLan": "允许局域网连接",
+    "tunMode": "TUN 模式",
+    "checkForUpdates": "检查更新",
+    "updateRuleProviders": "更新规则提供者"
   },
   "language": {
     "english": "English",

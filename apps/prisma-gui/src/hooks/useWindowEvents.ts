@@ -9,6 +9,7 @@ import { useConnection } from "./useConnection";
 import { notify } from "../store/notifications";
 import { api } from "../lib/commands";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { useRuleProviders } from "../store/ruleProviders";
 
 export function useWindowEvents() {
   const minimizeToTray = useSettings((s) => s.minimizeToTray);
@@ -32,6 +33,12 @@ export function useWindowEvents() {
   useEffect(() => {
     api.setTrayPort(socks5Port).catch(() => {});
   }, [socks5Port]);
+
+  // Sync toggle states to tray on init
+  useEffect(() => {
+    const s = useSettings.getState();
+    api.syncTrayToggles(s.startOnBoot, s.allowLan, s.tunEnabled).catch(() => {});
+  }, []);
 
   // Handle tray "Connect/Disconnect" toggle
   useEffect(() => {
@@ -102,4 +109,81 @@ export function useWindowEvents() {
     });
     return () => { unlisten.then((f) => f()); };
   }, [switchTo]);
+
+  // Handle tray "Check for Updates" (Item 3)
+  useEffect(() => {
+    const unlisten = listen("tray://check-update", async () => {
+      try {
+        const info = await api.checkUpdate();
+        if (info && info.version) {
+          useStore.getState().setUpdateAvailable(info);
+          notify.info(i18n.t("tray.updateAvailable", { version: info.version }));
+        } else {
+          notify.success(i18n.t("tray.upToDate"));
+        }
+      } catch {
+        notify.error(i18n.t("tray.updateCheckFailed"));
+      }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // Handle tray "Update Rule Providers" (Item 4)
+  useEffect(() => {
+    const unlisten = listen("tray://update-providers", async () => {
+      const providers = useRuleProviders.getState().providers.filter((p) => p.enabled);
+      if (providers.length === 0) {
+        notify.info(i18n.t("tray.noEnabledProviders"));
+        return;
+      }
+      let successCount = 0;
+      const store = useStore.getState();
+      const proxyPort = store.connected ? (useSettings.getState().httpPort || 0) : 0;
+      for (const p of providers) {
+        try {
+          const result = await api.updateRuleProvider(
+            p.id,
+            p.name,
+            p.url,
+            p.behavior,
+            p.action,
+            proxyPort,
+          );
+          useRuleProviders.getState().updateProviderStatus(
+            p.id,
+            result.rule_count,
+            new Date().toISOString(),
+          );
+          successCount++;
+        } catch {
+          // Continue updating remaining providers
+        }
+      }
+      notify.success(i18n.t("tray.providersUpdated", { count: successCount }));
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // Handle tray "Quick Toggles" (Item 2)
+  useEffect(() => {
+    const unlisten = listen<{ key: string; value: boolean }>(
+      "tray://toggle-setting",
+      (event) => {
+        const { key, value } = event.payload;
+        const settings = useSettings.getState();
+        switch (key) {
+          case "autoConnect":
+            settings.patch({ startOnBoot: value });
+            break;
+          case "allowLan":
+            settings.patch({ allowLan: value });
+            break;
+          case "tunEnabled":
+            settings.patch({ tunEnabled: value });
+            break;
+        }
+      },
+    );
+    return () => { unlisten.then((f) => f()); };
+  }, []);
 }

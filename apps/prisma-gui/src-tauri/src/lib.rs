@@ -24,9 +24,21 @@ unsafe extern "C" fn on_ffi_event(
                     tray::update_status(handle, code);
                 }
                 Some("stats") => {
-                    let up   = parsed["speed_up_bps"].as_f64().unwrap_or(0.0);
-                    let down = parsed["speed_down_bps"].as_f64().unwrap_or(0.0);
-                    tray::update_tooltip(handle, up, down);
+                    // Profile name and connections are provided by frontend
+                    // via the update_tray_stats command. Use empty defaults
+                    // here so the FFI callback still keeps the tooltip fresh.
+                    tray::update_tooltip(
+                        handle,
+                        &tray::TrayStatsUpdate {
+                            up_bps: parsed["speed_up_bps"].as_f64().unwrap_or(0.0),
+                            down_bps: parsed["speed_down_bps"].as_f64().unwrap_or(0.0),
+                            bytes_up: parsed["bytes_up"].as_f64().unwrap_or(0.0),
+                            bytes_down: parsed["bytes_down"].as_f64().unwrap_or(0.0),
+                            connections: 0,
+                            profile_name: "",
+                            uptime_secs: parsed["uptime_secs"].as_u64().unwrap_or(0),
+                        },
+                    );
                 }
                 _ => {}
             }
@@ -104,6 +116,9 @@ pub fn run() {
             commands::set_tray_proxy_mode,
             commands::get_active_profile_id,
             commands::get_proxy_mode,
+            commands::update_tray_stats,
+            commands::update_tray_recent,
+            commands::sync_tray_toggles,
             commands::set_per_app_filter,
             commands::clear_per_app_filter,
             commands::get_running_apps,

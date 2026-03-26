@@ -670,7 +670,25 @@
   "tray": {
     "copyTerminalProxy": "Copy Terminal Proxy",
     "copiedTerminalProxy": "Terminal proxy command copied to clipboard",
-    "httpPortNotSet": "HTTP proxy port not configured"
+    "httpPortNotSet": "HTTP proxy port not configured",
+    "updateAvailable": "Update available: v{{version}}",
+    "upToDate": "You're up to date!",
+    "updateCheckFailed": "Failed to check for updates",
+    "noEnabledProviders": "No enabled rule providers to update",
+    "providersUpdated": "Updated {{count}} rule provider(s)",
+    "speedStats": "Speed Stats",
+    "upload": "Upload",
+    "download": "Download",
+    "totalUp": "Total Up",
+    "totalDown": "Total Down",
+    "connections": "Connections",
+    "recentConnections": "Recent Connections",
+    "quickToggles": "Quick Toggles",
+    "autoConnect": "Auto-connect on startup",
+    "allowLan": "Allow LAN connections",
+    "tunMode": "TUN mode",
+    "checkForUpdates": "Check for Updates",
+    "updateRuleProviders": "Update Rule Providers"
   },
   "language": {
     "english": "English",
