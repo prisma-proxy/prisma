@@ -5,6 +5,7 @@ const DEFAULT_WIDGET_ORDER = [
   "health",
   "metrics",
   "traffic-chart",
+  "top-connections",
   "transport-pie",
   "geoip",
   "connection-map",

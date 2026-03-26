@@ -31,7 +31,8 @@ import { useI18n } from "@/lib/i18n";
 import { formatBytes } from "@/lib/utils";
 import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { exportToCSV } from "@/lib/export";
-import { useMetricsHistory, type TimeRange, type Resolution } from "@/hooks/use-metrics";
+import { useMetricsHistory, type TimeRange } from "@/hooks/use-metrics";
+import { RESOLUTION_MAP } from "@/lib/chart-theme";
 import { useAllClientMetrics } from "@/hooks/use-client-metrics";
 import { useConnections } from "@/hooks/use-connections";
 import { useRole } from "@/components/auth/role-guard";
@@ -47,12 +48,7 @@ const PERIOD_OPTIONS: { key: TimeRange; i18nKey: string }[] = [
   { key: "7d", i18nKey: "chart.timeRange.7d" },
 ];
 
-const RESOLUTION_MAP: Record<TimeRange, Resolution> = {
-  "1h": "10s",
-  "6h": "60s",
-  "24h": "60s",
-  "7d": "60s",
-};
+// Imported from chart-theme below — removed local duplicate
 
 const PIE_COLORS = [
   "hsl(217, 91%, 60%)",

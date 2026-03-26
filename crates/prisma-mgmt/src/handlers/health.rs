@@ -28,10 +28,26 @@ pub async fn metrics(State(state): State<MgmtState>) -> Json<MetricsSnapshot> {
 
 #[derive(Deserialize)]
 pub struct HistoryParams {
-    /// Period: "1h", "6h", "24h", "7d". Default: "1h".
+    /// Period: "1h", "3h", "6h", "12h", "24h", "3d", "7d", "14d", "30d". Default: "1h".
     pub period: Option<String>,
-    /// Resolution in seconds: "1", "10", "60". Default: "10".
+    /// Resolution override in seconds. When omitted, auto-selected based on period.
     pub resolution: Option<String>,
+}
+
+/// Maps a period string to (period_seconds, default_resolution_seconds).
+/// Resolution is chosen to yield roughly 300-360 data points.
+fn period_config(period: &str) -> (u64, u64) {
+    match period {
+        "3h" => (3 * 3600, 30),
+        "6h" => (6 * 3600, 60),
+        "12h" => (12 * 3600, 120),
+        "24h" => (24 * 3600, 300),
+        "3d" => (3 * 24 * 3600, 900),
+        "7d" => (7 * 24 * 3600, 1800),
+        "14d" => (14 * 24 * 3600, 3600),
+        "30d" => (30 * 24 * 3600, 7200),
+        _ => (3600, 10), // "1h" or unknown
+    }
 }
 
 /// Returns downsampled metrics history from the ring buffer.
@@ -39,17 +55,20 @@ pub async fn metrics_history(
     State(state): State<MgmtState>,
     Query(params): Query<HistoryParams>,
 ) -> Json<Vec<MetricsSnapshot>> {
-    let period_secs: u64 = match params.period.as_deref() {
-        Some("6h") => 6 * 3600,
-        Some("24h") => 24 * 3600,
-        Some("7d") => 7 * 24 * 3600,
-        _ => 3600, // default 1h
-    };
+    let (period_secs, default_resolution) = period_config(params.period.as_deref().unwrap_or("1h"));
 
     let resolution_secs: u64 = match params.resolution.as_deref() {
         Some("1") | Some("1s") => 1,
+        Some("10") | Some("10s") => 10,
+        Some("30") | Some("30s") => 30,
         Some("60") | Some("60s") => 60,
-        _ => 10, // default 10s
+        Some("120") | Some("120s") => 120,
+        Some("300") | Some("300s") => 300,
+        Some("900") | Some("900s") => 900,
+        Some("1800") | Some("1800s") => 1800,
+        Some("3600") | Some("3600s") => 3600,
+        Some("7200") | Some("7200s") => 7200,
+        _ => default_resolution,
     };
 
     let history = state.metrics_history.read().await;

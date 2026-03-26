@@ -36,8 +36,8 @@ export function useMetrics() {
   return state;
 }
 
-export type TimeRange = "1h" | "6h" | "24h" | "7d";
-export type Resolution = "1s" | "10s" | "60s";
+export type TimeRange = "1h" | "3h" | "6h" | "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
+export type Resolution = "1s" | "10s" | "30s" | "60s" | "120s" | "300s" | "900s" | "1800s" | "3600s" | "7200s";
 
 export function useMetricsHistory(period: TimeRange = "1h", resolution: Resolution = "10s") {
   return useQuery({

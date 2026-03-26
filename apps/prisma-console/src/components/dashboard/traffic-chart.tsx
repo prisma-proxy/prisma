@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -9,13 +9,22 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Brush,
 } from "recharts";
+import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { MetricsSnapshot } from "@/lib/types";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes, exportToCsv } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
+import {
+  CHART_THEME,
+  CHART_AXIS_TICK,
+  TIME_RANGES,
+  RESOLUTION_MAP,
+  formatXAxis,
+  tickInterval,
+} from "@/lib/chart-theme";
 import { useMetricsHistory, computeRateMbps, type TimeRange } from "@/hooks/use-metrics";
 
 interface TrafficChartProps {
@@ -23,29 +32,25 @@ interface TrafficChartProps {
 }
 
 interface ChartDataPoint {
+  timestamp: string;
   time: string;
   bytes_up: number;
   bytes_down: number;
 }
 
 interface MbpsDataPoint {
+  timestamp: string;
   time: string;
   uploadMbps: number;
   downloadMbps: number;
 }
 
-const TIME_RANGES: { key: TimeRange; i18nKey: string }[] = [
-  { key: "1h", i18nKey: "chart.timeRange.1h" },
-  { key: "6h", i18nKey: "chart.timeRange.6h" },
-  { key: "24h", i18nKey: "chart.timeRange.24h" },
-  { key: "7d", i18nKey: "chart.timeRange.7d" },
-];
-
-const RESOLUTION_MAP: Record<TimeRange, "1s" | "10s" | "60s"> = {
-  "1h": "10s",
-  "6h": "60s",
-  "24h": "60s",
-  "7d": "60s",
+const TOOLTIP_STYLE = {
+  backgroundColor: CHART_THEME.tooltip.bg,
+  border: `1px solid ${CHART_THEME.tooltip.border}`,
+  borderRadius: "var(--radius)",
+  color: CHART_THEME.tooltip.text,
+  fontSize: "0.875rem",
 };
 
 export function TrafficChart({ history }: TrafficChartProps) {
@@ -56,75 +61,65 @@ export function TrafficChart({ history }: TrafficChartProps) {
   const resolution = selectedRange ? RESOLUTION_MAP[selectedRange] : "10s";
   const { data: historicalData } = useMetricsHistory(
     selectedRange ?? "1h",
-    resolution
+    resolution as never,
   );
 
   const activeHistory = selectedRange && historicalData ? historicalData : history;
+  const activeRange: TimeRange | "live" = selectedRange ?? "live";
 
   const data = useMemo<ChartDataPoint[]>(() => {
     if (activeHistory.length < 2) return [];
 
-    const latestTs = new Date(activeHistory[activeHistory.length - 1].timestamp).getTime();
     const points: ChartDataPoint[] = [];
-
     for (let i = 1; i < activeHistory.length; i++) {
       const prev = activeHistory[i - 1];
       const curr = activeHistory[i];
-
       const bytesUpDiff = Math.max(0, curr.total_bytes_up - prev.total_bytes_up);
       const bytesDownDiff = Math.max(0, curr.total_bytes_down - prev.total_bytes_down);
-
-      const ts = new Date(curr.timestamp);
-      const secsAgo = Math.round((latestTs - ts.getTime()) / 1000);
-
-      const time =
-        secsAgo <= 120
-          ? `${secsAgo}s ago`
-          : ts.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            });
-
-      points.push({
-        time,
-        bytes_up: bytesUpDiff,
-        bytes_down: bytesDownDiff,
-      });
+      const ts = curr.timestamp;
+      const time = formatXAxis(ts, activeRange);
+      points.push({ timestamp: ts, time, bytes_up: bytesUpDiff, bytes_down: bytesDownDiff });
     }
-
     return points;
-  }, [activeHistory]);
+  }, [activeHistory, activeRange]);
 
   const mbpsData = useMemo<MbpsDataPoint[]>(() => {
     if (!showMbps || activeHistory.length < 2) return [];
     const rates = computeRateMbps(activeHistory);
-    const latestTs = rates.length > 0 ? new Date(rates[rates.length - 1].timestamp).getTime() : 0;
-    return rates.map((r) => {
-      const ts = new Date(r.timestamp);
-      const secsAgo = Math.round((latestTs - ts.getTime()) / 1000);
-      const time =
-        secsAgo <= 120
-          ? `${secsAgo}s ago`
-          : ts.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            });
-      return {
-        time,
-        uploadMbps: Math.round(r.uploadMbps * 100) / 100,
-        downloadMbps: Math.round(r.downloadMbps * 100) / 100,
-      };
-    });
-  }, [activeHistory, showMbps]);
+    return rates.map((r) => ({
+      timestamp: r.timestamp,
+      time: formatXAxis(r.timestamp, activeRange),
+      uploadMbps: Math.round(r.uploadMbps * 100) / 100,
+      downloadMbps: Math.round(r.downloadMbps * 100) / 100,
+    }));
+  }, [activeHistory, showMbps, activeRange]);
+
+  const handleExportCsv = useCallback(() => {
+    if (showMbps && mbpsData.length > 0) {
+      exportToCsv(
+        "prisma-traffic-mbps",
+        ["Timestamp", "Upload (Mbps)", "Download (Mbps)"],
+        mbpsData.map((d) => [d.timestamp, d.uploadMbps, d.downloadMbps]),
+      );
+    } else if (data.length > 0) {
+      exportToCsv(
+        "prisma-traffic-bytes",
+        ["Timestamp", "Bytes Up", "Bytes Down"],
+        data.map((d) => [d.timestamp, d.bytes_up, d.bytes_down]),
+      );
+    }
+  }, [showMbps, mbpsData, data]);
+
+  const interval = tickInterval(activeRange);
+  const chartData = showMbps ? mbpsData : data;
+  const hasData = chartData.length > 0;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle>{t("dashboard.realtimeTraffic")}</CardTitle>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 flex-wrap">
             <Button
               variant={selectedRange === null ? "default" : "outline"}
               size="xs"
@@ -142,7 +137,7 @@ export function TrafficChart({ history }: TrafficChartProps) {
                 {t(i18nKey)}
               </Button>
             ))}
-            <div className="ml-2 h-4 w-px bg-border" />
+            <div className="ml-1 h-4 w-px bg-border" />
             <Button
               variant={showMbps ? "default" : "outline"}
               size="xs"
@@ -150,76 +145,85 @@ export function TrafficChart({ history }: TrafficChartProps) {
             >
               {t("chart.mbps")}
             </Button>
+            {hasData && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleExportCsv}
+                title={t("chart.exportCsv")}
+                className="h-6 w-6 ml-0.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {showMbps ? (
-          mbpsData.length === 0 ? (
-            <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-              {t("common.waitingForData")}
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={mbpsData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis
-                  dataKey="time"
-                  tick={{ fontSize: 12 }}
-                  className="text-muted-foreground"
-                />
-                <YAxis
-                  tickFormatter={(value: number) => `${value} Mbps`}
-                  tick={{ fontSize: 12 }}
-                  className="text-muted-foreground"
-                  width={90}
-                />
-                <Tooltip
-                  formatter={(value, name) => [
-                    `${Number(value).toFixed(2)} Mbps`,
-                    name === "uploadMbps" ? t("common.upload") : t("common.download"),
-                  ]}
-                  labelFormatter={(label) => String(label)}
-                  contentStyle={CHART_TOOLTIP_STYLE}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="uploadMbps"
-                  name="uploadMbps"
-                  stroke="hsl(217, 91%, 60%)"
-                  fill="hsl(217, 91%, 60%)"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="downloadMbps"
-                  name="downloadMbps"
-                  stroke="hsl(142, 71%, 45%)"
-                  fill="hsl(142, 71%, 45%)"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )
-        ) : data.length === 0 ? (
+        {!hasData ? (
           <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
             {t("common.waitingForData")}
           </p>
+        ) : showMbps ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={mbpsData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis
+                dataKey="time"
+                tick={CHART_AXIS_TICK}
+                interval={interval}
+              />
+              <YAxis
+                tickFormatter={(value: number) => `${value} Mbps`}
+                tick={CHART_AXIS_TICK}
+                width={90}
+              />
+              <Tooltip
+                formatter={(value, name) => [
+                  `${Number(value).toFixed(2)} Mbps`,
+                  name === "uploadMbps" ? t("common.upload") : t("common.download"),
+                ]}
+                labelFormatter={(label) => String(label)}
+                contentStyle={TOOLTIP_STYLE}
+              />
+              <Area
+                type="monotone"
+                dataKey="uploadMbps"
+                name="uploadMbps"
+                stroke={CHART_THEME.upload}
+                fill={CHART_THEME.upload}
+                fillOpacity={0.15}
+                strokeWidth={2}
+              />
+              <Area
+                type="monotone"
+                dataKey="downloadMbps"
+                name="downloadMbps"
+                stroke={CHART_THEME.download}
+                fill={CHART_THEME.download}
+                fillOpacity={0.15}
+                strokeWidth={2}
+              />
+              <Brush
+                dataKey="time"
+                height={20}
+                stroke={CHART_THEME.brush.stroke}
+                fill={CHART_THEME.brush.fill}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
               <XAxis
                 dataKey="time"
-                tick={{ fontSize: 12 }}
-                className="text-muted-foreground"
+                tick={CHART_AXIS_TICK}
+                interval={interval}
               />
               <YAxis
                 tickFormatter={(value: number) => formatBytes(value)}
-                tick={{ fontSize: 12 }}
-                className="text-muted-foreground"
+                tick={CHART_AXIS_TICK}
                 width={80}
               />
               <Tooltip
@@ -228,19 +232,14 @@ export function TrafficChart({ history }: TrafficChartProps) {
                   name === "bytes_up" ? t("common.upload") : t("common.download"),
                 ]}
                 labelFormatter={(label) => String(label)}
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "var(--radius)",
-                  fontSize: "0.875rem",
-                }}
+                contentStyle={TOOLTIP_STYLE}
               />
               <Area
                 type="monotone"
                 dataKey="bytes_up"
                 name="bytes_up"
-                stroke="hsl(217, 91%, 60%)"
-                fill="hsl(217, 91%, 60%)"
+                stroke={CHART_THEME.upload}
+                fill={CHART_THEME.upload}
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
@@ -248,10 +247,16 @@ export function TrafficChart({ history }: TrafficChartProps) {
                 type="monotone"
                 dataKey="bytes_down"
                 name="bytes_down"
-                stroke="hsl(142, 71%, 45%)"
-                fill="hsl(142, 71%, 45%)"
+                stroke={CHART_THEME.download}
+                fill={CHART_THEME.download}
                 fillOpacity={0.15}
                 strokeWidth={2}
+              />
+              <Brush
+                dataKey="time"
+                height={20}
+                stroke={CHART_THEME.brush.stroke}
+                fill={CHART_THEME.brush.fill}
               />
             </AreaChart>
           </ResponsiveContainer>

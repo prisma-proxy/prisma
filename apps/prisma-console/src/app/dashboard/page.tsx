@@ -26,6 +26,7 @@ import { GeoIPPie } from "@/components/dashboard/geoip-pie";
 import { ConnectionMap } from "@/components/dashboard/connection-map";
 import { ConnectionHistogram } from "@/components/dashboard/connection-histogram";
 import { HistoricalCharts } from "@/components/dashboard/historical-charts";
+import { TopConnectionsChart } from "@/components/dashboard/top-connections-chart";
 import { SetupWizard } from "@/components/onboarding/setup-wizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -275,6 +276,8 @@ export default function OverviewPage() {
         )}
       </>
     );
+
+    map["top-connections"] = <TopConnectionsChart />;
 
     map["transport-pie"] = (
       <div className="grid gap-6 lg:grid-cols-2">

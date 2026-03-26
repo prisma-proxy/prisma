@@ -13,6 +13,38 @@ export function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
+/**
+ * Export tabular data as a CSV file download.
+ * @param filename - Download filename (without extension)
+ * @param headers - Column header labels
+ * @param rows - Array of row arrays, each value a string or number
+ */
+export function exportToCsv(
+  filename: string,
+  headers: string[],
+  rows: (string | number)[][],
+) {
+  const escape = (v: string | number) => {
+    const s = String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const csv = [
+    headers.map(escape).join(","),
+    ...rows.map((r) => r.map(escape).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function formatDuration(seconds: number): string {
   seconds = Math.floor(seconds);
   if (seconds < 60) return `${seconds}s`;
