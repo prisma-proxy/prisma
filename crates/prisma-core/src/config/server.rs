@@ -375,55 +375,42 @@ impl<'de> serde::Deserialize<'de> for RuleCondition {
     where
         D: serde::Deserializer<'de>,
     {
-        // Deserialize as a generic TOML/JSON value first, then match manually.
-        // This allows unknown "type" values to be caught gracefully.
-        let value = toml::Value::deserialize(deserializer)?;
+        // Use serde_json::Value which handles JSON, TOML, and #[serde(flatten)] correctly.
+        // The previous toml::Value broke deserialization when rules came from JSON (management API).
+        let value = serde_json::Value::deserialize(deserializer)?;
 
-        // Handle the adjacently tagged format: { type = "...", value = ... }
-        let table = match &value {
-            toml::Value::Table(t) => t,
-            toml::Value::String(s) => {
-                // Simple string case (e.g., "All")
-                return match s.as_str() {
-                    "All" => Ok(RuleCondition::All),
-                    _ => Ok(RuleCondition::Unknown),
-                };
-            }
-            _ => return Ok(RuleCondition::Unknown),
+        if let Some(s) = value.as_str() {
+            return match s {
+                "All" => Ok(RuleCondition::All),
+                _ => Ok(RuleCondition::Unknown),
+            };
+        }
+
+        let obj = match value.as_object() {
+            Some(o) => o,
+            None => return Ok(RuleCondition::Unknown),
         };
 
-        let type_str = match table.get("type").and_then(|v| v.as_str()) {
+        let type_str = match obj.get("type").and_then(|v| v.as_str()) {
             Some(s) => s,
             None => return Ok(RuleCondition::Unknown),
         };
 
+        let val_str = || {
+            obj.get("value")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+
         match type_str {
-            "DomainMatch" => {
-                let val = table
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default();
-                Ok(RuleCondition::DomainMatch(val.to_string()))
-            }
-            "DomainExact" => {
-                let val = table
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default();
-                Ok(RuleCondition::DomainExact(val.to_string()))
-            }
-            "IpCidr" => {
-                let val = table
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default();
-                Ok(RuleCondition::IpCidr(val.to_string()))
-            }
+            "DomainMatch" => Ok(RuleCondition::DomainMatch(val_str())),
+            "DomainExact" => Ok(RuleCondition::DomainExact(val_str())),
+            "IpCidr" => Ok(RuleCondition::IpCidr(val_str())),
             "PortRange" => {
-                // PortRange value is a 2-element array [u16, u16]
-                if let Some(arr) = table.get("value").and_then(|v| v.as_array()) {
-                    let a = arr.first().and_then(|v| v.as_integer()).unwrap_or(0) as u16;
-                    let b = arr.get(1).and_then(|v| v.as_integer()).unwrap_or(0) as u16;
+                if let Some(arr) = obj.get("value").and_then(|v| v.as_array()) {
+                    let a = arr.first().and_then(|v| v.as_u64()).unwrap_or(0) as u16;
+                    let b = arr.get(1).and_then(|v| v.as_u64()).unwrap_or(0) as u16;
                     Ok(RuleCondition::PortRange(a, b))
                 } else {
                     Ok(RuleCondition::PortRange(0, 0))
