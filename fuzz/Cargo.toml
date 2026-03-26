@@ -1,0 +1,40 @@
+[package]
+name = "prisma-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+prisma-core = { path = "../crates/prisma-core" }
+arbitrary = { version = "1", features = ["derive"] }
+bytes = "1"
+toml = "0.8"
+serde_json = "1"
+base64 = "0.22"
+
+# Prevent this from interfering with workspace members
+[workspace]
+
+[[bin]]
+name = "fuzz_handshake_decode"
+path = "fuzz_targets/handshake_decode.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_codec_frame_decode"
+path = "fuzz_targets/codec_frame_decode.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_config_toml_parse"
+path = "fuzz_targets/config_toml_parse.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_uri_parse"
+path = "fuzz_targets/uri_parse.rs"
+doc = false

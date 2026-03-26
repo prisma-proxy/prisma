@@ -1,0 +1,41 @@
+[workspace]
+
+[package]
+name = "prisma-gui"
+version = "2.23.0"
+edition = "2021"
+
+[lib]
+name = "prisma_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "prisma-gui"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri          = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell        = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-os           = "2"
+tauri-plugin-autostart    = { version = "2", optional = true }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog   = "2"
+tauri-plugin-fs       = "2"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+prisma-ffi  = { path = "../../../crates/prisma-ffi" }
+prisma-core = { path = "../../../crates/prisma-core" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "socks"] }
+tokio   = { version = "1", features = ["rt", "fs"] }
+tracing = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = ["desktop"]
+desktop = ["tauri-plugin-autostart"]

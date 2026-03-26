@@ -1,0 +1,1356 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Prisma Management API",
+    "description": "Management API for the Prisma encrypted proxy system. Provides endpoints for client management, connection monitoring, configuration, routing, bandwidth control, and real-time metrics.",
+    "version": "2.5.0",
+    "license": {
+      "name": "GPLv3.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:9090",
+      "description": "Local development server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Returns server health status including uptime and version.",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "version": { "type": "string", "example": "2.5.0" },
+                    "uptime_secs": { "type": "integer", "example": 3600 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Server metrics snapshot",
+        "description": "Returns current server metrics including connection counts, bandwidth, and memory usage.",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Current metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active_connections": { "type": "integer" },
+                    "total_connections": { "type": "integer" },
+                    "bytes_sent": { "type": "integer" },
+                    "bytes_received": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/history": {
+      "get": {
+        "summary": "Historical metrics",
+        "description": "Returns historical metrics data points.",
+        "tags": ["Health"],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["1h", "6h", "24h", "7d"], "default": "1h" },
+            "description": "Time period for history"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historical metrics data points",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/info": {
+      "get": {
+        "summary": "System information",
+        "description": "Returns system information including CPU, memory, and OS details.",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "System information",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections": {
+      "get": {
+        "summary": "List active connections",
+        "description": "Returns all currently active proxy connections.",
+        "tags": ["Connections"],
+        "responses": {
+          "200": {
+            "description": "List of active connections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connection"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/geo": {
+      "get": {
+        "summary": "Connection geo summary",
+        "description": "Returns geographic distribution of active connections.",
+        "tags": ["Connections"],
+        "responses": {
+          "200": {
+            "description": "Geographic summary of connections",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/{id}": {
+      "delete": {
+        "summary": "Disconnect a connection",
+        "description": "Forcefully disconnects an active connection by session ID.",
+        "tags": ["Connections"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Session ID"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Connection disconnected" },
+          "404": { "description": "Connection not found" }
+        }
+      }
+    },
+    "/api/geoip/download": {
+      "post": {
+        "summary": "Download GeoIP database",
+        "description": "Triggers download of the GeoIP database for connection geolocation.",
+        "tags": ["Connections"],
+        "responses": {
+          "200": { "description": "Download started or completed" }
+        }
+      }
+    },
+    "/api/clients": {
+      "get": {
+        "summary": "List all clients",
+        "description": "Returns all authorized clients with their configuration.",
+        "tags": ["Clients"],
+        "responses": {
+          "200": {
+            "description": "List of clients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Client"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new client",
+        "description": "Creates a new authorized client with auto-generated credentials.",
+        "tags": ["Clients"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "description": "Human-readable client name" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Client created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "name": { "type": "string" },
+                    "auth_secret_hex": { "type": "string", "description": "64-char hex-encoded auth secret" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clients/share": {
+      "post": {
+        "summary": "Generate share link for client",
+        "description": "Generates a shareable URI or QR code for a client's configuration.",
+        "tags": ["Clients"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_id": { "type": "string", "format": "uuid" },
+                  "format": { "type": "string", "enum": ["uri", "qr"], "default": "uri" }
+                },
+                "required": ["client_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Share link or QR code generated",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clients/{id}": {
+      "put": {
+        "summary": "Update a client",
+        "description": "Updates an existing client's properties (name, enabled status).",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "enabled": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Client updated" },
+          "404": { "description": "Client not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a client",
+        "description": "Removes an authorized client. Active connections from this client will be terminated.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Client deleted" },
+          "404": { "description": "Client not found" }
+        }
+      }
+    },
+    "/api/clients/{id}/secret": {
+      "get": {
+        "summary": "Get client auth secret",
+        "description": "Returns the authentication secret for a specific client.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "auth_secret_hex": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Client not found" }
+        }
+      }
+    },
+    "/api/clients/{id}/permissions": {
+      "get": {
+        "summary": "Get client permissions",
+        "description": "Returns the permission set for a specific client.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client permissions",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Permissions" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update client permissions",
+        "description": "Updates the permission set for a specific client.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Permissions" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Permissions updated" }
+        }
+      }
+    },
+    "/api/clients/{id}/kick": {
+      "post": {
+        "summary": "Kick a client",
+        "description": "Disconnects all active connections from a specific client.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Client kicked" }
+        }
+      }
+    },
+    "/api/clients/{id}/block": {
+      "post": {
+        "summary": "Block a client",
+        "description": "Blocks a client from connecting.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Client blocked" }
+        }
+      },
+      "delete": {
+        "summary": "Unblock a client",
+        "description": "Removes a block on a client, allowing them to connect again.",
+        "tags": ["Clients"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Client unblocked" }
+        }
+      }
+    },
+    "/api/clients/permissions/defaults": {
+      "get": {
+        "summary": "Get default permissions",
+        "description": "Returns the default permission set applied to new clients.",
+        "tags": ["Clients"],
+        "responses": {
+          "200": {
+            "description": "Default permissions",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Permissions" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set default permissions",
+        "description": "Updates the default permission set for new clients.",
+        "tags": ["Clients"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Permissions" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Default permissions updated" }
+        }
+      }
+    },
+    "/api/clients/{id}/bandwidth": {
+      "get": {
+        "summary": "Get client bandwidth limits",
+        "description": "Returns the bandwidth limit configuration for a specific client.",
+        "tags": ["Bandwidth"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client bandwidth limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "upload_bps": { "type": "integer", "description": "Upload limit in bits per second (0 = unlimited)" },
+                    "download_bps": { "type": "integer", "description": "Download limit in bits per second (0 = unlimited)" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update client bandwidth limits",
+        "description": "Sets bandwidth limits for a specific client.",
+        "tags": ["Bandwidth"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "upload_bps": { "type": "integer" },
+                  "download_bps": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Bandwidth limits updated" }
+        }
+      }
+    },
+    "/api/clients/{id}/quota": {
+      "get": {
+        "summary": "Get client traffic quota",
+        "description": "Returns the traffic quota for a specific client.",
+        "tags": ["Bandwidth"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client traffic quota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quota_bytes": { "type": "integer" },
+                    "used_bytes": { "type": "integer" },
+                    "period": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update client traffic quota",
+        "description": "Sets the traffic quota for a specific client.",
+        "tags": ["Bandwidth"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quota_bytes": { "type": "integer" },
+                  "period": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Quota updated" }
+        }
+      }
+    },
+    "/api/bandwidth/summary": {
+      "get": {
+        "summary": "Bandwidth summary",
+        "description": "Returns bandwidth usage summary across all clients.",
+        "tags": ["Bandwidth"],
+        "responses": {
+          "200": {
+            "description": "Bandwidth summary",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/clients": {
+      "get": {
+        "summary": "List client metrics",
+        "description": "Returns per-client metrics for all clients.",
+        "tags": ["Metrics"],
+        "responses": {
+          "200": {
+            "description": "Per-client metrics",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/clients/{id}": {
+      "get": {
+        "summary": "Get client metrics",
+        "description": "Returns metrics for a specific client.",
+        "tags": ["Metrics"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client metrics",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/clients/{id}/history": {
+      "get": {
+        "summary": "Get client metrics history",
+        "description": "Returns historical metrics for a specific client.",
+        "tags": ["Metrics"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historical client metrics",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "summary": "Get server configuration",
+        "description": "Returns the current server configuration (sensitive fields redacted).",
+        "tags": ["Config"],
+        "responses": {
+          "200": {
+            "description": "Server configuration",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update server configuration",
+        "description": "Partially updates the server configuration. Only provided fields are modified.",
+        "tags": ["Config"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Partial configuration update using dotted key notation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Configuration updated" },
+          "400": { "description": "Invalid configuration value" }
+        }
+      }
+    },
+    "/api/config/tls": {
+      "get": {
+        "summary": "Get TLS configuration",
+        "description": "Returns TLS certificate information including expiry dates.",
+        "tags": ["Config"],
+        "responses": {
+          "200": {
+            "description": "TLS configuration and certificate info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "cert_path": { "type": "string" },
+                    "key_path": { "type": "string" },
+                    "not_before": { "type": "string", "format": "date-time" },
+                    "not_after": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/backups": {
+      "get": {
+        "summary": "List config backups",
+        "description": "Returns all available configuration backups.",
+        "tags": ["Config"],
+        "responses": {
+          "200": {
+            "description": "List of backups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "created_at": { "type": "string", "format": "date-time" },
+                      "size": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/backup": {
+      "post": {
+        "summary": "Create a config backup",
+        "description": "Creates a new backup of the current server configuration.",
+        "tags": ["Config"],
+        "responses": {
+          "200": {
+            "description": "Backup created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/backups/{name}": {
+      "get": {
+        "summary": "Get a specific backup",
+        "description": "Returns the content of a specific configuration backup.",
+        "tags": ["Config"],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Backup content" },
+          "404": { "description": "Backup not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a backup",
+        "description": "Deletes a specific configuration backup.",
+        "tags": ["Config"],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Backup deleted" },
+          "404": { "description": "Backup not found" }
+        }
+      }
+    },
+    "/api/config/backups/{name}/restore": {
+      "post": {
+        "summary": "Restore a config backup",
+        "description": "Restores the server configuration from a specific backup.",
+        "tags": ["Config"],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Configuration restored" },
+          "404": { "description": "Backup not found" }
+        }
+      }
+    },
+    "/api/config/backups/{name}/diff": {
+      "get": {
+        "summary": "Diff a backup with current config",
+        "description": "Returns a unified diff between the backup and current configuration.",
+        "tags": ["Config"],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified diff",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "diff": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Backup not found" }
+        }
+      }
+    },
+    "/api/forwards": {
+      "get": {
+        "summary": "List port forwards",
+        "description": "Returns all configured port forwarding rules.",
+        "tags": ["Forwards"],
+        "responses": {
+          "200": {
+            "description": "List of port forwards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Forward" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a port forward",
+        "description": "Creates a new port forwarding rule.",
+        "tags": ["Forwards"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Forward" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Forward created" },
+          "400": { "description": "Invalid forward configuration" }
+        }
+      }
+    },
+    "/api/forwards/{port}": {
+      "put": {
+        "summary": "Update a port forward",
+        "description": "Updates an existing port forwarding rule.",
+        "tags": ["Forwards"],
+        "parameters": [
+          {
+            "name": "port",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Forward" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Forward updated" },
+          "404": { "description": "Forward not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a port forward",
+        "description": "Removes a port forwarding rule.",
+        "tags": ["Forwards"],
+        "parameters": [
+          {
+            "name": "port",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Forward deleted" },
+          "404": { "description": "Forward not found" }
+        }
+      }
+    },
+    "/api/forwards/{port}/connections": {
+      "get": {
+        "summary": "List forward connections",
+        "description": "Returns active connections for a specific port forward.",
+        "tags": ["Forwards"],
+        "parameters": [
+          {
+            "name": "port",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active forward connections",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/routes": {
+      "get": {
+        "summary": "List routing rules",
+        "description": "Returns all configured routing rules ordered by priority.",
+        "tags": ["Routes"],
+        "responses": {
+          "200": {
+            "description": "List of routing rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Route" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a routing rule",
+        "description": "Creates a new routing rule.",
+        "tags": ["Routes"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Route" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Route created" },
+          "400": { "description": "Invalid route configuration" }
+        }
+      }
+    },
+    "/api/routes/{id}": {
+      "put": {
+        "summary": "Update a routing rule",
+        "description": "Updates an existing routing rule.",
+        "tags": ["Routes"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Route" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Route updated" },
+          "404": { "description": "Route not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a routing rule",
+        "description": "Removes a routing rule.",
+        "tags": ["Routes"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Route deleted" },
+          "404": { "description": "Route not found" }
+        }
+      }
+    },
+    "/api/acls": {
+      "get": {
+        "summary": "List ACLs",
+        "description": "Returns all access control lists.",
+        "tags": ["ACLs"],
+        "responses": {
+          "200": {
+            "description": "List of ACLs",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acls/{client_id}": {
+      "get": {
+        "summary": "Get client ACL",
+        "description": "Returns the ACL for a specific client.",
+        "tags": ["ACLs"],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Client ACL" }
+        }
+      },
+      "put": {
+        "summary": "Set client ACL",
+        "description": "Sets the ACL for a specific client.",
+        "tags": ["ACLs"],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ACL updated" }
+        }
+      },
+      "delete": {
+        "summary": "Remove client ACL",
+        "description": "Removes the ACL for a specific client, reverting to defaults.",
+        "tags": ["ACLs"],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "ACL removed" }
+        }
+      }
+    },
+    "/api/alerts/config": {
+      "get": {
+        "summary": "Get alert configuration",
+        "description": "Returns current alert thresholds and notification settings.",
+        "tags": ["Alerts"],
+        "responses": {
+          "200": {
+            "description": "Alert configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cert_expiry_days": { "type": "integer", "description": "Days before cert expiry to alert" },
+                    "quota_warn_percent": { "type": "integer", "description": "Quota usage percentage to warn at" },
+                    "handshake_spike_threshold": { "type": "integer", "description": "Handshake count threshold for spike alerts" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update alert configuration",
+        "description": "Updates alert thresholds and notification settings.",
+        "tags": ["Alerts"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cert_expiry_days": { "type": "integer" },
+                  "quota_warn_percent": { "type": "integer" },
+                  "handshake_spike_threshold": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Alert configuration updated" }
+        }
+      }
+    },
+    "/api/reload": {
+      "post": {
+        "summary": "Reload server configuration",
+        "description": "Triggers a hot-reload of the server configuration from disk.",
+        "tags": ["Config"],
+        "responses": {
+          "200": { "description": "Configuration reloaded" }
+        }
+      }
+    },
+    "/api/prometheus": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "description": "Returns metrics in Prometheus exposition format. This endpoint does not require authentication.",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prometheus metrics",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ws/metrics": {
+      "get": {
+        "summary": "WebSocket metrics stream",
+        "description": "Real-time metrics stream over WebSocket. Send connect request to upgrade.",
+        "tags": ["WebSocket"],
+        "responses": {
+          "101": { "description": "WebSocket upgrade" }
+        }
+      }
+    },
+    "/api/ws/logs": {
+      "get": {
+        "summary": "WebSocket log stream",
+        "description": "Real-time server log stream over WebSocket.",
+        "tags": ["WebSocket"],
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] },
+            "description": "Minimum log level filter"
+          }
+        ],
+        "responses": {
+          "101": { "description": "WebSocket upgrade" }
+        }
+      }
+    },
+    "/api/ws/connections": {
+      "get": {
+        "summary": "WebSocket connection events",
+        "description": "Real-time connection events (connect, disconnect) over WebSocket.",
+        "tags": ["WebSocket"],
+        "responses": {
+          "101": { "description": "WebSocket upgrade" }
+        }
+      }
+    },
+    "/api/ws/reload": {
+      "get": {
+        "summary": "WebSocket reload events",
+        "description": "Receive notifications when server configuration is reloaded.",
+        "tags": ["WebSocket"],
+        "responses": {
+          "101": { "description": "WebSocket upgrade" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Management API auth token. Pass as Bearer token in Authorization header or as ?token= query parameter for WebSocket endpoints."
+      }
+    },
+    "schemas": {
+      "Client": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "description": "Unique client identifier" },
+          "name": { "type": "string", "description": "Human-readable client name" },
+          "enabled": { "type": "boolean", "description": "Whether the client is allowed to connect" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional tags for client organization"
+          }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "properties": {
+          "session_id": { "type": "string", "description": "Unique session identifier" },
+          "client_id": { "type": "string", "format": "uuid" },
+          "client_name": { "type": "string" },
+          "remote_addr": { "type": "string", "description": "Client IP address" },
+          "target": { "type": "string", "description": "Destination address" },
+          "transport": { "type": "string", "description": "Transport protocol used" },
+          "bytes_sent": { "type": "integer" },
+          "bytes_received": { "type": "integer" },
+          "connected_at": { "type": "string", "format": "date-time" },
+          "duration_secs": { "type": "integer" }
+        }
+      },
+      "Route": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "Unique rule identifier" },
+          "name": { "type": "string", "description": "Human-readable rule name" },
+          "condition": { "type": "string", "description": "Match condition (e.g., DomainMatch:*.ads.*, IpCidr:10.0.0.0/8, PortRange:80-443, All)" },
+          "action": { "type": "string", "enum": ["allow", "block"], "description": "Action to take when condition matches" },
+          "priority": { "type": "integer", "description": "Rule priority (lower = higher priority)" }
+        }
+      },
+      "Forward": {
+        "type": "object",
+        "properties": {
+          "listen_port": { "type": "integer", "description": "Local port to listen on" },
+          "target": { "type": "string", "description": "Target address (host:port)" },
+          "protocol": { "type": "string", "enum": ["tcp", "udp"], "description": "Protocol for forwarding" }
+        }
+      },
+      "Permissions": {
+        "type": "object",
+        "description": "Client permission set controlling what actions the client can perform",
+        "properties": {
+          "allow_tcp": { "type": "boolean", "default": true },
+          "allow_udp": { "type": "boolean", "default": true },
+          "max_connections": { "type": "integer", "description": "Maximum concurrent connections (0 = unlimited)" },
+          "allowed_domains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Domain whitelist (empty = allow all)"
+          },
+          "blocked_domains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Domain blacklist"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Health", "description": "Health checks, metrics, and system information" },
+    { "name": "Connections", "description": "Active connection management and monitoring" },
+    { "name": "Clients", "description": "Client CRUD, permissions, and sharing" },
+    { "name": "Bandwidth", "description": "Bandwidth limits and traffic quotas" },
+    { "name": "Metrics", "description": "Per-client metrics and history" },
+    { "name": "Config", "description": "Server configuration management and backups" },
+    { "name": "Forwards", "description": "Port forwarding rules" },
+    { "name": "Routes", "description": "Routing and access control rules" },
+    { "name": "ACLs", "description": "Access control lists for clients" },
+    { "name": "Alerts", "description": "Alert thresholds and notifications" },
+    { "name": "WebSocket", "description": "Real-time streaming endpoints" }
+  ]
+}

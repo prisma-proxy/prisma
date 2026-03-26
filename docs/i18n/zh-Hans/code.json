@@ -1,0 +1,275 @@
+{
+  "homepage.getStarted": {
+    "message": "快速开始"
+  },
+  "homepage.viewGitHub": {
+    "message": "在 GitHub 上查看"
+  },
+  "homepage.title": {
+    "message": "首页"
+  },
+  "homepage.description": {
+    "message": "Prisma Proxy — 基于 Rust 构建的新一代加密代理基础设施"
+  },
+  "homepage.features": {
+    "message": "功能特性"
+  },
+  "homepage.protocol": {
+    "message": "协议 v5"
+  },
+  "homepage.quickStart": {
+    "message": "快速上手"
+  },
+  "homepage.quickStartNote": {
+    "message": "安装二进制文件，生成凭证、TLS 证书和示例配置文件。"
+  },
+  "homepage.features.multiTransport.title": {
+    "message": "8 种传输"
+  },
+  "homepage.features.multiTransport.description": {
+    "message": "QUIC v2、TCP、WebSocket、gRPC、XHTTP、XPorta、SSH、WireGuard — 审查封锁时自动切换传输协议。"
+  },
+  "homepage.features.prismaTls.title": {
+    "message": "PrismaTLS"
+  },
+  "homepage.features.prismaTls.description": {
+    "message": "主动探测防御，具备浏览器指纹模拟、伪装服务器池和填充信标认证。"
+  },
+  "homepage.features.trafficShaping.title": {
+    "message": "流量整形"
+  },
+  "homepage.features.trafficShaping.description": {
+    "message": "桶填充 (Bucket Padding)、干扰注入、时序抖动和帧合并，击败封装 TLS 指纹识别。"
+  },
+  "homepage.features.cdnCompatible.title": {
+    "message": "CDN 兼容"
+  },
+  "homepage.features.cdnCompatible.description": {
+    "message": "将服务器隐藏在 Cloudflare 背后。XPorta 使流量与正常 REST API 调用无法区分。XMUX 连接池增强隐蔽性。"
+  },
+  "homepage.features.proxyGroups.title": {
+    "message": "代理组与订阅"
+  },
+  "homepage.features.proxyGroups.description": {
+    "message": "支持 Select、AutoUrl、Fallback 和 LoadBalance 代理组。订阅导入，支持自动更新。"
+  },
+  "homepage.features.tunMode.title": {
+    "message": "TUN 模式"
+  },
+  "homepage.features.tunMode.description": {
+    "message": "通过虚拟网络接口实现系统级代理。所有应用自动代理，无需逐一配置。"
+  },
+  "homepage.features.crossPlatform.title": {
+    "message": "跨平台"
+  },
+  "homepage.features.crossPlatform.description": {
+    "message": "桌面 GUI（Tauri 2）、Android（Kotlin + JNI）、iOS（Swift + xcframework）和 CLI。全部由同一 Rust 核心通过 C FFI 驱动。"
+  },
+  "homepage.features.builtInRust.title": {
+    "message": "Rust 构建"
+  },
+  "homepage.features.builtInRust.description": {
+    "message": "io_uring 零拷贝 I/O、异步运行时、内存安全。以极少资源处理数千并发连接。"
+  },
+  "homepage.highlights.encryption": {
+    "message": "加密 (Encryption)"
+  },
+  "homepage.highlights.keyExchange": {
+    "message": "密钥交换 (Key Exchange)"
+  },
+  "homepage.highlights.handshake": {
+    "message": "握手 (Handshake)"
+  },
+  "homepage.highlights.transports": {
+    "message": "传输协议"
+  },
+  "homepage.highlights.udpRelay": {
+    "message": "UDP 中继 (Relay)"
+  },
+  "homepage.highlights.congestion": {
+    "message": "拥塞控制 (Congestion Control)"
+  },
+  "homepage.highlights.obfuscation": {
+    "message": "混淆 (Obfuscation)"
+  },
+  "homepage.highlights.platforms": {
+    "message": "平台支持"
+  },
+  "benchmarks.page.title": {
+    "message": "性能基准测试"
+  },
+  "benchmarks.page.description": {
+    "message": "Prisma Proxy 与 Xray-core 和 sing-box 的性能基准对比"
+  },
+  "benchmarks.heading": {
+    "message": "性能基准测试"
+  },
+  "benchmarks.subtitle": {
+    "message": "Prisma Proxy vs Xray-core vs sing-box — 自动化每周对比"
+  },
+  "benchmarks.meta.updated": {
+    "message": "最后更新："
+  },
+  "benchmarks.meta.scenarios": {
+    "message": "个场景"
+  },
+  "benchmarks.loading": {
+    "message": "正在加载基准测试数据..."
+  },
+  "benchmarks.error.title": {
+    "message": "无法加载基准测试"
+  },
+  "benchmarks.error.retry": {
+    "message": "重试"
+  },
+  "benchmarks.error.viewGH": {
+    "message": "在 GitHub Actions 上查看结果"
+  },
+  "benchmarks.error.artifactOnly": {
+    "message": "基准测试数据文件尚未部署。最新 CI 构件可在 GitHub Actions 上查看。"
+  },
+  "benchmarks.error.noData": {
+    "message": "无法加载基准测试数据。请稍后再试或在 GitHub Actions 上查看结果。"
+  },
+  "benchmarks.error.fetch": {
+    "message": "获取基准测试数据失败。请稍后重试。"
+  },
+  "benchmarks.legend.baseline": {
+    "message": "基线"
+  },
+  "benchmarks.throughput.title": {
+    "message": "吞吐量 (Throughput) 对比"
+  },
+  "benchmarks.throughput.download": {
+    "message": "下载 (Mbps)"
+  },
+  "benchmarks.throughput.upload": {
+    "message": "上传 (Mbps)"
+  },
+  "benchmarks.latency.title": {
+    "message": "延迟 (Latency) 对比"
+  },
+  "benchmarks.latency.ttfb": {
+    "message": "TTFB 延迟 (Latency) (ms)"
+  },
+  "benchmarks.latency.handshake": {
+    "message": "握手 (Handshake) 时间 (ms)"
+  },
+  "benchmarks.platforms.title": {
+    "message": "平台概览"
+  },
+  "benchmarks.h2h.title": {
+    "message": "正面对比"
+  },
+  "benchmarks.h2h.description": {
+    "message": "每个平台的最佳场景并排对比。"
+  },
+  "benchmarks.h2h.metric": {
+    "message": "指标"
+  },
+  "benchmarks.resources.title": {
+    "message": "资源使用"
+  },
+  "benchmarks.resources.cpuChart": {
+    "message": "CPU 使用率 (%) — 越低越好"
+  },
+  "benchmarks.resources.memChart": {
+    "message": "空闲内存 (KB) — 越低越好"
+  },
+  "benchmarks.resources.scenario": {
+    "message": "场景"
+  },
+  "benchmarks.resources.cpu": {
+    "message": "CPU %"
+  },
+  "benchmarks.resources.memIdle": {
+    "message": "空闲内存 (KB)"
+  },
+  "benchmarks.resources.memLoad": {
+    "message": "负载内存 (KB)"
+  },
+  "benchmarks.resources.concurrent": {
+    "message": "4x 并发 (Mbps)"
+  },
+  "benchmarks.resources.dlCv": {
+    "message": "下载稳定性 (CV%)"
+  },
+  "benchmarks.efficiency.title": {
+    "message": "吞吐效率 (Throughput Efficiency)"
+  },
+  "benchmarks.efficiency.description": {
+    "message": "哪个代理在单位资源消耗下能提供最大吞吐量。"
+  },
+  "benchmarks.efficiency.perMb": {
+    "message": "每 MB 内存吞吐 (Mbps/MB)（越高越好）"
+  },
+  "benchmarks.efficiency.perCpu": {
+    "message": "每 CPU% 吞吐 (Mbps/CPU%)（越高越好）"
+  },
+  "benchmarks.security.title": {
+    "message": "安全评分"
+  },
+  "benchmarks.security.description": {
+    "message": "综合评分 (0-100)，基于加密 (Encryption) 深度、前向保密 (Forward Secrecy)、流量分析抵抗、协议检测抵抗、防重放 (Anti-Replay) 和认证强度。"
+  },
+  "benchmarks.security.chart": {
+    "message": "安全评分（越高越好）"
+  },
+  "benchmarks.security.scenario": {
+    "message": "场景"
+  },
+  "benchmarks.security.tier": {
+    "message": "等级"
+  },
+  "benchmarks.security.score": {
+    "message": "分数"
+  },
+  "benchmarks.security.throughput": {
+    "message": "下载 (Mbps)"
+  },
+  "benchmarks.security.tradeoff": {
+    "message": "安全/速度"
+  },
+  "benchmarks.usecases.title": {
+    "message": "使用场景推荐"
+  },
+  "benchmarks.usecase.personal": {
+    "message": "个人 VPN"
+  },
+  "benchmarks.usecase.personal.desc": {
+    "message": "日常浏览、流媒体和隐私保护。优先考虑低延迟和强安全性。"
+  },
+  "benchmarks.usecase.saas": {
+    "message": "多租户 SaaS"
+  },
+  "benchmarks.usecase.saas.desc": {
+    "message": "服务大量并发用户。优先考虑并发能力和均衡的资源使用。"
+  },
+  "benchmarks.usecase.edge": {
+    "message": "边缘 / IoT"
+  },
+  "benchmarks.usecase.edge.desc": {
+    "message": "资源受限设备。优先考虑低内存占用和 CPU 效率。"
+  },
+  "benchmarks.usecase.cdn": {
+    "message": "CDN / 批量传输"
+  },
+  "benchmarks.usecase.cdn.desc": {
+    "message": "大文件传输和内容分发。优先考虑原始吞吐量和并发能力。"
+  },
+  "benchmarks.usecase.highsec": {
+    "message": "高安全性"
+  },
+  "benchmarks.usecase.highsec.desc": {
+    "message": "最大化抗审查 (Anti-Censorship) 能力。安全评分是主导因素。"
+  },
+  "benchmarks.history.title": {
+    "message": "历史趋势"
+  },
+  "benchmarks.history.placeholder": {
+    "message": "历史基准测试数据在每次 CI 运行时收集。在 GitHub Actions 上查看过去的结果和趋势。"
+  },
+  "benchmarks.history.link": {
+    "message": "在 GitHub Actions 上查看历史数据"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "bundle": {
+    "iOS": {
+      "developmentTeam": "",
+      "minimumSystemVersion": "15.0"
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Prisma",
+        "fullscreen": false
+      }
+    ]
+  }
+}

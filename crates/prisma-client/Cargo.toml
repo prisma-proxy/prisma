@@ -1,0 +1,49 @@
+[package]
+name = "prisma-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+prisma-core = { path = "../prisma-core" }
+tokio = { workspace = true }
+quinn = { workspace = true }
+rustls = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+webpki-roots = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+http = { workspace = true }
+futures-util = { workspace = true }
+tokio-stream = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }
+rand = { workspace = true }
+blake3 = { workspace = true }
+smoltcp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+russh = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+wintun = { workspace = true }
+windows-sys = { version = "0.59", features = [
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_Foundation",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

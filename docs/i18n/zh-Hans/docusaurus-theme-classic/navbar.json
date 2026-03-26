@@ -1,0 +1,20 @@
+{
+  "title": {
+    "message": "Prisma Proxy"
+  },
+  "item.label.Docs": {
+    "message": "文档"
+  },
+  "item.label.Guide": {
+    "message": "新手指南"
+  },
+  "item.label.Benchmarks": {
+    "message": "性能基准测试（Benchmarks）"
+  },
+  "item.label.Dev": {
+    "message": "开发者文档"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub"
+  }
+}

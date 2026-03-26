@@ -1,0 +1,18 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="prism-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <!-- Triangular prism / shield shape -->
+  <path d="M16 2 L28 10 L28 22 L16 30 L4 22 L4 10 Z" fill="url(#prism-gradient)" stroke="none"/>
+  <!-- Inner light refraction lines -->
+  <path d="M16 7 L22 11 L22 21 L16 25 L10 21 L10 11 Z" fill="none" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
+  <!-- Central prism triangle -->
+  <path d="M16 10 L20.5 16 L11.5 16 Z" fill="#ffffff" opacity="0.9"/>
+  <!-- Refracted light beams -->
+  <line x1="20.5" y1="16" x2="24" y2="13" stroke="#93c5fd" stroke-width="1" opacity="0.8"/>
+  <line x1="20.5" y1="16" x2="24" y2="16" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+  <line x1="20.5" y1="16" x2="24" y2="19" stroke="#dbeafe" stroke-width="1" opacity="0.8"/>
+</svg>

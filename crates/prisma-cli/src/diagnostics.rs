@@ -1,0 +1,242 @@
+use std::sync::Arc;
+
+use anyhow::Result;
+use prisma_core::config::client::ClientConfig;
+use prisma_core::congestion::CongestionMode;
+
+/// Build a ProxyContext from a ClientConfig and optional server address override.
+/// Public variant for use by other CLI modules (e.g., speed-test).
+pub fn build_proxy_context_pub(
+    config: &ClientConfig,
+    server_override: Option<&str>,
+) -> Result<prisma_client::proxy::ProxyContext> {
+    build_proxy_context(config, server_override)
+}
+
+fn build_proxy_context(
+    config: &ClientConfig,
+    server_override: Option<&str>,
+) -> Result<prisma_client::proxy::ProxyContext> {
+    let server_addr = server_override
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| config.server_addr.clone());
+    let server_addr = if server_addr.contains(':') {
+        server_addr
+    } else {
+        format!("{}:8443", server_addr)
+    };
+
+    let client_id = prisma_core::types::ClientId::from_uuid(
+        uuid::Uuid::parse_str(&config.identity.client_id)
+            .map_err(|e| anyhow::anyhow!("Invalid client_id: {}", e))?,
+    );
+    let auth_secret = prisma_core::util::hex_decode_32(&config.identity.auth_secret)
+        .map_err(|e| anyhow::anyhow!("Invalid auth_secret: {}", e))?;
+    let cipher_suite = match config.cipher_suite.as_str() {
+        "aes-256-gcm" => prisma_core::types::CipherSuite::Aes256Gcm,
+        _ => prisma_core::types::CipherSuite::ChaCha20Poly1305,
+    };
+    let congestion_mode = CongestionMode::from_config(
+        &config.congestion.mode,
+        config.congestion.target_bandwidth.as_deref(),
+    );
+
+    Ok(prisma_client::proxy::ProxyContext {
+        server_addr,
+        client_id,
+        auth_secret,
+        cipher_suite,
+        use_quic: config.transport == "quic",
+        skip_cert_verify: config.skip_cert_verify,
+        tls_on_tcp: config.tls_on_tcp,
+        alpn_protocols: config.alpn_protocols.clone(),
+        tls_server_name: config.tls_server_name.clone(),
+        use_ws: config.transport == "ws",
+        ws: config.ws.clone(),
+        use_grpc: config.transport == "grpc",
+        grpc: config.grpc.clone(),
+        use_xhttp: config.transport == "xhttp",
+        xhttp: config.xhttp.clone(),
+        use_xporta: config.transport == "xporta",
+        xporta_config: config.xporta.clone(),
+        user_agent: config.user_agent.clone(),
+        referer: config.referer.clone(),
+        congestion_mode,
+        port_hopping: config.port_hopping.clone(),
+        salamander_password: config.salamander_password.clone(),
+        udp_fec: None,
+        dns_config: prisma_core::dns::DnsConfig::default(),
+        dns_resolver: prisma_client::dns_resolver::DnsResolver::new(
+            &prisma_core::dns::DnsConfig::default(),
+        ),
+        router: Arc::new(prisma_core::router::Router::new(vec![])),
+        fingerprint: config.fingerprint.clone(),
+        quic_version: config.quic_version.clone(),
+        traffic_shaping: config.traffic_shaping.clone(),
+        use_prisma_tls: config.transport == "prisma-tls",
+        use_wireguard: config.transport == "wireguard",
+        wireguard_config: config.wireguard.clone(),
+        metrics: prisma_client::metrics::ClientMetrics::new(),
+        server_key_pin: config.server_key_pin.clone(),
+    })
+}
+
+/// Build a ProxyContext with a specific transport override.
+fn build_proxy_context_for_transport(
+    config: &ClientConfig,
+    transport: &str,
+) -> Result<prisma_client::proxy::ProxyContext> {
+    let mut ctx = build_proxy_context(config, None)?;
+    ctx.use_quic = transport == "quic";
+    ctx.use_ws = transport == "ws";
+    ctx.use_grpc = transport == "grpc";
+    ctx.use_xhttp = transport == "xhttp";
+    ctx.use_xporta = transport == "xporta";
+    ctx.use_prisma_tls = transport == "prisma-tls";
+    Ok(ctx)
+}
+
+pub async fn ping(
+    config_path: &str,
+    server: Option<&str>,
+    count: u32,
+    interval_ms: u64,
+) -> Result<()> {
+    use prisma_core::config::load_client_config;
+
+    let config = load_client_config(config_path)
+        .map_err(|e| anyhow::anyhow!("Failed to load client config: {}", e))?;
+
+    let ctx = build_proxy_context(&config, server)?;
+
+    println!("PRISMA PING {} ({})", ctx.server_addr, config_path);
+    println!();
+
+    let mut rtts = Vec::new();
+
+    for seq in 1..=count {
+        let start = std::time::Instant::now();
+        match ctx.connect().await {
+            Ok(transport) => {
+                match prisma_client::tunnel::establish_raw_tunnel(
+                    transport,
+                    ctx.client_id,
+                    ctx.auth_secret,
+                    ctx.cipher_suite,
+                    ctx.server_key_pin.as_deref(),
+                )
+                .await
+                {
+                    Ok(_tunnel) => {
+                        let rtt = start.elapsed();
+                        let ms = rtt.as_secs_f64() * 1000.0;
+                        rtts.push(ms);
+                        println!(
+                            "seq={} transport={} time={:.1}ms",
+                            seq, config.transport, ms
+                        );
+                    }
+                    Err(e) => {
+                        println!("seq={} tunnel error: {}", seq, e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("seq={} connect error: {}", seq, e);
+            }
+        }
+
+        if seq < count {
+            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+        }
+    }
+
+    println!();
+    if rtts.is_empty() {
+        println!("--- no successful pings ---");
+    } else {
+        let min = rtts.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = rtts.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let avg = rtts.iter().sum::<f64>() / rtts.len() as f64;
+        println!("--- {} ping statistics ---", ctx.server_addr);
+        println!(
+            "{} transmitted, {} received, {:.0}% loss",
+            count,
+            rtts.len(),
+            (1.0 - rtts.len() as f64 / count as f64) * 100.0
+        );
+        println!("rtt min/avg/max = {:.1}/{:.1}/{:.1} ms", min, avg, max);
+    }
+
+    Ok(())
+}
+
+pub async fn test_transport(config_path: &str) -> Result<()> {
+    use prisma_core::config::load_client_config;
+
+    let config = load_client_config(config_path)
+        .map_err(|e| anyhow::anyhow!("Failed to load client config: {}", e))?;
+
+    println!("Testing transports to {} ...", config.server_addr);
+    println!();
+
+    let transports = [
+        ("quic", true),
+        ("prisma-tls", true),
+        ("ws", config.ws.url.is_some()),
+        ("grpc", config.grpc.url.is_some()),
+        (
+            "xhttp",
+            config.xhttp.stream_url.is_some() || config.xhttp.upload_url.is_some(),
+        ),
+        ("xporta", config.xporta.is_some()),
+    ];
+
+    let mut rows = Vec::new();
+
+    for (transport_name, available) in &transports {
+        if !available {
+            rows.push(vec![
+                transport_name.to_string(),
+                "SKIP".to_string(),
+                "-".to_string(),
+                "not configured".to_string(),
+            ]);
+            continue;
+        }
+
+        let ctx = build_proxy_context_for_transport(&config, transport_name)?;
+
+        let start = std::time::Instant::now();
+        match tokio::time::timeout(std::time::Duration::from_secs(10), ctx.connect()).await {
+            Ok(Ok(_transport)) => {
+                let latency = start.elapsed();
+                rows.push(vec![
+                    transport_name.to_string(),
+                    "OK".to_string(),
+                    format!("{:.0}ms", latency.as_secs_f64() * 1000.0),
+                    String::new(),
+                ]);
+            }
+            Ok(Err(e)) => {
+                rows.push(vec![
+                    transport_name.to_string(),
+                    "FAIL".to_string(),
+                    "-".to_string(),
+                    format!("{}", e),
+                ]);
+            }
+            Err(_) => {
+                rows.push(vec![
+                    transport_name.to_string(),
+                    "TIMEOUT".to_string(),
+                    ">10s".to_string(),
+                    "connection timed out".to_string(),
+                ]);
+            }
+        }
+    }
+
+    crate::api_client::print_table(&["Transport", "Status", "Latency", "Error"], &rows);
+    Ok(())
+}

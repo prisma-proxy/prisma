@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capabilities for iOS and Android",
+  "platforms": ["iOS", "android"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:path:default",
+    "notification:default",
+    "os:allow-platform",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
+    "dialog:allow-save",
+    "dialog:allow-open",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file"
+  ]
+}

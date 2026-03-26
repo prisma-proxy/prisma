@@ -1,0 +1,1569 @@
+use std::net::{Ipv4Addr, Ipv6Addr};
+
+use crate::crypto::aead::AeadCipher;
+use crate::error::{CryptoError, ProtocolError};
+use crate::types::{CipherSuite, ClientId, ProxyAddress, ProxyDestination, NONCE_SIZE};
+
+use super::types::*;
+
+// --- Handshake message encoding/decoding ---
+
+/// Encode PrismaClientInit to bytes.
+/// Wire format:
+///   [version:1][flags:1][client_ephemeral_pub:32][client_id:16][timestamp:8]
+///   [cipher_suite:1][auth_token:32][padding:var]
+pub fn encode_client_init(msg: &PrismaClientInit) -> Vec<u8> {
+    let pq_len = msg.pq_kem_encap_key.as_ref().map_or(0, |k| 2 + k.len());
+    let mut buf = Vec::with_capacity(1 + 1 + 32 + 16 + 8 + 1 + 32 + pq_len + msg.padding.len());
+    buf.push(msg.version);
+    buf.push(msg.flags);
+    buf.extend_from_slice(&msg.client_ephemeral_pub);
+    buf.extend_from_slice(msg.client_id.0.as_bytes());
+    buf.extend_from_slice(&msg.timestamp.to_be_bytes());
+    buf.push(msg.cipher_suite as u8);
+    buf.extend_from_slice(&msg.auth_token);
+    // PQ KEM encapsulation key (after auth_token, before padding)
+    if let Some(ref ek) = msg.pq_kem_encap_key {
+        buf.extend_from_slice(&(ek.len() as u16).to_be_bytes());
+        buf.extend_from_slice(ek);
+    }
+    buf.extend_from_slice(&msg.padding);
+    buf
+}
+
+/// Decode PrismaClientInit from bytes.
+pub fn decode_client_init(data: &[u8]) -> Result<PrismaClientInit, ProtocolError> {
+    // Minimum: 1+1+32+16+8+1+32 = 91
+    if data.len() < 91 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaClientInit too short".into(),
+        ));
+    }
+    let version = data[0];
+    let flags = data[1];
+    let mut client_ephemeral_pub = [0u8; 32];
+    client_ephemeral_pub.copy_from_slice(&data[2..34]);
+    let client_id = ClientId(uuid::Uuid::from_bytes(
+        data[34..50].try_into().expect("slice is exactly 16 bytes"),
+    ));
+    let timestamp = u64::from_be_bytes(data[50..58].try_into().expect("slice is exactly 8 bytes"));
+    let cipher_suite =
+        CipherSuite::from_u8(data[58]).ok_or(ProtocolError::InvalidCommand(data[58]))?;
+    let mut auth_token = [0u8; 32];
+    auth_token.copy_from_slice(&data[59..91]);
+
+    // Parse optional PQ KEM encapsulation key when CLIENT_INIT_FLAG_PQ_KEM is set
+    let mut cursor = 91;
+    let pq_kem_encap_key = if flags & CLIENT_INIT_FLAG_PQ_KEM != 0 {
+        if data.len() < cursor + 2 {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaClientInit PQ KEM length truncated".into(),
+            ));
+        }
+        let ek_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        cursor += 2;
+        if data.len() < cursor + ek_len {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaClientInit PQ KEM encap key truncated".into(),
+            ));
+        }
+        let ek = data[cursor..cursor + ek_len].to_vec();
+        cursor += ek_len;
+        Some(ek)
+    } else {
+        None
+    };
+    let padding = data[cursor..].to_vec();
+
+    Ok(PrismaClientInit {
+        version,
+        flags,
+        client_ephemeral_pub,
+        client_id,
+        timestamp,
+        cipher_suite,
+        auth_token,
+        pq_kem_encap_key,
+        padding,
+    })
+}
+
+/// Encode PrismaServerInit to bytes (plaintext — will be encrypted with preliminary key).
+/// Wire format:
+///   [status:1][session_id:16][server_ephemeral_pub:32][challenge:32]
+///   [padding_min:2][padding_max:2][server_features:4]
+///   [ticket_len:2][ticket:var]
+///   [bucket_count:2][bucket_sizes:2*N][padding:var]
+pub fn encode_server_init(msg: &PrismaServerInit) -> Vec<u8> {
+    let bucket_bytes = msg.bucket_sizes.len() * 2;
+    let mut buf = Vec::with_capacity(
+        1 + 16
+            + 32
+            + 32
+            + 2
+            + 2
+            + 4
+            + 2
+            + msg.session_ticket.len()
+            + 2
+            + bucket_bytes
+            + msg.padding.len(),
+    );
+    buf.push(msg.status as u8);
+    buf.extend_from_slice(msg.session_id.as_bytes());
+    buf.extend_from_slice(&msg.server_ephemeral_pub);
+    buf.extend_from_slice(&msg.challenge);
+    buf.extend_from_slice(&msg.padding_min.to_le_bytes());
+    buf.extend_from_slice(&msg.padding_max.to_le_bytes());
+    buf.extend_from_slice(&msg.server_features.to_le_bytes());
+    buf.extend_from_slice(&(msg.session_ticket.len() as u16).to_be_bytes());
+    buf.extend_from_slice(&msg.session_ticket);
+    buf.extend_from_slice(&(msg.bucket_sizes.len() as u16).to_be_bytes());
+    for &size in &msg.bucket_sizes {
+        buf.extend_from_slice(&size.to_le_bytes());
+    }
+    // PQ KEM ciphertext (after bucket_sizes, before padding)
+    if let Some(ref ct) = msg.pq_kem_ciphertext {
+        buf.extend_from_slice(&(ct.len() as u16).to_be_bytes());
+        buf.extend_from_slice(ct);
+    }
+    buf.extend_from_slice(&msg.padding);
+    buf
+}
+
+/// Decode PrismaServerInit from bytes.
+pub fn decode_server_init(data: &[u8]) -> Result<PrismaServerInit, ProtocolError> {
+    // Minimum: 1+16+32+32+2+2+4+2+0+2 = 93
+    if data.len() < 93 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit too short".into(),
+        ));
+    }
+    let status = AcceptStatus::from_u8(data[0]).ok_or(ProtocolError::InvalidFrame(
+        "Invalid PrismaServerInit status".into(),
+    ))?;
+    let session_id =
+        uuid::Uuid::from_bytes(data[1..17].try_into().expect("slice is exactly 16 bytes"));
+    let mut server_ephemeral_pub = [0u8; 32];
+    server_ephemeral_pub.copy_from_slice(&data[17..49]);
+    let mut challenge = [0u8; 32];
+    challenge.copy_from_slice(&data[49..81]);
+    let padding_min = u16::from_le_bytes([data[81], data[82]]);
+    let padding_max = u16::from_le_bytes([data[83], data[84]]);
+    let server_features = u32::from_le_bytes([data[85], data[86], data[87], data[88]]);
+    let ticket_len = u16::from_be_bytes([data[89], data[90]]) as usize;
+    // Sanity check: reject absurdly large ticket lengths to prevent allocation DoS.
+    // A legitimate session ticket is ~61 bytes (encrypted); 4096 is extremely generous.
+    if ticket_len > 4096 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit session ticket too large".into(),
+        ));
+    }
+    let ticket_end = 91 + ticket_len;
+    if data.len() < ticket_end + 2 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit ticket/buckets truncated".into(),
+        ));
+    }
+    let session_ticket = data[91..ticket_end].to_vec();
+    let bucket_count = u16::from_be_bytes([data[ticket_end], data[ticket_end + 1]]) as usize;
+    // Sanity check: typical bucket configs have 4-16 sizes; 256 is extremely generous.
+    if bucket_count > 256 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit too many bucket sizes".into(),
+        ));
+    }
+    let buckets_start = ticket_end + 2;
+    let buckets_end = buckets_start + bucket_count * 2;
+    if data.len() < buckets_end {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaServerInit bucket sizes truncated".into(),
+        ));
+    }
+    let mut bucket_sizes = Vec::with_capacity(bucket_count);
+    for i in 0..bucket_count {
+        let offset = buckets_start + i * 2;
+        bucket_sizes.push(u16::from_le_bytes([data[offset], data[offset + 1]]));
+    }
+
+    // Parse optional PQ KEM ciphertext when FEATURE_PQ_KEM is set
+    let mut cursor = buckets_end;
+    let pq_kem_ciphertext = if server_features & FEATURE_PQ_KEM != 0 {
+        if data.len() < cursor + 2 {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaServerInit PQ KEM length truncated".into(),
+            ));
+        }
+        let ct_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        cursor += 2;
+        if data.len() < cursor + ct_len {
+            return Err(ProtocolError::InvalidFrame(
+                "PrismaServerInit PQ KEM ciphertext truncated".into(),
+            ));
+        }
+        let ct = data[cursor..cursor + ct_len].to_vec();
+        cursor += ct_len;
+        Some(ct)
+    } else {
+        None
+    };
+    let padding = data[cursor..].to_vec();
+
+    Ok(PrismaServerInit {
+        status,
+        session_id,
+        server_ephemeral_pub,
+        challenge,
+        padding_min,
+        padding_max,
+        server_features,
+        session_ticket,
+        bucket_sizes,
+        pq_kem_ciphertext,
+        padding,
+    })
+}
+
+/// Encode PrismaClientResume to bytes (0-RTT).
+#[allow(dead_code)]
+pub(crate) fn encode_client_resume(msg: &PrismaClientResume) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(
+        1 + 1 + 32 + 2 + msg.session_ticket.len() + msg.encrypted_0rtt_data.len(),
+    );
+    buf.push(msg.version);
+    buf.push(msg.flags);
+    buf.extend_from_slice(&msg.client_ephemeral_pub);
+    buf.extend_from_slice(&(msg.session_ticket.len() as u16).to_be_bytes());
+    buf.extend_from_slice(&msg.session_ticket);
+    buf.extend_from_slice(&msg.encrypted_0rtt_data);
+    buf
+}
+
+/// Decode PrismaClientResume from bytes (0-RTT).
+#[allow(dead_code)]
+pub(crate) fn decode_client_resume(data: &[u8]) -> Result<PrismaClientResume, ProtocolError> {
+    // Minimum: 1+1+32+2 = 36
+    if data.len() < 36 {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaClientResume too short".into(),
+        ));
+    }
+    let version = data[0];
+    let flags = data[1];
+    let mut client_ephemeral_pub = [0u8; 32];
+    client_ephemeral_pub.copy_from_slice(&data[2..34]);
+    let ticket_len = u16::from_be_bytes([data[34], data[35]]) as usize;
+    if data.len() < 36 + ticket_len {
+        return Err(ProtocolError::InvalidFrame(
+            "PrismaClientResume ticket truncated".into(),
+        ));
+    }
+    let session_ticket = data[36..36 + ticket_len].to_vec();
+    let encrypted_0rtt_data = data[36 + ticket_len..].to_vec();
+
+    Ok(PrismaClientResume {
+        version,
+        flags,
+        client_ephemeral_pub,
+        session_ticket,
+        encrypted_0rtt_data,
+    })
+}
+
+/// Encode SessionTicket to plaintext bytes (server encrypts before sending).
+pub(crate) fn encode_session_ticket(ticket: &SessionTicket) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(16 + 32 + 1 + 8 + 2 + 2);
+    buf.extend_from_slice(ticket.client_id.0.as_bytes());
+    buf.extend_from_slice(&ticket.session_key);
+    buf.push(ticket.cipher_suite as u8);
+    buf.extend_from_slice(&ticket.issued_at.to_be_bytes());
+    buf.extend_from_slice(&ticket.padding_range.min.to_be_bytes());
+    buf.extend_from_slice(&ticket.padding_range.max.to_be_bytes());
+    buf
+}
+
+/// Decode SessionTicket from plaintext bytes.
+#[allow(dead_code)]
+pub(crate) fn decode_session_ticket(data: &[u8]) -> Result<SessionTicket, ProtocolError> {
+    // 16+32+1+8+2+2 = 61
+    if data.len() < 61 {
+        return Err(ProtocolError::InvalidFrame(
+            "SessionTicket too short".into(),
+        ));
+    }
+    let client_id = ClientId(uuid::Uuid::from_bytes(
+        data[..16].try_into().expect("slice is exactly 16 bytes"),
+    ));
+    let mut session_key = [0u8; 32];
+    session_key.copy_from_slice(&data[16..48]);
+    let cipher_suite =
+        CipherSuite::from_u8(data[48]).ok_or(ProtocolError::InvalidCommand(data[48]))?;
+    let issued_at = u64::from_be_bytes(data[49..57].try_into().expect("slice is exactly 8 bytes"));
+    let padding_min = u16::from_be_bytes([data[57], data[58]]);
+    let padding_max = u16::from_be_bytes([data[59], data[60]]);
+
+    Ok(SessionTicket {
+        client_id,
+        session_key,
+        cipher_suite,
+        issued_at,
+        padding_range: crate::types::PaddingRange::new(padding_min, padding_max),
+    })
+}
+
+// --- DataFrame encoding/decoding ---
+
+/// Encode a DataFrame to plaintext bytes.
+/// v3 format: [cmd:1][flags:2 LE][stream_id:4][payload:var]
+/// v2 padded: [cmd:1][flags:2 LE][stream_id:4][payload_len:2][payload:var][padding:var]
+pub fn encode_data_frame(frame: &DataFrame) -> Vec<u8> {
+    let payload = encode_command_payload(&frame.command);
+    let has_length_prefix = frame.flags & FLAG_PADDED != 0 || frame.flags & FLAG_BUCKETED != 0;
+    let extra = if has_length_prefix { 2 } else { 0 };
+
+    let mut buf = Vec::with_capacity(7 + extra + payload.len());
+    // Common header: [cmd:1][flags:2 LE][stream_id:4]
+    buf.push(frame.command.cmd_byte());
+    buf.extend_from_slice(&frame.flags.to_le_bytes());
+    buf.extend_from_slice(&frame.stream_id.to_be_bytes());
+
+    if frame.flags & FLAG_PADDED != 0 {
+        // Padded format: include payload_len so receiver can split payload from padding.
+        // Padding is appended by the caller (via encode_data_frame_padded).
+        buf.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+    } else if frame.flags & FLAG_BUCKETED != 0 {
+        // Bucketed format: bucket_pad_len=0 placeholder; actual padding appended by caller
+        buf.extend_from_slice(&0u16.to_be_bytes());
+    }
+
+    buf.extend_from_slice(&payload);
+    buf
+}
+
+/// Encode a DataFrame with padding appended.
+/// Fast-path: skips padding generation entirely when padding_range.max == 0.
+pub fn encode_data_frame_padded(
+    frame: &DataFrame,
+    padding_range: &crate::types::PaddingRange,
+) -> Vec<u8> {
+    let mut buf = encode_data_frame(frame);
+    if frame.flags & FLAG_PADDED != 0 && padding_range.max > 0 {
+        let padding = crate::crypto::padding::generate_frame_padding(padding_range);
+        buf.extend_from_slice(&padding);
+    }
+    buf
+}
+
+/// Decode a DataFrame from plaintext bytes.
+/// v3 format: [cmd:1][flags:2 LE][stream_id:4][payload:var]
+pub fn decode_data_frame(data: &[u8]) -> Result<DataFrame, ProtocolError> {
+    if data.len() < 7 {
+        return Err(ProtocolError::InvalidFrame("DataFrame too short".into()));
+    }
+    let cmd = data[0];
+    let flags = u16::from_le_bytes([data[1], data[2]]);
+    let stream_id = u32::from_be_bytes(
+        data[3..7]
+            .try_into()
+            .expect("slice is exactly 4 bytes after length check"),
+    );
+
+    let payload = if flags & FLAG_PADDED != 0 {
+        // Padded format: [payload_len:2][payload:var][padding:var]
+        if data.len() < 9 {
+            return Err(ProtocolError::InvalidFrame(
+                "Padded DataFrame too short for payload_len".into(),
+            ));
+        }
+        let payload_len = u16::from_be_bytes([data[7], data[8]]) as usize;
+        if data.len() < 9 + payload_len {
+            return Err(ProtocolError::InvalidFrame(
+                "Padded DataFrame payload truncated".into(),
+            ));
+        }
+        // Strip padding — only return the actual payload
+        &data[9..9 + payload_len]
+    } else if flags & FLAG_BUCKETED != 0 {
+        // Bucketed format: [bucket_pad_len:2][payload:var][bucket_padding:var]
+        if data.len() < 9 {
+            return Err(ProtocolError::InvalidFrame(
+                "Bucketed DataFrame too short".into(),
+            ));
+        }
+        let bucket_pad_len = u16::from_be_bytes([data[7], data[8]]) as usize;
+        if data.len() < 9 + bucket_pad_len {
+            return Err(ProtocolError::InvalidFrame(
+                "Bucketed DataFrame pad_len exceeds frame".into(),
+            ));
+        }
+        // Strip bucket padding from the end
+        &data[9..data.len() - bucket_pad_len]
+    } else {
+        &data[7..]
+    };
+
+    let command = decode_command_payload(cmd, payload)?;
+
+    Ok(DataFrame {
+        command,
+        flags,
+        stream_id,
+    })
+}
+
+pub fn encode_command_payload(cmd: &Command) -> Vec<u8> {
+    match cmd {
+        Command::Connect(dest) => encode_proxy_destination(dest),
+        Command::Data(data) => data.to_vec(),
+        Command::Close => Vec::new(),
+        Command::Ping(seq) => seq.to_be_bytes().to_vec(),
+        Command::Pong(seq) => seq.to_be_bytes().to_vec(),
+        Command::RegisterForward {
+            remote_port,
+            name,
+            protocol,
+            bind_addr,
+            max_connections,
+            allowed_ips,
+        } => {
+            let name_bytes = name.as_bytes();
+            let proto_bytes = protocol.as_bytes();
+            let mut buf = Vec::with_capacity(64);
+            buf.extend_from_slice(&remote_port.to_be_bytes());
+            // name: [len:1][bytes]
+            buf.push(name_bytes.len() as u8);
+            buf.extend_from_slice(name_bytes);
+            // protocol: [len:1][bytes]
+            buf.push(proto_bytes.len() as u8);
+            buf.extend_from_slice(proto_bytes);
+            // bind_addr: [has:1] then [len:1][bytes] if present
+            if let Some(ref addr) = bind_addr {
+                let addr_bytes = addr.as_bytes();
+                buf.push(1);
+                buf.push(addr_bytes.len() as u8);
+                buf.extend_from_slice(addr_bytes);
+            } else {
+                buf.push(0);
+            }
+            // max_connections: [has:1] then [u32:4] if present
+            if let Some(mc) = max_connections {
+                buf.push(1);
+                buf.extend_from_slice(&mc.to_be_bytes());
+            } else {
+                buf.push(0);
+            }
+            // allowed_ips: [count:2] then for each [len:1][bytes]
+            buf.extend_from_slice(&(allowed_ips.len() as u16).to_be_bytes());
+            for ip in allowed_ips {
+                let ip_bytes = ip.as_bytes();
+                buf.push(ip_bytes.len() as u8);
+                buf.extend_from_slice(ip_bytes);
+            }
+            buf
+        }
+        Command::ForwardReady {
+            remote_port,
+            success,
+            error_reason,
+        } => {
+            let mut buf = Vec::with_capacity(16);
+            buf.extend_from_slice(&remote_port.to_be_bytes());
+            buf.push(u8::from(*success));
+            // error_reason: [has:1] then [len:2][bytes] if present
+            if let Some(ref reason) = error_reason {
+                let reason_bytes = reason.as_bytes();
+                buf.push(1);
+                buf.extend_from_slice(&(reason_bytes.len() as u16).to_be_bytes());
+                buf.extend_from_slice(reason_bytes);
+            } else {
+                buf.push(0);
+            }
+            buf
+        }
+        Command::ForwardConnect { remote_port } => remote_port.to_be_bytes().to_vec(),
+        // v3 commands
+        Command::UdpAssociate {
+            bind_addr_type,
+            bind_addr,
+            bind_port,
+        } => {
+            let mut buf = Vec::with_capacity(1 + bind_addr.len() + 2);
+            buf.push(*bind_addr_type);
+            buf.extend_from_slice(bind_addr);
+            buf.extend_from_slice(&bind_port.to_be_bytes());
+            buf
+        }
+        Command::UdpData {
+            assoc_id,
+            frag,
+            addr_type,
+            dest_addr,
+            dest_port,
+            payload,
+        } => {
+            let mut buf = Vec::with_capacity(4 + 1 + 1 + dest_addr.len() + 2 + payload.len());
+            buf.extend_from_slice(&assoc_id.to_be_bytes());
+            buf.push(*frag);
+            buf.push(*addr_type);
+            buf.extend_from_slice(dest_addr);
+            buf.extend_from_slice(&dest_port.to_be_bytes());
+            buf.extend_from_slice(payload);
+            buf
+        }
+        Command::SpeedTest {
+            direction,
+            duration_secs,
+            data,
+        } => {
+            let mut buf = Vec::with_capacity(2 + data.len());
+            buf.push(*direction);
+            buf.push(*duration_secs);
+            buf.extend_from_slice(data);
+            buf
+        }
+        Command::DnsQuery { query_id, data } | Command::DnsResponse { query_id, data } => {
+            let mut buf = Vec::with_capacity(2 + data.len());
+            buf.extend_from_slice(&query_id.to_be_bytes());
+            buf.extend_from_slice(data);
+            buf
+        }
+        Command::ChallengeResponse { hash } => hash.to_vec(),
+        Command::Migration { token, session_id } => {
+            let mut buf = Vec::with_capacity(48);
+            buf.extend_from_slice(token);
+            buf.extend_from_slice(session_id);
+            buf
+        }
+        Command::FallbackAdvertisement { transports } => {
+            // Wire format: [count:1][for each: len:1, name:var]
+            let mut buf = Vec::new();
+            let count = transports.len().min(255) as u8;
+            buf.push(count);
+            for name in transports.iter().take(255) {
+                let name_bytes = name.as_bytes();
+                let len = name_bytes.len().min(255) as u8;
+                buf.push(len);
+                buf.extend_from_slice(&name_bytes[..len as usize]);
+            }
+            buf
+        }
+    }
+}
+
+fn decode_command_payload(cmd: u8, payload: &[u8]) -> Result<Command, ProtocolError> {
+    match cmd {
+        CMD_CONNECT => {
+            let dest = decode_proxy_destination(payload)?;
+            Ok(Command::Connect(dest))
+        }
+        CMD_DATA => Ok(Command::Data(bytes::Bytes::copy_from_slice(payload))),
+        CMD_CLOSE => Ok(Command::Close),
+        CMD_PING => {
+            if payload.len() < 4 {
+                return Err(ProtocolError::InvalidFrame("Ping payload too short".into()));
+            }
+            Ok(Command::Ping(u32::from_be_bytes(
+                payload[..4]
+                    .try_into()
+                    .expect("slice is exactly 4 bytes after length check"),
+            )))
+        }
+        CMD_PONG => {
+            if payload.len() < 4 {
+                return Err(ProtocolError::InvalidFrame("Pong payload too short".into()));
+            }
+            Ok(Command::Pong(u32::from_be_bytes(
+                payload[..4]
+                    .try_into()
+                    .expect("slice is exactly 4 bytes after length check"),
+            )))
+        }
+        CMD_REGISTER_FORWARD => {
+            if payload.len() < 3 {
+                return Err(ProtocolError::InvalidFrame(
+                    "RegisterForward too short".into(),
+                ));
+            }
+            let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
+            let mut cursor = 2;
+            // name: [len:1][bytes]
+            let name_len = payload[cursor] as usize;
+            cursor += 1;
+            if payload.len() < cursor + name_len {
+                return Err(ProtocolError::InvalidFrame(
+                    "RegisterForward name truncated".into(),
+                ));
+            }
+            let name = String::from_utf8(payload[cursor..cursor + name_len].to_vec())
+                .map_err(|_| ProtocolError::InvalidFrame("Invalid forward name".into()))?;
+            cursor += name_len;
+
+            // protocol: [len:1][bytes] — optional (defaults to "tcp" if absent)
+            let protocol = if cursor < payload.len() {
+                let proto_len = payload[cursor] as usize;
+                cursor += 1;
+                if payload.len() < cursor + proto_len {
+                    return Err(ProtocolError::InvalidFrame(
+                        "RegisterForward protocol truncated".into(),
+                    ));
+                }
+                let proto = String::from_utf8(payload[cursor..cursor + proto_len].to_vec())
+                    .map_err(|_| ProtocolError::InvalidFrame("Invalid forward protocol".into()))?;
+                cursor += proto_len;
+                proto
+            } else {
+                "tcp".into()
+            };
+
+            // bind_addr: [has:1] then [len:1][bytes] if present
+            let bind_addr = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if cursor >= payload.len() {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward bind_addr len truncated".into(),
+                        ));
+                    }
+                    let addr_len = payload[cursor] as usize;
+                    cursor += 1;
+                    if payload.len() < cursor + addr_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward bind_addr truncated".into(),
+                        ));
+                    }
+                    let addr = String::from_utf8(payload[cursor..cursor + addr_len].to_vec())
+                        .map_err(|_| {
+                            ProtocolError::InvalidFrame("Invalid forward bind_addr".into())
+                        })?;
+                    cursor += addr_len;
+                    Some(addr)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // max_connections: [has:1] then [u32:4] if present
+            let max_connections = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if payload.len() < cursor + 4 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward max_connections truncated".into(),
+                        ));
+                    }
+                    let mc = u32::from_be_bytes(
+                        payload[cursor..cursor + 4]
+                            .try_into()
+                            .expect("4 bytes after len check"),
+                    );
+                    cursor += 4;
+                    Some(mc)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // allowed_ips: [count:2] then for each [len:1][bytes]
+            let allowed_ips = if cursor + 2 <= payload.len() {
+                let count = u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+                cursor += 2;
+                let mut ips = Vec::with_capacity(count);
+                for _ in 0..count {
+                    if cursor >= payload.len() {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward allowed_ips truncated".into(),
+                        ));
+                    }
+                    let ip_len = payload[cursor] as usize;
+                    cursor += 1;
+                    if payload.len() < cursor + ip_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "RegisterForward allowed_ip truncated".into(),
+                        ));
+                    }
+                    let ip = String::from_utf8(payload[cursor..cursor + ip_len].to_vec()).map_err(
+                        |_| ProtocolError::InvalidFrame("Invalid forward allowed_ip".into()),
+                    )?;
+                    cursor += ip_len;
+                    ips.push(ip);
+                }
+                ips
+            } else {
+                Vec::new()
+            };
+
+            Ok(Command::RegisterForward {
+                remote_port,
+                name,
+                protocol,
+                bind_addr,
+                max_connections,
+                allowed_ips,
+            })
+        }
+        CMD_FORWARD_READY => {
+            if payload.len() < 3 {
+                return Err(ProtocolError::InvalidFrame("ForwardReady too short".into()));
+            }
+            let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
+            let success = payload[2] != 0;
+            let mut cursor = 3;
+
+            // error_reason: [has:1] then [len:2][bytes] if present — optional
+            let error_reason = if cursor < payload.len() {
+                let has = payload[cursor];
+                cursor += 1;
+                if has != 0 {
+                    if payload.len() < cursor + 2 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "ForwardReady error_reason len truncated".into(),
+                        ));
+                    }
+                    let reason_len =
+                        u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+                    cursor += 2;
+                    if payload.len() < cursor + reason_len {
+                        return Err(ProtocolError::InvalidFrame(
+                            "ForwardReady error_reason truncated".into(),
+                        ));
+                    }
+                    let reason = String::from_utf8(payload[cursor..cursor + reason_len].to_vec())
+                        .map_err(|_| {
+                        ProtocolError::InvalidFrame("Invalid forward error_reason".into())
+                    })?;
+                    let _ = cursor + reason_len;
+                    Some(reason)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            Ok(Command::ForwardReady {
+                remote_port,
+                success,
+                error_reason,
+            })
+        }
+        CMD_FORWARD_CONNECT => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame(
+                    "ForwardConnect too short".into(),
+                ));
+            }
+            let remote_port = u16::from_be_bytes([payload[0], payload[1]]);
+            Ok(Command::ForwardConnect { remote_port })
+        }
+        // v3 commands
+        CMD_UDP_ASSOCIATE => {
+            if payload.len() < 3 {
+                return Err(ProtocolError::InvalidFrame("UdpAssociate too short".into()));
+            }
+            let bind_addr_type = payload[0];
+            let bind_port =
+                u16::from_be_bytes([payload[payload.len() - 2], payload[payload.len() - 1]]);
+            let bind_addr = payload[1..payload.len() - 2].to_vec();
+            Ok(Command::UdpAssociate {
+                bind_addr_type,
+                bind_addr,
+                bind_port,
+            })
+        }
+        CMD_UDP_DATA => {
+            // [assoc_id:4][frag:1][addr_type:1][dest_addr:var][dest_port:2][payload:var]
+            if payload.len() < 8 {
+                return Err(ProtocolError::InvalidFrame("UdpData too short".into()));
+            }
+            let assoc_id =
+                u32::from_be_bytes(payload[..4].try_into().expect("4 bytes after len check"));
+            let frag = payload[4];
+            let addr_type = payload[5];
+            // Parse variable-length address based on type
+            let (addr_end, dest_addr) = match addr_type {
+                0x01 => {
+                    // IPv4: 4 bytes
+                    if payload.len() < 12 {
+                        return Err(ProtocolError::InvalidFrame("UdpData IPv4 too short".into()));
+                    }
+                    (10, payload[6..10].to_vec())
+                }
+                0x04 => {
+                    // IPv6: 16 bytes
+                    if payload.len() < 24 {
+                        return Err(ProtocolError::InvalidFrame("UdpData IPv6 too short".into()));
+                    }
+                    (22, payload[6..22].to_vec())
+                }
+                0x03 => {
+                    // Domain: [len:1][domain:var]
+                    if payload.len() < 7 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "UdpData domain too short".into(),
+                        ));
+                    }
+                    let domain_len = payload[6] as usize;
+                    let end = 7 + domain_len;
+                    if payload.len() < end + 2 {
+                        return Err(ProtocolError::InvalidFrame(
+                            "UdpData domain truncated".into(),
+                        ));
+                    }
+                    (end, payload[6..end].to_vec())
+                }
+                _ => {
+                    return Err(ProtocolError::InvalidAddressType(addr_type));
+                }
+            };
+            if payload.len() < addr_end + 2 {
+                return Err(ProtocolError::InvalidFrame(
+                    "UdpData dest_port truncated".into(),
+                ));
+            }
+            let dest_port = u16::from_be_bytes([payload[addr_end], payload[addr_end + 1]]);
+            let udp_payload = payload[addr_end + 2..].to_vec();
+            Ok(Command::UdpData {
+                assoc_id,
+                frag,
+                addr_type,
+                dest_addr,
+                dest_port,
+                payload: udp_payload,
+            })
+        }
+        CMD_SPEED_TEST => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("SpeedTest too short".into()));
+            }
+            Ok(Command::SpeedTest {
+                direction: payload[0],
+                duration_secs: payload[1],
+                data: payload[2..].to_vec(),
+            })
+        }
+        CMD_DNS_QUERY | CMD_DNS_RESPONSE => {
+            if payload.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("DNS frame too short".into()));
+            }
+            let query_id = u16::from_be_bytes([payload[0], payload[1]]);
+            let data = payload[2..].to_vec();
+            if cmd == CMD_DNS_QUERY {
+                Ok(Command::DnsQuery { query_id, data })
+            } else {
+                Ok(Command::DnsResponse { query_id, data })
+            }
+        }
+        CMD_CHALLENGE_RESP => {
+            if payload.len() < 32 {
+                return Err(ProtocolError::InvalidFrame(
+                    "ChallengeResponse too short".into(),
+                ));
+            }
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&payload[..32]);
+            Ok(Command::ChallengeResponse { hash })
+        }
+        CMD_MIGRATION => {
+            if payload.len() < 48 {
+                return Err(ProtocolError::InvalidFrame("Migration too short".into()));
+            }
+            let mut token = [0u8; 32];
+            token.copy_from_slice(&payload[..32]);
+            let mut session_id = [0u8; 16];
+            session_id.copy_from_slice(&payload[32..48]);
+            Ok(Command::Migration { token, session_id })
+        }
+        CMD_FALLBACK_ADVERTISEMENT => {
+            // Wire format: [count:1][for each: len:1, name:var]
+            if payload.is_empty() {
+                return Err(ProtocolError::InvalidFrame(
+                    "FallbackAdvertisement too short".into(),
+                ));
+            }
+            let count = payload[0] as usize;
+            let mut offset = 1;
+            let mut transports = Vec::with_capacity(count);
+            for _ in 0..count {
+                if offset >= payload.len() {
+                    return Err(ProtocolError::InvalidFrame(
+                        "FallbackAdvertisement truncated".into(),
+                    ));
+                }
+                let name_len = payload[offset] as usize;
+                offset += 1;
+                if offset + name_len > payload.len() {
+                    return Err(ProtocolError::InvalidFrame(
+                        "FallbackAdvertisement name truncated".into(),
+                    ));
+                }
+                let name =
+                    String::from_utf8_lossy(&payload[offset..offset + name_len]).into_owned();
+                transports.push(name);
+                offset += name_len;
+            }
+            Ok(Command::FallbackAdvertisement { transports })
+        }
+        _ => Err(ProtocolError::InvalidCommand(cmd)),
+    }
+}
+
+/// Encode: [addr_type:1][address:var][port:2]
+fn encode_proxy_destination(dest: &ProxyDestination) -> Vec<u8> {
+    let capacity = match &dest.address {
+        ProxyAddress::Ipv4(_) => 1 + 4 + 2,
+        ProxyAddress::Ipv6(_) => 1 + 16 + 2,
+        ProxyAddress::Domain(d) => 1 + 1 + d.len() + 2,
+    };
+    let mut buf = Vec::with_capacity(capacity);
+    buf.push(dest.address.addr_type());
+    match &dest.address {
+        ProxyAddress::Ipv4(addr) => buf.extend_from_slice(&addr.octets()),
+        ProxyAddress::Ipv6(addr) => buf.extend_from_slice(&addr.octets()),
+        ProxyAddress::Domain(domain) => {
+            let bytes = domain.as_bytes();
+            buf.push(bytes.len() as u8);
+            buf.extend_from_slice(bytes);
+        }
+    }
+    buf.extend_from_slice(&dest.port.to_be_bytes());
+    buf
+}
+
+/// Decode: [addr_type:1][address:var][port:2]
+fn decode_proxy_destination(data: &[u8]) -> Result<ProxyDestination, ProtocolError> {
+    if data.is_empty() {
+        return Err(ProtocolError::InvalidFrame("Empty destination".into()));
+    }
+    let addr_type = data[0];
+    match addr_type {
+        0x01 => {
+            if data.len() < 7 {
+                // 1 + 4 + 2
+                return Err(ProtocolError::InvalidFrame("IPv4 dest too short".into()));
+            }
+            let addr = Ipv4Addr::new(data[1], data[2], data[3], data[4]);
+            let port = u16::from_be_bytes([data[5], data[6]]);
+            Ok(ProxyDestination {
+                address: ProxyAddress::Ipv4(addr),
+                port,
+            })
+        }
+        0x03 => {
+            if data.len() < 2 {
+                return Err(ProtocolError::InvalidFrame("Domain dest too short".into()));
+            }
+            let len = data[1] as usize;
+            if data.len() < 2 + len + 2 {
+                return Err(ProtocolError::InvalidFrame("Domain dest truncated".into()));
+            }
+            let domain = String::from_utf8(data[2..2 + len].to_vec())
+                .map_err(|_| ProtocolError::InvalidFrame("Invalid domain encoding".into()))?;
+            let port = u16::from_be_bytes([data[2 + len], data[3 + len]]);
+            Ok(ProxyDestination {
+                address: ProxyAddress::Domain(domain),
+                port,
+            })
+        }
+        0x04 => {
+            if data.len() < 19 {
+                // 1 + 16 + 2
+                return Err(ProtocolError::InvalidFrame("IPv6 dest too short".into()));
+            }
+            let octets: [u8; 16] = data[1..17].try_into().expect("16 bytes after len check");
+            let addr = Ipv6Addr::from(octets);
+            let port = u16::from_be_bytes([data[17], data[18]]);
+            Ok(ProxyDestination {
+                address: ProxyAddress::Ipv6(addr),
+                port,
+            })
+        }
+        _ => Err(ProtocolError::InvalidAddressType(addr_type)),
+    }
+}
+
+// --- Encrypted frame wire format ---
+// [nonce:12][len:2][ciphertext][tag:16]
+
+/// Encrypt a plaintext data frame into the wire format.
+///
+/// v5 enhancement: when `aad` is non-empty, the frame header bytes
+/// (cmd + flags + stream_id) are bound as additional authenticated data,
+/// providing integrity over the plaintext structure that the AEAD tag covers.
+pub fn encrypt_frame(
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; NONCE_SIZE],
+    plaintext: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    encrypt_frame_aad(cipher, nonce, plaintext, &[])
+}
+
+/// Encrypt a plaintext data frame with v5 AAD derived from the header key.
+///
+/// This is the public API for encrypting standalone frames (e.g. Pong responses)
+/// using the v5 wire format. The wire output is `[nonce:12][inner_len:2][ciphertext+tag]`
+/// (caller must prepend the outer_len:2 prefix).
+pub fn encrypt_frame_v5(
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; NONCE_SIZE],
+    plaintext: &[u8],
+    header_key: Option<&[u8; 32]>,
+) -> Result<Vec<u8>, CryptoError> {
+    let aad = build_v5_aad(header_key, nonce);
+    encrypt_frame_aad(cipher, nonce, plaintext, aad.as_slice())
+}
+
+/// Encrypt a plaintext data frame with explicit AAD (v5 header authentication).
+pub(crate) fn encrypt_frame_aad(
+    cipher: &dyn AeadCipher,
+    nonce: &[u8; NONCE_SIZE],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    let ciphertext = cipher.encrypt(nonce, plaintext, aad)?;
+    let len = ciphertext.len() as u16;
+    let mut wire = Vec::with_capacity(NONCE_SIZE + 2 + ciphertext.len());
+    wire.extend_from_slice(nonce);
+    wire.extend_from_slice(&len.to_be_bytes());
+    wire.extend_from_slice(&ciphertext);
+    Ok(wire)
+}
+
+/// Decrypt a wire-format encrypted frame.
+pub fn decrypt_frame(
+    cipher: &dyn AeadCipher,
+    wire: &[u8],
+) -> Result<(Vec<u8>, [u8; NONCE_SIZE]), CryptoError> {
+    decrypt_frame_aad(cipher, wire, &[])
+}
+
+/// Decrypt a wire-format encrypted frame with explicit AAD (v5 header authentication).
+pub(crate) fn decrypt_frame_aad(
+    cipher: &dyn AeadCipher,
+    wire: &[u8],
+    aad: &[u8],
+) -> Result<(Vec<u8>, [u8; NONCE_SIZE]), CryptoError> {
+    if wire.len() < NONCE_SIZE + 2 {
+        return Err(CryptoError::DecryptionFailed(
+            "Encrypted frame too short".into(),
+        ));
+    }
+    let mut nonce = [0u8; NONCE_SIZE];
+    nonce.copy_from_slice(&wire[..NONCE_SIZE]);
+    let len = u16::from_be_bytes([wire[NONCE_SIZE], wire[NONCE_SIZE + 1]]) as usize;
+    let ciphertext_start = NONCE_SIZE + 2;
+    if wire.len() < ciphertext_start + len {
+        return Err(CryptoError::DecryptionFailed(
+            "Encrypted frame truncated".into(),
+        ));
+    }
+    let ciphertext = &wire[ciphertext_start..ciphertext_start + len];
+    let plaintext = cipher.decrypt(&nonce, ciphertext, aad)?;
+    Ok((plaintext, nonce))
+}
+
+/// Build AAD (additional authenticated data) from a header key and nonce.
+///
+/// Header-authenticated encryption binds the session identity into each
+/// frame's AEAD tag. The AAD is BLAKE3(header_key, nonce), truncated to 16 bytes.
+/// This prevents cross-session frame injection: an attacker who captures
+/// encrypted frames from session A cannot replay them into session B,
+/// even if both sessions happen to use the same cipher key (which shouldn't
+/// happen, but defense-in-depth).
+///
+/// Returns a 16-byte AAD when header_key is provided, or an empty slice when not.
+/// Uses a fixed-size array to avoid heap allocation on the hot path.
+#[inline]
+pub(crate) fn build_v5_aad(header_key: Option<&[u8; 32]>, nonce: &[u8; NONCE_SIZE]) -> Aad {
+    match header_key {
+        Some(key) => {
+            let hash = blake3::keyed_hash(key, nonce);
+            let bytes: [u8; 32] = hash.into();
+            let mut aad = [0u8; 16];
+            aad.copy_from_slice(&bytes[..16]);
+            Aad::Some(aad)
+        }
+        None => Aad::None,
+    }
+}
+
+/// Zero-allocation AAD container for v5 header-authenticated encryption.
+#[derive(Debug)]
+pub(crate) enum Aad {
+    Some([u8; 16]),
+    None,
+}
+
+impl Aad {
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            Aad::Some(ref bytes) => bytes,
+            Aad::None => &[],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::PRISMA_PROTOCOL_VERSION;
+
+    #[test]
+    fn test_client_init_round_trip() {
+        let msg = PrismaClientInit {
+            version: PRISMA_PROTOCOL_VERSION,
+            flags: 0,
+            client_ephemeral_pub: [0xAA; 32],
+            client_id: ClientId(uuid::Uuid::nil()),
+            timestamp: 1700000000,
+            cipher_suite: CipherSuite::ChaCha20Poly1305,
+            auth_token: [0xBB; 32],
+            pq_kem_encap_key: None,
+            padding: vec![1, 2, 3],
+        };
+        let encoded = encode_client_init(&msg);
+        let decoded = decode_client_init(&encoded).unwrap();
+        assert_eq!(decoded.version, msg.version);
+        assert_eq!(decoded.flags, msg.flags);
+        assert_eq!(decoded.client_ephemeral_pub, msg.client_ephemeral_pub);
+        assert_eq!(decoded.client_id, msg.client_id);
+        assert_eq!(decoded.timestamp, msg.timestamp);
+        assert_eq!(decoded.cipher_suite, msg.cipher_suite);
+        assert_eq!(decoded.auth_token, msg.auth_token);
+        assert_eq!(decoded.pq_kem_encap_key, msg.pq_kem_encap_key);
+        assert_eq!(decoded.padding, msg.padding);
+    }
+
+    #[test]
+    fn test_client_init_minimum_size() {
+        // Exactly 91 bytes: should succeed with empty padding
+        let msg = PrismaClientInit {
+            version: PRISMA_PROTOCOL_VERSION,
+            flags: 0,
+            client_ephemeral_pub: [0xAA; 32],
+            client_id: ClientId(uuid::Uuid::nil()),
+            timestamp: 1700000000,
+            cipher_suite: CipherSuite::ChaCha20Poly1305,
+            auth_token: [0xBB; 32],
+            pq_kem_encap_key: None,
+            padding: vec![],
+        };
+        let encoded = encode_client_init(&msg);
+        assert_eq!(encoded.len(), 91);
+        let decoded = decode_client_init(&encoded).unwrap();
+        assert_eq!(decoded.padding, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_client_init_too_short() {
+        let data = [0u8; 90];
+        assert!(decode_client_init(&data).is_err());
+    }
+
+    #[test]
+    fn test_server_init_round_trip() {
+        let msg = PrismaServerInit {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            server_ephemeral_pub: [0xCC; 32],
+            challenge: [0xDD; 32],
+            padding_min: 10,
+            padding_max: 200,
+            server_features: FEATURE_UDP_RELAY | FEATURE_SPEED_TEST,
+            session_ticket: vec![1, 2, 3, 4, 5],
+            bucket_sizes: vec![128, 256, 512],
+            pq_kem_ciphertext: None,
+            padding: vec![6, 7, 8],
+        };
+        let encoded = encode_server_init(&msg);
+        let decoded = decode_server_init(&encoded).unwrap();
+        assert_eq!(decoded.status, msg.status);
+        assert_eq!(decoded.session_id, msg.session_id);
+        assert_eq!(decoded.server_ephemeral_pub, msg.server_ephemeral_pub);
+        assert_eq!(decoded.challenge, msg.challenge);
+        assert_eq!(decoded.padding_min, msg.padding_min);
+        assert_eq!(decoded.padding_max, msg.padding_max);
+        assert_eq!(decoded.server_features, msg.server_features);
+        assert_eq!(decoded.session_ticket, msg.session_ticket);
+        assert_eq!(decoded.bucket_sizes, msg.bucket_sizes);
+        assert_eq!(decoded.pq_kem_ciphertext, msg.pq_kem_ciphertext);
+        assert_eq!(decoded.padding, msg.padding);
+    }
+
+    #[test]
+    fn test_server_init_no_buckets_round_trip() {
+        let msg = PrismaServerInit {
+            status: AcceptStatus::Ok,
+            session_id: uuid::Uuid::nil(),
+            server_ephemeral_pub: [0xCC; 32],
+            challenge: [0xDD; 32],
+            padding_min: 10,
+            padding_max: 200,
+            server_features: 0,
+            session_ticket: vec![],
+            bucket_sizes: vec![],
+            pq_kem_ciphertext: None,
+            padding: vec![],
+        };
+        let encoded = encode_server_init(&msg);
+        let decoded = decode_server_init(&encoded).unwrap();
+        assert_eq!(decoded.bucket_sizes, Vec::<u16>::new());
+        assert_eq!(decoded.session_ticket, Vec::<u8>::new());
+        assert_eq!(decoded.padding, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_server_init_too_short() {
+        let data = [0u8; 92];
+        assert!(decode_server_init(&data).is_err());
+    }
+
+    #[test]
+    fn test_client_resume_round_trip() {
+        let msg = PrismaClientResume {
+            version: PRISMA_PROTOCOL_VERSION,
+            flags: CLIENT_INIT_FLAG_RESUMPTION,
+            client_ephemeral_pub: [0xEE; 32],
+            session_ticket: vec![1, 2, 3, 4, 5],
+            encrypted_0rtt_data: vec![10, 20, 30],
+        };
+        let encoded = encode_client_resume(&msg);
+        let decoded = decode_client_resume(&encoded).unwrap();
+        assert_eq!(decoded.version, msg.version);
+        assert_eq!(decoded.flags, msg.flags);
+        assert_eq!(decoded.client_ephemeral_pub, msg.client_ephemeral_pub);
+        assert_eq!(decoded.session_ticket, msg.session_ticket);
+        assert_eq!(decoded.encrypted_0rtt_data, msg.encrypted_0rtt_data);
+    }
+
+    #[test]
+    fn test_session_ticket_round_trip() {
+        use crate::types::PaddingRange;
+        let ticket = SessionTicket {
+            client_id: ClientId(uuid::Uuid::nil()),
+            session_key: [0xAA; 32],
+            cipher_suite: CipherSuite::Aes256Gcm,
+            issued_at: 1700000000,
+            padding_range: PaddingRange::new(10, 256),
+        };
+        let encoded = encode_session_ticket(&ticket);
+        let decoded = decode_session_ticket(&encoded).unwrap();
+        assert_eq!(decoded.client_id, ticket.client_id);
+        assert_eq!(decoded.session_key, ticket.session_key);
+        assert_eq!(decoded.cipher_suite, ticket.cipher_suite);
+        assert_eq!(decoded.issued_at, ticket.issued_at);
+        assert_eq!(decoded.padding_range, ticket.padding_range);
+    }
+
+    #[test]
+    fn test_padded_data_frame_round_trip() {
+        use crate::types::PaddingRange;
+        let frame = DataFrame {
+            command: Command::Data(bytes::Bytes::from_static(&[1, 2, 3, 4, 5])),
+            flags: FLAG_PADDED,
+            stream_id: 42,
+        };
+        let range = PaddingRange::new(10, 50);
+        let encoded = encode_data_frame_padded(&frame, &range);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+        assert_eq!(decoded.stream_id, frame.stream_id);
+    }
+
+    #[test]
+    fn test_data_frame_connect_round_trip() {
+        let frame = DataFrame {
+            command: Command::Connect(ProxyDestination {
+                address: ProxyAddress::Domain("example.com".into()),
+                port: 443,
+            }),
+            flags: 0,
+            stream_id: 1,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.stream_id, frame.stream_id);
+    }
+
+    #[test]
+    fn test_data_frame_ipv4_round_trip() {
+        let frame = DataFrame {
+            command: Command::Connect(ProxyDestination {
+                address: ProxyAddress::Ipv4(Ipv4Addr::new(1, 2, 3, 4)),
+                port: 80,
+            }),
+            flags: 0,
+            stream_id: 42,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_data_frame_ipv6_round_trip() {
+        let frame = DataFrame {
+            command: Command::Connect(ProxyDestination {
+                address: ProxyAddress::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 8080,
+            }),
+            flags: 0,
+            stream_id: 7,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_data_frame_data_round_trip() {
+        let frame = DataFrame {
+            command: Command::Data(bytes::Bytes::from_static(&[1, 2, 3, 4, 5])),
+            flags: FLAG_PADDED,
+            stream_id: 100,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+    }
+
+    #[test]
+    fn test_data_frame_ping_pong_round_trip() {
+        for cmd in [Command::Ping(42), Command::Pong(42), Command::Close] {
+            let frame = DataFrame {
+                command: cmd.clone(),
+                flags: 0,
+                stream_id: 0,
+            };
+            let encoded = encode_data_frame(&frame);
+            let decoded = decode_data_frame(&encoded).unwrap();
+            assert_eq!(decoded.command, frame.command);
+        }
+    }
+
+    #[test]
+    fn test_command_challenge_response_round_trip() {
+        let frame = DataFrame {
+            command: Command::ChallengeResponse { hash: [0xAA; 32] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_command_dns_round_trip() {
+        let frame = DataFrame {
+            command: Command::DnsQuery {
+                query_id: 42,
+                data: vec![1, 2, 3],
+            },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+
+        let frame = DataFrame {
+            command: Command::DnsResponse {
+                query_id: 42,
+                data: vec![4, 5, 6],
+            },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_command_speed_test_round_trip() {
+        let frame = DataFrame {
+            command: Command::SpeedTest {
+                direction: 0,
+                duration_secs: 10,
+                data: vec![0xFF; 100],
+            },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+    }
+
+    #[test]
+    fn test_encrypted_frame_round_trip() {
+        use crate::crypto::aead::create_cipher;
+
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"hello encrypted world";
+
+        let wire = encrypt_frame(cipher.as_ref(), &nonce, plaintext).unwrap();
+        let (decrypted, dec_nonce) = decrypt_frame(cipher.as_ref(), &wire).unwrap();
+        assert_eq!(decrypted, plaintext);
+        assert_eq!(dec_nonce, nonce);
+    }
+
+    // ===== v5 tests =====
+
+    #[test]
+    fn test_v5_encrypted_frame_aad_round_trip() {
+        use crate::crypto::aead::create_cipher;
+
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"hello v5 world";
+        let header_key = [0xAAu8; 32];
+        let aad = build_v5_aad(Some(&header_key), &nonce);
+
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, aad.as_slice()).unwrap();
+        let (decrypted, dec_nonce) =
+            decrypt_frame_aad(cipher.as_ref(), &wire, aad.as_slice()).unwrap();
+        assert_eq!(decrypted, plaintext);
+        assert_eq!(dec_nonce, nonce);
+    }
+
+    #[test]
+    fn test_v5_aad_mismatch_fails_decryption() {
+        use crate::crypto::aead::create_cipher;
+
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"secret data";
+        let header_key = [0xAAu8; 32];
+        let aad = build_v5_aad(Some(&header_key), &nonce);
+
+        let wire = encrypt_frame_aad(cipher.as_ref(), &nonce, plaintext, aad.as_slice()).unwrap();
+
+        // Decryption with different AAD should fail
+        let wrong_key = [0xBBu8; 32];
+        let wrong_aad = build_v5_aad(Some(&wrong_key), &nonce);
+        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, wrong_aad.as_slice()).is_err());
+
+        // Decryption with empty AAD should also fail
+        assert!(decrypt_frame_aad(cipher.as_ref(), &wire, &[]).is_err());
+    }
+
+    #[test]
+    fn test_v5_aad_empty_without_header_key() {
+        let aad = build_v5_aad(None, &[0u8; NONCE_SIZE]);
+        assert!(aad.as_slice().is_empty());
+    }
+
+    #[test]
+    fn test_v5_aad_deterministic() {
+        let header_key = [0xCCu8; 32];
+        let nonce = [1u8; NONCE_SIZE];
+        let aad1 = build_v5_aad(Some(&header_key), &nonce);
+        let aad2 = build_v5_aad(Some(&header_key), &nonce);
+        assert_eq!(aad1.as_slice(), aad2.as_slice());
+        assert_eq!(aad1.as_slice().len(), 16);
+    }
+
+    #[test]
+    fn test_v5_aad_differs_per_nonce() {
+        let header_key = [0xCCu8; 32];
+        let nonce1 = [1u8; NONCE_SIZE];
+        let nonce2 = [2u8; NONCE_SIZE];
+        let aad1 = build_v5_aad(Some(&header_key), &nonce1);
+        let aad2 = build_v5_aad(Some(&header_key), &nonce2);
+        assert_ne!(aad1.as_slice(), aad2.as_slice());
+    }
+
+    #[test]
+    fn test_frame_no_aad_round_trip() {
+        use crate::crypto::aead::create_cipher;
+
+        // Frames encrypted without AAD should still decrypt without AAD
+        let key = [0x42u8; 32];
+        let cipher = create_cipher(CipherSuite::ChaCha20Poly1305, &key);
+        let nonce = [0u8; NONCE_SIZE];
+        let plaintext = b"no aad frame";
+
+        let wire = encrypt_frame(cipher.as_ref(), &nonce, plaintext).unwrap();
+        let (decrypted, _) = decrypt_frame(cipher.as_ref(), &wire).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_migration_command_round_trip() {
+        let frame = DataFrame {
+            command: Command::Migration {
+                token: [0xAA; 32],
+                session_id: [0xBB; 16],
+            },
+            flags: FLAG_MIGRATION,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+    }
+
+    #[test]
+    fn test_migration_command_too_short() {
+        let result = decode_command_payload(CMD_MIGRATION, &[0u8; 47]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fallback_advertisement_round_trip() {
+        let frame = DataFrame {
+            command: Command::FallbackAdvertisement {
+                transports: vec![
+                    "tcp".into(),
+                    "quic".into(),
+                    "websocket".into(),
+                    "grpc".into(),
+                ],
+            },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        assert_eq!(decoded.command, frame.command);
+        assert_eq!(decoded.flags, frame.flags);
+    }
+
+    #[test]
+    fn test_fallback_advertisement_empty() {
+        let frame = DataFrame {
+            command: Command::FallbackAdvertisement { transports: vec![] },
+            flags: 0,
+            stream_id: 0,
+        };
+        let encoded = encode_data_frame(&frame);
+        let decoded = decode_data_frame(&encoded).unwrap();
+        if let Command::FallbackAdvertisement { transports } = decoded.command {
+            assert!(transports.is_empty());
+        } else {
+            panic!("Expected FallbackAdvertisement");
+        }
+    }
+
+    #[test]
+    fn test_fallback_advertisement_too_short() {
+        let result = decode_command_payload(CMD_FALLBACK_ADVERTISEMENT, &[]);
+        assert!(result.is_err());
+    }
+}

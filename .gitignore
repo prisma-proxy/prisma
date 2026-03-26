@@ -1,0 +1,93 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Secrets / TLS
+.env
+.env.local
+.env.*.local
+*.pem
+*.crt
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+._*
+__MACOSX/
+ehthumbs.db
+
+# Docs (Docusaurus)
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
+
+# Console (Next.js)
+apps/prisma-console/node_modules/
+apps/prisma-console/.next/
+apps/prisma-console/out/
+
+# prisma-gui (Tauri + Vite)
+apps/prisma-gui/node_modules/
+apps/prisma-gui/dist/
+apps/prisma-gui/.vite/
+apps/prisma-gui/src-tauri/target/
+apps/prisma-gui/src-tauri/gen/
+apps/prisma-gui/src-tauri/WixTools/
+
+# prisma-ffi build artifacts
+crates/prisma-ffi/include/*.generated.h
+
+# prisma-mcp (MCP dev server)
+tools/prisma-mcp/node_modules/
+tools/prisma-mcp/dist/
+tools/prisma-mcp/.prisma-mcp.db
+
+# Claude Code (agents, skills, memory, settings)
+.claude/
+
+# Fuzzing
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+
+# Benchmark artifacts
+benchmark-results/
+criterion-reports/
+target/criterion/
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+tarpaulin-report.html
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Temp / merge artifacts
+*.orig
+*.bak
+*.tmp
+tmp/
+.tmp/
+
+# Build caches
+*.tsbuildinfo
+.turbo/
+
+# Misc
+prisma-plan.md
+.claude/

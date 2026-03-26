@@ -1,0 +1,512 @@
+export interface HealthResponse {
+  status: string;
+  uptime_secs: number;
+  version: string;
+}
+
+export interface MetricsSnapshot {
+  timestamp: string;
+  uptime_secs: number;
+  total_connections: number;
+  active_connections: number;
+  total_bytes_up: number;
+  total_bytes_down: number;
+  handshake_failures: number;
+}
+
+export interface ConnectionInfo {
+  session_id: string;
+  client_id: string | null;
+  client_name: string | null;
+  peer_addr: string;
+  transport: string;
+  mode: string;
+  connected_at: string;
+  bytes_up: number;
+  bytes_down: number;
+  /** Present when backend populates destination info (skip_serializing_if None) */
+  destination?: string;
+  /** Present when a routing rule matched (skip_serializing_if None) */
+  matched_rule?: string;
+  /** Connection duration in seconds, always present from backend */
+  duration_secs: number;
+  country?: string;
+  city?: string;
+}
+
+export interface ClientInfo {
+  id: string;
+  name: string | null;
+  enabled: boolean;
+  tags: string[];
+}
+
+export interface CreateClientResponse {
+  id: string;
+  name: string | null;
+  auth_secret_hex: string;
+}
+
+// --- Nested config sub-types (matching backend ConfigResponse) ---
+
+export interface PerformanceInfo {
+  max_connections: number;
+  connection_timeout_secs: number;
+}
+
+export interface PortForwardingInfo {
+  enabled: boolean;
+  port_range_start: number;
+  port_range_end: number;
+}
+
+export interface CamouflageInfo {
+  enabled: boolean;
+  tls_on_tcp: boolean;
+  fallback_addr: string | null;
+  alpn_protocols: string[];
+  salamander_password: string | null;
+  h3_cover_site: string | null;
+  h3_static_dir: string | null;
+}
+
+export interface CdnInfo {
+  enabled: boolean;
+  listen_addr: string;
+  ws_tunnel_path: string;
+  grpc_tunnel_path: string;
+  xhttp_upload_path: string;
+  xhttp_download_path: string;
+  xhttp_stream_path: string;
+  cover_upstream: string | null;
+  xporta_enabled: boolean;
+  expose_management_api: boolean;
+  management_api_path: string;
+  padding_header: boolean;
+  enable_sse_disguise: boolean;
+}
+
+export interface TrafficShapingInfo {
+  padding_mode: string;
+  bucket_sizes: number[];
+  timing_jitter_ms: number;
+  chaff_interval_ms: number;
+  coalesce_window_ms: number;
+}
+
+export interface CongestionInfo {
+  mode: string;
+  target_bandwidth: string | null;
+}
+
+export interface AntiRttInfo {
+  enabled: boolean;
+  normalization_ms: number;
+}
+
+export interface MaskServerEntry {
+  addr: string;
+  names: string[];
+}
+
+export interface PrismaTlsInfo {
+  enabled: boolean;
+  auth_secret: string;
+  mask_servers: MaskServerEntry[];
+  auth_rotation_hours: number;
+}
+
+export interface SshInfo {
+  enabled: boolean;
+  listen_addr: string;
+}
+
+export interface WireGuardInfo {
+  enabled: boolean;
+  listen_addr: string;
+}
+
+export interface FallbackInfo {
+  enabled: boolean;
+  max_consecutive_failures: number;
+  health_check_interval: number;
+}
+
+export interface PaddingInfo {
+  min: number;
+  max: number;
+}
+
+export interface PortHoppingInfo {
+  enabled: boolean;
+  base_port: number;
+  range: number;
+  interval_secs: number;
+  grace_period_secs: number;
+}
+
+export interface ManagementApiInfo {
+  enabled: boolean;
+  listen_addr: string;
+  tls_enabled: boolean;
+  cors_origins: string[];
+}
+
+export interface ConfigResponse {
+  listen_addr: string;
+  quic_listen_addr: string;
+  tls_enabled: boolean;
+  authorized_clients_count: number;
+  logging_level: string;
+  logging_format: string;
+  dns_upstream: string;
+  allow_transport_only_cipher: boolean;
+  performance: PerformanceInfo;
+  port_forwarding: PortForwardingInfo;
+  camouflage: CamouflageInfo;
+  cdn: CdnInfo;
+  traffic_shaping: TrafficShapingInfo;
+  congestion: CongestionInfo;
+  anti_rtt: AntiRttInfo;
+  prisma_tls: PrismaTlsInfo;
+  padding: PaddingInfo;
+  port_hopping: PortHoppingInfo;
+  management_api: ManagementApiInfo;
+  routing_rules_count: number;
+  auto_backup_interval_mins: number;
+  // Advanced sections
+  ssh: SshInfo;
+  wireguard: WireGuardInfo;
+  fallback: FallbackInfo;
+  config_watch: boolean;
+  shutdown_drain_timeout_secs: number;
+  ticket_rotation_hours: number;
+  public_address: string | null;
+}
+
+export interface TlsInfoResponse {
+  enabled: boolean;
+  cert_path: string | null;
+  key_path: string | null;
+}
+
+export interface ForwardInfo {
+  remote_port: number;
+  name: string;
+  client_id: string | null;
+  bind_addr: string;
+  active_connections: number;
+  total_connections: number;
+  bytes_up: number;
+  bytes_down: number;
+  registered_at: string;
+  protocol: string;
+  allowed_ips: string[];
+}
+
+export interface ForwardListResponse {
+  forwards: ForwardInfo[];
+}
+
+export interface RoutingRule {
+  id: string;
+  name: string;
+  priority: number;
+  condition: RuleCondition;
+  action: "Allow" | "Block" | "Direct" | "Reject";
+  enabled: boolean;
+}
+
+export type RuleCondition =
+  | { type: "DomainMatch"; value: string }
+  | { type: "DomainExact"; value: string }
+  | { type: "DomainSuffix"; value: string }
+  | { type: "DomainKeyword"; value: string }
+  | { type: "IpCidr"; value: string }
+  | { type: "GeoIp"; value: string }
+  | { type: "PortRange"; value: [number, number] }
+  | { type: "All"; value?: null };
+
+/** Log levels ordered from most verbose to least verbose. */
+export const LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
+/** Numeric priority for each log level (higher = more severe). */
+export const LOG_LEVEL_PRIORITY: Record<string, number> = Object.fromEntries(
+  LOG_LEVELS.map((l, i) => [l, i])
+);
+
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  target: string;
+  message: string;
+}
+
+export interface SystemInfoResponse {
+  version: string;
+  platform: string;
+  pid: number;
+  cpu_usage: number;
+  memory_used_mb: number;
+  memory_total_mb: number;
+  listeners: ListenerInfo[];
+  cert_expiry_days: number | null;
+}
+
+export interface ListenerInfo {
+  addr: string;
+  protocol: string;
+}
+
+export interface ClientPermissions {
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  allowed_destinations: string[];
+  blocked_destinations: string[];
+  max_connections: number;
+  bandwidth_limit: number | null;
+  allowed_ports: string[];
+  blocked_ports: number[];
+}
+
+export interface ClientBandwidthInfo {
+  client_id: string;
+  upload_bps: number;
+  download_bps: number;
+}
+
+export interface ClientQuotaInfo {
+  client_id: string;
+  quota_bytes: number;
+  used_bytes: number;
+  remaining_bytes: number;
+}
+
+export interface BandwidthSummary {
+  clients: ClientBandwidthSummaryEntry[];
+}
+
+export interface ClientBandwidthSummaryEntry {
+  client_id: string;
+  client_name: string | null;
+  upload_bps: number;
+  download_bps: number;
+  quota_bytes: number;
+  quota_used: number;
+}
+
+export interface BackupInfo {
+  name: string;
+  timestamp: string;
+  size: number;
+}
+
+export interface BackupDiff {
+  changes: DiffChange[];
+}
+
+export interface DiffChange {
+  tag: "equal" | "insert" | "delete";
+  old_value: string | null;
+  new_value: string | null;
+}
+
+export interface AlertConfig {
+  cert_expiry_days: number;
+  quota_warn_percent: number;
+  handshake_spike_threshold: number;
+}
+
+export interface ClientMetricsEntry {
+  client_id: string;
+  client_name: string | null;
+  bytes_up: number;
+  bytes_down: number;
+  connection_count: number;
+  active_connections: number;
+  last_seen: string | null;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  latency_p99_ms: number | null;
+}
+
+export interface ClientMetricsHistoryEntry {
+  timestamp: string;
+  bytes_up: number;
+  bytes_down: number;
+  active_connections: number;
+}
+
+export interface GeoEntry {
+  country: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
+  count: number;
+}
+
+export interface ShareClientResponse {
+  toml: string;
+  uri: string;
+  qr_svg: string;
+}
+
+export interface AclRule {
+  destination: string;
+  ports: string;
+  action: "allow" | "deny";
+}
+
+export interface UserInfo {
+  username: string;
+  role: "admin" | "operator" | "client";
+  enabled: boolean;
+}
+
+// ── Console Settings ──────────────────────────────────────────────────
+
+export interface ConsoleSettings {
+  settings: Record<string, string>;
+}
+
+// ── Subscription / Redemption ─────────────────────────────────────────
+
+export interface RedemptionCode {
+  id: number;
+  code: string;
+  max_uses: number;
+  used_count: number;
+  max_clients: number;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  expires_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  plan_id: number | null;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  max_connections: number;
+  allowed_destinations: string;
+  blocked_destinations: string;
+}
+
+export interface CreateCodeRequest {
+  max_uses?: number;
+  max_clients?: number;
+  bandwidth_up?: string;
+  bandwidth_down?: string;
+  quota?: string;
+  quota_period?: string;
+  expires_at?: string;
+  plan_id?: number;
+  allow_port_forwarding?: boolean;
+  allow_udp?: boolean;
+  max_connections?: number;
+  allowed_destinations?: string;
+  blocked_destinations?: string;
+}
+
+export interface CreateCodeResponse {
+  id: number;
+  code: string;
+}
+
+export interface RedeemResponse {
+  client_id: string;
+  auth_secret_hex: string;
+  name: string;
+}
+
+export interface SubscriptionInfo {
+  code: string;
+  client_id: string;
+  redeemed_at: string;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+}
+
+// ── Invites ───────────────────────────────────────────────────────────
+
+export interface InviteInfo {
+  id: number;
+  token: string;
+  max_uses: number;
+  used_count: number;
+  max_clients: number;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  default_role: string;
+  expires_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  plan_id: number | null;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  max_connections: number;
+  allowed_destinations: string;
+  blocked_destinations: string;
+}
+
+export interface CreateInviteRequest {
+  max_uses?: number;
+  max_clients?: number;
+  bandwidth_up?: string;
+  bandwidth_down?: string;
+  quota?: string;
+  quota_period?: string;
+  default_role?: string;
+  expires_at?: string;
+  plan_id?: number;
+  allow_port_forwarding?: boolean;
+  allow_udp?: boolean;
+  max_connections?: number;
+  allowed_destinations?: string;
+  blocked_destinations?: string;
+}
+
+export interface CreateInviteResponse {
+  id: number;
+  token: string;
+}
+
+export interface InviteInfoPublic {
+  valid: boolean;
+  default_role: string;
+  max_clients: number;
+}
+
+export interface InviteRedeemResponse {
+  token: string;
+  user: { username: string; role: string };
+  expires_at: string;
+  client_id: string;
+  auth_secret_hex: string;
+}
+
+// ── Subscription Plans ───────────────────────────────────────────────
+
+export interface SubscriptionPlan {
+  id: number;
+  name: string;
+  display_name: string;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  max_connections: number;
+  max_clients: number;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  allowed_destinations: string;
+  blocked_destinations: string;
+  expiry_days: number;
+  created_at: string;
+}
+

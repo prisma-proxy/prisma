@@ -1,0 +1,16 @@
+{
+  "bundle": {
+    "android": {
+    
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Prisma",
+        "fullscreen": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useCreateClient } from "@/hooks/use-clients";
+import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/lib/toast-context";
+import { ClientForm } from "@/components/clients/client-form";
+import { KeyDisplay } from "@/components/clients/key-display";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { CreateClientResponse } from "@/lib/types";
+
+export default function NewClientPage() {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const createClient = useCreateClient();
+  const [result, setResult] = useState<CreateClientResponse | null>(null);
+
+  function handleSubmit(name: string) {
+    createClient.mutate(name || undefined, {
+      onSuccess: (data) => {
+        setResult(data);
+        toast(t("toast.clientCreated"), "success");
+      },
+      onError: (error: Error) => {
+        toast(error.message || t("toast.clientCreateError"), "error");
+      },
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard/clients/">
+          <Button variant="outline" size="sm">
+            {t("clients.backToClients")}
+          </Button>
+        </Link>
+        <h2 className="text-lg font-semibold">{t("clients.addNewClient")}</h2>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{result ? t("clients.clientCreated") : t("clients.createClient")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <KeyDisplay clientId={result.id} secretHex={result.auth_secret_hex} />
+          ) : (
+            <ClientForm
+              onSubmit={handleSubmit}
+              isLoading={createClient.isPending}
+            />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
