@@ -57,7 +57,7 @@ const config: Config = {
           showLastUpdateTime: true,
           lastVersion: 'current',
           versions: {
-            current: {label: 'v2.13.0', path: ''},
+            current: {label: 'v2.14.0', path: ''},
           },
         },
         blog: false,
