@@ -2,7 +2,7 @@
 
 [package]
 name = "prisma-gui"
-version = "2.18.0"
+version = "2.19.0"
 edition = "2021"
 
 [lib]
