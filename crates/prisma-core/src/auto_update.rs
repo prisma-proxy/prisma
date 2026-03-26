@@ -25,9 +25,30 @@ struct GithubAsset {
     browser_download_url: String,
 }
 
+/// Build a ureq agent, optionally routing through an HTTP proxy.
+fn build_agent(proxy_port: u16) -> Result<ureq::Agent> {
+    if proxy_port > 0 {
+        let url = format!("http://127.0.0.1:{proxy_port}");
+        let proxy = ureq::Proxy::new(&url)?;
+        Ok(ureq::Agent::config_builder()
+            .proxy(Some(proxy))
+            .build()
+            .into())
+    } else {
+        Ok(ureq::Agent::new_with_defaults())
+    }
+}
+
 /// Check GitHub releases for a newer version. Returns `None` if already up to date.
 pub fn check() -> Result<Option<UpdateInfo>> {
-    let resp: GithubRelease = ureq::get(RELEASES_API)
+    check_with_proxy(0)
+}
+
+/// Check GitHub releases for a newer version, optionally via proxy.
+pub fn check_with_proxy(proxy_port: u16) -> Result<Option<UpdateInfo>> {
+    let agent = build_agent(proxy_port)?;
+    let resp: GithubRelease = agent
+        .get(RELEASES_API)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
         .call()?
         .body_mut()
@@ -61,7 +82,16 @@ const MAX_DOWNLOAD_SIZE: u64 = 200 * 1024 * 1024;
 
 /// Download a binary from `download_url` and verify its SHA256 hash.
 pub fn download_and_verify(download_url: &str, expected_sha256: &str) -> Result<Vec<u8>> {
-    let agent = ureq::Agent::new_with_defaults();
+    download_and_verify_with_proxy(download_url, expected_sha256, 0)
+}
+
+/// Download a binary from `download_url`, verify its SHA256 hash, optionally via proxy.
+pub fn download_and_verify_with_proxy(
+    download_url: &str,
+    expected_sha256: &str,
+    proxy_port: u16,
+) -> Result<Vec<u8>> {
+    let agent = build_agent(proxy_port)?;
     let mut resp = agent
         .get(download_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
@@ -99,7 +129,12 @@ pub fn apply(download_url: &str, expected_sha256: &str) -> Result<()> {
 
 /// Download a binary from `download_url` without hash verification.
 pub fn download(download_url: &str) -> Result<Vec<u8>> {
-    let agent = ureq::Agent::new_with_defaults();
+    download_with_proxy(download_url, 0)
+}
+
+/// Download a binary from `download_url` without hash verification, optionally via proxy.
+pub fn download_with_proxy(download_url: &str, proxy_port: u16) -> Result<Vec<u8>> {
+    let agent = build_agent(proxy_port)?;
     let mut resp = agent
         .get(download_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))

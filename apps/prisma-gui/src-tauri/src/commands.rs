@@ -177,19 +177,26 @@ pub fn clear_system_proxy() -> Result<(), String> {
 // ── auto-update ───────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn check_update() -> Result<Option<serde_json::Value>, String> {
-    let ptr = prisma_ffi::prisma_check_update_json();
-    match unsafe { read_owned_cstr(ptr) } {
+pub fn check_update(proxy_port: Option<u16>) -> Result<Option<serde_json::Value>, String> {
+    let port = proxy_port.unwrap_or(0);
+    let result = prisma_core::auto_update::check_with_proxy(port).map_err(|e| e.to_string())?;
+    match result {
         None => Ok(None),
-        Some(s) => serde_json::from_str(&s)
+        Some(info) => serde_json::to_value(&info)
             .map(Some)
             .map_err(|e| e.to_string()),
     }
 }
 
 #[tauri::command]
-pub async fn apply_update(app: tauri::AppHandle, url: String, sha: String) -> Result<(), String> {
+pub async fn apply_update(
+    app: tauri::AppHandle,
+    url: String,
+    sha: String,
+    proxy_port: Option<u16>,
+) -> Result<(), String> {
     let app_clone = app.clone();
+    let port = proxy_port.unwrap_or(0);
     tokio::task::spawn_blocking(move || {
         // Emit downloading phase
         let _ = app_clone.emit(
@@ -198,9 +205,9 @@ pub async fn apply_update(app: tauri::AppHandle, url: String, sha: String) -> Re
         );
 
         let bytes = if sha.is_empty() {
-            prisma_core::auto_update::download(&url)
+            prisma_core::auto_update::download_with_proxy(&url, port)
         } else {
-            prisma_core::auto_update::download_and_verify(&url, &sha)
+            prisma_core::auto_update::download_and_verify_with_proxy(&url, &sha, port)
         }
         .map_err(|e| e.to_string())?;
 

@@ -4,9 +4,13 @@ import { RefreshCw, Download } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/store";
+import { useSettings } from "@/store/settings";
 import { api } from "@/lib/commands";
 import { notify } from "@/store/notifications";
+
+type UpdateDownloadMode = "auto" | "direct" | "proxy";
 
 /** Replace `**text**` with <strong>text</strong> */
 function renderInlineBold(text: string): React.ReactNode {
@@ -25,6 +29,20 @@ export default function UpdatesSection() {
   const setUpdateProgress = useStore((s) => s.setUpdateProgress);
   const setUpdatePhase = useStore((s) => s.setUpdatePhase);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [downloadMode, setDownloadMode] = useState<UpdateDownloadMode>("auto");
+
+  function resolveProxyPort(): number {
+    const isConnected = useStore.getState().connected;
+    const httpPort = useSettings.getState().httpPort || 0;
+    switch (downloadMode) {
+      case "proxy":
+        return httpPort;
+      case "direct":
+        return 0;
+      default: // auto
+        return isConnected ? httpPort : 0;
+    }
+  }
 
   // Listen for update-progress events from the Tauri backend
   useEffect(() => {
@@ -46,7 +64,7 @@ export default function UpdatesSection() {
   async function handleCheckUpdate() {
     try {
       setCheckingUpdate(true);
-      const info = await api.checkUpdate();
+      const info = await api.checkUpdate(resolveProxyPort());
       if (info) {
         useStore.getState().setUpdateAvailable(info);
         notify.info(`${t("settings.updateAvailable")}: v${info.version}`);
@@ -65,7 +83,7 @@ export default function UpdatesSection() {
     try {
       setUpdateProgress(0);
       setUpdatePhase("downloading");
-      await api.applyUpdate(updateAvailable.url, updateAvailable.sha ?? "");
+      await api.applyUpdate(updateAvailable.url, updateAvailable.sha ?? "", resolveProxyPort());
     } catch (e) {
       notify.error(String(e));
       setUpdateProgress(null);
@@ -120,7 +138,7 @@ export default function UpdatesSection() {
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <Button variant="outline" size="sm" disabled={checkingUpdate} onClick={handleCheckUpdate}>
           <RefreshCw className={checkingUpdate ? "animate-spin" : ""} />
           {t("settings.checkUpdates")}
@@ -130,6 +148,16 @@ export default function UpdatesSection() {
             <Download /> {t("settings.install")}
           </Button>
         )}
+        <Select value={downloadMode} onValueChange={(v) => setDownloadMode(v as UpdateDownloadMode)}>
+          <SelectTrigger className="w-[80px] h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">{t("rules.downloadAuto")}</SelectItem>
+            <SelectItem value="direct">{t("rules.downloadDirect")}</SelectItem>
+            <SelectItem value="proxy">{t("rules.downloadProxy")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

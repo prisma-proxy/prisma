@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 export interface Rule {
   id: string;
-  type: "DOMAIN" | "DOMAIN-SUFFIX" | "DOMAIN-KEYWORD" | "IP-CIDR" | "GEOIP" | "FINAL";
+  type: "DOMAIN" | "DOMAIN-SUFFIX" | "DOMAIN-KEYWORD" | "IP-CIDR" | "GEOIP" | "GEOSITE" | "FINAL";
   match: string;
   action: "PROXY" | "DIRECT" | "REJECT";
 }

@@ -4,8 +4,8 @@ import type { TimeRange, Resolution } from "@/hooks/use-metrics";
  * Shared chart theme using CSS variables for light/dark compatibility.
  */
 export const CHART_THEME = {
-  grid: "hsl(var(--border) / 0.15)",
-  axis: "hsl(var(--muted-foreground))",
+  grid: "hsl(var(--border) / 0.12)",
+  axis: "hsl(var(--muted-foreground) / 0.7)",
   tooltip: {
     bg: "hsl(var(--popover))",
     border: "hsl(var(--border))",
@@ -19,8 +19,16 @@ export const CHART_THEME = {
   },
 } as const;
 
-export const CHART_AXIS_TICK = { fill: "hsl(var(--muted-foreground))", fontSize: 11 };
-export const CHART_AXIS_TICK_SM = { fill: "hsl(var(--muted-foreground))", fontSize: 10 };
+export const CHART_AXIS_TICK = {
+  fill: "hsl(var(--muted-foreground))",
+  fontSize: 10,
+  fontFamily: "var(--font-geist-sans)",
+};
+export const CHART_AXIS_TICK_SM = {
+  fill: "hsl(var(--muted-foreground))",
+  fontSize: 10,
+  fontFamily: "var(--font-geist-sans)",
+};
 
 /**
  * 10 line colors for the Top Connections multi-line chart.

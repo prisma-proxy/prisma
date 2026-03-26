@@ -4939,7 +4939,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-client"
-version = "2.18.0"
+version = "2.19.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -4977,7 +4977,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-core"
-version = "2.18.0"
+version = "2.19.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5029,7 +5029,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-ffi"
-version = "2.18.0"
+version = "2.19.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5060,7 +5060,7 @@ dependencies = [
 
 [[package]]
 name = "prisma-gui"
-version = "2.18.0"
+version = "2.19.0"
 dependencies = [
  "libc",
  "prisma-core",

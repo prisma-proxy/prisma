@@ -452,6 +452,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
 }
 
 pub fn update_status(handle: &AppHandle, status: i32) {
+    tracing::info!(status, "Tray status update");
     let icon = match status {
         2 => icon_on(),
         1 => icon_connecting(),

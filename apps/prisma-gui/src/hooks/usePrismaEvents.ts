@@ -104,6 +104,8 @@ export function usePrismaEvents() {
                 notify.warning("System proxy mode is active but HTTP port is not configured");
               }
             }
+            // Force tray menu rebuild so Connect/Disconnect label is correct
+            api.refreshTrayProfiles().catch(() => {});
             notify.success(i18n.t("notifications.connected"));
           } else if (data.status === "connecting") {
             store.setManualDisconnect(false);
@@ -149,6 +151,8 @@ export function usePrismaEvents() {
             useConnections.getState().closeAllActive();
             store.clearLogs();
             store.setConnected(false);
+            // Force tray menu rebuild so Connect/Disconnect label is correct
+            api.refreshTrayProfiles().catch(() => {});
           }
           break;
 

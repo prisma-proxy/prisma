@@ -192,7 +192,8 @@
     "testInput": "Test domain or IP",
     "test": "Test",
     "testResult": "Matched",
-    "noMatch": "No rule matched this input"
+    "noMatch": "No rule matched this input",
+    "testedAtRuntime": "Tested at runtime"
   },
   "connections": {
     "title": "Connections",

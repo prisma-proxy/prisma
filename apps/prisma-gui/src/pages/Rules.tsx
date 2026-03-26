@@ -34,7 +34,7 @@ import {
 import type { PresetCategory, RulePreset } from "@/lib/rulePresets";
 import { api } from "@/lib/commands";
 
-const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "GEOIP", "FINAL"] as const;
+const RULE_TYPES   = ["DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "GEOIP", "GEOSITE", "FINAL"] as const;
 const RULE_ACTIONS = ["PROXY", "DIRECT", "REJECT"] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -166,9 +166,19 @@ export default function Rules() {
           break;
         }
         case "GEOIP":
-          // GeoIP requires MMDB lookup — show runtime badge
-          setTestResult({ matched: true, rule: { ...r, action: r.action, _runtimeOnly: true } as Rule & { _runtimeOnly?: boolean } });
-          return;
+          // Only consider GEOIP rules when the input looks like an IP address
+          if (ipToNum(input) !== null) {
+            setTestResult({ matched: true, rule: { ...r, action: r.action, _runtimeOnly: true } as Rule & { _runtimeOnly?: boolean } });
+            return;
+          }
+          break;
+        case "GEOSITE":
+          // GEOSITE requires database lookup — show runtime badge for domain inputs
+          if (ipToNum(input) === null) {
+            setTestResult({ matched: true, rule: { ...r, action: r.action, _runtimeOnly: true } as Rule & { _runtimeOnly?: boolean } });
+            return;
+          }
+          break;
         case "FINAL":
           setTestResult({ matched: true, rule: r });
           return;

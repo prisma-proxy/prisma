@@ -192,7 +192,8 @@
     "testInput": "测试域名或 IP",
     "test": "测试",
     "testResult": "匹配",
-    "noMatch": "没有规则匹配此输入"
+    "noMatch": "没有规则匹配此输入",
+    "testedAtRuntime": "运行时验证"
   },
   "connections": {
     "title": "连接",

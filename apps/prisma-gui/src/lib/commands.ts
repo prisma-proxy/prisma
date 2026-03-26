@@ -46,11 +46,11 @@ export const api = {
   refreshSubscriptions: () =>
     invoke<ImportResult>("refresh_subscriptions"),
 
-  checkUpdate:      () =>
-    invoke<UpdateInfo | null>("check_update"),
+  checkUpdate:      (proxyPort?: number) =>
+    invoke<UpdateInfo | null>("check_update", { proxyPort: proxyPort ?? 0 }),
 
-  applyUpdate:      (url: string, sha: string) =>
-    invoke<void>("apply_update", { url, sha }),
+  applyUpdate:      (url: string, sha: string, proxyPort?: number) =>
+    invoke<void>("apply_update", { url, sha, proxyPort: proxyPort ?? 0 }),
 
   pingServer:       (addr: string) =>
     invoke<number>("ping_server", { addr }),
