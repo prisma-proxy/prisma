@@ -345,4 +345,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  // Subscription plans
+  getPlans: () =>
+    apiFetch<import("./types").SubscriptionPlan[]>("/api/plans"),
+  createPlan: (data: Omit<import("./types").SubscriptionPlan, "id" | "created_at">) =>
+    apiFetch<import("./types").SubscriptionPlan>("/api/plans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updatePlan: (id: number, data: Omit<import("./types").SubscriptionPlan, "created_at">) =>
+    apiFetch<void>(`/api/plans/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deletePlan: (id: number) =>
+    apiFetch<void>(`/api/plans/${id}`, { method: "DELETE" }),
 };

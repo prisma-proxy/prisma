@@ -40,10 +40,10 @@ export function ConsoleSettingsForm() {
     mutationFn: (settings: Record<string, string>) => api.updateSettings(settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["console-settings"] });
-      toast(t("toast.settingsSaved") || "Settings saved", "success");
+      toast(t("toast.settingsSaved"), "success");
     },
     onError: () => {
-      toast(t("common.error") || "Error", "error");
+      toast(t("common.error"), "error");
     },
   });
 
@@ -63,16 +63,16 @@ export function ConsoleSettingsForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("settings.console") || "Console Settings"}</CardTitle>
+        <CardTitle>{t("settings.console") || t("consoleSettings.enableRegistration")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
           {/* Registration toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Enable Registration</p>
+              <p className="text-sm font-medium">{t("consoleSettings.enableRegistration")}</p>
               <p className="text-xs text-muted-foreground">
-                Allow new users to self-register via the console
+                {t("consoleSettings.enableRegistrationDesc")}
               </p>
             </div>
             <button
@@ -94,25 +94,25 @@ export function ConsoleSettingsForm() {
 
           {/* Default user role */}
           <div>
-            <label className="text-sm font-medium">Default User Role</label>
+            <label className="text-sm font-medium">{t("consoleSettings.defaultRole")}</label>
             <p className="text-xs text-muted-foreground mb-2">
-              Role assigned to users who self-register
+              {t("consoleSettings.defaultRoleDesc")}
             </p>
             <select
               value={defaultUserRole}
               onChange={(e) => setDefaultUserRole(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="client">Client</option>
-              <option value="operator">Operator</option>
+              <option value="client">{t("users.client")}</option>
+              <option value="operator">{t("users.operator")}</option>
             </select>
           </div>
 
           {/* Session expiry */}
           <div>
-            <label className="text-sm font-medium">Session Expiry (hours)</label>
+            <label className="text-sm font-medium">{t("consoleSettings.sessionExpiry")}</label>
             <p className="text-xs text-muted-foreground mb-2">
-              JWT token lifetime in hours
+              {t("consoleSettings.sessionExpiryDesc")}
             </p>
             <input
               type="number"
@@ -126,9 +126,9 @@ export function ConsoleSettingsForm() {
 
           {/* Auto-backup interval */}
           <div>
-            <label className="text-sm font-medium">Auto-Backup Interval (minutes)</label>
+            <label className="text-sm font-medium">{t("consoleSettings.backupInterval")}</label>
             <p className="text-xs text-muted-foreground mb-2">
-              Periodic backup interval. Set to 0 to disable.
+              {t("consoleSettings.backupIntervalDesc")}
             </p>
             <input
               type="number"
@@ -143,7 +143,7 @@ export function ConsoleSettingsForm() {
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={mutation.isPending}>
               <Save className="h-4 w-4 mr-1.5" />
-              {mutation.isPending ? "Saving..." : t("common.save") || "Save"}
+              {mutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </div>
         </div>

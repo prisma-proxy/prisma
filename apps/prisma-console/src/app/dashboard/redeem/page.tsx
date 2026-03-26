@@ -33,16 +33,16 @@ export default function RedeemPage() {
       setCode("");
       queryClient.invalidateQueries({ queryKey: ["subscription"] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
-      toast("Code redeemed successfully!", "success");
+      toast(t("redeem.redeemSuccess"), "success");
     },
     onError: (error: Error) => {
-      let msg = "Redemption failed";
+      let msg = t("redeem.redeemFailed");
       if (error.message.includes("Gone")) {
-        msg = "Code expired or fully used";
+        msg = t("redeem.codeExpired");
       } else if (error.message.includes("Conflict")) {
-        msg = "You have already redeemed the maximum clients for this code";
+        msg = t("redeem.maxRedeemed");
       } else if (error.message.includes("Not Found")) {
-        msg = "Invalid code";
+        msg = t("redeem.invalidCode");
       }
       toast(msg, "error");
     },
@@ -50,14 +50,14 @@ export default function RedeemPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold tracking-tight">Redeem Code</h2>
+      <h2 className="text-lg font-semibold tracking-tight">{t("redeem.title")}</h2>
 
       {/* Redeem form */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Ticket className="h-4 w-4" />
-            Enter Redemption Code
+            {t("redeem.enterCode")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -66,7 +66,7 @@ export default function RedeemPage() {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="PRISMA-XXXX-XXXX-XXXX"
+              placeholder={t("redeem.placeholder")}
               className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono tracking-wider ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && code.trim()) {
@@ -78,7 +78,7 @@ export default function RedeemPage() {
               onClick={() => redeemMutation.mutate(code.trim())}
               disabled={!code.trim() || redeemMutation.isPending}
             >
-              {redeemMutation.isPending ? "Redeeming..." : "Redeem"}
+              {redeemMutation.isPending ? t("redeem.redeeming") : t("redeem.redeemButton")}
             </Button>
           </div>
         </CardContent>
@@ -90,17 +90,17 @@ export default function RedeemPage() {
           <CardHeader>
             <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-400">
               <CheckCircle2 className="h-4 w-4" />
-              Client Created Successfully
+              {t("redeem.clientCreated")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Client Name</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("redeem.clientName")}</p>
                 <p className="text-sm font-medium">{result.name}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Client ID</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("redeem.clientId")}</p>
                 <div className="flex items-center gap-2">
                   <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate font-mono">
                     {result.client_id}
@@ -109,7 +109,7 @@ export default function RedeemPage() {
                 </div>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Auth Secret</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("redeem.authSecret")}</p>
                 <div className="flex items-center gap-2">
                   <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate font-mono">
                     {result.auth_secret_hex}
@@ -118,7 +118,7 @@ export default function RedeemPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Save these credentials. You can also find this client in the Clients page.
+                {t("redeem.saveCredentials")}
               </p>
             </div>
           </CardContent>
@@ -128,25 +128,25 @@ export default function RedeemPage() {
       {/* Subscription history */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">My Subscriptions</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("redeem.mySubscriptions")}</CardTitle>
         </CardHeader>
         <CardContent>
           {subsLoading ? (
             <SkeletonCard className="h-32" />
           ) : !subscriptions?.length ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              No subscriptions yet. Redeem a code to get started.
+              {t("redeem.noSubscriptions")}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">Code</th>
-                    <th className="py-2 pr-4 font-medium">Client ID</th>
-                    <th className="py-2 pr-4 font-medium">Redeemed</th>
-                    <th className="py-2 pr-4 font-medium">Bandwidth</th>
-                    <th className="py-2 font-medium">Quota</th>
+                    <th className="py-2 pr-4 font-medium">{t("redeem.code")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("redeem.clientIdShort")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("redeem.redeemed")}</th>
+                    <th className="py-2 pr-4 font-medium">{t("subscriptions.bandwidth")}</th>
+                    <th className="py-2 font-medium">{t("subscriptions.quota")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,9 +164,9 @@ export default function RedeemPage() {
                       <td className="py-2 pr-4 text-xs">
                         {sub.bandwidth_up || sub.bandwidth_down
                           ? `${sub.bandwidth_up || "-"} / ${sub.bandwidth_down || "-"}`
-                          : "Unlimited"}
+                          : t("subscriptions.unlimited")}
                       </td>
-                      <td className="py-2 text-xs">{sub.quota || "Unlimited"}</td>
+                      <td className="py-2 text-xs">{sub.quota || t("subscriptions.unlimited")}</td>
                     </tr>
                   ))}
                 </tbody>

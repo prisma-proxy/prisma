@@ -44,10 +44,13 @@ fn extract_ip(peer_addr: &str) -> Option<IpAddr> {
     ip_str.parse().ok()
 }
 
-/// Lookup country and city from an MMDB reader.
-fn lookup_geo(reader: &maxminddb::Reader<Vec<u8>>, ip: IpAddr) -> (Option<String>, Option<String>) {
+/// Lookup country, city, lat, lon from an MMDB reader.
+fn lookup_geo(
+    reader: &maxminddb::Reader<Vec<u8>>,
+    ip: IpAddr,
+) -> (Option<String>, Option<String>, Option<f64>, Option<f64>) {
     let Ok(city): Result<maxminddb::geoip2::City, _> = reader.lookup(ip) else {
-        return (None, None);
+        return (None, None, None, None);
     };
     let country = city.country.and_then(|c| c.iso_code).map(|s| s.to_string());
     let city_name = city
@@ -55,7 +58,9 @@ fn lookup_geo(reader: &maxminddb::Reader<Vec<u8>>, ip: IpAddr) -> (Option<String
         .and_then(|c| c.names)
         .and_then(|n| n.get("en").copied())
         .map(|s| s.to_string());
-    (country, city_name)
+    let lat = city.location.as_ref().and_then(|l| l.latitude);
+    let lon = city.location.as_ref().and_then(|l| l.longitude);
+    (country, city_name, lat, lon)
 }
 
 /// Try to open the MMDB file from the config path.
@@ -89,7 +94,12 @@ pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ConnectionResponse
 
             let (country, city) = reader
                 .as_ref()
-                .and_then(|r| extract_ip(&c.peer_addr).map(|ip| lookup_geo(r, ip)))
+                .and_then(|r| {
+                    extract_ip(&c.peer_addr).map(|ip| {
+                        let (co, ci, _lat, _lon) = lookup_geo(r, ip);
+                        (co, ci)
+                    })
+                })
                 .unwrap_or((None, None));
 
             ConnectionResponse {
@@ -125,10 +135,16 @@ pub async fn disconnect(State(state): State<MgmtState>, Path(id): Path<Uuid>) ->
 #[derive(Serialize)]
 pub struct GeoEntry {
     pub country: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub city: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lon: Option<f64>,
     pub count: u32,
 }
 
-/// GET /api/connections/geo — country distribution of active connections.
+/// GET /api/connections/geo — city-level distribution of active connections.
 pub async fn geo_summary(State(state): State<MgmtState>) -> Json<Vec<GeoEntry>> {
     let cfg = state.config.read().await;
     let reader = open_mmdb(&cfg);
@@ -139,20 +155,39 @@ pub async fn geo_summary(State(state): State<MgmtState>) -> Json<Vec<GeoEntry>> 
     };
 
     let conns = state.connections.read().await;
-    let mut counts: HashMap<String, u32> = HashMap::new();
+
+    // Aggregate by (country, city) pair
+    type GeoKey = (String, Option<String>);
+    type GeoVal = (u32, Option<f64>, Option<f64>);
+    let mut counts: HashMap<GeoKey, GeoVal> = HashMap::new();
 
     for conn in conns.values() {
         if let Some(ip) = extract_ip(&conn.peer_addr) {
-            let (country, _city) = lookup_geo(&reader, ip);
+            let (country, city, lat, lon) = lookup_geo(&reader, ip);
             if let Some(code) = country {
-                *counts.entry(code).or_insert(0) += 1;
+                let key = (code, city);
+                let entry = counts.entry(key).or_insert((0, lat, lon));
+                entry.0 += 1;
+                // Preserve lat/lon from first lookup
+                if entry.1.is_none() {
+                    entry.1 = lat;
+                }
+                if entry.2.is_none() {
+                    entry.2 = lon;
+                }
             }
         }
     }
 
     let mut entries: Vec<GeoEntry> = counts
         .into_iter()
-        .map(|(country, count)| GeoEntry { country, count })
+        .map(|((country, city), (count, lat, lon))| GeoEntry {
+            country,
+            city,
+            lat,
+            lon,
+            count,
+        })
         .collect();
     entries.sort_by(|a, b| b.count.cmp(&a.count));
 

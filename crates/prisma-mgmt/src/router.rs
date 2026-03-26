@@ -190,6 +190,15 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
             get(subscriptions::list_invites).post(subscriptions::create_invite),
         )
         .route("/api/invites/{id}", delete(subscriptions::delete_invite))
+        // Subscription plans (admin)
+        .route(
+            "/api/plans",
+            get(subscriptions::list_plans).post(subscriptions::create_plan),
+        )
+        .route(
+            "/api/plans/{id}",
+            put(subscriptions::update_plan).delete(subscriptions::delete_plan),
+        )
         // Auth middleware — protects everything above
         .layer(middleware::from_fn(auth_middleware))
         .layer({

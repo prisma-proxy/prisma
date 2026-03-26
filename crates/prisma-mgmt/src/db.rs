@@ -16,7 +16,7 @@ use prisma_core::config::server::{
 };
 
 /// Current schema version.  Increment when adding migrations.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 // ───────────────────────────── Public types ─────────────────────────────
 
@@ -86,6 +86,11 @@ fn apply_up_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
             conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [1])?;
             info!("Applied SQLite migration v1 (up)");
         }
+        2 => {
+            conn.execute_batch(include_str!("db_migrations/v2.sql"))?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [2])?;
+            info!("Applied SQLite migration v2 (up)");
+        }
         other => {
             warn!(version = other, "No up migration found for version");
         }
@@ -99,6 +104,10 @@ fn apply_down_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
         1 => {
             conn.execute_batch(include_str!("db_migrations/v1_down.sql"))?;
             info!("Applied SQLite migration v1 (down)");
+        }
+        2 => {
+            conn.execute_batch(include_str!("db_migrations/v2_down.sql"))?;
+            info!("Applied SQLite migration v2 (down)");
         }
         other => {
             warn!(
@@ -648,6 +657,12 @@ pub struct RedemptionCode {
     pub expires_at: Option<String>,
     pub created_by: Option<String>,
     pub created_at: String,
+    pub plan_id: Option<i64>,
+    pub allow_port_forwarding: bool,
+    pub allow_udp: bool,
+    pub max_connections: i32,
+    pub allowed_destinations: String,
+    pub blocked_destinations: String,
 }
 
 pub fn insert_redemption_code(
@@ -656,8 +671,8 @@ pub fn insert_redemption_code(
 ) -> rusqlite::Result<i64> {
     let conn = db.lock().expect("db lock poisoned");
     conn.execute(
-        "INSERT INTO redemption_codes (code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO redemption_codes (code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             code.code,
             code.max_uses,
@@ -669,6 +684,12 @@ pub fn insert_redemption_code(
             code.quota_period,
             code.expires_at,
             code.created_by,
+            code.plan_id,
+            code.allow_port_forwarding as i32,
+            code.allow_udp as i32,
+            code.max_connections,
+            code.allowed_destinations,
+            code.blocked_destinations,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -677,7 +698,7 @@ pub fn insert_redemption_code(
 pub fn list_redemption_codes(db: &Mutex<Connection>) -> Vec<RedemptionCode> {
     let conn = db.lock().expect("db lock poisoned");
     let mut stmt = conn
-        .prepare("SELECT id, code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by, created_at FROM redemption_codes ORDER BY id DESC")
+        .prepare("SELECT id, code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by, created_at, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations FROM redemption_codes ORDER BY id DESC")
         .expect("prepare");
     stmt.query_map([], |row| {
         Ok(RedemptionCode {
@@ -693,6 +714,12 @@ pub fn list_redemption_codes(db: &Mutex<Connection>) -> Vec<RedemptionCode> {
             expires_at: row.get(9)?,
             created_by: row.get(10)?,
             created_at: row.get(11)?,
+            plan_id: row.get(12)?,
+            allow_port_forwarding: row.get::<_, i32>(13).unwrap_or(1) != 0,
+            allow_udp: row.get::<_, i32>(14).unwrap_or(1) != 0,
+            max_connections: row.get(15).unwrap_or(0),
+            allowed_destinations: row.get(16).unwrap_or_default(),
+            blocked_destinations: row.get(17).unwrap_or_default(),
         })
     })
     .expect("query")
@@ -703,7 +730,7 @@ pub fn list_redemption_codes(db: &Mutex<Connection>) -> Vec<RedemptionCode> {
 pub fn get_redemption_code_by_code(db: &Mutex<Connection>, code: &str) -> Option<RedemptionCode> {
     let conn = db.lock().expect("db lock poisoned");
     conn.query_row(
-        "SELECT id, code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by, created_at FROM redemption_codes WHERE code = ?1",
+        "SELECT id, code, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, expires_at, created_by, created_at, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations FROM redemption_codes WHERE code = ?1",
         [code],
         |row| {
             Ok(RedemptionCode {
@@ -719,6 +746,12 @@ pub fn get_redemption_code_by_code(db: &Mutex<Connection>, code: &str) -> Option
                 expires_at: row.get(9)?,
                 created_by: row.get(10)?,
                 created_at: row.get(11)?,
+                plan_id: row.get(12)?,
+                allow_port_forwarding: row.get::<_, i32>(13).unwrap_or(1) != 0,
+                allow_udp: row.get::<_, i32>(14).unwrap_or(1) != 0,
+                max_connections: row.get(15).unwrap_or(0),
+                allowed_destinations: row.get(16).unwrap_or_default(),
+                blocked_destinations: row.get(17).unwrap_or_default(),
             })
         },
     )
@@ -784,13 +817,19 @@ pub struct Invite {
     pub expires_at: Option<String>,
     pub created_by: Option<String>,
     pub created_at: String,
+    pub plan_id: Option<i64>,
+    pub allow_port_forwarding: bool,
+    pub allow_udp: bool,
+    pub max_connections: i32,
+    pub allowed_destinations: String,
+    pub blocked_destinations: String,
 }
 
 pub fn insert_invite(db: &Mutex<Connection>, inv: &Invite) -> rusqlite::Result<i64> {
     let conn = db.lock().expect("db lock poisoned");
     conn.execute(
-        "INSERT INTO invites (token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO invites (token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             inv.token,
             inv.max_uses,
@@ -803,6 +842,12 @@ pub fn insert_invite(db: &Mutex<Connection>, inv: &Invite) -> rusqlite::Result<i
             inv.default_role,
             inv.expires_at,
             inv.created_by,
+            inv.plan_id,
+            inv.allow_port_forwarding as i32,
+            inv.allow_udp as i32,
+            inv.max_connections,
+            inv.allowed_destinations,
+            inv.blocked_destinations,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -811,7 +856,7 @@ pub fn insert_invite(db: &Mutex<Connection>, inv: &Invite) -> rusqlite::Result<i
 pub fn list_invites(db: &Mutex<Connection>) -> Vec<Invite> {
     let conn = db.lock().expect("db lock poisoned");
     let mut stmt = conn
-        .prepare("SELECT id, token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by, created_at FROM invites ORDER BY id DESC")
+        .prepare("SELECT id, token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by, created_at, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations FROM invites ORDER BY id DESC")
         .expect("prepare");
     stmt.query_map([], |row| {
         Ok(Invite {
@@ -828,6 +873,12 @@ pub fn list_invites(db: &Mutex<Connection>) -> Vec<Invite> {
             expires_at: row.get(10)?,
             created_by: row.get(11)?,
             created_at: row.get(12)?,
+            plan_id: row.get(13)?,
+            allow_port_forwarding: row.get::<_, i32>(14).unwrap_or(1) != 0,
+            allow_udp: row.get::<_, i32>(15).unwrap_or(1) != 0,
+            max_connections: row.get(16).unwrap_or(0),
+            allowed_destinations: row.get(17).unwrap_or_default(),
+            blocked_destinations: row.get(18).unwrap_or_default(),
         })
     })
     .expect("query")
@@ -838,7 +889,7 @@ pub fn list_invites(db: &Mutex<Connection>) -> Vec<Invite> {
 pub fn get_invite_by_token(db: &Mutex<Connection>, token: &str) -> Option<Invite> {
     let conn = db.lock().expect("db lock poisoned");
     conn.query_row(
-        "SELECT id, token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by, created_at FROM invites WHERE token = ?1",
+        "SELECT id, token, max_uses, used_count, max_clients, bandwidth_up, bandwidth_down, quota, quota_period, default_role, expires_at, created_by, created_at, plan_id, allow_port_forwarding, allow_udp, max_connections, allowed_destinations, blocked_destinations FROM invites WHERE token = ?1",
         [token],
         |row| {
             Ok(Invite {
@@ -855,6 +906,12 @@ pub fn get_invite_by_token(db: &Mutex<Connection>, token: &str) -> Option<Invite
                 expires_at: row.get(10)?,
                 created_by: row.get(11)?,
                 created_at: row.get(12)?,
+                plan_id: row.get(13)?,
+                allow_port_forwarding: row.get::<_, i32>(14).unwrap_or(1) != 0,
+                allow_udp: row.get::<_, i32>(15).unwrap_or(1) != 0,
+                max_connections: row.get(16).unwrap_or(0),
+                allowed_destinations: row.get(17).unwrap_or_default(),
+                blocked_destinations: row.get(18).unwrap_or_default(),
             })
         },
     )
@@ -918,6 +975,144 @@ pub fn user_subscriptions(db: &Mutex<Connection>, username: &str) -> Vec<Subscri
     .collect()
 }
 
+// ─────────────────────── Subscription plans ──────────────────────────────
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct SubscriptionPlan {
+    pub id: i64,
+    pub name: String,
+    pub display_name: String,
+    pub bandwidth_up: Option<String>,
+    pub bandwidth_down: Option<String>,
+    pub quota: Option<String>,
+    pub quota_period: Option<String>,
+    pub max_connections: i32,
+    pub max_clients: i32,
+    pub allow_port_forwarding: bool,
+    pub allow_udp: bool,
+    pub allowed_destinations: String,
+    pub blocked_destinations: String,
+    pub expiry_days: i32,
+    pub created_at: String,
+}
+
+pub fn insert_plan(db: &Mutex<Connection>, plan: &SubscriptionPlan) -> rusqlite::Result<i64> {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.execute(
+        "INSERT INTO subscription_plans (name, display_name, bandwidth_up, bandwidth_down, quota, quota_period, max_connections, max_clients, allow_port_forwarding, allow_udp, allowed_destinations, blocked_destinations, expiry_days) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![
+            plan.name,
+            plan.display_name,
+            plan.bandwidth_up,
+            plan.bandwidth_down,
+            plan.quota,
+            plan.quota_period,
+            plan.max_connections,
+            plan.max_clients,
+            plan.allow_port_forwarding as i32,
+            plan.allow_udp as i32,
+            plan.allowed_destinations,
+            plan.blocked_destinations,
+            plan.expiry_days,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn list_plans(db: &Mutex<Connection>) -> Vec<SubscriptionPlan> {
+    let conn = db.lock().expect("db lock poisoned");
+    let mut stmt = conn
+        .prepare("SELECT id, name, display_name, bandwidth_up, bandwidth_down, quota, quota_period, max_connections, max_clients, allow_port_forwarding, allow_udp, allowed_destinations, blocked_destinations, expiry_days, created_at FROM subscription_plans ORDER BY id")
+        .expect("prepare");
+    stmt.query_map([], |row| {
+        Ok(SubscriptionPlan {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            display_name: row.get(2)?,
+            bandwidth_up: row.get(3)?,
+            bandwidth_down: row.get(4)?,
+            quota: row.get(5)?,
+            quota_period: row.get(6)?,
+            max_connections: row.get(7)?,
+            max_clients: row.get(8)?,
+            allow_port_forwarding: row.get::<_, i32>(9)? != 0,
+            allow_udp: row.get::<_, i32>(10)? != 0,
+            allowed_destinations: row.get(11)?,
+            blocked_destinations: row.get(12)?,
+            expiry_days: row.get(13)?,
+            created_at: row.get(14)?,
+        })
+    })
+    .expect("query")
+    .filter_map(|r| r.ok())
+    .collect()
+}
+
+pub fn get_plan(db: &Mutex<Connection>, id: i64) -> Option<SubscriptionPlan> {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.query_row(
+        "SELECT id, name, display_name, bandwidth_up, bandwidth_down, quota, quota_period, max_connections, max_clients, allow_port_forwarding, allow_udp, allowed_destinations, blocked_destinations, expiry_days, created_at FROM subscription_plans WHERE id = ?1",
+        [id],
+        |row| {
+            Ok(SubscriptionPlan {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                display_name: row.get(2)?,
+                bandwidth_up: row.get(3)?,
+                bandwidth_down: row.get(4)?,
+                quota: row.get(5)?,
+                quota_period: row.get(6)?,
+                max_connections: row.get(7)?,
+                max_clients: row.get(8)?,
+                allow_port_forwarding: row.get::<_, i32>(9)? != 0,
+                allow_udp: row.get::<_, i32>(10)? != 0,
+                allowed_destinations: row.get(11)?,
+                blocked_destinations: row.get(12)?,
+                expiry_days: row.get(13)?,
+                created_at: row.get(14)?,
+            })
+        },
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+pub fn update_plan(db: &Mutex<Connection>, plan: &SubscriptionPlan) -> bool {
+    let conn = db.lock().expect("db lock poisoned");
+    let rows = conn
+        .execute(
+            "UPDATE subscription_plans SET name=?1, display_name=?2, bandwidth_up=?3, bandwidth_down=?4, quota=?5, quota_period=?6, max_connections=?7, max_clients=?8, allow_port_forwarding=?9, allow_udp=?10, allowed_destinations=?11, blocked_destinations=?12, expiry_days=?13 WHERE id=?14",
+            params![
+                plan.name,
+                plan.display_name,
+                plan.bandwidth_up,
+                plan.bandwidth_down,
+                plan.quota,
+                plan.quota_period,
+                plan.max_connections,
+                plan.max_clients,
+                plan.allow_port_forwarding as i32,
+                plan.allow_udp as i32,
+                plan.allowed_destinations,
+                plan.blocked_destinations,
+                plan.expiry_days,
+                plan.id,
+            ],
+        )
+        .unwrap_or(0);
+    rows > 0
+}
+
+pub fn delete_plan(db: &Mutex<Connection>, id: i64) -> bool {
+    let conn = db.lock().expect("db lock poisoned");
+    let rows = conn
+        .execute("DELETE FROM subscription_plans WHERE id = ?1", [id])
+        .unwrap_or(0);
+    rows > 0
+}
+
 // ─────────────────────── SQLite dump for backup ─────────────────────────
 
 pub fn dump_sql(db: &Mutex<Connection>) -> String {
@@ -930,6 +1125,7 @@ pub fn dump_sql(db: &Mutex<Connection>) -> String {
         "redemptions",
         "invites",
         "settings",
+        "subscription_plans",
         "schema_version",
     ];
     let mut out = String::new();

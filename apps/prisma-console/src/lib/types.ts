@@ -310,6 +310,9 @@ export interface ClientMetricsHistoryEntry {
 
 export interface GeoEntry {
   country: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
   count: number;
 }
 
@@ -352,6 +355,12 @@ export interface RedemptionCode {
   expires_at: string | null;
   created_by: string | null;
   created_at: string;
+  plan_id: number | null;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  max_connections: number;
+  allowed_destinations: string;
+  blocked_destinations: string;
 }
 
 export interface CreateCodeRequest {
@@ -362,6 +371,12 @@ export interface CreateCodeRequest {
   quota?: string;
   quota_period?: string;
   expires_at?: string;
+  plan_id?: number;
+  allow_port_forwarding?: boolean;
+  allow_udp?: boolean;
+  max_connections?: number;
+  allowed_destinations?: string;
+  blocked_destinations?: string;
 }
 
 export interface CreateCodeResponse {
@@ -401,6 +416,12 @@ export interface InviteInfo {
   expires_at: string | null;
   created_by: string | null;
   created_at: string;
+  plan_id: number | null;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  max_connections: number;
+  allowed_destinations: string;
+  blocked_destinations: string;
 }
 
 export interface CreateInviteRequest {
@@ -412,6 +433,12 @@ export interface CreateInviteRequest {
   quota_period?: string;
   default_role?: string;
   expires_at?: string;
+  plan_id?: number;
+  allow_port_forwarding?: boolean;
+  allow_udp?: boolean;
+  max_connections?: number;
+  allowed_destinations?: string;
+  blocked_destinations?: string;
 }
 
 export interface CreateInviteResponse {
@@ -431,5 +458,25 @@ export interface InviteRedeemResponse {
   expires_at: string;
   client_id: string;
   auth_secret_hex: string;
+}
+
+// ── Subscription Plans ───────────────────────────────────────────────
+
+export interface SubscriptionPlan {
+  id: number;
+  name: string;
+  display_name: string;
+  bandwidth_up: string | null;
+  bandwidth_down: string | null;
+  quota: string | null;
+  quota_period: string | null;
+  max_connections: number;
+  max_clients: number;
+  allow_port_forwarding: boolean;
+  allow_udp: boolean;
+  allowed_destinations: string;
+  blocked_destinations: string;
+  expiry_days: number;
+  created_at: string;
 }
 

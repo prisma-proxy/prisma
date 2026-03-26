@@ -25,6 +25,31 @@ import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
 
+const COUNTRY_NAMES: Record<string, string> = {
+  US: "United States", CN: "China", JP: "Japan", GB: "United Kingdom",
+  DE: "Germany", FR: "France", KR: "South Korea", IN: "India",
+  CA: "Canada", AU: "Australia", BR: "Brazil", RU: "Russia",
+  NL: "Netherlands", SG: "Singapore", HK: "Hong Kong", TW: "Taiwan",
+  SE: "Sweden", CH: "Switzerland", IT: "Italy", ES: "Spain",
+  PL: "Poland", FI: "Finland", NO: "Norway", DK: "Denmark",
+  AT: "Austria", BE: "Belgium", IE: "Ireland", PT: "Portugal",
+  CZ: "Czech Republic", RO: "Romania", UA: "Ukraine", ZA: "South Africa",
+  MX: "Mexico", AR: "Argentina", CL: "Chile", CO: "Colombia",
+  ID: "Indonesia", TH: "Thailand", VN: "Vietnam", PH: "Philippines",
+  MY: "Malaysia", NZ: "New Zealand", IL: "Israel", AE: "UAE",
+  TR: "Turkey", SA: "Saudi Arabia", EG: "Egypt", NG: "Nigeria",
+  KE: "Kenya", PK: "Pakistan", BD: "Bangladesh", LK: "Sri Lanka",
+  GR: "Greece", HU: "Hungary", BG: "Bulgaria", HR: "Croatia",
+  RS: "Serbia", SK: "Slovakia", SI: "Slovenia", LT: "Lithuania",
+  LV: "Latvia", EE: "Estonia", LU: "Luxembourg", IS: "Iceland",
+};
+
+function formatGeoDisplay(country: string, city?: string | null): string {
+  const name = COUNTRY_NAMES[country] || country;
+  if (city) return `${city}, ${name}`;
+  return name;
+}
+
 /** Extract IP from "IP:port" or "[IPv6]:port" address strings. */
 function stripPort(addr: string): string {
   if (addr.startsWith("[")) {
@@ -356,7 +381,7 @@ export function ConnectionTable({
                             return (
                               <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground text-[11px]">
                                 <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold tracking-wide">{c.country}</span>
-                                {c.city && <span className="font-sans">{c.city}</span>}
+                                <span className="font-sans">{formatGeoDisplay(c.country, c.city)}</span>
                               </span>
                             );
                           })()}
@@ -463,7 +488,7 @@ export function ConnectionTable({
                       {conn.country && (
                         <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground text-[11px]">
                           <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold tracking-wide">{conn.country}</span>
-                          {conn.city && <span className="font-sans">{conn.city}</span>}
+                          <span className="font-sans">{formatGeoDisplay(conn.country, conn.city)}</span>
                         </span>
                       )}
                     </span>

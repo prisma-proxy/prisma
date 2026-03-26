@@ -50,6 +50,12 @@ pub struct CreateCodeRequest {
     pub quota: Option<String>,
     pub quota_period: Option<String>,
     pub expires_at: Option<String>,
+    pub plan_id: Option<i64>,
+    pub allow_port_forwarding: Option<bool>,
+    pub allow_udp: Option<bool>,
+    pub max_connections: Option<i32>,
+    pub allowed_destinations: Option<String>,
+    pub blocked_destinations: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -81,6 +87,12 @@ pub async fn create_code(
         expires_at: req.expires_at,
         created_by: Some(user.username),
         created_at: String::new(),
+        plan_id: req.plan_id,
+        allow_port_forwarding: req.allow_port_forwarding.unwrap_or(true),
+        allow_udp: req.allow_udp.unwrap_or(true),
+        max_connections: req.max_connections.unwrap_or(0),
+        allowed_destinations: req.allowed_destinations.unwrap_or_default(),
+        blocked_destinations: req.blocked_destinations.unwrap_or_default(),
     };
 
     let id =
@@ -226,6 +238,12 @@ pub struct CreateInviteRequest {
     pub quota_period: Option<String>,
     pub default_role: Option<String>,
     pub expires_at: Option<String>,
+    pub plan_id: Option<i64>,
+    pub allow_port_forwarding: Option<bool>,
+    pub allow_udp: Option<bool>,
+    pub max_connections: Option<i32>,
+    pub allowed_destinations: Option<String>,
+    pub blocked_destinations: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -258,6 +276,12 @@ pub async fn create_invite(
         expires_at: req.expires_at,
         created_by: Some(user.username),
         created_at: String::new(),
+        plan_id: req.plan_id,
+        allow_port_forwarding: req.allow_port_forwarding.unwrap_or(true),
+        allow_udp: req.allow_udp.unwrap_or(true),
+        max_connections: req.max_connections.unwrap_or(0),
+        allowed_destinations: req.allowed_destinations.unwrap_or_default(),
+        blocked_destinations: req.blocked_destinations.unwrap_or_default(),
     };
 
     let id = db::insert_invite(database, &inv).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -449,4 +473,66 @@ pub async fn redeem_invite(
         client_id: client_id.to_string(),
         auth_secret_hex: hex,
     }))
+}
+
+// ─────────────────────── Plan CRUD endpoints ─────────────────────────────
+
+/// POST /api/plans — admin creates a subscription plan
+pub async fn create_plan(
+    user: UserInfo,
+    State(state): State<MgmtState>,
+    Json(req): Json<db::SubscriptionPlan>,
+) -> Result<Json<db::SubscriptionPlan>, StatusCode> {
+    require_admin(&user)?;
+    let database = state.require_db()?;
+
+    let id = db::insert_plan(database, &req).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut plan = req;
+    plan.id = id;
+    Ok(Json(plan))
+}
+
+/// GET /api/plans — list all subscription plans
+pub async fn list_plans(
+    user: UserInfo,
+    State(state): State<MgmtState>,
+) -> Result<Json<Vec<db::SubscriptionPlan>>, StatusCode> {
+    require_admin(&user)?;
+    let database = state.require_db()?;
+    Ok(Json(db::list_plans(database)))
+}
+
+/// PUT /api/plans/{id} — update a plan
+pub async fn update_plan(
+    user: UserInfo,
+    State(state): State<MgmtState>,
+    Path(id): Path<i64>,
+    Json(mut req): Json<db::SubscriptionPlan>,
+) -> Result<StatusCode, StatusCode> {
+    require_admin(&user)?;
+    let database = state.require_db()?;
+
+    req.id = id;
+    if db::update_plan(database, &req) {
+        Ok(StatusCode::OK)
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+/// DELETE /api/plans/{id} — delete a plan
+pub async fn delete_plan(
+    user: UserInfo,
+    State(state): State<MgmtState>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, StatusCode> {
+    require_admin(&user)?;
+    let database = state.require_db()?;
+
+    if db::delete_plan(database, id) {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
