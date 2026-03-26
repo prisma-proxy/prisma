@@ -18,12 +18,11 @@ All Rust workspace crates live under `crates/`:
 Other packages (not Cargo workspace members):
 | Package | Role |
 |---------|------|
-| `apps/prisma-gui` | Tauri 2 + React 19 desktop app |
 | `apps/prisma-console` | Next.js dashboard (independent version) |
 | `docs/` | Docusaurus documentation site (EN + CN) |
 | `tools/prisma-mcp` | MCP development server for AI agents |
 
-Mobile: `apps/prisma-gui` uses Tauri 2 mobile targets (iOS/Android) — no separate native apps.
+GUI has been moved to a separate repository: [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui)
 
 ## Key Commands
 

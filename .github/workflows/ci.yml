@@ -9,10 +9,6 @@ on:
       - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'apps/prisma-gui/src/**'
-      - 'apps/prisma-gui/src-tauri/**'
-      - 'apps/prisma-gui/package.json'
-      - 'apps/prisma-gui/package-lock.json'
       - 'apps/prisma-console/src/**'
       - 'apps/prisma-console/package.json'
       - 'apps/prisma-console/package-lock.json'
@@ -26,10 +22,6 @@ on:
       - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'apps/prisma-gui/src/**'
-      - 'apps/prisma-gui/src-tauri/**'
-      - 'apps/prisma-gui/package.json'
-      - 'apps/prisma-gui/package-lock.json'
       - 'apps/prisma-console/src/**'
       - 'apps/prisma-console/package.json'
       - 'apps/prisma-console/package-lock.json'
@@ -130,49 +122,6 @@ jobs:
   # ---------------------------------------------------------------------------
   # GUI: TypeScript check + Tauri Rust check
   # ---------------------------------------------------------------------------
-  gui-check:
-    name: GUI Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: apps/prisma-gui/package-lock.json
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: apps/prisma-gui
-
-      - name: TypeScript check
-        run: npx tsc --noEmit
-        working-directory: apps/prisma-gui
-
-      # Verify the Tauri Rust side compiles (check only, no full build)
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/prisma-gui/src-tauri
-
-      - name: Install Linux system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libgtk-3-dev
-
-      - name: Cargo check (Tauri backend)
-        run: cargo check
-        working-directory: apps/prisma-gui/src-tauri
-
   # ---------------------------------------------------------------------------
   # Console: build the Next.js static export
   # ---------------------------------------------------------------------------
@@ -252,7 +201,7 @@ jobs:
   ci-pass:
     name: CI Pass
     if: always()
-    needs: [fmt, clippy, test, gui-check, console-check, mcp-check, docs-check]
+    needs: [fmt, clippy, test, console-check, mcp-check, docs-check]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
@@ -261,7 +210,6 @@ jobs:
             "${{ needs.fmt.result }}"
             "${{ needs.clippy.result }}"
             "${{ needs.test.result }}"
-            "${{ needs.gui-check.result }}"
             "${{ needs.console-check.result }}"
             "${{ needs.mcp-check.result }}"
             "${{ needs.docs-check.result }}"

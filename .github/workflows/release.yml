@@ -9,11 +9,6 @@ on:
         description: 'Release tag (e.g. v0.9.0)'
         required: true
         type: string
-      skip_gui:
-        description: 'Skip GUI builds'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -155,175 +150,11 @@ jobs:
             ${{ matrix.artifact }}.sha256
           retention-days: 5
 
-  # ---------------------------------------------------------------------------
-  # Job 2: Build prisma-gui (Tauri 2) for desktop platforms
-  # ---------------------------------------------------------------------------
-  build-gui:
-    name: GUI / ${{ matrix.label }}
-    if: ${{ !inputs.skip_gui }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Windows x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            rust_targets: x86_64-pc-windows-msvc
-          - label: macOS Universal
-            os: macos-latest
-            target: universal-apple-darwin
-            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
-          - label: Linux x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            rust_targets: x86_64-unknown-linux-gnu
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: ${{ matrix.rust_targets }}
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: gui-${{ matrix.target }}
-          workspaces: apps/prisma-gui/src-tauri
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: apps/prisma-gui/package-lock.json
-
-      # Linux system dependencies for WebKitGTK and AppIndicator
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            librsvg2-dev \
-            patchelf \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: apps/prisma-gui
-
-      - name: Install Tauri CLI
-        run: npm install -g @tauri-apps/cli@^2
-
-      - name: Build Tauri app
-        run: tauri build ${{ matrix.target != 'x86_64-unknown-linux-gnu' && format('--target {0}', matrix.target) || '' }}
-        working-directory: apps/prisma-gui
-        env:
-          # Disable code signing on macOS in CI (sign separately if needed)
-          APPLE_SIGNING_IDENTITY: '-'
-
-      # Collect Windows artifacts (.exe portable)
-      - name: Collect artifacts (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path gui-artifacts
-          $base = "apps/prisma-gui/src-tauri/target/x86_64-pc-windows-msvc/release"
-
-          # Portable exe
-          if (Test-Path "$base/prisma-gui.exe") {
-            Copy-Item "$base/prisma-gui.exe" "gui-artifacts/prisma-gui-windows-x64.exe"
-          }
-
-          # MSI installer
-          $msi = Get-ChildItem "$base/bundle/msi/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($msi) {
-            Copy-Item $msi.FullName "gui-artifacts/Prisma-windows-x64.msi"
-          }
-
-          # NSIS installer
-          $nsis = Get-ChildItem "$base/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($nsis) {
-            Copy-Item $nsis.FullName "gui-artifacts/Prisma-windows-x64-setup.exe"
-          }
-
-          Get-ChildItem gui-artifacts/
-
-      # Collect macOS artifacts (.dmg, portable binary)
-      - name: Collect artifacts (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p gui-artifacts
-          BASE="apps/prisma-gui/src-tauri/target/universal-apple-darwin/release"
-
-          # DMG
-          DMG=$(find "${BASE}/bundle/dmg" -name '*.dmg' 2>/dev/null | head -1)
-          if [ -n "$DMG" ]; then
-            cp "$DMG" gui-artifacts/Prisma-macos-universal.dmg
-          fi
-
-          # Portable binary from inside .app
-          APP_BIN="${BASE}/bundle/macos/Prisma.app/Contents/MacOS/Prisma"
-          if [ -f "$APP_BIN" ]; then
-            cp "$APP_BIN" gui-artifacts/prisma-gui-macos-universal
-          elif [ -f "${BASE}/prisma-gui" ]; then
-            cp "${BASE}/prisma-gui" gui-artifacts/prisma-gui-macos-universal
-          fi
-
-          ls -la gui-artifacts/
-
-      # Collect Linux artifacts (.deb, .AppImage)
-      - name: Collect artifacts (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p gui-artifacts
-          BASE="apps/prisma-gui/src-tauri/target/release"
-
-          # Debian package
-          DEB=$(find "${BASE}/bundle/deb" -name '*.deb' 2>/dev/null | head -1)
-          if [ -n "$DEB" ]; then
-            cp "$DEB" gui-artifacts/prisma-gui-linux-amd64.deb
-          fi
-
-          # AppImage
-          APPIMAGE=$(find "${BASE}/bundle/appimage" -name '*.AppImage' 2>/dev/null | head -1)
-          if [ -n "$APPIMAGE" ]; then
-            cp "$APPIMAGE" gui-artifacts/prisma-gui-linux-amd64.AppImage
-          fi
-
-          # RPM
-          RPM=$(find "${BASE}/bundle/rpm" -name '*.rpm' 2>/dev/null | head -1)
-          if [ -n "$RPM" ]; then
-            cp "$RPM" gui-artifacts/prisma-gui-linux-amd64.rpm
-          fi
-
-          # Portable binary
-          if [ -f "${BASE}/prisma-gui" ]; then
-            cp "${BASE}/prisma-gui" gui-artifacts/prisma-gui-linux-amd64
-            chmod +x gui-artifacts/prisma-gui-linux-amd64
-          fi
-
-          ls -la gui-artifacts/
-
-      - name: Upload GUI artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: gui-${{ matrix.label }}
-          path: gui-artifacts/*
-          retention-days: 5
+  # NOTE: prisma-gui has moved to github.com/prisma-proxy/prisma-gui
+  # Its release workflow runs independently in that repo.
 
   # ---------------------------------------------------------------------------
-  # Job 3: Build prisma-console (Next.js static export)
+  # Job 2: Build prisma-console (Next.js static export)
   # ---------------------------------------------------------------------------
   build-console:
     name: Console
@@ -362,7 +193,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build-server, build-gui, build-console]
+    needs: [build-server, build-console]
     # Run even if optional GUI job was skipped or failed
     if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
     runs-on: ubuntu-latest
@@ -396,10 +227,6 @@ jobs:
           find artifacts -type f -name 'prisma-darwin-*' -exec cp {} release/ \;
           find artifacts -type f -name 'prisma-windows-*' -exec cp {} release/ \;
           find artifacts -type f -name 'prisma-freebsd-*' -exec cp {} release/ \;
-
-          # GUI artifacts (from build-gui)
-          find artifacts -type f -name 'prisma-gui-*' -exec cp {} release/ \;
-          find artifacts -type f -name 'Prisma-*' -exec cp {} release/ \;
 
           # Console archive
           find artifacts -type f -name 'prisma-console.tar.gz' -exec cp {} release/ \;
@@ -540,11 +367,7 @@ jobs:
             echo ""
             echo "### Desktop App (GUI)"
             echo ""
-            echo "| Platform | Installer | Portable |"
-            echo "|----------|-----------|----------|"
-            echo "| macOS (Universal) | [Prisma-macos-universal.dmg](${BASE_URL}/Prisma-macos-universal.dmg) | — |"
-            echo "| Windows x64 | [Prisma-windows-x64.msi](${BASE_URL}/Prisma-windows-x64.msi) | [prisma-gui-windows-x64.exe](${BASE_URL}/prisma-gui-windows-x64.exe) |"
-            echo "| Linux x64 | [prisma-gui-linux-amd64.deb](${BASE_URL}/prisma-gui-linux-amd64.deb) | [prisma-gui-linux-amd64.AppImage](${BASE_URL}/prisma-gui-linux-amd64.AppImage) |"
+            echo "> Desktop/mobile GUI: see [prisma-gui releases](https://github.com/prisma-proxy/prisma-gui/releases)"
             echo ""
             echo "### Web Console"
             echo ""
