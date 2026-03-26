@@ -45,7 +45,7 @@ fn extract_ip(peer_addr: &str) -> Option<IpAddr> {
 }
 
 /// Lookup country, city, lat, lon from an MMDB reader.
-fn lookup_geo(
+pub(crate) fn lookup_geo(
     reader: &maxminddb::Reader<Vec<u8>>,
     ip: IpAddr,
 ) -> (Option<String>, Option<String>, Option<f64>, Option<f64>) {
@@ -64,7 +64,7 @@ fn lookup_geo(
 }
 
 /// Try to open the MMDB file from the config path.
-fn open_mmdb(
+pub(crate) fn open_mmdb(
     state_config: &prisma_core::config::server::ServerConfig,
 ) -> Option<maxminddb::Reader<Vec<u8>>> {
     let path = state_config.routing.geoip_path.as_deref()?;
@@ -112,8 +112,8 @@ pub async fn list(State(state): State<MgmtState>) -> Json<Vec<ConnectionResponse
                 connected_at: c.connected_at.to_rfc3339(),
                 bytes_up: c.bytes_up_val(),
                 bytes_down: c.bytes_down_val(),
-                destination: None,
-                matched_rule: None,
+                destination: c.destination.clone(),
+                matched_rule: c.matched_rule.clone(),
                 duration_secs: duration,
                 country,
                 city,
@@ -280,6 +280,106 @@ pub async fn download_geoip(State(state): State<MgmtState>) -> impl IntoResponse
     {
         let mut cfg = state.config.write().await;
         cfg.routing.geoip_path = Some(save_path.clone());
+    }
+
+    // 6. Persist config to disk
+    state.persist_config().await;
+
+    // 7. Return success
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "path": save_path
+        })),
+    )
+}
+
+// ── POST /api/geosite/download ─────────────────────────────────────────────
+
+const GEOSITE_DOWNLOAD_URL: &str =
+    "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat";
+const GEOSITE_FILE_NAME: &str = "geosite.dat";
+
+/// POST /api/geosite/download — download GeoSite domain-list and auto-configure.
+pub async fn download_geosite(State(state): State<MgmtState>) -> impl IntoResponse {
+    // 1. Create data directory if it doesn't exist
+    if let Err(e) = tokio::fs::create_dir_all(GEOIP_DATA_DIR).await {
+        tracing::error!(error = %e, "Failed to create data directory");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to create data directory: {}", e)
+            })),
+        );
+    }
+
+    // 2. Download the GeoSite database
+    let bytes = match reqwest::get(GEOSITE_DOWNLOAD_URL).await {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let status = resp.status();
+                tracing::error!(%status, "GeoSite download returned non-success status");
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": format!("Download failed with HTTP status {}", status)
+                    })),
+                );
+            }
+            match resp.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!(error = %e, "Failed to read GeoSite download body");
+                    return (
+                        StatusCode::BAD_GATEWAY,
+                        Json(serde_json::json!({
+                            "success": false,
+                            "error": format!("Failed to read download response: {}", e)
+                        })),
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "GeoSite download request failed");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Download request failed: {}", e)
+                })),
+            );
+        }
+    };
+
+    // 3. Save to disk
+    let save_path = format!("{}/{}", GEOIP_DATA_DIR, GEOSITE_FILE_NAME);
+    if let Err(e) = tokio::fs::write(&save_path, &bytes).await {
+        tracing::error!(error = %e, path = %save_path, "Failed to write GeoSite database");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to write file: {}", e)
+            })),
+        );
+    }
+
+    tracing::info!(path = %save_path, size = bytes.len(), "GeoSite database downloaded");
+
+    // 4. Canonicalize to absolute path
+    let save_path = std::path::Path::new(&save_path)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(save_path);
+
+    // 5. Update config with geosite_path on routing
+    {
+        let mut cfg = state.config.write().await;
+        cfg.routing.geosite_path = Some(save_path.clone());
     }
 
     // 6. Persist config to disk

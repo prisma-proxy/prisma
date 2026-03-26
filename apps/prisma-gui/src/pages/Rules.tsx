@@ -166,8 +166,9 @@ export default function Rules() {
           break;
         }
         case "GEOIP":
-          // Cannot resolve without backend, skip
-          break;
+          // GeoIP requires MMDB lookup — show runtime badge
+          setTestResult({ matched: true, rule: { ...r, action: r.action, _runtimeOnly: true } as Rule & { _runtimeOnly?: boolean } });
+          return;
         case "FINAL":
           setTestResult({ matched: true, rule: r });
           return;
@@ -376,15 +377,21 @@ export default function Rules() {
                   {testResult.rule.match && (
                     <span className="text-xs text-muted-foreground font-mono mr-1">{testResult.rule.match}</span>
                   )}
-                  <Badge
-                    variant={
-                      testResult.rule.action === "PROXY" ? "success" :
-                      testResult.rule.action === "REJECT" ? "destructive" : "secondary"
-                    }
-                    className="text-xs"
-                  >
-                    {testResult.rule.action}
-                  </Badge>
+                  {"_runtimeOnly" in testResult.rule && (testResult.rule as Rule & { _runtimeOnly?: boolean })._runtimeOnly ? (
+                    <Badge variant="outline" className="text-xs border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      {t("rules.testedAtRuntime")}
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant={
+                        testResult.rule.action === "PROXY" ? "success" :
+                        testResult.rule.action === "REJECT" ? "destructive" : "secondary"
+                      }
+                      className="text-xs"
+                    >
+                      {testResult.rule.action}
+                    </Badge>
+                  )}
                 </p>
               ) : (
                 <p className="text-muted-foreground">{t("rules.noMatch")}</p>

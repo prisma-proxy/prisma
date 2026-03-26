@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Route as RouteIcon, Search, List, LayoutGrid } from "lucide-react";
+import { Route as RouteIcon, Search, List, LayoutGrid, Download } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/lib/toast-context";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { useRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute } from "@/hooks/use-routes";
 import { RuleEditor } from "@/components/routing/rule-editor";
 import { TemplateSelector } from "@/components/routing/template-selector";
@@ -26,6 +27,7 @@ export default function RoutingPage() {
   const deleteRoute = useDeleteRoute();
 
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
+  const [downloadingGeoSite, setDownloadingGeoSite] = useState(false);
   const [testQuery, setTestQuery] = useState("");
   const [testResult, setTestResult] = useState<{
     matched: boolean;
@@ -84,10 +86,33 @@ export default function RoutingPage() {
     });
   }
 
+  async function handleDownloadGeoSite() {
+    setDownloadingGeoSite(true);
+    try {
+      await api.downloadGeoSite();
+      await api.reloadConfig().catch(() => {});
+      toast(t("routing.geositeDownloadSuccess"), "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setDownloadingGeoSite(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("routing.routingRules")}</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadGeoSite}
+            disabled={downloadingGeoSite}
+          >
+            <Download className="h-4 w-4" />
+            {downloadingGeoSite ? t("routing.downloading") : t("routing.downloadGeoSite")}
+          </Button>
         <RuleEditor
           key={editingRule?.id ?? "new"}
           onSubmit={editingRule ? handleEdit : handleCreate}
@@ -95,6 +120,7 @@ export default function RoutingPage() {
           editingRule={editingRule}
           onOpenChange={(open) => { if (!open) setEditingRule(null); }}
         />
+        </div>
       </div>
 
       <Tabs defaultValue="rules">

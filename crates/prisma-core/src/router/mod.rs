@@ -287,6 +287,9 @@ pub struct RoutingConfig {
     /// Path to a v2fly geoip.dat file for GeoIP-based routing.
     #[serde(default)]
     pub geoip_path: Option<String>,
+    /// Path to a v2fly geosite.dat (domain-list-community) file for domain-based routing.
+    #[serde(default)]
+    pub geosite_path: Option<String>,
     /// Rule providers — remote rule lists fetched at startup and periodically.
     #[serde(default)]
     pub rule_providers: Vec<crate::rule_provider::RuleProviderConfig>,

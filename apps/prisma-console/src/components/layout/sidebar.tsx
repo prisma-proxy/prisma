@@ -18,9 +18,6 @@ import {
   Gauge,
   BarChart3,
   Network,
-  Sun,
-  Moon,
-  Globe,
   Radio,
   ScrollText,
   LogOut,
@@ -28,11 +25,9 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { useTheme } from "@/lib/theme-context";
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/components/auth/role-guard";
 import { Button } from "@/components/ui/button";
-import { NotificationDrawer } from "@/components/layout/notification-drawer";
 import { ServerSelector } from "@/components/layout/server-selector";
 import {
   DropdownMenu,
@@ -109,8 +104,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t, locale, setLocale } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { t } = useI18n();
   const { user, logout } = useAuth();
   const { role } = useRole();
 
@@ -147,7 +141,7 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
           {!collapsed && (
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg overflow-hidden bg-primary">
-                <img src="/favicon.ico" alt="Prisma" className="h-6 w-6" />
+                <img src="/favicon.ico" alt="Prisma" className="h-6 w-6 dark:invert" />
               </div>
               <span className="text-base font-semibold tracking-tight">Prisma</span>
             </div>
@@ -279,27 +273,6 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
             </DropdownMenu>
           )}
 
-          <div className={`flex items-center ${collapsed ? "flex-col gap-1" : "gap-1"}`}>
-            <NotificationDrawer />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
-              title={t("theme.title")}
-              aria-label={t("aria.toggleTheme")}
-            >
-              {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-              title={locale === "en" ? "中文" : "English"}
-              aria-label={t("aria.toggleLocale")}
-            >
-              <Globe className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </aside>
     </TooltipProvider>

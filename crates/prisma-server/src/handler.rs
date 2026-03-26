@@ -565,7 +565,8 @@ where
             }
 
             // Check routing rules
-            if !check_routing_rules(state, dest).await {
+            let (allowed, matched_rule_name) = check_routing_rules(state, dest).await;
+            if !allowed {
                 warn!(dest = %dest, "Connection blocked by routing rule");
                 return Err(anyhow::anyhow!("Blocked by routing rule"));
             }
@@ -581,7 +582,7 @@ where
             // Track connection count for permissions enforcement
             state.permission_store.increment_connections(&client_id_str);
 
-            // Update connection mode and destination
+            // Update connection mode, destination, and matched rule
             if let Some(conn) = state
                 .connections
                 .write()
@@ -590,6 +591,7 @@ where
             {
                 conn.mode = SessionMode::Proxy;
                 conn.destination = Some(dest.to_string());
+                conn.matched_rule = matched_rule_name;
             }
 
             info!(dest = %dest, "Connecting to destination");
@@ -804,11 +806,15 @@ where
     }
 }
 
-/// Check destination against routing rules. Returns true if allowed.
-async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bool {
+/// Check destination against routing rules.
+/// Returns `(allowed, matched_rule_name)`.
+async fn check_routing_rules(
+    state: &ServerState,
+    dest: &ProxyDestination,
+) -> (bool, Option<String>) {
     let rules = state.routing_rules.read().await;
     if rules.is_empty() {
-        return true; // No rules = allow all
+        return (true, None); // No rules = allow all
     }
 
     let mut sorted: Vec<_> = rules.iter().filter(|r| r.enabled).collect();
@@ -826,8 +832,8 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
                 _ => false,
             },
             RuleCondition::IpCidr(cidr) => {
-                if cidr.starts_with("geoip:") {
-                    false // GeoIP rules cannot be evaluated in management rule context
+                if cidr.starts_with("geoip:") || cidr.starts_with("geosite:") {
+                    false // GeoIP/GeoSite rules cannot be evaluated in management rule context
                 } else {
                     match &dest.address {
                         ProxyAddress::Ipv4(ip) => cidr_match_v4(cidr, *ip),
@@ -840,14 +846,15 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
         };
 
         if matches {
-            return matches!(
+            let allowed = matches!(
                 rule.action,
                 RuleAction::Allow | RuleAction::Direct | RuleAction::Unknown
             );
+            return (allowed, Some(rule.name.clone()));
         }
     }
 
-    true // Default: allow if no rule matched
+    (true, None) // Default: allow if no rule matched
 }
 
 fn domain_glob_match(pattern: &str, domain: &str) -> bool {

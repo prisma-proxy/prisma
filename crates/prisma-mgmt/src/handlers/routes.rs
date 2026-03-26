@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -9,6 +9,7 @@ use uuid::Uuid;
 use prisma_core::config::server::{RoutingRule, RuleAction, RuleCondition};
 
 use crate::db;
+use crate::handlers::connections;
 use crate::MgmtState;
 
 #[derive(Deserialize)]
@@ -171,8 +172,26 @@ pub async fn test_rules(
                 }
             }
             RuleCondition::IpCidr(cidr) => {
-                if cidr.starts_with("geoip:") {
-                    false // GeoIP not testable
+                if let Some(target_country) = cidr.strip_prefix("geoip:") {
+                    // GeoIP: look up the query IP in MMDB and compare country code
+                    if let Some(ip) = ip {
+                        let cfg = state.config.read().await;
+                        if let Some(reader) = connections::open_mmdb(&cfg) {
+                            let (country, _, _, _) =
+                                connections::lookup_geo(&reader, IpAddr::V4(ip));
+                            country
+                                .as_deref()
+                                .is_some_and(|c| c.eq_ignore_ascii_case(target_country))
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else if cidr.starts_with("geosite:") {
+                    // GeoSite: domain-based matching — requires runtime evaluation
+                    // Cannot be tested locally without loading the full geosite database
+                    false
                 } else if let Some(ip) = ip {
                     if let Some((network, mask)) = prisma_core::router::parse_cidr_v4(cidr) {
                         (u32::from(ip) & mask) == network
@@ -213,6 +232,8 @@ pub async fn test_rules(
                 RuleCondition::IpCidr(c) => {
                     if c.starts_with("geoip:") {
                         "GEOIP"
+                    } else if c.starts_with("geosite:") {
+                        "GEOSITE"
                     } else {
                         "IP-CIDR"
                     }

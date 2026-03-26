@@ -272,6 +272,10 @@ export const api = {
   downloadGeoIP: () =>
     apiFetch<{ success: boolean; path: string }>("/api/geoip/download", { method: "POST" }),
 
+  // GeoSite download
+  downloadGeoSite: () =>
+    apiFetch<{ success: boolean; path: string }>("/api/geosite/download", { method: "POST" }),
+
   // Users
   getUsers: () =>
     apiFetch<import("./types").UserInfo[]>("/api/users"),

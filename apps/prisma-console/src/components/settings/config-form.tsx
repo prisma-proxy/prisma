@@ -42,7 +42,6 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
   const [portForwardingEnabled, setPortForwardingEnabled] = useState(config.port_forwarding.enabled);
   const [portRangeStart, setPortRangeStart] = useState(config.port_forwarding.port_range_start);
   const [portRangeEnd, setPortRangeEnd] = useState(config.port_forwarding.port_range_end);
-  const [autoBackupInterval, setAutoBackupInterval] = useState(config.auto_backup_interval_mins ?? 0);
   const [managementApiEnabled, setManagementApiEnabled] = useState(config.management_api?.enabled ?? true);
 
   const listenAddrValidation = useValidation(listenAddr, ["address"]);
@@ -69,7 +68,6 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
       port_forwarding_enabled: portForwardingEnabled,
       port_forwarding_port_range_start: portRangeStart,
       port_forwarding_port_range_end: portRangeEnd,
-      auto_backup_interval_mins: autoBackupInterval,
       management_api_enabled: managementApiEnabled,
     });
   }
@@ -234,24 +232,6 @@ export function ConfigForm({ config, onSave, isLoading, readOnly }: ConfigFormPr
             </div>
           </div>
         )}
-      </div>
-
-      {/* Auto-Backup */}
-      <div className="space-y-4">
-        <div className="grid gap-1.5">
-          <Label htmlFor="auto-backup-interval">
-            {t("settings.autoBackupInterval")}{" "}
-            <span className="text-muted-foreground text-xs">({t("settings.autoBackupIntervalHint")})</span>
-          </Label>
-          <Input
-            id="auto-backup-interval"
-            type="number"
-            value={autoBackupInterval}
-            onChange={(e) => setAutoBackupInterval(parseInt(e.target.value, 10) || 0)}
-            min={0}
-            placeholder="0"
-          />
-        </div>
       </div>
 
       {/* Management API */}

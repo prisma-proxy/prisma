@@ -40,6 +40,7 @@ const FRIENDLY_TYPES = [
   "DOMAIN-KEYWORD",
   "IP-CIDR",
   "GEOIP",
+  "GEOSITE",
   "PORT-RANGE",
   "FINAL",
 ] as const;
@@ -62,6 +63,7 @@ export function parseConditionType(condition: RuleCondition): { type: FriendlyTy
   if (condition.type === "IpCidr") {
     const v = condition.value as string;
     if (v.startsWith("geoip:")) return { type: "GEOIP", match: v.slice(6) };
+    if (v.startsWith("geosite:")) return { type: "GEOSITE", match: v.slice(8) };
     return { type: "IP-CIDR", match: v };
   }
   if (condition.type === "GeoIp") return { type: "GEOIP", match: condition.value as string };
@@ -96,6 +98,8 @@ function buildCondition(type: FriendlyType, match: string): RuleCondition {
       return { type: "IpCidr", value: match };
     case "GEOIP":
       return { type: "IpCidr", value: `geoip:${match}` };
+    case "GEOSITE":
+      return { type: "IpCidr", value: `geosite:${match}` };
     case "PORT-RANGE": {
       const [a, b] = match.split("-").map(Number);
       return { type: "PortRange", value: [a || 0, b || a || 0] };
@@ -159,6 +163,7 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
       case "PORT-RANGE": return "e.g. 8000-9000";
       case "IP-CIDR": return "e.g. 192.168.1.0/24";
       case "GEOIP": return "e.g. CN, US, JP";
+      case "GEOSITE": return "e.g. cn, google, ads";
       case "DOMAIN-SUFFIX": return "e.g. google.com";
       case "DOMAIN-KEYWORD": return "e.g. facebook";
       case "DOMAIN": return "e.g. www.example.com";

@@ -52,8 +52,9 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
         .route("/api/connections", get(connections::list))
         .route("/api/connections/geo", get(connections::geo_summary))
         .route("/api/connections/{id}", delete(connections::disconnect))
-        // GeoIP
+        // GeoIP & GeoSite
         .route("/api/geoip/download", post(connections::download_geoip))
+        .route("/api/geosite/download", post(connections::download_geosite))
         // Clients
         .route("/api/clients", get(clients::list))
         .route("/api/clients", post(clients::create))
