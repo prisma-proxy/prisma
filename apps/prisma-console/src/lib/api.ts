@@ -130,6 +130,17 @@ export const api = {
     }),
   deleteRoute: (id: string) =>
     apiFetch<void>(`/api/routes/${id}`, { method: "DELETE" }),
+  testRoute: (query: string) =>
+    apiFetch<{
+      matched: boolean;
+      rule_id: string | null;
+      rule_name: string | null;
+      action: string | null;
+      condition_type: string | null;
+    }>("/api/routes/test", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
 
   // Reload
   reloadConfig: () =>
@@ -192,6 +203,10 @@ export const api = {
   // GeoIP / connection origins
   getConnectionGeo: () =>
     apiFetch<import("./types").GeoEntry[]>("/api/connections/geo"),
+
+  // Server GeoIP (server's own country)
+  getServerGeo: () =>
+    apiFetch<{ country: string } | null>("/api/server/geo"),
 
   // Per-client metrics
   getClientMetrics: () =>

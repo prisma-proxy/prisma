@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
@@ -45,13 +45,19 @@ function QueryLayer({ children }: { children: React.ReactNode }) {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // Hydration gate: prevent server/client mismatch for this static-export SPA.
+  // The static HTML has empty body content; after mount, providers read
+  // localStorage (theme, locale, auth) and render the full app.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <ThemeProvider>
       <I18nProvider>
         <AuthProvider>
           <ToastProvider>
             <QueryLayer>
-              {children}
+              {mounted ? children : null}
             </QueryLayer>
           </ToastProvider>
         </AuthProvider>

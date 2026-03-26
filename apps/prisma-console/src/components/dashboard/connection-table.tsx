@@ -24,20 +24,6 @@ import type { ConnectionInfo } from "@/lib/types";
 import { formatBytes } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
-/** Convert 2-letter ISO country code to flag emoji. */
-function countryFlag(code: string): string {
-  return code
-    .toUpperCase()
-    .split("")
-    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
-    .join("");
-}
-
-/** Format geo info as compact "🇺🇸 US". City shown via tooltip. */
-function formatGeo(country?: string): string {
-  if (!country) return "";
-  return `${countryFlag(country)} ${country}`;
-}
 
 /** Extract IP from "IP:port" or "[IPv6]:port" address strings. */
 function stripPort(addr: string): string {
@@ -366,8 +352,13 @@ export function ConnectionTable({
                           <CopyButton value={group.ip} />
                           {(() => {
                             const c = group.connections[0];
-                            const geo = formatGeo(c?.country);
-                            return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]" title={c?.city ? `${c.country}, ${c.city}` : c?.country}>{geo}</span> : null;
+                            if (!c?.country) return null;
+                            return (
+                              <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground text-[11px]">
+                                <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold tracking-wide">{c.country}</span>
+                                {c.city && <span className="font-sans">{c.city}</span>}
+                              </span>
+                            );
                           })()}
                         </span>
                       </TableCell>
@@ -469,10 +460,12 @@ export function ConnectionTable({
                     <span className="flex items-center gap-1">
                       {stripPort(conn.peer_addr)}
                       <CopyButton value={stripPort(conn.peer_addr)} />
-                      {(() => {
-                        const geo = formatGeo(conn.country);
-                        return geo ? <span className="ml-1 text-muted-foreground font-sans text-[11px]" title={conn.city ? `${conn.country}, ${conn.city}` : conn.country}>{geo}</span> : null;
-                      })()}
+                      {conn.country && (
+                        <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground text-[11px]">
+                          <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold tracking-wide">{conn.country}</span>
+                          {conn.city && <span className="font-sans">{conn.city}</span>}
+                        </span>
+                      )}
                     </span>
                   </TableCell>
                   <TableCell>{conn.transport}</TableCell>

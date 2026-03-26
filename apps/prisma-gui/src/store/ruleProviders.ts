@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type DownloadMode = "auto" | "direct" | "proxy";
+
 export interface RuleProvider {
   id: string;
   name: string;
@@ -10,6 +12,7 @@ export interface RuleProvider {
   enabled: boolean;
   lastUpdated: string | null;
   ruleCount: number;
+  downloadMode?: DownloadMode;
 }
 
 /** Pre-configured community provider suggestions */
@@ -46,6 +49,7 @@ interface RuleProvidersStore {
   remove: (id: string) => void;
   toggle: (id: string) => void;
   updateProviderStatus: (id: string, ruleCount: number, lastUpdated: string) => void;
+  setDownloadMode: (id: string, mode: DownloadMode) => void;
   setProviders: (providers: RuleProvider[]) => void;
 }
 
@@ -83,6 +87,13 @@ export const useRuleProviders = create<RuleProvidersStore>()(
         set((state) => ({
           providers: state.providers.map((p) =>
             p.id === id ? { ...p, ruleCount, lastUpdated } : p
+          ),
+        })),
+
+      setDownloadMode: (id, mode) =>
+        set((state) => ({
+          providers: state.providers.map((p) =>
+            p.id === id ? { ...p, downloadMode: mode } : p
           ),
         })),
 

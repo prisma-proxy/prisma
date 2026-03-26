@@ -152,7 +152,7 @@ export function ClientShareDialog({
                         <td className="select-none border-r border-border/40 px-2 py-0 text-right text-[10px] text-muted-foreground/60 align-top w-8">
                           {idx + 1}
                         </td>
-                        <td className="px-3 py-0 whitespace-pre">
+                        <td className="px-3 py-0 whitespace-pre-wrap break-all">
                           {highlightToml(line)}
                         </td>
                       </tr>

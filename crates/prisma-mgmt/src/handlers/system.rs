@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
@@ -91,6 +93,71 @@ fn get_system_metrics() -> SystemMetrics {
         memory_used_mb: 0,
         memory_total_mb: 0,
     }
+}
+
+#[derive(Serialize)]
+pub struct ServerGeoResponse {
+    pub country: String,
+}
+
+/// GET /api/server/geo — return the server's own country code by looking up
+/// its `public_address` in the GeoIP MMDB database.
+pub async fn server_geo(State(state): State<MgmtState>) -> Json<Option<ServerGeoResponse>> {
+    let cfg = state.config.read().await;
+
+    let Some(ref addr) = cfg.public_address else {
+        return Json(None);
+    };
+
+    // Extract host part (handle IPv6 brackets and port)
+    let host: String = if addr.starts_with('[') {
+        addr.split(']')
+            .next()
+            .unwrap_or(addr)
+            .trim_start_matches('[')
+            .to_string()
+    } else if addr.matches(':').count() > 1 {
+        addr.clone()
+    } else {
+        addr.rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(addr)
+            .to_string()
+    };
+
+    let geoip_path = cfg.routing.geoip_path.clone();
+    drop(cfg);
+
+    // Try parsing directly as IP, otherwise resolve the hostname asynchronously
+    let ip: Option<IpAddr> = if let Ok(ip) = host.parse::<IpAddr>() {
+        Some(ip)
+    } else {
+        tokio::net::lookup_host(format!("{host}:0"))
+            .await
+            .ok()
+            .and_then(|mut addrs| addrs.next())
+            .map(|sa| sa.ip())
+    };
+
+    let Some(ip) = ip else {
+        return Json(None);
+    };
+
+    let reader = geoip_path
+        .as_deref()
+        .and_then(|p| maxminddb::Reader::open_readfile(p).ok());
+
+    let Some(reader) = reader else {
+        return Json(None);
+    };
+
+    let Ok(city): Result<maxminddb::geoip2::City, _> = reader.lookup(ip) else {
+        return Json(None);
+    };
+
+    let country = city.country.and_then(|c| c.iso_code).map(|s| s.to_string());
+
+    Json(country.map(|c| ServerGeoResponse { country: c }))
 }
 
 fn get_cert_expiry_days(cert_path: &str) -> Option<i64> {

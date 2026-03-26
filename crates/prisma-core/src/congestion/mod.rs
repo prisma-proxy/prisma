@@ -56,11 +56,15 @@ impl CongestionMode {
                 let bps = target_bandwidth.map(parse_bps).unwrap_or(100_000_000); // 100 Mbps default
                 CongestionMode::Brutal { target_bps: bps }
             }
-            "adaptive" => {
+            "adaptive" | "auto" => {
                 let bps = target_bandwidth.map(parse_bps).unwrap_or(100_000_000);
                 CongestionMode::Adaptive { initial_bps: bps }
             }
-            _ => CongestionMode::Bbr,
+            "bbr" => CongestionMode::Bbr,
+            other => {
+                tracing::warn!(mode = other, "Unknown congestion mode, defaulting to BBR");
+                CongestionMode::Bbr
+            }
         }
     }
 

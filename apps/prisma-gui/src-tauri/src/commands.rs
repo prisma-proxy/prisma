@@ -403,6 +403,14 @@ pub async fn update_rule_provider(
     }
     let content = resp.text().await.map_err(|e| e.to_string())?;
 
+    // Sanitize name to prevent path traversal
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        return Err("Invalid rule provider name".into());
+    }
+
     // Write to the cache directory that prisma-client expects
     // RuleProviderManager uses {name}.txt as the cache filename
     let cache_dir = std::env::temp_dir().join("prisma-rule-providers");

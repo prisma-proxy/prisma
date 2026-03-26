@@ -21,7 +21,7 @@ import {
 import { useRules } from "@/store/rules";
 import type { Rule } from "@/store/rules";
 import { useRuleProviders, SUGGESTED_PROVIDERS } from "@/store/ruleProviders";
-import type { RuleProvider } from "@/store/ruleProviders";
+import type { RuleProvider, DownloadMode } from "@/store/ruleProviders";
 import { useStore } from "@/store";
 import { useSettings } from "@/store/settings";
 import { useConnection } from "@/hooks/useConnection";
@@ -87,6 +87,7 @@ export default function Rules() {
   const removeProvider = useRuleProviders((s) => s.remove);
   const toggleProvider = useRuleProviders((s) => s.toggle);
   const updateProviderStatus = useRuleProviders((s) => s.updateProviderStatus);
+  const setDownloadMode = useRuleProviders((s) => s.setDownloadMode);
 
   const connected = useStore((s) => s.connected);
   const activeProfileIdx = useStore((s) => s.activeProfileIdx);
@@ -264,7 +265,18 @@ export default function Rules() {
     setUpdatingProviders((prev) => new Set(prev).add(provider.id));
     try {
       const isConnected = useStore.getState().connected;
-      const httpPort = isConnected ? (useSettings.getState().httpPort || 0) : 0;
+      const mode = provider.downloadMode || "auto";
+      let httpPort = 0;
+      if (mode === "proxy") {
+        if (!isConnected) {
+          notify.error(t("rules.proxyNotConnected"));
+          return;
+        }
+        httpPort = useSettings.getState().httpPort || 0;
+      } else if (mode === "auto") {
+        httpPort = isConnected ? (useSettings.getState().httpPort || 0) : 0;
+      }
+      // mode === "direct" → httpPort stays 0
       const result = await api.updateRuleProvider(
         provider.id, provider.name, provider.url, provider.behavior, provider.action, httpPort
       );
@@ -506,6 +518,19 @@ export default function Rules() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <Select
+                      value={provider.downloadMode || "auto"}
+                      onValueChange={(v) => setDownloadMode(provider.id, v as DownloadMode)}
+                    >
+                      <SelectTrigger className="h-7 w-[72px] text-[10px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">{t("rules.downloadAuto")}</SelectItem>
+                        <SelectItem value="direct">{t("rules.downloadDirect")}</SelectItem>
+                        <SelectItem value="proxy">{t("rules.downloadProxy")}</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="icon"
                       variant="ghost"

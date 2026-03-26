@@ -33,7 +33,7 @@ use prisma_core::state::LogEntry;
 use prisma_core::types::{CipherSuite, ClientId};
 use prisma_core::util;
 use tokio::sync::broadcast;
-use tracing::info;
+use tracing::{info, warn};
 
 use dns_resolver::DnsResolver;
 use metrics::ClientMetrics;
@@ -261,6 +261,11 @@ async fn run_inner(
                         "Loaded rules from provider cache"
                     );
                     all_rules.extend(provider_rules);
+                } else {
+                    warn!(
+                        providers = config.routing.rule_providers.len(),
+                        "Rule providers configured but no cached rules found — update providers first"
+                    );
                 }
             }
 

@@ -825,11 +825,16 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
                 ProxyAddress::Domain(d) => domain_glob_match(pattern, d),
                 _ => false,
             },
-            RuleCondition::IpCidr(cidr) => match &dest.address {
-                ProxyAddress::Ipv4(ip) => cidr_match_v4(cidr, *ip),
-                ProxyAddress::Ipv6(_) => false, // simplified
-                ProxyAddress::Domain(_) => false,
-            },
+            RuleCondition::IpCidr(cidr) => {
+                if cidr.starts_with("geoip:") {
+                    false // GeoIP rules cannot be evaluated in management rule context
+                } else {
+                    match &dest.address {
+                        ProxyAddress::Ipv4(ip) => cidr_match_v4(cidr, *ip),
+                        _ => false,
+                    }
+                }
+            }
             RuleCondition::PortRange(start, end) => dest.port >= *start && dest.port <= *end,
         };
 
@@ -842,10 +847,16 @@ async fn check_routing_rules(state: &ServerState, dest: &ProxyDestination) -> bo
 }
 
 fn domain_glob_match(pattern: &str, domain: &str) -> bool {
-    if let Some(suffix) = pattern.strip_prefix("*.") {
-        domain.ends_with(suffix) || domain.eq_ignore_ascii_case(suffix)
+    let domain_lc = domain.to_ascii_lowercase();
+    let pattern_lc = pattern.to_ascii_lowercase();
+    if let Some(suffix) = pattern_lc.strip_prefix("*.") {
+        // Suffix match: *.google.com matches google.com and www.google.com
+        domain_lc == suffix || domain_lc.ends_with(&format!(".{suffix}"))
+    } else if pattern_lc.starts_with('*') && pattern_lc.ends_with('*') && pattern_lc.len() > 2 {
+        // Keyword match: *google* matches anything containing "google"
+        domain_lc.contains(&pattern_lc[1..pattern_lc.len() - 1])
     } else {
-        domain.eq_ignore_ascii_case(pattern)
+        domain_lc == pattern_lc
     }
 }
 
