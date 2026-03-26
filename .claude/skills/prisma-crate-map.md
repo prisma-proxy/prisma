@@ -11,7 +11,7 @@ globs:
   - "crates/*/Cargo.toml"
 ---
 
-# Prisma Crate Map (v2.21.0)
+# Prisma Crate Map (v2.22.0)
 
 ## Dependency Graph
 
