@@ -337,17 +337,19 @@ pub async fn run(config_path: &str) -> Result<()> {
         }
     });
 
+    let mut listener_handles: Vec<tokio::task::JoinHandle<()>> = vec![tcp_handle, quic_handle];
+
     // Start SSH listener if enabled
     if config.ssh.enabled {
         let ssh_config = config.clone();
         let ssh_auth = auth_store.clone();
         let ssh_dns = dns_cache.clone();
         let ssh_ctx = ctx.clone();
-        tokio::spawn(async move {
+        listener_handles.push(tokio::spawn(async move {
             if let Err(e) = listener::ssh::listen(&ssh_config, ssh_auth, ssh_dns, ssh_ctx).await {
                 tracing::error!("SSH listener error: {}", e);
             }
-        });
+        }));
         info!(addr = %config.ssh.listen_addr, "SSH transport listener spawned");
     }
 
@@ -357,18 +359,16 @@ pub async fn run(config_path: &str) -> Result<()> {
         let wg_auth = auth_store.clone();
         let wg_dns = dns_cache.clone();
         let wg_ctx = ctx.clone();
-        tokio::spawn(async move {
+        listener_handles.push(tokio::spawn(async move {
             if let Err(e) = listener::wireguard::listen(&wg_config, wg_auth, wg_dns, wg_ctx).await {
                 tracing::error!("WireGuard listener error: {}", e);
             }
-        });
+        }));
         info!(addr = %config.wireguard.listen_addr, "WireGuard-compatible UDP listener spawned");
     }
 
-    tokio::select! {
-        _ = tcp_handle => {},
-        _ = quic_handle => {},
-    }
+    // Wait for all listeners — server stays up as long as at least one is running
+    futures_util::future::join_all(listener_handles).await;
 
     Ok(())
 }
