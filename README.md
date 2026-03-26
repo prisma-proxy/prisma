@@ -1,6 +1,18 @@
 # Prisma
 
-[简体中文](./README_CN.md) | **English**
+<p align="center">
+  <img src="social-preview.png" alt="Prisma — High-Performance Encrypted Proxy System" width="640" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/prisma-proxy/prisma/releases/latest"><img src="https://img.shields.io/github/v/release/prisma-proxy/prisma?style=flat-square&color=2563eb" alt="Release" /></a>
+  <a href="https://github.com/prisma-proxy/prisma/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/prisma-proxy/prisma/ci.yml?branch=master&style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://github.com/prisma-proxy/prisma/blob/master/LICENSE"><img src="https://img.shields.io/github/license/prisma-proxy/prisma?style=flat-square" alt="License" /></a>
+</p>
+
+<p align="center">
+  <a href="./README_CN.md">简体中文</a> | <strong>English</strong>
+</p>
 
 A next-generation encrypted proxy infrastructure suite built in Rust. Prisma implements the **PrismaVeil v5** wire protocol — combining modern cryptography, multiple transport options, and advanced anti-censorship features.
 
