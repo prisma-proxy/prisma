@@ -22,10 +22,10 @@ function geoToSvg(lon: number, lat: number): [number, number] {
 
 /** Pick a choropleth fill color + opacity based on connection count */
 function countToFill(count: number): { fill: string; opacity: number } {
-  if (count <= 0) return { fill: "hsl(var(--muted))", opacity: 0.18 };
-  if (count <= 5) return { fill: "hsl(217, 91%, 80%)", opacity: 0.4 };
-  if (count <= 20) return { fill: "hsl(217, 91%, 60%)", opacity: 0.55 };
-  return { fill: "hsl(217, 91%, 45%)", opacity: 0.7 };
+  if (count <= 0) return { fill: "hsl(var(--muted-foreground))", opacity: 0.12 };
+  if (count <= 5) return { fill: "hsl(217, 91%, 75%)", opacity: 0.45 };
+  if (count <= 20) return { fill: "hsl(217, 91%, 60%)", opacity: 0.6 };
+  return { fill: "hsl(217, 91%, 45%)", opacity: 0.75 };
 }
 
 export function ConnectionMap() {
@@ -191,8 +191,8 @@ export function ConnectionMap() {
                   fill={fill}
                   fillOpacity={opacity}
                   stroke="hsl(var(--border))"
-                  strokeWidth={0.3}
-                  strokeOpacity={0.2}
+                  strokeWidth={0.5}
+                  strokeOpacity={0.35}
                   strokeLinejoin="round"
                   className="pointer-events-none"
                 />

@@ -246,14 +246,32 @@ export function RuleEditor({ onSubmit, isLoading, editingRule, onOpenChange }: R
           {condType !== "FINAL" && (
             <div className="grid gap-1.5">
               <Label htmlFor="rule-match">{t("routing.match")}</Label>
-              <Input
-                id="rule-match"
-                type="text"
-                placeholder={conditionPlaceholder()}
-                value={match}
-                onChange={(e) => setMatch(e.target.value)}
-                required
-              />
+              {condType === "GEOSITE" ? (
+                <Select value={match} onValueChange={(v) => setMatch(v ?? "")}>
+                  <SelectTrigger>
+                    {match || conditionPlaceholder()}
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["cn", "geolocation-cn", "geolocation-!cn", "tld-cn", "tld-!cn",
+                      "google", "facebook", "twitter", "youtube", "netflix", "amazon",
+                      "apple", "microsoft", "telegram", "category-ads", "category-ads-all",
+                      "private"].map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        <span className="font-mono text-xs">{cat}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="rule-match"
+                  type="text"
+                  placeholder={conditionPlaceholder()}
+                  value={match}
+                  onChange={(e) => setMatch(e.target.value)}
+                  required
+                />
+              )}
             </div>
           )}
 

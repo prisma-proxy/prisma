@@ -403,19 +403,20 @@ pub async fn update_rule_provider(
     }
     let content = resp.text().await.map_err(|e| e.to_string())?;
 
-    // Sanitize name to prevent path traversal
+    // Sanitize name to prevent path traversal (allow spaces for display names)
     if !name
         .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ' ')
     {
         return Err("Invalid rule provider name".into());
     }
 
     // Write to the cache directory that prisma-client expects
-    // RuleProviderManager uses {name}.txt as the cache filename
+    // Replace spaces with underscores for safe filenames
+    let safe_name = name.replace(' ', "_");
     let cache_dir = std::env::temp_dir().join("prisma-rule-providers");
     let _ = std::fs::create_dir_all(&cache_dir);
-    let cache_path = cache_dir.join(format!("{}.txt", name));
+    let cache_path = cache_dir.join(format!("{}.txt", safe_name));
     let _ = std::fs::write(&cache_path, &content);
 
     // Count lines that are actual rules (not comments/blanks)

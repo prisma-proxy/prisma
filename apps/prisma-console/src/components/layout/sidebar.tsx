@@ -140,8 +140,8 @@ export function Sidebar({ collapsed: controlledCollapsed, onCollapsedChange }: S
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg overflow-hidden bg-primary">
-                <img src="/favicon.ico" alt="Prisma" className="h-6 w-6 dark:invert" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg overflow-hidden bg-muted">
+                <img src="/favicon.ico" alt="Prisma" className="h-5 w-5" />
               </div>
               <span className="text-base font-semibold tracking-tight">Prisma</span>
             </div>
