@@ -1,6 +1,7 @@
 use anyhow::Result;
 use futures_util::FutureExt;
 use std::panic::AssertUnwindSafe;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
 use prisma_client::metrics::ClientMetrics;
@@ -9,7 +10,7 @@ use crate::runtime::PrismaRuntime;
 use crate::{PRISMA_STATUS_CONNECTED, PRISMA_STATUS_CONNECTING, PRISMA_STATUS_DISCONNECTED};
 
 pub struct ConnectionManager {
-    status: i32,
+    status: Arc<AtomicI32>,
     stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
     metrics: ClientMetrics,
     start_time: Option<std::time::Instant>,
@@ -21,7 +22,7 @@ pub struct ConnectionManager {
 impl ConnectionManager {
     pub fn new() -> Self {
         Self {
-            status: PRISMA_STATUS_DISCONNECTED,
+            status: Arc::new(AtomicI32::new(PRISMA_STATUS_DISCONNECTED)),
             stop_tx: None,
             metrics: ClientMetrics::new(),
             start_time: None,
@@ -36,11 +37,11 @@ impl ConnectionManager {
     }
 
     pub fn is_connected(&self) -> bool {
-        self.status == PRISMA_STATUS_CONNECTED
+        self.status.load(Ordering::Acquire) == PRISMA_STATUS_CONNECTED
     }
 
     pub fn status(&self) -> i32 {
-        self.status
+        self.status.load(Ordering::Acquire)
     }
 
     pub fn connect(
@@ -50,7 +51,8 @@ impl ConnectionManager {
         modes: u32,
         on_event: Arc<dyn Fn(String) + Send + Sync + 'static>,
     ) -> Result<()> {
-        self.status = PRISMA_STATUS_CONNECTING;
+        self.status
+            .store(PRISMA_STATUS_CONNECTING, Ordering::Release);
 
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
         self.stop_tx = Some(stop_tx);
@@ -92,6 +94,8 @@ impl ConnectionManager {
 
         // Clone for use after catch_unwind (panic handler + final disconnected event)
         let on_event_panic = on_event.clone();
+        // Clone the atomic status so the async task can update it
+        let status_arc = Arc::clone(&self.status);
 
         // Spawn log forwarder: converts tracing events → FFI callback events
         let on_event_log = on_event.clone();
@@ -175,9 +179,9 @@ impl ConnectionManager {
                     None
                 };
 
-                // Fire connected event now that config is written and we are
-                // about to start the client — this is the earliest point where
-                // the connection can be considered active.
+                // Mark status as connected before firing the event so that
+                // prisma_get_status() returns CONNECTED immediately.
+                status_arc.store(PRISMA_STATUS_CONNECTED, Ordering::Release);
                 on_event(r#"{"type":"status_changed","status":"connected","code":2}"#.to_string());
 
                 // Use run_embedded for log + metrics forwarding.
@@ -231,11 +235,11 @@ impl ConnectionManager {
                 }
             }
 
-            // Always fire disconnected so the UI resets
+            // Always mark status as disconnected and fire event so the UI resets
+            status_arc.store(PRISMA_STATUS_DISCONNECTED, Ordering::Release);
             on_event_panic(r#"{"type":"status_changed","status":"disconnected"}"#.to_string());
         });
 
-        self.status = PRISMA_STATUS_CONNECTING;
         Ok(())
     }
 
@@ -243,7 +247,8 @@ impl ConnectionManager {
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
         }
-        self.status = PRISMA_STATUS_DISCONNECTED;
+        self.status
+            .store(PRISMA_STATUS_DISCONNECTED, Ordering::Release);
         self.start_time = None;
         self.metrics.reset();
         self.socks5_addr = None;

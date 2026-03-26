@@ -19,6 +19,7 @@ export interface TrackedConnection {
 
 interface ConnectionsStore {
   connections: TrackedConnection[];
+  activeCount: number;
   nextId: number;
 
   addConnection: (conn: Omit<TrackedConnection, "id">) => void;
@@ -33,6 +34,7 @@ const MAX_CONNECTIONS = 1000;
 
 export const useConnections = create<ConnectionsStore>((set) => ({
   connections: [],
+  activeCount: 0,
   nextId: 1,
 
   addConnection: (conn) =>
@@ -40,6 +42,7 @@ export const useConnections = create<ConnectionsStore>((set) => ({
       const id = `conn-${state.nextId}`;
       const newConn = { ...conn, id };
       const updated = [...state.connections, newConn];
+      const delta = conn.status === "active" ? 1 : 0;
       // Trim old closed connections if over limit
       if (updated.length > MAX_CONNECTIONS) {
         const closedToRemove = updated.length - MAX_CONNECTIONS;
@@ -52,28 +55,36 @@ export const useConnections = create<ConnectionsStore>((set) => ({
           }
           return true;
         });
-        return { connections: filtered, nextId: state.nextId + 1 };
+        return { connections: filtered, activeCount: state.activeCount + delta, nextId: state.nextId + 1 };
       }
-      return { connections: updated, nextId: state.nextId + 1 };
+      return { connections: updated, activeCount: state.activeCount + delta, nextId: state.nextId + 1 };
     }),
 
   closeConnection: (destination) =>
-    set((state) => ({
-      connections: state.connections.map((c) =>
-        c.status === "active" && c.destination === destination
-          ? { ...c, status: "closed" as const, closedAt: Date.now() }
-          : c
-      ),
-    })),
+    set((state) => {
+      let closed = 0;
+      const connections = state.connections.map((c) => {
+        if (c.status === "active" && c.destination === destination) {
+          closed++;
+          return { ...c, status: "closed" as const, closedAt: Date.now() };
+        }
+        return c;
+      });
+      return { connections, activeCount: state.activeCount - closed };
+    }),
 
   closeConnectionById: (id) =>
-    set((state) => ({
-      connections: state.connections.map((c) =>
-        c.id === id && c.status === "active"
-          ? { ...c, status: "closed" as const, closedAt: Date.now() }
-          : c
-      ),
-    })),
+    set((state) => {
+      let closed = 0;
+      const connections = state.connections.map((c) => {
+        if (c.id === id && c.status === "active") {
+          closed++;
+          return { ...c, status: "closed" as const, closedAt: Date.now() };
+        }
+        return c;
+      });
+      return { connections, activeCount: state.activeCount - closed };
+    }),
 
   closeAllActive: () =>
     set((state) => ({
@@ -82,9 +93,10 @@ export const useConnections = create<ConnectionsStore>((set) => ({
           ? { ...c, status: "closed" as const, closedAt: Date.now() }
           : c
       ),
+      activeCount: 0,
     })),
 
-  clearAll: () => set({ connections: [] }),
+  clearAll: () => set({ connections: [], activeCount: 0 }),
 
   clearClosed: () =>
     set((state) => ({

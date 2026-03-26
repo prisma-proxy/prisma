@@ -579,6 +579,8 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "reconnecting": "Auto-reconnecting…",
+    "systemProxyNoHttpPort": "System proxy mode is active but HTTP port is not configured",
+    "autoReconnecting": "Auto-reconnecting… (attempt {{attempt}})",
     "history": "Notification History",
     "clearAll": "Clear All",
     "noNotifications": "No notifications"
@@ -740,5 +742,8 @@
   "language": {
     "english": "English",
     "chineseCN": "简体中文"
+  },
+  "time": {
+    "justNow": "just now"
   }
 }

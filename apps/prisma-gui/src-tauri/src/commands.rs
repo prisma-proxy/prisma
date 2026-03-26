@@ -17,7 +17,7 @@ unsafe fn read_owned_cstr(ptr: *mut c_char) -> Option<String> {
 }
 
 fn client_ptr(state: &tauri::State<AppState>) -> Result<*mut prisma_ffi::PrismaClient, String> {
-    let raw = *state.client.lock().unwrap();
+    let raw = *state.client.lock().map_err(|_| "Failed to acquire client lock".to_string())?;
     if raw == 0 {
         return Err("no client".into());
     }
@@ -495,6 +495,22 @@ pub fn open_folder(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn download_file(url: String, dest_path: String, proxy_port: u16) -> Result<(), String> {
+    if dest_path.contains("..") {
+        return Err("Invalid path: directory traversal not allowed".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let normalized = dest_path.replace('/', "\\");
+        if normalized.starts_with("\\\\") || normalized.starts_with("C:\\Windows") || normalized.starts_with("C:\\Program Files") {
+            return Err("Invalid path: writing to sensitive directory not allowed".into());
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if dest_path.starts_with("/etc") || dest_path.starts_with("/usr") || dest_path.starts_with("/bin") || dest_path.starts_with("/sbin") {
+            return Err("Invalid path: writing to sensitive directory not allowed".into());
+        }
+    }
     let mut builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .redirect(reqwest::redirect::Policy::limited(10));
@@ -570,6 +586,9 @@ pub async fn update_rule_provider(
     let content = resp.text().await.map_err(|e| e.to_string())?;
 
     // Sanitize name to prevent path traversal (allow spaces for display names)
+    if name.contains("..") || name.contains('/') || name.contains('\\') || name.starts_with('.') {
+        return Err("Invalid rule provider name".into());
+    }
     if !name
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ' ')

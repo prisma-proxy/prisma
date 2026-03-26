@@ -579,6 +579,8 @@
     "connected": "已连接",
     "disconnected": "已断开",
     "reconnecting": "自动重连中…",
+    "systemProxyNoHttpPort": "系统代理模式已启用，但未配置 HTTP 端口",
+    "autoReconnecting": "正在自动重连…（第 {{attempt}} 次）",
     "history": "通知历史",
     "clearAll": "清除全部",
     "noNotifications": "暂无通知"
@@ -740,5 +742,8 @@
   "language": {
     "english": "English",
     "chineseCN": "简体中文"
+  },
+  "time": {
+    "justNow": "刚刚"
   }
 }

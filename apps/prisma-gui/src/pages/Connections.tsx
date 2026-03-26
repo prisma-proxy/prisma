@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -66,16 +66,13 @@ function connDuration(conn: TrackedConnection): number {
   return Math.max(0, Math.floor((end - conn.startedAt) / 1000));
 }
 
-/** Each visible row manages its own 3-second timer for live duration updates. */
-const LiveDuration = memo(function LiveDuration({ conn }: { conn: TrackedConnection }) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (conn.status !== "active") return;
-    const timer = setInterval(() => setTick((t) => t + 1), 3000);
-    return () => clearInterval(timer);
-  }, [conn.status]);
-  return <>{fmtDuration(connDuration(conn))}</>;
-});
+/** Single shared tick drives all duration displays — avoids N timers for N rows. */
+function LiveDuration({ startedAt, closedAt, tick }: { startedAt: number; closedAt: number | null; tick: number }) {
+  void tick; // used only to trigger re-render
+  const end = closedAt ?? Date.now();
+  const elapsed = Math.max(0, Math.floor((end - startedAt) / 1000));
+  return <span>{fmtDuration(elapsed)}</span>;
+}
 
 const GRID_COLS = "grid-cols-[40px_1fr_80px_100px_80px_80px_80px_80px_36px]";
 const GRID_COLS_MOBILE = "grid-cols-[32px_1fr_72px_72px_72px_28px]";
@@ -86,6 +83,13 @@ export default function Connections() {
   const clearAll = useConnections((s) => s.clearAll);
   const clearClosed = useConnections((s) => s.clearClosed);
   const closeConnectionById = useConnections((s) => s.closeConnectionById);
+
+  // Single parent timer for all LiveDuration instances
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
@@ -152,13 +156,13 @@ export default function Connections() {
       let cmp = 0;
       switch (sortField) {
         case "destination":
-          cmp = a.destination.localeCompare(b.destination);
+          cmp = a.destination < b.destination ? -1 : a.destination > b.destination ? 1 : 0;
           break;
         case "action":
-          cmp = a.action.localeCompare(b.action);
+          cmp = a.action < b.action ? -1 : a.action > b.action ? 1 : 0;
           break;
         case "status":
-          cmp = a.status.localeCompare(b.status);
+          cmp = a.status < b.status ? -1 : a.status > b.status ? 1 : 0;
           break;
         case "startedAt":
           cmp = a.startedAt - b.startedAt;
@@ -533,7 +537,7 @@ export default function Connections() {
                         {fmtBytes(conn.bytesUp)}
                       </div>
                       <div className="text-right font-mono text-muted-foreground">
-                        <LiveDuration conn={conn} />
+                        <LiveDuration startedAt={conn.startedAt} closedAt={conn.closedAt} tick={tick} />
                       </div>
                       <div className="flex items-center justify-center">
                         {conn.status === "active" && (
@@ -590,7 +594,7 @@ export default function Connections() {
                         {fmtBytes(conn.bytesDown)}
                       </div>
                       <div className="text-right font-mono text-muted-foreground">
-                        <LiveDuration conn={conn} />
+                        <LiveDuration startedAt={conn.startedAt} closedAt={conn.closedAt} tick={tick} />
                       </div>
                       <div className="flex items-center justify-center">
                         {conn.status === "active" && (

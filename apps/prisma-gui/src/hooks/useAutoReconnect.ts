@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import i18n from "../i18n";
 import { notify } from "../store/notifications";
 import { useStore } from "../store";
 import { useSettings } from "../store/settings";
@@ -26,13 +27,16 @@ export function useAutoReconnect() {
     if (connected || connecting || manualDisconnect || !autoReconnect) return;
     if (reconnectMaxAttempts > 0 && attemptsRef.current >= reconnectMaxAttempts) return;
 
+    // Exponential backoff capped at 60s
+    const delay = Math.min(reconnectDelaySecs * 1000 * Math.pow(1.5, attemptsRef.current), 60_000);
+
     const timer = setTimeout(async () => {
       attemptsRef.current += 1;
       const profile =
         activeProfileIdx !== null ? profiles[activeProfileIdx] : profiles[0];
       if (!profile) return;
       try {
-        notify.info(`Auto-reconnecting… (attempt ${attemptsRef.current})`);
+        notify.info(i18n.t("notifications.autoReconnecting", { attempt: attemptsRef.current }));
         const enabledProviders = useRuleProviders.getState().providers
           .filter((p) => p.enabled)
           .map((p) => ({ name: p.name, url: p.url, behavior: p.behavior, action: p.action }));
@@ -49,7 +53,7 @@ export function useAutoReconnect() {
         useStore.getState().setConnectStartTime(null);
         // Next disconnect event will trigger another attempt
       }
-    }, reconnectDelaySecs * 1000);
+    }, delay);
 
     return () => clearTimeout(timer);
   }, [

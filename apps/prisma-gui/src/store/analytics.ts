@@ -144,7 +144,7 @@ export const useAnalytics = create<AnalyticsStore>()(
       addTraffic: (domain, bytes_up, bytes_down, rule) => {
         pendingUpdates.push({ domain, bytes_up, bytes_down, rule });
         if (!flushTimer) {
-          flushTimer = setTimeout(flushPending, 1_000);
+          flushTimer = setTimeout(flushPending, 3_000);
         }
       },
 

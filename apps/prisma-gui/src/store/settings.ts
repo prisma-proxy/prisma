@@ -68,7 +68,16 @@ export const useSettings = create<SettingsStore>()(
       splitTunnelProxy: [],
       splitTunnelDirect: [],
       proxyModes: 0x02, // System proxy by default
-      patch: (values) => set(values),
+      patch: (values) => {
+        const clamped = { ...values };
+        if (clamped.socks5Port !== undefined) {
+          clamped.socks5Port = Math.max(0, Math.min(65535, clamped.socks5Port));
+        }
+        if (clamped.httpPort !== undefined && clamped.httpPort !== null) {
+          clamped.httpPort = Math.max(1, Math.min(65535, clamped.httpPort));
+        }
+        set(clamped);
+      },
       setProxyModes: (v) => set({ proxyModes: v }),
     }),
     { name: "prisma-settings" }

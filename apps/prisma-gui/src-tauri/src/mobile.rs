@@ -11,7 +11,7 @@ use prisma_ffi::PRISMA_OK;
 
 /// Helper: extract the raw `PrismaClient` pointer from managed state.
 fn client_ptr(state: &tauri::State<AppState>) -> Result<*mut prisma_ffi::PrismaClient, String> {
-    let raw = *state.client.lock().unwrap();
+    let raw = *state.client.lock().map_err(|_| "Failed to acquire client lock".to_string())?;
     if raw == 0 {
         return Err("no client".into());
     }

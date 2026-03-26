@@ -66,9 +66,23 @@ export default React.memo(function SpeedGraph() {
     // Clear
     ctx.clearRect(0, 0, w, h);
 
+    // Theme-aware colors
+    const isDark = document.documentElement.classList.contains('dark');
+    const colors = isDark ? {
+      grid: "hsl(240 3.7% 15.9% / 0.4)",
+      axis: "hsl(240 5% 64.9%)",
+      tooltipBg: "hsl(240 10% 3.9% / 0.85)",
+      tooltipLine: "hsl(240 5% 64.9% / 0.5)",
+    } : {
+      grid: "hsl(240 3.7% 84% / 0.5)",
+      axis: "hsl(240 5% 40%)",
+      tooltipBg: "hsl(0 0% 100% / 0.9)",
+      tooltipLine: "hsl(240 5% 40% / 0.5)",
+    };
+
     // Grid lines
     const gridLines = 4;
-    ctx.strokeStyle = "hsl(240 3.7% 15.9% / 0.4)";
+    ctx.strokeStyle = colors.grid;
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= gridLines; i++) {
       const y = pad.top + (plotH / gridLines) * i;
@@ -79,7 +93,7 @@ export default React.memo(function SpeedGraph() {
     }
 
     // Y-axis labels
-    ctx.fillStyle = "hsl(240 5% 64.9%)";
+    ctx.fillStyle = colors.axis;
     ctx.font = "10px system-ui, sans-serif";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
@@ -128,7 +142,7 @@ export default React.memo(function SpeedGraph() {
     const tip = tooltipRef.current;
     if (tip && tip.idx >= 0 && tip.idx < n) {
       const x = pad.left + (tip.idx / (n - 1)) * plotW;
-      ctx.strokeStyle = "hsl(240 5% 64.9% / 0.5)";
+      ctx.strokeStyle = colors.tooltipLine;
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
@@ -158,7 +172,7 @@ export default React.memo(function SpeedGraph() {
       const ty = pad.top + 4;
 
       // Background
-      ctx.fillStyle = "hsl(240 10% 3.9% / 0.85)";
+      ctx.fillStyle = colors.tooltipBg;
       ctx.beginPath();
       ctx.roundRect(tx, ty, tw, th, 4);
       ctx.fill();
@@ -179,10 +193,17 @@ export default React.memo(function SpeedGraph() {
     return () => cancelAnimationFrame(id);
   }, [draw]);
 
+  // Cache bounding rect to avoid synchronous layout recalculation on every mouse move
+  const rectRef = useRef<DOMRect | null>(null);
+
   useEffect(() => {
     const container = containerRef.current;
+    const canvas = canvasRef.current;
     if (!container) return;
-    const ro = new ResizeObserver(draw);
+    const ro = new ResizeObserver(() => {
+      if (canvas) rectRef.current = canvas.getBoundingClientRect();
+      draw();
+    });
     ro.observe(container);
     return () => ro.disconnect();
   }, [draw]);
@@ -198,9 +219,8 @@ export default React.memo(function SpeedGraph() {
   }
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = rectRef.current;
+    if (!rect) return;
     const x = e.clientX - rect.left;
     const pad = { left: 40, right: 8 };
     const plotW = rect.width - pad.left - pad.right;
@@ -241,6 +261,8 @@ export default React.memo(function SpeedGraph() {
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           className="w-full h-full"
+          role="img"
+          aria-label={t("home.speedGraph")}
         />
       </div>
     </div>

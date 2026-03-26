@@ -209,6 +209,7 @@ fn build_recent_connections_submenu<M: tauri::Manager<tauri::Wry>>(
 ) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
     let recent = crate::state::RECENT_CONNECTIONS
         .lock()
+        .ok()
         .map(|g| g.clone())
         .unwrap_or_default();
 
@@ -367,67 +368,102 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         }
         "tray-show" => {
             if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
+                if let Err(e) = w.show() {
+                    tracing::warn!("Failed to show window: {}", e);
+                }
+                if let Err(e) = w.set_focus() {
+                    tracing::warn!("Failed to set window focus: {}", e);
+                }
             }
         }
         "tray-connect" => {
-            let _ = app.emit("tray://connect-toggle", ());
+            if let Err(e) = app.emit("tray://connect-toggle", ()) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "tray-copy-addr" => {
-            let _ = app.emit("tray://copy-proxy-address", ());
+            if let Err(e) = app.emit("tray://copy-proxy-address", ()) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "copy-terminal-proxy" => {
-            let _ = app.emit("tray://copy-terminal-proxy", ());
+            if let Err(e) = app.emit("tray://copy-terminal-proxy", ()) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "tray-check-update" => {
-            let _ = app.emit("tray://check-update", ());
+            if let Err(e) = app.emit("tray://check-update", ()) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "tray-update-providers" => {
-            let _ = app.emit("tray://update-providers", ());
+            if let Err(e) = app.emit("tray://update-providers", ()) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "mode:system" => {
-            let _ = app.emit("tray://proxy-mode-change", 0x02u32);
+            if let Err(e) = app.emit("tray://proxy-mode-change", 0x02u32) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "mode:direct" => {
-            let _ = app.emit("tray://proxy-mode-change", 0x01u32);
+            if let Err(e) = app.emit("tray://proxy-mode-change", 0x01u32) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         "mode:pac" => {
-            let _ = app.emit("tray://proxy-mode-change", 0x10u32);
+            if let Err(e) = app.emit("tray://proxy-mode-change", 0x10u32) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         id if id.starts_with("profile:") => {
             let profile_id = id["profile:".len()..].to_owned();
-            let _ = app.emit("tray://profile-select", profile_id);
+            if let Err(e) = app.emit("tray://profile-select", profile_id) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
         }
         id if id.starts_with("toggle:") => {
             let key = id["toggle:".len()..].to_owned();
             // Flip the current value
             let new_value = match key.as_str() {
                 "autoConnect" => {
-                    let mut g = crate::state::TOGGLE_AUTO_CONNECT.lock().unwrap();
+                    let mut g = match crate::state::TOGGLE_AUTO_CONNECT.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
                     *g = !*g;
                     *g
                 }
                 "allowLan" => {
-                    let mut g = crate::state::TOGGLE_ALLOW_LAN.lock().unwrap();
+                    let mut g = match crate::state::TOGGLE_ALLOW_LAN.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
                     *g = !*g;
                     *g
                 }
                 "tunEnabled" => {
-                    let mut g = crate::state::TOGGLE_TUN.lock().unwrap();
+                    let mut g = match crate::state::TOGGLE_TUN.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
                     *g = !*g;
                     *g
                 }
                 _ => return,
             };
-            let _ = app.emit(
+            if let Err(e) = app.emit(
                 "tray://toggle-setting",
                 serde_json::json!({ "key": key, "value": new_value }),
-            );
+            ) {
+                tracing::warn!("Failed to emit tray event: {}", e);
+            }
             // Rebuild menu to update checkmarks
             if let Ok(menu) = build_full_menu(app) {
                 if let Some(tray) = app.tray_by_id("prisma-tray") {
-                    let _ = tray.set_menu(Some(menu));
+                    if let Err(e) = tray.set_menu(Some(menu)) {
+                        tracing::warn!("Failed to set tray menu: {}", e);
+                    }
                 }
             }
         }
@@ -460,20 +496,26 @@ pub fn update_status(handle: &AppHandle, status: i32) {
     };
 
     if let Some(tray) = handle.tray_by_id("prisma-tray") {
-        let _ = tray.set_icon(Some(icon));
+        if let Err(e) = tray.set_icon(Some(icon)) {
+            tracing::warn!("Failed to set tray icon: {}", e);
+        }
     }
 
     if let Ok(guard) = crate::state::TRAY_CONNECT_ITEM.lock() {
         if let Some(item) = guard.as_ref() {
             let label = if status == 2 { "Disconnect" } else { "Connect" };
-            let _ = item.set_text(label);
+            if let Err(e) = item.set_text(label) {
+                tracing::warn!("Failed to set tray item text: {}", e);
+            }
         }
     }
 
     // When disconnecting, reset tooltip to simple form
     if status == 0 {
         if let Some(tray) = handle.tray_by_id("prisma-tray") {
-            let _ = tray.set_tooltip(Some("Prisma \u{2014} Disconnected"));
+            if let Err(e) = tray.set_tooltip(Some("Prisma \u{2014} Disconnected")) {
+                tracing::warn!("Failed to set tray tooltip: {}", e);
+            }
         }
     }
 }
@@ -509,33 +551,45 @@ pub fn update_tooltip(handle: &AppHandle, stats: &TrayStatsUpdate<'_>) {
         )
     };
     if let Some(tray) = handle.tray_by_id("prisma-tray") {
-        let _ = tray.set_tooltip(Some(&tooltip));
+        if let Err(e) = tray.set_tooltip(Some(&tooltip)) {
+            tracing::warn!("Failed to set tray tooltip: {}", e);
+        }
     }
 
     // Update Speed Stats submenu items (Item 1)
     if let Ok(g) = crate::state::TRAY_STAT_UPLOAD.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!("\u{2191} Upload: {}", fmt_speed(stats.up_bps)));
+            if let Err(e) = item.set_text(format!("\u{2191} Upload: {}", fmt_speed(stats.up_bps))) {
+                tracing::warn!("Failed to set tray stat text: {}", e);
+            }
         }
     }
     if let Ok(g) = crate::state::TRAY_STAT_DOWNLOAD.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!("\u{2193} Download: {}", fmt_speed(stats.down_bps)));
+            if let Err(e) = item.set_text(format!("\u{2193} Download: {}", fmt_speed(stats.down_bps))) {
+                tracing::warn!("Failed to set tray stat text: {}", e);
+            }
         }
     }
     if let Ok(g) = crate::state::TRAY_STAT_TOTAL_UP.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!("Total Up: {}", fmt_bytes(stats.bytes_up)));
+            if let Err(e) = item.set_text(format!("Total Up: {}", fmt_bytes(stats.bytes_up))) {
+                tracing::warn!("Failed to set tray stat text: {}", e);
+            }
         }
     }
     if let Ok(g) = crate::state::TRAY_STAT_TOTAL_DOWN.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!("Total Down: {}", fmt_bytes(stats.bytes_down)));
+            if let Err(e) = item.set_text(format!("Total Down: {}", fmt_bytes(stats.bytes_down))) {
+                tracing::warn!("Failed to set tray stat text: {}", e);
+            }
         }
     }
     if let Ok(g) = crate::state::TRAY_STAT_CONNECTIONS.lock() {
         if let Some(item) = g.as_ref() {
-            let _ = item.set_text(format!("Connections: {}", stats.connections));
+            if let Err(e) = item.set_text(format!("Connections: {}", stats.connections)) {
+                tracing::warn!("Failed to set tray stat text: {}", e);
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { useStatusSync } from "./hooks/useStatusSync";
 import { usePrismaEvents } from "./hooks/usePrismaEvents";
 import { usePlatform } from "./hooks/usePlatform";
@@ -43,21 +44,24 @@ export default function App() {
       {!isMobile && <Sidebar />}
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className={`flex-1 overflow-hidden ${isMobile ? "pb-16" : ""}`}>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/"          element={<Home />} />
-              <Route path="/profiles"  element={<Profiles />} />
-              <Route path="/subscriptions" element={<Subscriptions />} />
-              <Route path="/rules"     element={<Rules />} />
-              <Route path="/connections" element={<Connections />} />
-              <Route path="/logs"      element={<Logs />} />
-              <Route path="/speedtest" element={<SpeedTest />} />
-              <Route path="/diagnostics" element={<Diagnostics />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/per-app"   element={<PerApp />} />
-              <Route path="/settings"  element={<Settings />} />
-            </Routes>
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/"          element={<Home />} />
+                <Route path="/profiles"  element={<Profiles />} />
+                <Route path="/subscriptions" element={<Subscriptions />} />
+                <Route path="/rules"     element={<Rules />} />
+                <Route path="/connections" element={<Connections />} />
+                <Route path="/logs"      element={<Logs />} />
+                <Route path="/speedtest" element={<SpeedTest />} />
+                <Route path="/diagnostics" element={<Diagnostics />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/per-app"   element={<PerApp />} />
+                <Route path="/settings"  element={<Settings />} />
+                <Route path="*"          element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
         {!isMobile && <StatusBar />}
       </div>

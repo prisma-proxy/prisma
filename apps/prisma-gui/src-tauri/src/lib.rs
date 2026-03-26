@@ -6,7 +6,7 @@ mod state;
 mod tray;
 
 use std::ffi::CStr;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 unsafe extern "C" fn on_ffi_event(json: *const std::ffi::c_char, _userdata: *mut std::ffi::c_void) {
     if json.is_null() {
@@ -134,6 +134,21 @@ pub fn run() {
             mobile::on_app_foreground,
             mobile::on_memory_warning,
         ])
-        .run(tauri::generate_context!())
-        .expect("tauri run failed");
+        .build(tauri::generate_context!())
+        .expect("tauri build failed")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Clean up the FFI PrismaClient on exit to avoid resource leaks
+                if let Some(handle) = state::APP_HANDLE.get() {
+                    if let Some(app_state) = handle.try_state::<state::AppState>() {
+                        if let Ok(raw) = app_state.client.lock() {
+                            let ptr = *raw as *mut prisma_ffi::PrismaClient;
+                            if !ptr.is_null() && *raw != 0 {
+                                unsafe { prisma_ffi::prisma_destroy(ptr); }
+                            }
+                        }
+                    }
+                }
+            }
+        });
 }

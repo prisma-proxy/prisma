@@ -46,13 +46,17 @@ let suppressedErrors = 0;
 
 // Batch log entries via rAF to prevent per-log React re-renders under load.
 let pendingLogs: LogEntry[] = [];
+let pendingConnMsgs: string[] = [];
 let logRafId: number | null = null;
 
 // Track recent unique destinations for tray submenu (Item 6).
 const MAX_RECENT = 5;
 let recentDestinations: string[] = [];
 let recentDirty = false;
-let recentRafId: number | null = null;
+
+// Throttle tray stats updates (every N stats ticks instead of every tick)
+let trayUpdateCounter = 0;
+const TRAY_UPDATE_EVERY = 3;
 
 export function usePrismaEvents() {
   useEffect(() => {
@@ -101,7 +105,7 @@ export function usePrismaEvents() {
                   api.setSystemProxy("127.0.0.1", httpPort).catch(() => {});
                 }, 200);
               } else {
-                notify.warning("System proxy mode is active but HTTP port is not configured");
+                notify.warning(i18n.t("notifications.systemProxyNoHttpPort"));
               }
             }
             // Force tray menu rebuild so Connect/Disconnect label is correct
@@ -121,13 +125,11 @@ export function usePrismaEvents() {
               cancelAnimationFrame(logRafId);
               logRafId = null;
               pendingLogs = [];
-            }
-            if (recentRafId !== null) {
-              cancelAnimationFrame(recentRafId);
-              recentRafId = null;
+              pendingConnMsgs = [];
             }
             recentDestinations = [];
             recentDirty = false;
+            trayUpdateCounter = 0;
 
             // Disconnected — record session bytes + uptime
             {
@@ -149,6 +151,7 @@ export function usePrismaEvents() {
             // Mark all active connections as closed so the user can see what
             // was connected before disconnect, then clear stale logs.
             useConnections.getState().closeAllActive();
+            useConnections.getState().clearAll();
             store.clearLogs();
             store.setConnected(false);
             // Force tray menu rebuild so Connect/Disconnect label is correct
@@ -171,17 +174,21 @@ export function usePrismaEvents() {
               // Track peak speeds for the active profile
               const { activeProfileIdx: aidx, profiles: profs } = st;
               const activeProf = aidx !== null ? profs[aidx] : profs[0];
-              if (activeProf) {
-                useProfileMetrics.getState().recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
+              if (activeProf && (s.speed_down_bps > 0 || s.speed_up_bps > 0)) {
+                const pm = useProfileMetrics.getState();
+                const cur = pm.metrics[activeProf.id];
+                if (!cur || s.speed_down_bps > cur.peakSpeedDownBps || s.speed_up_bps > cur.peakSpeedUpBps) {
+                  pm.recordPeakSpeed(activeProf.id, s.speed_down_bps, s.speed_up_bps);
+                }
               }
               // Track data usage deltas
-              const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
               if (prevStats) {
                 const deltaUp = Math.max(0, s.bytes_up - prevStats.bytes_up);
                 const deltaDown = Math.max(0, s.bytes_down - prevStats.bytes_down);
                 if (deltaUp > 0 || deltaDown > 0) {
                   useDataUsage.getState().recordUsage(deltaUp, deltaDown);
                   const analytics = useAnalytics.getState();
+                  const activeConns = useConnections.getState().connections.filter((c) => c.status === "active");
                   if (activeConns.length > 0) {
                     const perUp = Math.floor(deltaUp / activeConns.length);
                     const perDown = Math.floor(deltaDown / activeConns.length);
@@ -194,17 +201,21 @@ export function usePrismaEvents() {
                   }
                 }
               }
-              // Update tray speed stats + tooltip (Items 1 & 5)
-              const profileName = activeProf?.name ?? "";
-              api.updateTrayStats(
-                s.speed_up_bps,
-                s.speed_down_bps,
-                s.bytes_up,
-                s.bytes_down,
-                activeConns.length,
-                profileName,
-                s.uptime_secs,
-              ).catch(() => {});
+              // Throttle tray updates to every Nth stats tick
+              trayUpdateCounter++;
+              if (trayUpdateCounter >= TRAY_UPDATE_EVERY) {
+                trayUpdateCounter = 0;
+                const profileName = activeProf?.name ?? "";
+                api.updateTrayStats(
+                  s.speed_up_bps,
+                  s.speed_down_bps,
+                  s.bytes_up,
+                  s.bytes_down,
+                  useConnections.getState().activeCount,
+                  profileName,
+                  s.uptime_secs,
+                ).catch(() => {});
+              }
             });
           }
           break;
@@ -218,6 +229,7 @@ export function usePrismaEvents() {
             msg:   logMsg,
             time:  data.time ?? Date.now(),
           });
+          pendingConnMsgs.push(logMsg);
           if (logRafId === null) {
             logRafId = requestAnimationFrame(() => {
               logRafId = null;
@@ -226,32 +238,27 @@ export function usePrismaEvents() {
               if (batch.length > 0 && useStore.getState().connected) {
                 useStore.getState().addLogs(batch);
               }
-            });
-          }
-          parseLogForConnection(logMsg);
-
-          // Track recent destinations for tray submenu (Item 6).
-          // After parseLogForConnection may have added a new connection,
-          // check if the latest connection destination is new.
-          {
-            const conns = useConnections.getState().connections;
-            if (conns.length > 0) {
-              const latest = conns[conns.length - 1];
-              const dest = latest.destination.replace(/:\d+$/, "");
-              if (dest && !recentDestinations.includes(dest)) {
-                recentDestinations = [dest, ...recentDestinations].slice(0, MAX_RECENT);
-                recentDirty = true;
-                if (recentRafId === null) {
-                  recentRafId = requestAnimationFrame(() => {
-                    recentRafId = null;
-                    if (recentDirty) {
-                      recentDirty = false;
-                      api.updateTrayRecent([...recentDestinations]).catch(() => {});
-                    }
-                  });
+              // Batch connection parsing — avoids per-log store updates
+              const connBatch = pendingConnMsgs;
+              pendingConnMsgs = [];
+              for (const m of connBatch) {
+                parseLogForConnection(m);
+              }
+              // Track recent destinations for tray submenu
+              const conns = useConnections.getState().connections;
+              if (conns.length > 0) {
+                const latest = conns[conns.length - 1];
+                const dest = latest.destination.replace(/:\d+$/, "");
+                if (dest && !recentDestinations.includes(dest)) {
+                  recentDestinations = [dest, ...recentDestinations].slice(0, MAX_RECENT);
+                  recentDirty = true;
                 }
               }
-            }
+              if (recentDirty) {
+                recentDirty = false;
+                api.updateTrayRecent([...recentDestinations]).catch(() => {});
+              }
+            });
           }
           break;
         }
