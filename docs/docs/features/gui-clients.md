@@ -7,7 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # GUI Clients
 
-Prisma ships GUI clients for all major platforms. The primary desktop client is the **Prisma GUI** (`packages/gui`), a cross-platform Tauri 2 + React application that runs on Windows, macOS, Linux, Android, and iOS. It links against **prisma-ffi**, a C-ABI shared library built from the same Rust codebase as the CLI.
+:::info Repository Split
+As of v2.26.0, the GUI desktop/mobile client has moved to its own repository: **[prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui)**. It uses a git submodule for the core Rust crates. All GUI development, issues, and releases now live in that repo.
+:::
+
+Prisma ships GUI clients for all major platforms. The primary desktop client is the **Prisma GUI** ([prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui)), a cross-platform Tauri 2 + React application that runs on Windows, macOS, Linux, Android, and iOS. It links against **prisma-ffi**, a C-ABI shared library built from the same Rust codebase as the CLI.
 
 ```
 prisma-ffi  ←──────────────────────────────────────┐
@@ -107,9 +111,15 @@ When the app window gains focus, it automatically checks the clipboard for `pris
 ### Build
 
 ```bash
-cd packages/gui
+# Clone the GUI repository
+git clone https://github.com/prisma-proxy/prisma-gui.git
+cd prisma-gui
+
+# Initialize the core crates submodule
+git submodule update --init --recursive
 
 # Development
+npm install
 npm run dev
 npm run tauri dev
 
@@ -120,7 +130,7 @@ npm run tauri build
 
 ### Installation
 
-Download the appropriate installer for your platform from the [releases page](https://github.com/prisma-proxy/prisma/releases/latest):
+Download the appropriate installer for your platform from the [prisma-gui releases page](https://github.com/prisma-proxy/prisma-gui/releases/latest):
 
 - **Windows**: `prisma-gui_x.y.z_x64-setup.exe` or `.msi`
 - **macOS**: `prisma-gui_x.y.z_aarch64.dmg` or `_x64.dmg`

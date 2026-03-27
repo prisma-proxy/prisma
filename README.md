@@ -96,13 +96,14 @@ prisma/
 │   ├── prisma-cli/      # CLI: server/client, monitor TUI, config validator, profile wizard
 │   └── prisma-ffi/      # C FFI library for GUI clients
 ├── apps/
-│   ├── prisma-gui/      # Cross-platform GUI (Tauri 2 + React + TypeScript)
 │   └── prisma-console/  # Web console (Next.js + shadcn/ui)
 ├── docs/                # Documentation site (Docusaurus)
 ├── tools/
 │   └── prisma-mcp/      # MCP development server
 └── scripts/             # Install scripts and benchmarks
 ```
+
+> **GUI Client** -- The cross-platform desktop/mobile GUI (Tauri 2 + React) has moved to its own repository: [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui).
 
 ## Documentation
 
@@ -135,8 +136,8 @@ cargo clippy --workspace -- -D warnings
 # Build FFI library
 cargo build --release -p prisma-ffi
 
-# Build GUI (requires Node.js)
-cd apps/prisma-gui && npm install && npm run tauri build
+# Build GUI (separate repo — https://github.com/prisma-proxy/prisma-gui)
+# git clone https://github.com/prisma-proxy/prisma-gui.git && cd prisma-gui && npm install && npm run tauri build
 
 # Build console
 cd apps/prisma-console && npm ci && npm run build

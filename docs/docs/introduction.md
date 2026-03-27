@@ -5,7 +5,7 @@ slug: /introduction
 
 # Introduction
 
-Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.24.0** ships with improved error propagation, connection map enhancements, routing rule fixes, extended analytics, enriched system tray, consolidated settings, and many more production-grade features.
+Prisma is a next-generation encrypted proxy infrastructure suite built in Rust. It implements the **PrismaVeil v5** wire protocol — combining modern cryptography (including post-quantum hybrid key exchange), eight transport options, and advanced anti-censorship features. Version **2.26.0** ships with a subscription system overhaul, improved server resilience, an upgraded connection map, GUI performance and stability improvements, and many more production-grade features.
 
 ## Features
 
@@ -144,6 +144,23 @@ graph LR
     B -->|REST / WS| C["prisma-mgmt (axum)"]
     C --> D[ServerState]
 ```
+
+## What's New in 2.26.0
+
+- **Subscription system overhaul** — invite redemption page (`/invite/[token]`), plan edit/update UI, expiry date picker for codes and invites, advanced permission fields (port forwarding, UDP, connections, destinations, quota period), auto-refresh queries, improved delete confirmations
+- **Error handling** — HTTP status code checking (410/409/404) replaces fragile string matching in redeem page
+- **CI fix** — `.npmrc` with `legacy-peer-deps` for react-simple-maps compatibility
+- **GUI repository split** — desktop/mobile client migrated to [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui) as a standalone repo with git submodule for core crates
+
+## What's New in 2.25.0
+
+- **Server resilience** — QUIC listener no longer crashes under systemd (`CAP_NET_BIND_SERVICE`); single listener failure is non-fatal (`join_all` replaces `select!`)
+- **FFI connection status fix** — `ConnectionManager.status` changed from `i32` to `Arc<AtomicI32>` so the async task correctly transitions to CONNECTED (was stuck on CONNECTING)
+- **Connection map upgrade** — replaced custom SVG with react-simple-maps + Natural Earth 50m TopoJSON, geoNaturalEarth1 projection, full dark mode support, HTML tooltip overlay, choropleth legend
+- **GUI crash prevention** — ErrorBoundary around routes, catch-all 404 route, client cleanup on app exit (`prisma_destroy` on `RunEvent::Exit`), replaced all `.lock().unwrap()` with error handling
+- **GUI performance** — batched `parseLogForConnection` into rAF, debounced `profileMetrics` and `connectionHistory` persist (5s), throttled tray updates (every 3 ticks), cached `getBoundingClientRect`, `localeCompare` replaced with simple string comparison in sort, single parent tick timer for LiveDuration
+- **GUI polish** — theme-aware SpeedGraph colors, i18n for hardcoded English strings, exponential auto-reconnect backoff (1.5x, cap 60s), port validation (1-65535), canvas accessibility
+- **GUI security** — path traversal validation in `download_file`, rule provider name validation, tray emit error logging
 
 ## What's New in 2.24.0
 
