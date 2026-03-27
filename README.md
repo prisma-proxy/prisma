@@ -28,13 +28,18 @@ A next-generation encrypted proxy infrastructure suite built in Rust. Prisma imp
 - **Port forwarding** — frp-style reverse proxy over encrypted tunnels
 - **SQLite backend** — users, clients, routing rules, and subscriptions stored in SQLite with automatic migration from TOML
 - **Subscription system** — redemption codes (`PRISMA-XXXX`) and invite links for streamlined client onboarding
-- **Web console** — real-time dashboard with first-run setup wizard, analytics, client sharing (TOML/URI/QR), multi-server management, routing templates, subscription management, role-based dashboard, config history (Next.js + shadcn/ui)
 - **Smart DNS** — fake IP, tunnel, smart (GeoSite), and direct modes
 - **CLI tools** — `prisma monitor` (TUI dashboard), `prisma validate` (config checker), `prisma profile new` (interactive wizard), batch client management
 - **CLI self-update** — `prisma update` checks GitHub releases and self-replaces the binary
-- **Native GUI clients** — Windows (Win32/GDI), Android (Jetpack Compose), iOS (SwiftUI), macOS (menu bar)
-- **Cross-platform GUI** — speed test, split tunneling, network diagnostics, connection timeline, QR camera scanner, full backup/restore, system tray (Tauri 2 + React)
 - **OpenAPI spec** — full API documentation at `/api/docs/openapi.json` for third-party integration
+
+## Related Repositories
+
+| Repository | Description |
+|------------|-------------|
+| [prisma-gui](https://github.com/prisma-proxy/prisma-gui) | Desktop + mobile client (Tauri 2 + React) — Windows, macOS, Linux, iOS, Android |
+| [prisma-console](https://github.com/prisma-proxy/prisma-console) | Web management dashboard (Next.js + shadcn/ui) — real-time analytics, client management, subscriptions |
+| [prisma-docs](https://github.com/prisma-proxy/prisma-docs) | Documentation site (Docusaurus) — guides, configuration reference, protocol spec |
 
 ## Quick Start
 
@@ -95,19 +100,15 @@ prisma/
 │   ├── prisma-mgmt/     # Management API (REST + WebSocket via axum)
 │   ├── prisma-cli/      # CLI: server/client, monitor TUI, config validator, profile wizard
 │   └── prisma-ffi/      # C FFI library for GUI clients
-├── apps/
-│   └── prisma-console/  # Web console (Next.js + shadcn/ui)
-├── docs/                # Documentation site (Docusaurus)
 ├── tools/
-│   └── prisma-mcp/      # MCP development server
-└── scripts/             # Install scripts and benchmarks
+│   └── prisma-mcp/      # MCP development server for AI agents
+├── scripts/             # Install scripts (Linux/macOS/Windows)
+└── deploy/              # Deployment configs (systemd, Docker)
 ```
-
-> **GUI Client** -- The cross-platform desktop/mobile GUI (Tauri 2 + React) has moved to its own repository: [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui).
 
 ## Documentation
 
-Full documentation is available at **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**, including:
+Full documentation: **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**
 
 - [Getting Started](https://yamimega.github.io/prisma/docs/getting-started) — first proxy session walkthrough
 - [Installation](https://yamimega.github.io/prisma/docs/installation) — all platforms, Docker, Cargo
@@ -117,11 +118,7 @@ Full documentation is available at **[yamimega.github.io/prisma](https://yamimeg
 - [PrismaTLS](https://yamimega.github.io/prisma/docs/features/prisma-tls) — active probing resistance
 - [Traffic Shaping](https://yamimega.github.io/prisma/docs/features/traffic-shaping) — anti-fingerprinting
 - [TUN Mode](https://yamimega.github.io/prisma/docs/features/tun-mode) — system-wide proxy setup
-- [Config Examples](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 ready-to-use templates
 - [PrismaVeil Protocol](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — wire protocol specification
-- [Console](https://yamimega.github.io/prisma/docs/features/console) — web UI setup
-- [Management API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API reference
-- [GUI Clients](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows, Android, iOS, macOS apps
 
 ## Development
 
@@ -133,17 +130,8 @@ cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 
-# Build FFI library
+# Build FFI library (used by prisma-gui)
 cargo build --release -p prisma-ffi
-
-# Build GUI (separate repo — https://github.com/prisma-proxy/prisma-gui)
-# git clone https://github.com/prisma-proxy/prisma-gui.git && cd prisma-gui && npm install && npm run tauri build
-
-# Build console
-cd apps/prisma-console && npm ci && npm run build
-
-# Build docs
-cd docs && npm install && npm start
 ```
 
 ## License

@@ -84,6 +84,14 @@ git clone https://github.com/prisma-proxy/prisma.git && cd prisma
 cargo build --release
 ```
 
+## 相关仓库
+
+| 仓库 | 描述 |
+|------|------|
+| [prisma-gui](https://github.com/prisma-proxy/prisma-gui) | 桌面 + 移动端客户端（Tauri 2 + React）— Windows、macOS、Linux、iOS、Android |
+| [prisma-console](https://github.com/prisma-proxy/prisma-console) | Web 管理控制台（Next.js + shadcn/ui）— 实时分析、客户端管理、订阅 |
+| [prisma-docs](https://github.com/prisma-proxy/prisma-docs) | 文档站点（Docusaurus）— 指南、配置参考、协议规范 |
+
 ## 项目结构
 
 ```
@@ -95,15 +103,11 @@ prisma/
 │   ├── prisma-mgmt/     # 管理 API（基于 axum 的 REST + WebSocket）
 │   ├── prisma-cli/      # CLI 工具：服务端/客户端、TUI 监控、配置校验、配置向导
 │   └── prisma-ffi/      # C FFI 库，供 GUI 客户端调用
-├── apps/
-│   └── prisma-console/  # Web 管理控制台（Next.js + shadcn/ui）
-├── docs/                # 文档站点（Docusaurus）
 ├── tools/
 │   └── prisma-mcp/      # MCP 开发服务器
-└── scripts/             # 安装脚本和基准测试
+├── scripts/             # 安装脚本
+└── deploy/              # 部署配置（systemd、Docker）
 ```
-
-> **GUI 客户端** -- 跨平台桌面/移动端 GUI（Tauri 2 + React）已迁移至独立仓库：[prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui)。
 
 ## 文档
 
@@ -133,17 +137,8 @@ cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 
-# 构建 FFI 库
+# 构建 FFI 库（供 prisma-gui 使用）
 cargo build --release -p prisma-ffi
-
-# 构建 GUI（独立仓库 — https://github.com/prisma-proxy/prisma-gui）
-# git clone https://github.com/prisma-proxy/prisma-gui.git && cd prisma-gui && npm install && npm run tauri build
-
-# 构建控制台
-cd apps/prisma-console && npm ci && npm run build
-
-# 构建文档
-cd docs && npm install && npm start
 ```
 
 ## 许可证
