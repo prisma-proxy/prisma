@@ -1627,7 +1627,8 @@ fn strip_inline_markdown(s: &str) -> String {
     while i < chars.len() {
         // **bold** or __bold__
         if i + 1 < chars.len()
-            && ((chars[i] == '*' && chars[i + 1] == '*') || (chars[i] == '_' && chars[i + 1] == '_'))
+            && ((chars[i] == '*' && chars[i + 1] == '*')
+                || (chars[i] == '_' && chars[i + 1] == '_'))
         {
             let marker = chars[i];
             i += 2;
@@ -1635,7 +1636,9 @@ fn strip_inline_markdown(s: &str) -> String {
                 out.push(chars[i]);
                 i += 1;
             }
-            if i + 1 < chars.len() { i += 2; }
+            if i + 1 < chars.len() {
+                i += 2;
+            }
             continue;
         }
         // `code`
@@ -1645,7 +1648,9 @@ fn strip_inline_markdown(s: &str) -> String {
                 out.push(chars[i]);
                 i += 1;
             }
-            if i < chars.len() { i += 1; }
+            if i < chars.len() {
+                i += 1;
+            }
             continue;
         }
         // [text](url) → text
@@ -1654,23 +1659,30 @@ fn strip_inline_markdown(s: &str) -> String {
             let mut depth = 1;
             i += 1;
             while i < chars.len() && depth > 0 {
-                if chars[i] == '[' { depth += 1; }
-                if chars[i] == ']' { depth -= 1; }
+                if chars[i] == '[' {
+                    depth += 1;
+                }
+                if chars[i] == ']' {
+                    depth -= 1;
+                }
                 i += 1;
             }
             let text: String = chars[start..i.saturating_sub(1)].iter().collect();
             // Skip the (url) part
             if i < chars.len() && chars[i] == '(' {
                 i += 1;
-                while i < chars.len() && chars[i] != ')' { i += 1; }
-                if i < chars.len() { i += 1; }
+                while i < chars.len() && chars[i] != ')' {
+                    i += 1;
+                }
+                if i < chars.len() {
+                    i += 1;
+                }
             }
             out.push_str(&text);
             continue;
         }
         // *italic* or _italic_ (single)
-        if (chars[i] == '*' || chars[i] == '_')
-            && (i + 1 < chars.len() && chars[i + 1] != chars[i])
+        if (chars[i] == '*' || chars[i] == '_') && (i + 1 < chars.len() && chars[i + 1] != chars[i])
         {
             let marker = chars[i];
             i += 1;
@@ -1678,7 +1690,9 @@ fn strip_inline_markdown(s: &str) -> String {
                 out.push(chars[i]);
                 i += 1;
             }
-            if i < chars.len() { i += 1; }
+            if i < chars.len() {
+                i += 1;
+            }
             continue;
         }
         out.push(chars[i]);
