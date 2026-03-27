@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
 use rand::Rng;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{debug, info};
 
@@ -56,10 +56,16 @@ impl PoolEntry {
 /// tracks transport connection lifecycles and evicts stale connections.
 /// Connections are created with randomized lifetime and request count limits
 /// to avoid fingerprinting.
+///
+/// Uses `RwLock` so read-only operations (health_check) don't block writers,
+/// and an `AtomicUsize` for lock-free pool size reads on the hot path.
 pub struct ConnectionPool {
     config: XmuxConfig,
     ctx: ProxyContext,
-    entries: Arc<Mutex<Vec<Arc<PoolEntry>>>>,
+    entries: Arc<RwLock<Vec<Arc<PoolEntry>>>>,
+    /// Lock-free pool size counter. Incremented on entry push, decremented
+    /// on eviction. Avoids acquiring any lock just to read the pool length.
+    size: AtomicUsize,
     stats: PoolStats,
 }
 
@@ -69,7 +75,8 @@ impl ConnectionPool {
         Self {
             config,
             ctx,
-            entries: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(RwLock::new(Vec::new())),
+            size: AtomicUsize::new(0),
             stats: PoolStats {
                 total_created: AtomicU64::new(0),
                 total_evicted: AtomicU64::new(0),
@@ -80,11 +87,12 @@ impl ConnectionPool {
     /// Get or create a connection for the given destination.
     /// Returns a TunnelConnection by establishing a new tunnel through
     /// a pooled transport connection.
+    ///
+    /// Eviction is decoupled from the happy path: the pool is only
+    /// cleaned when it exceeds `target_size * 2`, checked via an atomic
+    /// read (no lock acquisition needed for the size check).
     pub async fn connect(&self, destination: &ProxyDestination) -> Result<TunnelConnection> {
-        // Evict expired and unhealthy entries
-        self.evict().await;
-
-        // Establish a new tunnel connection
+        // Establish a new tunnel connection (no lock held)
         let stream = self.ctx.connect().await?;
 
         let tunnel = tunnel::establish_tunnel(
@@ -113,9 +121,19 @@ impl ConnectionPool {
             unhealthy: std::sync::atomic::AtomicBool::new(false),
         });
 
+        let eviction_threshold = self.target_size() as usize * 2;
+
+        // Bound pool growth: evict before pushing if we have exceeded
+        // double the target size. The atomic check avoids acquiring the
+        // write lock on the happy path.
+        if self.size.load(Ordering::Relaxed) >= eviction_threshold {
+            self.evict().await;
+        }
+
         {
-            let mut entries = self.entries.lock().await;
+            let mut entries = self.entries.write().await;
             entries.push(entry);
+            self.size.fetch_add(1, Ordering::Relaxed);
         }
 
         self.stats.total_created.fetch_add(1, Ordering::Relaxed);
@@ -123,7 +141,7 @@ impl ConnectionPool {
         debug!(
             max_lifetime_secs = max_lifetime.as_secs(),
             max_requests = max_requests,
-            pool_size = self.pool_size().await,
+            pool_size = self.pool_size(),
             "Pool connection created with randomized limits"
         );
 
@@ -132,11 +150,12 @@ impl ConnectionPool {
 
     /// Evict expired and unhealthy entries from the pool.
     async fn evict(&self) {
-        let mut entries = self.entries.lock().await;
+        let mut entries = self.entries.write().await;
         let before = entries.len();
         entries.retain(|e| !e.is_expired());
         let evicted = before - entries.len();
         if evicted > 0 {
+            self.size.fetch_sub(evicted, Ordering::Relaxed);
             self.stats
                 .total_evicted
                 .fetch_add(evicted as u64, Ordering::Relaxed);
@@ -150,8 +169,10 @@ impl ConnectionPool {
 
     /// Run a health check on all pooled entries, marking unhealthy ones
     /// for eviction on the next connect() call.
+    ///
+    /// Only acquires a read lock -- does not block concurrent connect() calls.
     pub async fn health_check(&self) {
-        let entries = self.entries.lock().await;
+        let entries = self.entries.read().await;
         let mut unhealthy_count = 0;
         for entry in entries.iter() {
             if entry.created_at.elapsed() >= entry.max_lifetime {
@@ -169,8 +190,9 @@ impl ConnectionPool {
     }
 
     /// Get the current number of active entries in the pool.
-    pub async fn pool_size(&self) -> usize {
-        self.entries.lock().await.len()
+    /// Lock-free: reads from an `AtomicUsize` counter.
+    pub fn pool_size(&self) -> usize {
+        self.size.load(Ordering::Relaxed)
     }
 
     /// Get the target pool size (randomized from config range).
