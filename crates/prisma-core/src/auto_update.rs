@@ -10,6 +10,8 @@ pub struct UpdateInfo {
     pub version: String,
     pub url: String,
     pub changelog: String,
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -67,14 +69,47 @@ pub fn check_with_proxy(proxy_port: u16) -> Result<Option<UpdateInfo>> {
             .map(|a| a.browser_download_url.clone())
             .unwrap_or_default();
 
+        // Try to find the SHA256 checksums file and extract hash for our binary
+        let sha256 = extract_sha256_for_asset(&resp.assets, target_suffix, &agent);
+
         Ok(Some(UpdateInfo {
             version: resp.tag_name,
             url,
             changelog: resp.body.unwrap_or_default(),
+            sha256,
         }))
     } else {
         Ok(None)
     }
+}
+
+/// Download and parse the checksums file, extract the hash for the target asset.
+fn extract_sha256_for_asset(
+    assets: &[GithubAsset],
+    target_suffix: &str,
+    agent: &ureq::Agent,
+) -> Option<String> {
+    let checksums_asset = assets
+        .iter()
+        .find(|a| a.name.contains("checksums-sha256") || a.name.contains("sha256"))?;
+
+    let body = agent
+        .get(&checksums_asset.browser_download_url)
+        .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
+        .call()
+        .ok()?
+        .body_mut()
+        .read_to_string()
+        .ok()?;
+
+    // Format: "<hash>  <filename>" per line
+    for line in body.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 && parts[1].contains(target_suffix) {
+            return Some(parts[0].to_string());
+        }
+    }
+    None
 }
 
 /// Maximum download size: 200 MB (release binaries can be 30-50 MB).
@@ -220,7 +255,12 @@ pub fn self_replace(new_binary: &[u8]) -> Result<()> {
     // Step 3: rename .new → current exe
     if let Err(e) = std::fs::rename(&tmp_new, &current_exe) {
         // Restore backup on failure
-        std::fs::rename(&backup, &current_exe).ok();
+        if let Err(restore_err) = std::fs::rename(&backup, &current_exe) {
+            tracing::error!(
+                "CRITICAL: Failed to restore backup after update failure: {}",
+                restore_err
+            );
+        }
         return Err(e.into());
     }
 
@@ -231,13 +271,21 @@ pub fn self_replace(new_binary: &[u8]) -> Result<()> {
 }
 
 pub fn platform_asset_suffix() -> &'static str {
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     {
-        "windows"
+        "windows-amd64"
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
     {
-        "macos"
+        "windows-arm64"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        "darwin-arm64"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        "darwin-amd64"
     }
     #[cfg(target_os = "android")]
     {
@@ -247,13 +295,35 @@ pub fn platform_asset_suffix() -> &'static str {
     {
         "ios"
     }
-    #[cfg(not(any(
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "android",
-        target_os = "ios"
-    )))]
+    #[cfg(all(
+        not(target_os = "windows"),
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        target_arch = "x86_64"
+    ))]
     {
-        "linux"
+        "linux-amd64"
+    }
+    #[cfg(all(
+        not(target_os = "windows"),
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        target_arch = "aarch64"
+    ))]
+    {
+        "linux-arm64"
+    }
+    #[cfg(all(
+        not(target_os = "windows"),
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64")
+    ))]
+    {
+        "linux-amd64"
     }
 }

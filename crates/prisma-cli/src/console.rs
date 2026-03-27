@@ -134,7 +134,7 @@ async fn download_console(dest: &Path, version_file: &Path) -> Result<String> {
     // Use GitHub Releases API to find latest release with console asset
     let client = reqwest::Client::new();
 
-    let release_url = "https://api.github.com/repos/prisma-proxy/prisma/releases/latest";
+    let release_url = "https://api.github.com/repos/prisma-proxy/prisma-console/releases/latest";
     let release: serde_json::Value = client
         .get(release_url)
         .header("User-Agent", "prisma-cli")

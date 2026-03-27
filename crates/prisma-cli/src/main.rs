@@ -1643,13 +1643,25 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
         }
     }
 
-    // 4. Download
+    // 4. Download (with SHA256 verification when available)
     eprintln!("Downloading {}...", info.url);
-    let bytes = match auto_update::download(&info.url) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("Download failed: {}", e);
-            std::process::exit(1);
+    let bytes = if let Some(ref sha256) = info.sha256 {
+        eprintln!("Verifying SHA256: {}...", &sha256[..12]);
+        match auto_update::download_and_verify(&info.url, sha256) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("Download or verification failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        eprintln!("Warning: no SHA256 checksum available, downloading without verification");
+        match auto_update::download(&info.url) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("Download failed: {}", e);
+                std::process::exit(1);
+            }
         }
     };
 
