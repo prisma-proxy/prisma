@@ -153,49 +153,15 @@ jobs:
   # NOTE: prisma-gui has moved to github.com/prisma-proxy/prisma-gui
   # Its release workflow runs independently in that repo.
 
-  # ---------------------------------------------------------------------------
-  # Job 2: Build prisma-console (Next.js static export)
-  # ---------------------------------------------------------------------------
-  build-console:
-    name: Console
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: apps/prisma-console/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: apps/prisma-console
-
-      - name: Build static console
-        run: npm run build
-        working-directory: apps/prisma-console
-
-      - name: Package console
-        run: tar -czf prisma-console.tar.gz -C apps/prisma-console/out .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: prisma-console
-          path: prisma-console.tar.gz
-          retention-days: 5
+  # NOTE: prisma-console has moved to github.com/prisma-proxy/prisma-console
 
   # ---------------------------------------------------------------------------
-  # Job 4: Create GitHub Release
+  # Job 2: Create GitHub Release
   # ---------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build-server, build-console]
-    # Run even if optional GUI job was skipped or failed
-    if: ${{ always() && needs.build-server.result == 'success' && needs.build-console.result == 'success' }}
+    needs: [build-server]
+    if: ${{ needs.build-server.result == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -228,8 +194,7 @@ jobs:
           find artifacts -type f -name 'prisma-windows-*' -exec cp {} release/ \;
           find artifacts -type f -name 'prisma-freebsd-*' -exec cp {} release/ \;
 
-          # Console archive
-          find artifacts -type f -name 'prisma-console.tar.gz' -exec cp {} release/ \;
+          # Console and docs have moved to their own repos
 
           # Remove duplicate .sha256 collection artifacts
           # Keep only the meaningful ones
@@ -369,9 +334,11 @@ jobs:
             echo ""
             echo "> Desktop/mobile GUI: see [prisma-gui releases](https://github.com/prisma-proxy/prisma-gui/releases)"
             echo ""
-            echo "### Web Console"
+            echo "### Other Components"
             echo ""
-            echo "[prisma-console.tar.gz](${BASE_URL}/prisma-console.tar.gz) — static web dashboard (extract and serve)"
+            echo "- **GUI**: [prisma-gui releases](https://github.com/prisma-proxy/prisma-gui/releases)"
+            echo "- **Console**: [prisma-console releases](https://github.com/prisma-proxy/prisma-console/releases)"
+            echo "- **Docs**: [prisma-docs](https://github.com/prisma-proxy/prisma-docs)"
             echo ""
             echo "> Verify downloads: \`sha256sum -c checksums-sha256.txt\`"
             echo ""

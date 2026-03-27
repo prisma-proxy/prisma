@@ -18,11 +18,14 @@ All Rust workspace crates live under `crates/`:
 Other packages (not Cargo workspace members):
 | Package | Role |
 |---------|------|
-| `apps/prisma-console` | Next.js dashboard (independent version) |
-| `docs/` | Docusaurus documentation site (EN + CN) |
 | `tools/prisma-mcp` | MCP development server for AI agents |
 
-GUI has been moved to a separate repository: [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui)
+Separated repositories:
+| Repo | Role |
+|------|------|
+| [prisma-proxy/prisma-gui](https://github.com/prisma-proxy/prisma-gui) | Tauri 2 + React 19 desktop/mobile client |
+| [prisma-proxy/prisma-console](https://github.com/prisma-proxy/prisma-console) | Next.js management dashboard |
+| [prisma-proxy/prisma-docs](https://github.com/prisma-proxy/prisma-docs) | Docusaurus documentation site (EN + CN) |
 
 ## Key Commands
 

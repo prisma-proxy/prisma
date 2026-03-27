@@ -9,9 +9,6 @@ on:
       - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'apps/prisma-console/src/**'
-      - 'apps/prisma-console/package.json'
-      - 'apps/prisma-console/package-lock.json'
       - 'tools/prisma-mcp/src/**'
       - 'tools/prisma-mcp/package.json'
       - 'tools/prisma-mcp/tsconfig.json'
@@ -22,9 +19,6 @@ on:
       - 'crates/*/benches/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'apps/prisma-console/src/**'
-      - 'apps/prisma-console/package.json'
-      - 'apps/prisma-console/package-lock.json'
       - 'tools/prisma-mcp/src/**'
       - 'tools/prisma-mcp/package.json'
       - 'tools/prisma-mcp/tsconfig.json'
@@ -122,32 +116,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # GUI: TypeScript check + Tauri Rust check
   # ---------------------------------------------------------------------------
-  # ---------------------------------------------------------------------------
-  # Console: build the Next.js static export
-  # ---------------------------------------------------------------------------
-  console-check:
-    name: Console Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: apps/prisma-console/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: apps/prisma-console
-
-      - name: Lint
-        run: npm run lint
-        working-directory: apps/prisma-console
-
-      - name: Build
-        run: npm run build
-        working-directory: apps/prisma-console
+  # NOTE: prisma-console has moved to github.com/prisma-proxy/prisma-console
 
   # ---------------------------------------------------------------------------
   # MCP Server: TypeScript type check
@@ -172,28 +141,7 @@ jobs:
         run: npx tsc --noEmit
         working-directory: tools/prisma-mcp
 
-  # ---------------------------------------------------------------------------
-  # Docs: build Docusaurus site
-  # ---------------------------------------------------------------------------
-  docs-check:
-    name: Docs Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: docs
-
-      - name: Build
-        run: npm run build
-        working-directory: docs
+  # NOTE: prisma-docs has moved to github.com/prisma-proxy/prisma-docs
 
   # ---------------------------------------------------------------------------
   # Summary gate — single status check for branch protection
@@ -201,7 +149,7 @@ jobs:
   ci-pass:
     name: CI Pass
     if: always()
-    needs: [fmt, clippy, test, console-check, mcp-check, docs-check]
+    needs: [fmt, clippy, test, mcp-check]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
@@ -210,9 +158,7 @@ jobs:
             "${{ needs.fmt.result }}"
             "${{ needs.clippy.result }}"
             "${{ needs.test.result }}"
-            "${{ needs.console-check.result }}"
             "${{ needs.mcp-check.result }}"
-            "${{ needs.docs-check.result }}"
           )
           for r in "${results[@]}"; do
             if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
