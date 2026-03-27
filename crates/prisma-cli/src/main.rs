@@ -1583,6 +1583,110 @@ fn print_version(json: bool) {
     println!("  - xporta    (REST API simulation, CDN-compatible)");
 }
 
+/// Convert raw GitHub release markdown to clean terminal text.
+fn strip_markdown(md: &str) -> String {
+    let mut out = String::with_capacity(md.len());
+    for line in md.lines() {
+        let trimmed = line.trim();
+        // Skip horizontal rules
+        if trimmed.chars().all(|c| c == '-' || c == '*' || c == ' ') && trimmed.len() >= 3 {
+            continue;
+        }
+        // Skip HTML tags
+        if trimmed.starts_with('<') && trimmed.ends_with('>') {
+            continue;
+        }
+        // Strip heading markers, uppercase the text
+        let line = if let Some(rest) = trimmed.strip_prefix("### ") {
+            format!("  {}", rest.to_uppercase())
+        } else if let Some(rest) = trimmed.strip_prefix("## ") {
+            rest.to_uppercase()
+        } else if let Some(rest) = trimmed.strip_prefix("# ") {
+            rest.to_uppercase()
+        } else if let Some(rest) = trimmed.strip_prefix("> ") {
+            format!("  {rest}")
+        } else {
+            line.to_string()
+        };
+        // Inline formatting: **bold**, *italic*, `code`, [text](url)
+        let line = strip_inline_markdown(&line);
+        out.push_str(&line);
+        out.push('\n');
+    }
+    // Trim trailing blank lines
+    while out.ends_with("\n\n") {
+        out.pop();
+    }
+    out
+}
+
+fn strip_inline_markdown(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        // **bold** or __bold__
+        if i + 1 < chars.len()
+            && ((chars[i] == '*' && chars[i + 1] == '*') || (chars[i] == '_' && chars[i + 1] == '_'))
+        {
+            let marker = chars[i];
+            i += 2;
+            while i + 1 < chars.len() && !(chars[i] == marker && chars[i + 1] == marker) {
+                out.push(chars[i]);
+                i += 1;
+            }
+            if i + 1 < chars.len() { i += 2; }
+            continue;
+        }
+        // `code`
+        if chars[i] == '`' {
+            i += 1;
+            while i < chars.len() && chars[i] != '`' {
+                out.push(chars[i]);
+                i += 1;
+            }
+            if i < chars.len() { i += 1; }
+            continue;
+        }
+        // [text](url) → text
+        if chars[i] == '[' {
+            let start = i + 1;
+            let mut depth = 1;
+            i += 1;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '[' { depth += 1; }
+                if chars[i] == ']' { depth -= 1; }
+                i += 1;
+            }
+            let text: String = chars[start..i.saturating_sub(1)].iter().collect();
+            // Skip the (url) part
+            if i < chars.len() && chars[i] == '(' {
+                i += 1;
+                while i < chars.len() && chars[i] != ')' { i += 1; }
+                if i < chars.len() { i += 1; }
+            }
+            out.push_str(&text);
+            continue;
+        }
+        // *italic* or _italic_ (single)
+        if (chars[i] == '*' || chars[i] == '_')
+            && (i + 1 < chars.len() && chars[i + 1] != chars[i])
+        {
+            let marker = chars[i];
+            i += 1;
+            while i < chars.len() && chars[i] != marker {
+                out.push(chars[i]);
+                i += 1;
+            }
+            if i < chars.len() { i += 1; }
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
 fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
     use prisma_core::auto_update;
 
@@ -1618,7 +1722,7 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
     } else {
         println!("Update available: v{} -> {}", VERSION, info.version);
         if !info.changelog.is_empty() {
-            println!("\nChangelog:\n{}", info.changelog);
+            println!("\nChangelog:\n{}", strip_markdown(&info.changelog));
         }
         if check_only {
             return;
