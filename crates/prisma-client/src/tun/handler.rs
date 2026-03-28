@@ -134,6 +134,18 @@ pub async fn run_tun_handler(
                 let mut s = stack.lock().await;
                 s.receive_packet(pkt);
 
+                // Immediately poll to generate SYN-ACK response
+                let immediate_out = s.poll();
+                if !immediate_out.is_empty() {
+                    debug!(count = immediate_out.len(), "smoltcp immediate response after receive");
+                    let dev = &**device;
+                    for out_pkt in &immediate_out {
+                        if let Err(e) = dev.send(out_pkt) {
+                            warn!(error = %e, "TUN write error (immediate)");
+                        }
+                    }
+                }
+
                 // Check if this is a new connection (SYN)
                 let dest = match packet::tcp_dest(pkt) {
                     Some(d) => d,
@@ -387,10 +399,16 @@ async fn stack_poll_loop(
 
         // Write outbound packets to TUN device (no stack lock held)
         if !out_packets.is_empty() {
+            debug!(count = out_packets.len(), "smoltcp produced outbound packets");
             let dev = &**device;
             for pkt in &out_packets {
-                if let Err(e) = dev.send(pkt) {
-                    warn!(error = %e, "TUN write error");
+                match dev.send(pkt) {
+                    Ok(n) => {
+                        debug!(len = pkt.len(), written = n, "TUN write OK");
+                    }
+                    Err(e) => {
+                        warn!(error = %e, len = pkt.len(), "TUN write error");
+                    }
                 }
             }
         }
