@@ -25,23 +25,13 @@ Desktop.ini
 __MACOSX/
 ehthumbs.db
 
-# Docs (Docusaurus)
-docs/node_modules/
-docs/build/
-docs/.docusaurus/
+# Stale monorepo dirs (moved to separate repos)
+apps/
+docs/
 
-# Console (Next.js)
-apps/prisma-console/node_modules/
-apps/prisma-console/.next/
-apps/prisma-console/out/
-
-# prisma-gui (Tauri + Vite)
-apps/prisma-gui/node_modules/
-apps/prisma-gui/dist/
-apps/prisma-gui/.vite/
-apps/prisma-gui/src-tauri/target/
-apps/prisma-gui/src-tauri/gen/
-apps/prisma-gui/src-tauri/WixTools/
+# Claude Code
+.claude/
+CLAUDE.md
 
 # prisma-ffi build artifacts
 crates/prisma-ffi/include/*.generated.h
@@ -50,9 +40,6 @@ crates/prisma-ffi/include/*.generated.h
 tools/prisma-mcp/node_modules/
 tools/prisma-mcp/dist/
 tools/prisma-mcp/.prisma-mcp.db
-
-# Claude Code (agents, skills, memory, settings)
-.claude/
 
 # Fuzzing
 fuzz/target/
@@ -74,8 +61,6 @@ tarpaulin-report.html
 # Logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
 
 # Temp / merge artifacts
 *.orig
@@ -86,10 +71,6 @@ tmp/
 
 # Build caches
 *.tsbuildinfo
-.turbo/
 
 # Misc
-prisma-plan.md
-.claude/
 node_modules/
-CLAUDE.md
