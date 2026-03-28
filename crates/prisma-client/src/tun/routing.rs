@@ -17,6 +17,7 @@ use tracing::{debug, info, warn};
 
 /// The IP address assigned to the TUN interface (must match smoltcp stack).
 const TUN_LOCAL_IP: Ipv4Addr = Ipv4Addr::new(10, 0, 85, 1);
+#[cfg(target_os = "windows")]
 const TUN_NETMASK: &str = "255.255.255.0";
 
 /// Actions recorded for cleanup on Drop.
@@ -571,6 +572,7 @@ fn run_cmd(args: &[impl AsRef<str>]) -> Result<()> {
 }
 
 /// Convert CIDR notation (e.g., "0.0.0.0/1") to (network, subnet_mask) pair.
+#[cfg(any(target_os = "windows", test))]
 fn cidr_to_network_mask(cidr: &str) -> Result<(String, String)> {
     let (network, prefix) = cidr
         .split_once('/')
