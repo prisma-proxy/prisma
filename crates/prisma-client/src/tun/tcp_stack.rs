@@ -171,10 +171,14 @@ impl TcpStack {
         // packets with "Rejecting IPv4 packet; any_ip=false".
         iface.set_any_ip(true);
 
-        // Set default gateway (any IP works since we're routing everything through TUN)
+        // Default gateway must be within the interface's /24 subnet (10.0.85.x),
+        // otherwise smoltcp rejects packets with "no matching routes" because
+        // it checks has_ip_addr(gateway) which requires the gateway to be local.
         iface
             .routes_mut()
-            .add_default_ipv4_route(Ipv4Address::new(0, 0, 0, 1))
+            .add_default_ipv4_route(Ipv4Address::new(
+                octets[0], octets[1], octets[2], 254,
+            ))
             .ok();
 
         // Preallocate socket storage for up to 64 concurrent connections
