@@ -392,8 +392,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          gh release create "$TAG" \
-            --title "Prisma $TAG" \
-            --notes-file release-notes.md \
-            release/*
+          # Upload to existing release if it was pre-created, otherwise create new
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" \
+              --title "Prisma $TAG" \
+              --notes-file release-notes.md \
+              release/*
+          fi
 
