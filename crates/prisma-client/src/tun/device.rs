@@ -29,6 +29,9 @@ pub trait TunDevice: Send + 'static {
 ///
 /// Returns the device and a routing guard. The guard must be kept alive for
 /// the duration of TUN operation — dropping it cleans up all route changes.
+///
+/// Server IP is resolved BEFORE the TUN device is created so DNS still
+/// works through the system's normal routing (no chicken-and-egg problem).
 pub fn create_tun_device(
     device_name: &str,
     mtu: u16,
@@ -36,6 +39,10 @@ pub fn create_tun_device(
     include_routes: &[String],
     exclude_routes: &[String],
 ) -> Result<(Box<dyn TunDevice>, super::routing::TunRouteGuard)> {
+    // Resolve server IP while the system's routing is still intact.
+    let server_ip = super::routing::resolve_server_ip(server_addr)?;
+    tracing::info!(server_ip = %server_ip, "Resolved server IP for TUN bypass");
+
     let device: Box<dyn TunDevice>;
 
     #[cfg(target_os = "windows")]
@@ -71,7 +78,7 @@ pub fn create_tun_device(
     // Set up OS routing (assign IP, add routes, exclude server endpoint)
     let route_guard = super::routing::setup_tun_routing(
         device.name(),
-        server_addr,
+        server_ip,
         include_routes,
         exclude_routes,
     )?;

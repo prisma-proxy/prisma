@@ -19,6 +19,9 @@ use tracing::{debug, info, warn};
 const TUN_LOCAL_IP: Ipv4Addr = Ipv4Addr::new(10, 0, 85, 1);
 #[cfg(target_os = "windows")]
 const TUN_NETMASK: &str = "255.255.255.0";
+/// Peer IP for macOS point-to-point utun interface (must differ from local).
+#[cfg(target_os = "macos")]
+const TUN_PEER_IP: &str = "10.0.85.254";
 
 /// Actions recorded for cleanup on Drop.
 #[derive(Debug)]
@@ -53,74 +56,11 @@ impl Drop for TunRouteGuard {
     }
 }
 
-/// Configure OS routing for TUN mode.
-///
-/// `device_name`: name of the TUN interface (e.g., "prisma-tun0")
-/// `server_addr`: proxy server address "host:port" to exclude from TUN
-/// `include_routes`: CIDRs to route through TUN (e.g., ["0.0.0.0/0"])
-/// `exclude_routes`: CIDRs to bypass TUN
-pub fn setup_tun_routing(
-    device_name: &str,
-    server_addr: &str,
-    include_routes: &[String],
-    exclude_routes: &[String],
-) -> Result<TunRouteGuard> {
-    let mut guard = TunRouteGuard {
-        actions: Vec::new(),
-    };
-
-    // Resolve the server IP from the server address (host:port or ip:port)
-    let server_ip = resolve_server_ip(server_addr)?;
-    info!(
-        device = %device_name,
-        server_ip = %server_ip,
-        "Setting up TUN routing"
-    );
-
-    // Get the original default gateway before we modify routes
-    let original_gw = get_default_gateway()?;
-    info!(gateway = %original_gw, "Original default gateway");
-
-    // Step 1: Assign IP address to TUN interface
-    assign_tun_ip(device_name, &mut guard)?;
-
-    // Step 2: Add server endpoint bypass (via original gateway)
-    add_server_bypass(&server_ip, &original_gw, &mut guard)?;
-
-    // Step 3: Add exclude routes (via original gateway)
-    for route in exclude_routes {
-        if !route.is_empty() {
-            if let Err(e) = add_exclude_route(route, &original_gw, &mut guard) {
-                warn!(route = %route, error = %e, "Failed to add exclude route");
-            }
-        }
-    }
-
-    // Step 4: Add include routes through TUN
-    let use_default = include_routes.is_empty() || include_routes.iter().any(|r| r == "0.0.0.0/0");
-
-    if use_default {
-        // Split-route trick: 0.0.0.0/1 + 128.0.0.0/1 covers all IPs
-        // without replacing the system's default gateway.
-        add_tun_route(device_name, "0.0.0.0/1", &mut guard)?;
-        add_tun_route(device_name, "128.0.0.0/1", &mut guard)?;
-    } else {
-        for route in include_routes {
-            if !route.is_empty() {
-                add_tun_route(device_name, route, &mut guard)?;
-            }
-        }
-    }
-
-    info!(
-        cleanup_actions = guard.actions.len(),
-        "TUN routing configured"
-    );
-    Ok(guard)
-}
-
 /// Resolve the server IP from "host:port" format.
-fn resolve_server_ip(server_addr: &str) -> Result<Ipv4Addr> {
+///
+/// This is called BEFORE TUN routes are set up, so DNS resolution still
+/// uses the system's normal routing and should always succeed.
+pub fn resolve_server_ip(server_addr: &str) -> Result<Ipv4Addr> {
     // Strip port
     let host = server_addr
         .rsplit_once(':')
@@ -147,20 +87,102 @@ fn resolve_server_ip(server_addr: &str) -> Result<Ipv4Addr> {
     }
 }
 
+/// Configure OS routing for TUN mode.
+///
+/// `device_name`: actual OS-level name of the TUN interface (e.g., "utun0", "prisma-tun0")
+/// `server_ip`: pre-resolved proxy server IP to exclude from TUN routes
+/// `include_routes`: CIDRs to route through TUN (e.g., ["0.0.0.0/0"])
+/// `exclude_routes`: CIDRs to bypass TUN
+pub fn setup_tun_routing(
+    device_name: &str,
+    server_ip: Ipv4Addr,
+    include_routes: &[String],
+    exclude_routes: &[String],
+) -> Result<TunRouteGuard> {
+    let mut guard = TunRouteGuard {
+        actions: Vec::new(),
+    };
+
+    info!(
+        device = %device_name,
+        server_ip = %server_ip,
+        "Setting up TUN routing"
+    );
+
+    // Get the original default gateway before we modify routes
+    let original_gw = get_default_gateway()?;
+    info!(gateway = %original_gw, "Original default gateway");
+
+    // Step 1: Assign IP address to TUN interface
+    assign_tun_ip(device_name, &mut guard)?;
+
+    // Step 2: Add server endpoint bypass (via original gateway)
+    add_server_bypass(&server_ip, &original_gw, &mut guard)?;
+
+    // Step 3: Add exclude routes (via original gateway)
+    for route in exclude_routes {
+        if !route.is_empty() {
+            if let Err(e) = add_exclude_route(route, &original_gw, &mut guard) {
+                warn!(route = %route, error = %e, "Failed to add exclude route");
+            }
+        }
+    }
+
+    // Step 4: Add include routes through TUN
+    let use_default =
+        include_routes.is_empty() || include_routes.iter().any(|r| r == "0.0.0.0/0");
+
+    if use_default {
+        // Split-route trick: 0.0.0.0/1 + 128.0.0.0/1 covers all IPs
+        // without replacing the system's default gateway.
+        add_tun_route(device_name, "0.0.0.0/1", &mut guard)?;
+        add_tun_route(device_name, "128.0.0.0/1", &mut guard)?;
+    } else {
+        for route in include_routes {
+            if !route.is_empty() {
+                add_tun_route(device_name, route, &mut guard)?;
+            }
+        }
+    }
+
+    info!(
+        cleanup_actions = guard.actions.len(),
+        "TUN routing configured"
+    );
+    Ok(guard)
+}
+
 // =============================================================================
 // Windows implementation
 // =============================================================================
 
 #[cfg(target_os = "windows")]
 fn get_default_gateway() -> Result<Ipv4Addr> {
-    // Parse `route print 0.0.0.0` to find the default gateway
+    // Try PowerShell first for robust, locale-independent gateway detection.
+    // Selects the lowest-metric default route.
+    if let Ok(output) = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop",
+        ])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Ok(gw) = stdout.trim().parse::<Ipv4Addr>() {
+            return Ok(gw);
+        }
+    }
+
+    // Fallback: parse `route print`
     let output = std::process::Command::new("route")
         .args(["print", "0.0.0.0", "mask", "0.0.0.0"])
         .output()
         .context("Failed to run 'route print'")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Look for a line like: "0.0.0.0  0.0.0.0  192.168.1.1  192.168.1.100  25"
+    // Look for lines like: "0.0.0.0  0.0.0.0  192.168.1.1  192.168.1.100  25"
+    // Pick the first valid match (lowest metric is listed first).
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 3 && parts[0] == "0.0.0.0" && parts[1] == "0.0.0.0" {
@@ -175,14 +197,15 @@ fn get_default_gateway() -> Result<Ipv4Addr> {
 
 #[cfg(target_os = "windows")]
 fn assign_tun_ip(device_name: &str, guard: &mut TunRouteGuard) -> Result<()> {
-    // Assign static IP to the TUN adapter
+    // Assign static IP to the TUN adapter.
+    // netsh syntax: netsh interface ip set address <name> static <ip> <mask>
     run_cmd(&[
         "netsh",
         "interface",
         "ip",
         "set",
         "address",
-        &format!("name={}", device_name),
+        device_name,
         "static",
         &TUN_LOCAL_IP.to_string(),
         TUN_NETMASK,
@@ -195,7 +218,7 @@ fn assign_tun_ip(device_name: &str, guard: &mut TunRouteGuard) -> Result<()> {
             "ip".into(),
             "set".into(),
             "address".into(),
-            format!("name={}", device_name),
+            device_name.into(),
             "dhcp".into(),
         ],
     });
@@ -230,7 +253,11 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "windows")]
-fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
+fn add_exclude_route(
+    cidr: &str,
+    original_gw: &Ipv4Addr,
+    guard: &mut TunRouteGuard,
+) -> Result<()> {
     let (network, mask) = cidr_to_network_mask(cidr)?;
 
     run_cmd(&[
@@ -363,7 +390,11 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "linux")]
-fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
+fn add_exclude_route(
+    cidr: &str,
+    original_gw: &Ipv4Addr,
+    guard: &mut TunRouteGuard,
+) -> Result<()> {
     run_cmd(&["ip", "route", "add", cidr, "via", &original_gw.to_string()])?;
 
     guard.actions.push(CleanupAction::RemoveRoute {
@@ -421,12 +452,13 @@ fn get_default_gateway() -> Result<Ipv4Addr> {
 #[cfg(target_os = "macos")]
 fn assign_tun_ip(device_name: &str, guard: &mut TunRouteGuard) -> Result<()> {
     // macOS utun point-to-point: ifconfig utunN inet <local> <peer> mtu <mtu> up
+    // Local and peer IPs MUST differ for a valid P2P link.
     run_cmd(&[
         "ifconfig",
         device_name,
         "inet",
         &TUN_LOCAL_IP.to_string(),
-        &TUN_LOCAL_IP.to_string(),
+        TUN_PEER_IP,
         "mtu",
         "1500",
         "up",
@@ -436,7 +468,7 @@ fn assign_tun_ip(device_name: &str, guard: &mut TunRouteGuard) -> Result<()> {
         args: vec!["ifconfig".into(), device_name.into(), "down".into()],
     });
 
-    debug!(device = %device_name, ip = %TUN_LOCAL_IP, "Assigned IP to TUN interface");
+    debug!(device = %device_name, ip = %TUN_LOCAL_IP, peer = TUN_PEER_IP, "Assigned IP to TUN interface");
     Ok(())
 }
 
@@ -468,11 +500,32 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "macos")]
-fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
-    run_cmd(&["route", "add", "-net", cidr, &original_gw.to_string()])?;
+fn add_exclude_route(
+    cidr: &str,
+    original_gw: &Ipv4Addr,
+    guard: &mut TunRouteGuard,
+) -> Result<()> {
+    let (network, mask) = cidr_to_network_mask(cidr)?;
+
+    run_cmd(&[
+        "route",
+        "add",
+        "-net",
+        &network,
+        "-netmask",
+        &mask,
+        &original_gw.to_string(),
+    ])?;
 
     guard.actions.push(CleanupAction::RemoveRoute {
-        args: vec!["route".into(), "delete".into(), "-net".into(), cidr.into()],
+        args: vec![
+            "route".into(),
+            "delete".into(),
+            "-net".into(),
+            network.clone(),
+            "-netmask".into(),
+            mask.clone(),
+        ],
     });
 
     debug!(cidr = %cidr, gateway = %original_gw, "Added exclude route");
@@ -481,10 +534,28 @@ fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGua
 
 #[cfg(target_os = "macos")]
 fn add_tun_route(device_name: &str, cidr: &str, guard: &mut TunRouteGuard) -> Result<()> {
-    run_cmd(&["route", "add", "-net", cidr, "-interface", device_name])?;
+    let (network, mask) = cidr_to_network_mask(cidr)?;
+
+    run_cmd(&[
+        "route",
+        "add",
+        "-net",
+        &network,
+        "-netmask",
+        &mask,
+        "-interface",
+        device_name,
+    ])?;
 
     guard.actions.push(CleanupAction::RemoveRoute {
-        args: vec!["route".into(), "delete".into(), "-net".into(), cidr.into()],
+        args: vec![
+            "route".into(),
+            "delete".into(),
+            "-net".into(),
+            network.clone(),
+            "-netmask".into(),
+            mask.clone(),
+        ],
     });
 
     debug!(cidr = %cidr, device = %device_name, "Added TUN route");
@@ -572,7 +643,7 @@ fn run_cmd(args: &[impl AsRef<str>]) -> Result<()> {
 }
 
 /// Convert CIDR notation (e.g., "0.0.0.0/1") to (network, subnet_mask) pair.
-#[cfg(any(target_os = "windows", test))]
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn cidr_to_network_mask(cidr: &str) -> Result<(String, String)> {
     let (network, prefix) = cidr
         .split_once('/')
