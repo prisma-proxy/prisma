@@ -129,6 +129,20 @@ jobs:
         run: |
           Copy-Item "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "${{ matrix.artifact }}"
 
+      # Bundle portable .zip with wintun.dll for TUN mode support
+      - name: Bundle portable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "${{ matrix.artifact }}" -replace '\.exe$', ''
+          New-Item -ItemType Directory -Force -Path $name
+          Copy-Item "${{ matrix.artifact }}" "$name/prisma.exe"
+          Invoke-WebRequest -Uri "https://www.wintun.net/builds/wintun-0.14.1.zip" -OutFile wintun.zip
+          Expand-Archive wintun.zip -DestinationPath wintun-tmp
+          $arch = if ("${{ matrix.target }}" -match "aarch64") { "arm64" } else { "amd64" }
+          Copy-Item "wintun-tmp/wintun/bin/$arch/wintun.dll" "$name/wintun.dll"
+          Compress-Archive -Path "$name/*" -DestinationPath "$name.zip"
+
       # Generate SHA256 checksum
       - name: Checksum (Unix)
         if: runner.os != 'Windows'
@@ -140,6 +154,11 @@ jobs:
         run: |
           $hash = (Get-FileHash "${{ matrix.artifact }}" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ matrix.artifact }}" | Out-File -Encoding ascii "${{ matrix.artifact }}.sha256"
+          $zipName = "${{ matrix.artifact }}" -replace '\.exe$', '.zip'
+          if (Test-Path $zipName) {
+            $zhash = (Get-FileHash $zipName -Algorithm SHA256).Hash.ToLower()
+            "$zhash  $zipName" | Out-File -Encoding ascii "$zipName.sha256"
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -148,6 +167,16 @@ jobs:
           path: |
             ${{ matrix.artifact }}
             ${{ matrix.artifact }}.sha256
+          retention-days: 5
+
+      - name: Upload portable bundle (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}-portable
+          path: |
+            *.zip
+            *.zip.sha256
           retention-days: 5
 
   # NOTE: prisma-gui has moved to github.com/prisma-proxy/prisma-gui
