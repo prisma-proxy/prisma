@@ -154,31 +154,22 @@ impl TcpStack {
         let config = Config::new(HardwareAddress::Ip);
         let mut iface = Interface::new(config, &mut DummyDevice { mtu: mtu as usize }, smol_now());
 
-        // Add the local IP address with /24 prefix.
+        // For transparent TUN proxy, smoltcp must accept packets addressed to ANY IP.
+        // Use the local TUN IP as both the interface address and default gateway.
+        // With any_ip=true and a /32 prefix, smoltcp will:
+        // 1. Accept packets to any unicast IP (any_ip check)
+        // 2. Pass the route check (gateway = local_ip which IS in has_ip_addr)
         let octets = local_ip.octets();
-        let ip_addr = IpCidr::new(
-            IpAddress::Ipv4(Ipv4Address::new(octets[0], octets[1], octets[2], octets[3])),
-            24,
-        );
+        let local_smol = Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]);
         iface.update_ip_addrs(|addrs| {
-            addrs.push(ip_addr).ok();
+            addrs
+                .push(IpCidr::new(IpAddress::Ipv4(local_smol), 32))
+                .ok();
         });
-
-        // Enable any_ip so smoltcp accepts packets destined to ANY IP address,
-        // not just the local 10.0.85.x subnet. This is required for transparent
-        // proxy mode where TUN captures traffic to arbitrary internet IPs (e.g.,
-        // 142.250.x.x for Google). Without this, smoltcp rejects all non-local
-        // packets with "Rejecting IPv4 packet; any_ip=false".
         iface.set_any_ip(true);
-
-        // Default gateway must be within the interface's /24 subnet (10.0.85.x),
-        // otherwise smoltcp rejects packets with "no matching routes" because
-        // it checks has_ip_addr(gateway) which requires the gateway to be local.
         iface
             .routes_mut()
-            .add_default_ipv4_route(Ipv4Address::new(
-                octets[0], octets[1], octets[2], 254,
-            ))
+            .add_default_ipv4_route(local_smol)
             .ok();
 
         // Preallocate socket storage for up to 64 concurrent connections
