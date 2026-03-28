@@ -1,10 +1,3 @@
-FROM node:22-slim AS console
-WORKDIR /console
-COPY apps/prisma-console/package.json apps/prisma-console/package-lock.json ./
-RUN npm ci
-COPY apps/prisma-console/ ./
-RUN npm run build
-
 FROM rust:1-bookworm AS builder
 WORKDIR /src
 
@@ -36,7 +29,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/target/release/prisma /usr/local/bin/prisma
-COPY --from=console /console/out /opt/prisma/console
 
 EXPOSE 8443/tcp 8443/udp 9090/tcp
 
