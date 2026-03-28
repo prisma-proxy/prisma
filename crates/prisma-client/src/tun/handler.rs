@@ -171,6 +171,15 @@ pub async fn run_tun_handler(
                     info!(count = immediate_out.len(), "smoltcp produced response packets");
                     let dev = &**device;
                     for out_pkt in &immediate_out {
+                        // Log IP header of first few response packets for debugging
+                        if pkt_count <= 5 && out_pkt.len() >= 20 {
+                            let src = std::net::Ipv4Addr::new(out_pkt[12], out_pkt[13], out_pkt[14], out_pkt[15]);
+                            let dst = std::net::Ipv4Addr::new(out_pkt[16], out_pkt[17], out_pkt[18], out_pkt[19]);
+                            info!(
+                                src_ip = %src, dst_ip = %dst, len = out_pkt.len(),
+                                "smoltcp response IP header"
+                            );
+                        }
                         if let Err(e) = dev.send(out_pkt) {
                             warn!(error = %e, "TUN write error");
                         }
