@@ -449,18 +449,29 @@ fn create_android_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
 
     let fd = wait_for_mobile_tun_fd("Android VpnService")?;
 
-    // Android VPN fd may be non-blocking — set to blocking mode
-    // to avoid EAGAIN spam in the read loop.
+    // Duplicate the fd so Rust owns an independent handle.
+    // The original fd is owned by Android's ParcelFileDescriptor —
+    // from_raw_fd would take ownership and cause EIO on write.
+    let dup_fd = unsafe { libc::dup(fd) };
+    if dup_fd < 0 {
+        anyhow::bail!("Failed to dup TUN fd: {}", std::io::Error::last_os_error());
+    }
+
+    // Set to blocking mode to avoid EAGAIN in the read loop.
     unsafe {
-        let flags = libc::fcntl(fd, libc::F_GETFL);
+        let flags = libc::fcntl(dup_fd, libc::F_GETFL);
         if flags >= 0 && (flags & libc::O_NONBLOCK) != 0 {
-            libc::fcntl(fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
-            tracing::debug!(fd = fd, "Set TUN fd to blocking mode");
+            libc::fcntl(dup_fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
         }
     }
 
-    let file = unsafe { std::fs::File::from_raw_fd(fd) };
-    tracing::info!(fd = fd, mtu = mtu, "Android TUN device ready");
+    let file = unsafe { std::fs::File::from_raw_fd(dup_fd) };
+    tracing::info!(
+        original_fd = fd,
+        dup_fd = dup_fd,
+        mtu = mtu,
+        "Android TUN device ready"
+    );
 
     Ok(Box::new(MobileTunDevice {
         fd: file,
