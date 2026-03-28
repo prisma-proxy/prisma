@@ -111,21 +111,21 @@ prisma/
 
 ## 文档
 
-完整文档请访问 **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**，包括：
+完整文档请访问 **[prisma-proxy.github.io/prisma-docs](https://prisma-proxy.github.io/prisma-docs/)**，包括：
 
-- [快速入门](https://yamimega.github.io/prisma/docs/getting-started) — 第一个代理会话教程
-- [安装指南](https://yamimega.github.io/prisma/docs/installation) — 全平台、Docker、Cargo
-- [服务端配置](https://yamimega.github.io/prisma/docs/configuration/server) — 完整配置参考
-- [客户端配置](https://yamimega.github.io/prisma/docs/configuration/client) — 完整配置参考
-- [路由规则](https://yamimega.github.io/prisma/docs/features/routing-rules) — 客户端/服务端路由 + GeoIP
-- [PrismaTLS](https://yamimega.github.io/prisma/docs/features/prisma-tls) — 主动探测防御
-- [流量整形](https://yamimega.github.io/prisma/docs/features/traffic-shaping) — 抗指纹识别
-- [TUN 模式](https://yamimega.github.io/prisma/docs/features/tun-mode) — 系统级代理配置
-- [配置示例](https://yamimega.github.io/prisma/docs/deployment/config-examples) — 8 种场景即用模板
-- [PrismaVeil 协议](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — 线路协议规范
-- [控制台](https://yamimega.github.io/prisma/docs/features/console) — Web UI 配置
-- [管理 API](https://yamimega.github.io/prisma/docs/features/management-api) — REST/WebSocket API 参考
-- [GUI 客户端](https://yamimega.github.io/prisma/docs/features/gui-clients) — Windows、Android、iOS、macOS 应用
+- [快速入门](https://prisma-proxy.github.io/prisma-docs/docs/getting-started) — 第一个代理会话教程
+- [安装指南](https://prisma-proxy.github.io/prisma-docs/docs/installation) — 全平台、Docker、Cargo
+- [服务端配置](https://prisma-proxy.github.io/prisma-docs/docs/configuration/server) — 完整配置参考
+- [客户端配置](https://prisma-proxy.github.io/prisma-docs/docs/configuration/client) — 完整配置参考
+- [路由规则](https://prisma-proxy.github.io/prisma-docs/docs/features/routing-rules) — 客户端/服务端路由 + GeoIP
+- [PrismaTLS](https://prisma-proxy.github.io/prisma-docs/docs/features/prisma-tls) — 主动探测防御
+- [流量整形](https://prisma-proxy.github.io/prisma-docs/docs/features/traffic-shaping) — 抗指纹识别
+- [TUN 模式](https://prisma-proxy.github.io/prisma-docs/docs/features/tun-mode) — 系统级代理配置
+- [配置示例](https://prisma-proxy.github.io/prisma-docs/docs/deployment/config-examples) — 8 种场景即用模板
+- [PrismaVeil 协议](https://prisma-proxy.github.io/prisma-docs/docs/security/prismaveil-protocol) — 线路协议规范
+- [控制台](https://prisma-proxy.github.io/prisma-docs/docs/features/console) — Web UI 配置
+- [管理 API](https://prisma-proxy.github.io/prisma-docs/docs/features/management-api) — REST/WebSocket API 参考
+- [GUI 客户端](https://prisma-proxy.github.io/prisma-docs/docs/features/gui-clients) — Windows、Android、iOS、macOS 应用
 
 ## 开发
 

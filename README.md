@@ -108,17 +108,17 @@ prisma/
 
 ## Documentation
 
-Full documentation: **[yamimega.github.io/prisma](https://yamimega.github.io/prisma/)**
+Full documentation: **[prisma-proxy.github.io/prisma-docs](https://prisma-proxy.github.io/prisma-docs/)**
 
-- [Getting Started](https://yamimega.github.io/prisma/docs/getting-started) — first proxy session walkthrough
-- [Installation](https://yamimega.github.io/prisma/docs/installation) — all platforms, Docker, Cargo
-- [Server Configuration](https://yamimega.github.io/prisma/docs/configuration/server) — full config reference
-- [Client Configuration](https://yamimega.github.io/prisma/docs/configuration/client) — full config reference
-- [Routing Rules](https://yamimega.github.io/prisma/docs/features/routing-rules) — client/server routing + GeoIP
-- [PrismaTLS](https://yamimega.github.io/prisma/docs/features/prisma-tls) — active probing resistance
-- [Traffic Shaping](https://yamimega.github.io/prisma/docs/features/traffic-shaping) — anti-fingerprinting
-- [TUN Mode](https://yamimega.github.io/prisma/docs/features/tun-mode) — system-wide proxy setup
-- [PrismaVeil Protocol](https://yamimega.github.io/prisma/docs/security/prismaveil-protocol) — wire protocol specification
+- [Getting Started](https://prisma-proxy.github.io/prisma-docs/docs/getting-started) — first proxy session walkthrough
+- [Installation](https://prisma-proxy.github.io/prisma-docs/docs/installation) — all platforms, Docker, Cargo
+- [Server Configuration](https://prisma-proxy.github.io/prisma-docs/docs/configuration/server) — full config reference
+- [Client Configuration](https://prisma-proxy.github.io/prisma-docs/docs/configuration/client) — full config reference
+- [Routing Rules](https://prisma-proxy.github.io/prisma-docs/docs/features/routing-rules) — client/server routing + GeoIP
+- [PrismaTLS](https://prisma-proxy.github.io/prisma-docs/docs/features/prisma-tls) — active probing resistance
+- [Traffic Shaping](https://prisma-proxy.github.io/prisma-docs/docs/features/traffic-shaping) — anti-fingerprinting
+- [TUN Mode](https://prisma-proxy.github.io/prisma-docs/docs/features/tun-mode) — system-wide proxy setup
+- [PrismaVeil Protocol](https://prisma-proxy.github.io/prisma-docs/docs/security/prismaveil-protocol) — wire protocol specification
 
 ## Development
 
