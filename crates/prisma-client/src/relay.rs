@@ -171,42 +171,19 @@ where
 
     // Poll interval for checking smoltcp socket state
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
+    // Skip the first immediate tick — give the server time to process CMD_CONNECT
+    // before we start uploading client data (TLS ClientHello).
+    interval.tick().await;
 
     let mut encoder = FrameEncoder::new();
     let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
 
     loop {
         tokio::select! {
-            _ = interval.tick() => {
-                // Read data and check close state in a single lock acquisition
-                let (n, is_closed) = {
-                    let mut s = stack.lock().await;
-                    let n = s.read_from_socket(handle, encoder.payload_mut());
-                    let closed = s.is_closed(handle);
-                    (n, closed)
-                };
-                if n > 0 {
-                    metrics.add_up(n as u64);
-                    let nonce = session_keys.next_client_nonce();
-                    match encoder.seal_data_frame_v5(
-                        cipher.as_ref(),
-                        &nonce,
-                        n,
-                        0,
-                        &padding_range,
-                        header_key.as_ref(),
-                    ) {
-                        Ok(wire) => {
-                            if tunnel_write.write_all(wire).await.is_err() { break; }
-                        }
-                        Err(e) => {
-                            warn!("TUN relay encrypt error: {}", e);
-                            break;
-                        }
-                    }
-                }
-                if is_closed { break; }
-            }
+            // Prioritize tunnel reads over uploads — ensures we don't
+            // flood the server before it's ready to relay.
+            biased;
+
             // Read encrypted data from tunnel → decrypt → write to smoltcp socket
             result = async {
                 let mut len_buf = [0u8; 2];
@@ -238,10 +215,9 @@ where
                                         if written == 0 && !payload.is_empty() {
                                             tracing::warn!(
                                                 payload_len = payload.len(),
-                                                "TUN relay: write_to_socket returned 0 — data dropped"
+                                                "TUN relay: write_to_socket returned 0"
                                             );
                                         }
-                                        // Poll immediately and write to TUN — don't wait for stack_poll_loop
                                         if let Some(ref dev) = device {
                                             let out = s.poll();
                                             drop(s);
@@ -261,10 +237,41 @@ where
                         }
                     }
                     Err(e) => {
-                        info!("TUN relay: tunnel read error, ending session: {}", e);
+                        info!("TUN relay: tunnel read ended: {}", e);
                         break;
                     },
                 }
+            }
+
+            _ = interval.tick() => {
+                // Read data and check close state in a single lock acquisition
+                let (n, is_closed) = {
+                    let mut s = stack.lock().await;
+                    let n = s.read_from_socket(handle, encoder.payload_mut());
+                    let closed = s.is_closed(handle);
+                    (n, closed)
+                };
+                if n > 0 {
+                    metrics.add_up(n as u64);
+                    let nonce = session_keys.next_client_nonce();
+                    match encoder.seal_data_frame_v5(
+                        cipher.as_ref(),
+                        &nonce,
+                        n,
+                        0,
+                        &padding_range,
+                        header_key.as_ref(),
+                    ) {
+                        Ok(wire) => {
+                            if tunnel_write.write_all(wire).await.is_err() { break; }
+                        }
+                        Err(e) => {
+                            warn!("TUN relay encrypt error: {}", e);
+                            break;
+                        }
+                    }
+                }
+                if is_closed { break; }
             }
         }
     }
@@ -272,6 +279,7 @@ where
     info!("TUN TCP relay session ended");
     Ok(())
 }
+
 
 /// Direct relay between local client and outbound connection (no encryption).
 /// Used when routing rules select "direct" action.
