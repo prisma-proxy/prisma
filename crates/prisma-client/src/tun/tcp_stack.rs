@@ -284,6 +284,24 @@ impl TcpStack {
         self.connections.keys().copied().collect()
     }
 
+    /// Get the TCP state name for debugging.
+    pub fn socket_state(&self, handle: SocketHandle) -> &'static str {
+        let socket = self.sockets.get::<tcp::Socket>(handle);
+        match socket.state() {
+            TcpState::Closed => "Closed",
+            TcpState::Listen => "Listen",
+            TcpState::SynSent => "SynSent",
+            TcpState::SynReceived => "SynReceived",
+            TcpState::Established => "Established",
+            TcpState::FinWait1 => "FinWait1",
+            TcpState::FinWait2 => "FinWait2",
+            TcpState::CloseWait => "CloseWait",
+            TcpState::Closing => "Closing",
+            TcpState::LastAck => "LastAck",
+            TcpState::TimeWait => "TimeWait",
+        }
+    }
+
     /// Get connection info for a socket.
     pub fn get_connection(&self, handle: SocketHandle) -> Option<&TcpConnection> {
         self.connections.get(&handle)

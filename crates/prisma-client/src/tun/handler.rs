@@ -389,12 +389,29 @@ async fn stack_poll_loop(
 
             // Check for newly established connections
             let mut establish = Vec::new();
-            for handle in s.connection_handles() {
-                if s.is_established(handle) {
-                    if let Some(conn) = s.get_connection(handle) {
-                        establish.push((conn.dest, handle, conn.domain.clone()));
+            let handles = s.connection_handles();
+            for handle in &handles {
+                if s.is_established(*handle) {
+                    if let Some(conn) = s.get_connection(*handle) {
+                        establish.push((conn.dest, *handle, conn.domain.clone()));
                     }
                 }
+            }
+            // Log periodically to see if sockets exist and their states
+            static POLL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let pc = POLL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if pc == 100 || pc == 500 || pc == 1000 {
+                let states: Vec<String> = handles.iter().map(|h| {
+                    let state = s.socket_state(*h);
+                    format!("{:?}:{}", h, state)
+                }).collect();
+                info!(
+                    poll_count = pc,
+                    sockets = handles.len(),
+                    established = establish.len(),
+                    states = ?states,
+                    "stack_poll_loop status"
+                );
             }
 
             // Cleanup closed sockets
@@ -428,7 +445,7 @@ async fn stack_poll_loop(
                 continue;
             }
 
-            debug!(dest = %dest, "TUN TCP connection established, starting tunnel relay");
+            info!(dest = %dest, "TUN TCP connection ESTABLISHED, starting tunnel relay");
             tunnels_guard.insert(dest, TunnelState::Established);
 
             let ctx = ctx.clone();
