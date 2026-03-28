@@ -154,8 +154,7 @@ impl TcpStack {
         let config = Config::new(HardwareAddress::Ip);
         let mut iface = Interface::new(config, &mut DummyDevice { mtu: mtu as usize }, smol_now());
 
-        // Add the local IP address with /24 prefix (must match VPN builder's addAddress prefix).
-        // Using /0 would make smoltcp think it "owns" every IP and refuse to route.
+        // Add the local IP address with /24 prefix.
         let octets = local_ip.octets();
         let ip_addr = IpCidr::new(
             IpAddress::Ipv4(Ipv4Address::new(octets[0], octets[1], octets[2], octets[3])),
@@ -164,6 +163,13 @@ impl TcpStack {
         iface.update_ip_addrs(|addrs| {
             addrs.push(ip_addr).ok();
         });
+
+        // Enable any_ip so smoltcp accepts packets destined to ANY IP address,
+        // not just the local 10.0.85.x subnet. This is required for transparent
+        // proxy mode where TUN captures traffic to arbitrary internet IPs (e.g.,
+        // 142.250.x.x for Google). Without this, smoltcp rejects all non-local
+        // packets with "Rejecting IPv4 packet; any_ip=false".
+        iface.set_any_ip(true);
 
         // Set default gateway (any IP works since we're routing everything through TUN)
         iface
