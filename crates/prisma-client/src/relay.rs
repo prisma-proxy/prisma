@@ -158,6 +158,7 @@ pub async fn relay_tun_tcp_encrypted<R, W>(
     cipher: Box<dyn prisma_core::crypto::aead::AeadCipher>,
     mut session_keys: prisma_core::protocol::types::SessionKeys,
     metrics: ClientMetrics,
+    device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
 ) -> Result<()>
 where
     R: tokio::io::AsyncRead + Unpin + Send,
@@ -230,7 +231,21 @@ where
                                     CMD_DATA => {
                                         metrics.add_down(payload.len() as u64);
                                         let mut s = stack.lock().await;
-                                        s.write_to_socket(handle, payload);
+                                        let written = s.write_to_socket(handle, payload);
+                                        if written == 0 && !payload.is_empty() {
+                                            tracing::warn!(
+                                                payload_len = payload.len(),
+                                                "TUN relay: write_to_socket returned 0 — data dropped"
+                                            );
+                                        }
+                                        // Poll immediately and write to TUN — don't wait for stack_poll_loop
+                                        if let Some(ref dev) = device {
+                                            let out = s.poll();
+                                            drop(s);
+                                            for pkt in &out {
+                                                let _ = dev.send(pkt);
+                                            }
+                                        }
                                     }
                                     CMD_CLOSE => break,
                                     _ => {}
