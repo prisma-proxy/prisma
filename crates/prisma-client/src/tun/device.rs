@@ -575,22 +575,23 @@ impl TunDevice for MobileTunDevice {
 }
 
 /// Wait for the platform VPN service to provide a TUN file descriptor.
-/// Polls up to 50 times (5 seconds total).
+/// Polls up to 300 times (30 seconds total) to match the Tauri-side polling timeout.
 #[cfg(any(target_os = "android", target_os = "ios"))]
 fn wait_for_mobile_tun_fd(source: &str) -> Result<i32> {
     // The TUN fd is set atomically by the platform VPN service:
-    // - Android: JNI nativeSetTunFd() → PrismaClient.tun_fd
+    // - Android: Kotlin VpnPlugin.getTunFd() → Rust mobile.rs poll → prisma_set_tun_fd()
     // - iOS: prisma_ios_set_tun_fd() → IOS_TUN_FD
     // prisma_get_tun_fd reads this atomic. On library load the value is -1.
-    for _ in 0..50 {
+    for i in 0..300 {
         let fd = crate::mobile_tun_fd();
         if fd >= 0 {
+            tracing::info!(fd, poll_count = i, "Mobile TUN fd received");
             return Ok(fd);
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     Err(anyhow::anyhow!(
-        "TUN fd not available after 5s. Ensure {} has started.",
+        "TUN fd not available after 30s. Ensure {} has started.",
         source
     ))
 }
