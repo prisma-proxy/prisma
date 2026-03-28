@@ -445,36 +445,20 @@ impl TunDevice for MacOsTunDevice {
 
 #[cfg(target_os = "android")]
 fn create_android_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
-    use std::os::fd::FromRawFd;
-
     let fd = wait_for_mobile_tun_fd("Android VpnService")?;
 
-    // Duplicate the fd so Rust owns an independent handle.
-    // The original fd is owned by Android's ParcelFileDescriptor —
-    // from_raw_fd would take ownership and cause EIO on write.
-    let dup_fd = unsafe { libc::dup(fd) };
-    if dup_fd < 0 {
-        anyhow::bail!("Failed to dup TUN fd: {}", std::io::Error::last_os_error());
-    }
-
-    // Set to blocking mode to avoid EAGAIN in the read loop.
+    // Set to blocking mode for reads.
     unsafe {
-        let flags = libc::fcntl(dup_fd, libc::F_GETFL);
+        let flags = libc::fcntl(fd, libc::F_GETFL);
         if flags >= 0 && (flags & libc::O_NONBLOCK) != 0 {
-            libc::fcntl(dup_fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
+            libc::fcntl(fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
         }
     }
 
-    let file = unsafe { std::fs::File::from_raw_fd(dup_fd) };
-    tracing::info!(
-        original_fd = fd,
-        dup_fd = dup_fd,
-        mtu = mtu,
-        "Android TUN device ready"
-    );
+    tracing::info!(fd = fd, mtu = mtu, "Android TUN device ready (raw fd)");
 
-    Ok(Box::new(MobileTunDevice {
-        fd: file,
+    Ok(Box::new(RawFdTunDevice {
+        fd,
         name: "tun0".to_string(),
         mtu,
     }))
@@ -499,17 +483,59 @@ fn create_ios_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
     }))
 }
 
-/// Shared TUN device for Android and iOS.
-/// On mobile, the OS VPN service creates the TUN interface and passes the fd.
-/// Raw IP packets — no protocol header (unlike macOS utun).
-#[cfg(any(target_os = "android", target_os = "ios"))]
+/// TUN device using raw fd syscalls — does NOT take ownership of the fd.
+/// Used on Android where the fd is owned by ParcelFileDescriptor in the VPN service.
+#[cfg(target_os = "android")]
+struct RawFdTunDevice {
+    fd: i32,
+    name: String,
+    mtu: u16,
+}
+
+// SAFETY: The fd is a plain integer; read/write are atomic syscalls.
+#[cfg(target_os = "android")]
+unsafe impl Send for RawFdTunDevice {}
+#[cfg(target_os = "android")]
+unsafe impl Sync for RawFdTunDevice {}
+
+#[cfg(target_os = "android")]
+impl TunDevice for RawFdTunDevice {
+    fn recv(&self, buf: &mut [u8]) -> Result<usize> {
+        let n = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+        if n < 0 {
+            Err(std::io::Error::last_os_error().into())
+        } else {
+            Ok(n as usize)
+        }
+    }
+
+    fn send(&self, buf: &[u8]) -> Result<usize> {
+        let n = unsafe { libc::write(self.fd, buf.as_ptr() as *const libc::c_void, buf.len()) };
+        if n < 0 {
+            Err(std::io::Error::last_os_error().into())
+        } else {
+            Ok(n as usize)
+        }
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn mtu(&self) -> u16 {
+        self.mtu
+    }
+}
+
+/// Shared TUN device for iOS (uses File wrapper).
+#[cfg(target_os = "ios")]
 struct MobileTunDevice {
     fd: std::fs::File,
     name: String,
     mtu: u16,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(target_os = "ios")]
 impl TunDevice for MobileTunDevice {
     fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         use std::io::Read;
