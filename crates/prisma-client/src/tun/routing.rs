@@ -168,14 +168,18 @@ pub fn setup_tun_routing(
 fn get_default_gateway() -> Result<Ipv4Addr> {
     // Try PowerShell first for robust, locale-independent gateway detection.
     // Selects the lowest-metric default route.
-    if let Ok(output) = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop",
-        ])
-        .output()
-    {
+    let ps_result = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop",
+            ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+    };
+    if let Ok(output) = ps_result {
         let stdout = String::from_utf8_lossy(&output.stdout);
         if let Ok(gw) = stdout.trim().parse::<Ipv4Addr>() {
             return Ok(gw);
@@ -183,10 +187,14 @@ fn get_default_gateway() -> Result<Ipv4Addr> {
     }
 
     // Fallback: parse `route print`
-    let output = std::process::Command::new("route")
-        .args(["print", "0.0.0.0", "mask", "0.0.0.0"])
-        .output()
-        .context("Failed to run 'route print'")?;
+    let output = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("route")
+            .args(["print", "0.0.0.0", "mask", "0.0.0.0"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+            .context("Failed to run 'route print'")?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Look for lines like: "0.0.0.0  0.0.0.0  192.168.1.1  192.168.1.100  25"
@@ -610,6 +618,7 @@ fn add_tun_route(_device_name: &str, _cidr: &str, _guard: &mut TunRouteGuard) ->
 // =============================================================================
 
 /// Run a system command, returning an error if it fails.
+/// On Windows, uses CREATE_NO_WINDOW to suppress console window flashes.
 fn run_cmd(args: &[impl AsRef<str>]) -> Result<()> {
     let args_str: Vec<&str> = args.iter().map(|a| a.as_ref()).collect();
     if args_str.is_empty() {
@@ -618,8 +627,14 @@ fn run_cmd(args: &[impl AsRef<str>]) -> Result<()> {
 
     debug!(cmd = %args_str.join(" "), "Running routing command");
 
-    let output = std::process::Command::new(args_str[0])
-        .args(&args_str[1..])
+    let mut cmd = std::process::Command::new(args_str[0]);
+    cmd.args(&args_str[1..]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let output = cmd
         .output()
         .with_context(|| format!("Failed to run: {}", args_str.join(" ")))?;
 

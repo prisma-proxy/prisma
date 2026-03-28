@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -156,19 +158,21 @@ pub fn download_and_verify_with_proxy(
     expected_sha256: &str,
     proxy_port: u16,
 ) -> Result<Vec<u8>> {
-    let agent = build_agent(proxy_port)?;
-    let mut resp = agent
-        .get(download_url)
-        .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
-        .call()?;
+    download_and_verify_with_progress(download_url, expected_sha256, proxy_port, |_, _| {})
+}
 
-    let buf = resp
-        .body_mut()
-        .with_config()
-        .limit(MAX_DOWNLOAD_SIZE)
-        .read_to_vec()?;
+/// Download with SHA256 verification and progress reporting.
+pub fn download_and_verify_with_progress<F>(
+    download_url: &str,
+    expected_sha256: &str,
+    proxy_port: u16,
+    on_progress: F,
+) -> Result<Vec<u8>>
+where
+    F: Fn(u64, u64),
+{
+    let buf = download_with_progress(download_url, proxy_port, on_progress)?;
 
-    // Verify SHA256
     let mut hasher = Sha256::new();
     hasher.update(&buf);
     let result = format!("{:x}", hasher.finalize());
@@ -199,16 +203,60 @@ pub fn download(download_url: &str) -> Result<Vec<u8>> {
 
 /// Download a binary from `download_url` without hash verification, optionally via proxy.
 pub fn download_with_proxy(download_url: &str, proxy_port: u16) -> Result<Vec<u8>> {
+    download_with_progress(download_url, proxy_port, |_, _| {})
+}
+
+/// Download a binary with progress reporting.
+///
+/// `on_progress(bytes_downloaded, total_bytes)` is called after each chunk.
+/// `total_bytes` is 0 if the server didn't send a Content-Length header.
+pub fn download_with_progress<F>(
+    download_url: &str,
+    proxy_port: u16,
+    on_progress: F,
+) -> Result<Vec<u8>>
+where
+    F: Fn(u64, u64),
+{
     let agent = build_agent(proxy_port)?;
-    let mut resp = agent
+    let resp = agent
         .get(download_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
         .call()?;
-    let buf = resp
-        .body_mut()
-        .with_config()
-        .limit(MAX_DOWNLOAD_SIZE)
-        .read_to_vec()?;
+
+    let total = resp
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    if total > MAX_DOWNLOAD_SIZE {
+        anyhow::bail!(
+            "Download too large: {} bytes (max {})",
+            total,
+            MAX_DOWNLOAD_SIZE
+        );
+    }
+
+    let mut reader = resp.into_body().into_reader();
+    let mut buf = Vec::with_capacity(if total > 0 { total as usize } else { 1 << 20 });
+    let mut downloaded: u64 = 0;
+    let mut chunk = [0u8; 65536]; // 64KB chunks
+
+    loop {
+        let n = reader.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        downloaded += n as u64;
+        if downloaded > MAX_DOWNLOAD_SIZE {
+            anyhow::bail!("Download exceeded max size ({} bytes)", MAX_DOWNLOAD_SIZE);
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        on_progress(downloaded, total);
+    }
+
     Ok(buf)
 }
 

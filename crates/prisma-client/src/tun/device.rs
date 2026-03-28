@@ -115,23 +115,32 @@ pub fn create_tun_device(
 fn create_windows_tun(device_name: &str, mtu: u16) -> Result<Box<dyn TunDevice>> {
     use std::sync::Arc;
 
-    // Try loading wintun.dll from the executable's directory first (portable layout),
-    // then fall back to the system PATH / current working directory.
+    // Search for wintun.dll in multiple locations:
+    // 1. Exe directory (portable layout or after startup copy)
+    // 2. resources/ subdirectory (Tauri bundled resources)
+    // 3. System PATH / current working directory
     let wintun = unsafe {
-        let from_exe_dir = std::env::current_exe()
+        let exe_dir = std::env::current_exe()
             .ok()
-            .and_then(|p| p.parent().map(|d| d.join("wintun.dll")))
-            .filter(|p| p.exists())
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+        let candidates = [
+            exe_dir.as_ref().map(|d| d.join("wintun.dll")),
+            exe_dir.as_ref().map(|d| d.join("resources").join("wintun.dll")),
+        ];
+        let from_path = candidates
+            .iter()
+            .flatten()
+            .find(|p| p.exists())
             .map(|p| wintun::load_from_path(p));
 
-        match from_exe_dir {
+        match from_path {
             Some(Ok(w)) => Ok(w),
             _ => wintun::load(),
         }
     }
     .map_err(|e| {
         anyhow::anyhow!(
-            "Failed to load Wintun driver: {}. Place wintun.dll next to the prisma executable, or download from https://www.wintun.net/",
+            "Failed to load Wintun driver: {}. Place wintun.dll next to the executable or in a resources/ subdirectory. Download from https://www.wintun.net/",
             e
         )
     })?;
