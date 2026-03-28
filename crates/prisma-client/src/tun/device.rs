@@ -60,7 +60,24 @@ pub fn create_tun_device(
         device = create_macos_tun(device_name, mtu)?;
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    // Mobile platforms: TUN fd comes from the OS VPN service, no routing needed.
+    #[cfg(target_os = "android")]
+    {
+        device = create_android_tun(mtu)?;
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        device = create_ios_tun(mtu)?;
+    }
+
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "android",
+        target_os = "ios",
+    )))]
     {
         let _ = (
             device_name,
@@ -71,11 +88,15 @@ pub fn create_tun_device(
         );
         return Err(anyhow::anyhow!(
             "TUN mode is not supported on this platform. \
-             Supported: Windows, Linux, macOS."
+             Supported: Windows, Linux, macOS, Android, iOS."
         ));
     }
 
-    // Set up OS routing (assign IP, add routes, exclude server endpoint)
+    // On mobile, the OS VPN service handles routing — no route guard needed.
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let route_guard = super::routing::TunRouteGuard::noop();
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let route_guard = super::routing::setup_tun_routing(
         device.name(),
         server_ip,
@@ -393,4 +414,96 @@ impl TunDevice for MacOsTunDevice {
     fn mtu(&self) -> u16 {
         self.mtu
     }
+}
+
+// =============================================================================
+// Android implementation (uses fd from VpnService via JNI)
+// =============================================================================
+
+#[cfg(target_os = "android")]
+fn create_android_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
+    use std::os::fd::FromRawFd;
+
+    let fd = wait_for_mobile_tun_fd("Android VpnService")?;
+    let file = unsafe { std::fs::File::from_raw_fd(fd) };
+    tracing::info!(fd = fd, mtu = mtu, "Android TUN device ready");
+
+    Ok(Box::new(MobileTunDevice {
+        fd: file,
+        name: "tun0".to_string(),
+        mtu,
+    }))
+}
+
+// =============================================================================
+// iOS implementation (uses fd from NEPacketTunnelProvider via C FFI)
+// =============================================================================
+
+#[cfg(target_os = "ios")]
+fn create_ios_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
+    use std::os::fd::FromRawFd;
+
+    let fd = wait_for_mobile_tun_fd("iOS NetworkExtension")?;
+    let file = unsafe { std::fs::File::from_raw_fd(fd) };
+    tracing::info!(fd = fd, mtu = mtu, "iOS TUN device ready");
+
+    Ok(Box::new(MobileTunDevice {
+        fd: file,
+        name: "utun-prisma".to_string(),
+        mtu,
+    }))
+}
+
+/// Shared TUN device for Android and iOS.
+/// On mobile, the OS VPN service creates the TUN interface and passes the fd.
+/// Raw IP packets — no protocol header (unlike macOS utun).
+#[cfg(any(target_os = "android", target_os = "ios"))]
+struct MobileTunDevice {
+    fd: std::fs::File,
+    name: String,
+    mtu: u16,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+impl TunDevice for MobileTunDevice {
+    fn recv(&self, buf: &mut [u8]) -> Result<usize> {
+        use std::io::Read;
+        let mut fd = &self.fd;
+        Ok(fd.read(buf)?)
+    }
+
+    fn send(&self, buf: &[u8]) -> Result<usize> {
+        use std::io::Write;
+        let mut fd = &self.fd;
+        Ok(fd.write(buf)?)
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn mtu(&self) -> u16 {
+        self.mtu
+    }
+}
+
+/// Wait for the platform VPN service to provide a TUN file descriptor.
+/// Polls up to 50 times (5 seconds total).
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn wait_for_mobile_tun_fd(source: &str) -> Result<i32> {
+    // The TUN fd is set atomically by the platform VPN service:
+    // - Android: JNI nativeSetTunFd() → PrismaClient.tun_fd
+    // - iOS: prisma_ios_set_tun_fd() → IOS_TUN_FD
+    // prisma_get_tun_fd reads this atomic. On library load the value is -1.
+    for _ in 0..50 {
+        let fd = crate::mobile_tun_fd();
+        if fd >= 0 {
+            return Ok(fd);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err(anyhow::anyhow!(
+        "TUN fd not available after 5s. Ensure {} has started.",
+        source
+    ))
 }

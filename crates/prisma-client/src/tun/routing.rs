@@ -37,6 +37,15 @@ pub struct TunRouteGuard {
     actions: Vec<CleanupAction>,
 }
 
+impl TunRouteGuard {
+    /// Create a no-op guard (for mobile where the OS handles routing).
+    pub fn noop() -> Self {
+        Self {
+            actions: Vec::new(),
+        }
+    }
+}
+
 impl Drop for TunRouteGuard {
     fn drop(&mut self) {
         info!(

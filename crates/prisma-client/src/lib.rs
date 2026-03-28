@@ -23,6 +23,23 @@ pub mod xporta_stream;
 
 use std::sync::Arc;
 
+/// Get the TUN file descriptor set by the mobile platform's VPN service.
+/// Returns -1 if not set. Used by Android/iOS TUN device creation.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+static MOBILE_TUN_FD: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+/// Read the mobile TUN fd.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn mobile_tun_fd() -> i32 {
+    MOBILE_TUN_FD.load(std::sync::atomic::Ordering::Acquire)
+}
+
+/// Set the mobile TUN fd (called from FFI layer).
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn set_mobile_tun_fd(fd: i32) {
+    MOBILE_TUN_FD.store(fd, std::sync::atomic::Ordering::Release);
+}
+
 use anyhow::Result;
 use prisma_core::config::load_client_config;
 use prisma_core::congestion::CongestionMode;
