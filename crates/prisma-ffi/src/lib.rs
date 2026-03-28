@@ -1145,6 +1145,11 @@ pub unsafe extern "C" fn prisma_set_tun_fd(handle: *mut PrismaClient, fd: c_int)
 
         let prev = client.tun_fd.swap(fd, std::sync::atomic::Ordering::Relaxed);
 
+        // Bridge to the static atomic in prisma-client so
+        // wait_for_mobile_tun_fd() receives the fd.
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        prisma_client::set_mobile_tun_fd(fd);
+
         tracing::info!(previous = prev, current = fd, "TUN fd updated");
 
         client.fire_event(
