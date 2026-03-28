@@ -154,11 +154,12 @@ impl TcpStack {
         let config = Config::new(HardwareAddress::Ip);
         let mut iface = Interface::new(config, &mut DummyDevice { mtu: mtu as usize }, smol_now());
 
-        // Add the local IP address
+        // Add the local IP address with /24 prefix (must match VPN builder's addAddress prefix).
+        // Using /0 would make smoltcp think it "owns" every IP and refuse to route.
         let octets = local_ip.octets();
         let ip_addr = IpCidr::new(
             IpAddress::Ipv4(Ipv4Address::new(octets[0], octets[1], octets[2], octets[3])),
-            0,
+            24,
         );
         iface.update_ip_addrs(|addrs| {
             addrs.push(ip_addr).ok();
