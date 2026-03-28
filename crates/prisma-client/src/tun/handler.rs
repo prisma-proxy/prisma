@@ -57,27 +57,42 @@ pub async fn run_tun_handler(
         stack_poll_loop(poll_stack, poll_device, poll_tunnels, poll_ctx).await;
     });
 
-    // Main loop: read packets from TUN device and feed them to the stack
-    let mut buf = vec![0u8; mtu as usize + 64];
-    loop {
-        let n = {
-            let dev = device.lock().await;
+    // Main loop: read packets from TUN device and feed them to the stack.
+    // TUN reads are blocking (especially on Android where the fd is blocking mode),
+    // so we use spawn_blocking to avoid blocking the tokio runtime thread.
+    let read_device = device.clone();
+    let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
+    tokio::task::spawn_blocking(move || {
+        let mut buf = vec![0u8; mtu as usize + 64];
+        let rt = tokio::runtime::Handle::current();
+        loop {
+            let dev = rt.block_on(read_device.lock());
             match dev.recv(&mut buf) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!(error = %e, "TUN read error");
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+                Ok(0) => {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
                     continue;
                 }
+                Ok(n) => {
+                    if pkt_tx.blocking_send(buf[..n].to_vec()).is_err() {
+                        break; // channel closed, handler shutting down
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "TUN read error");
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
             }
-        };
-
-        if n == 0 {
-            tokio::time::sleep(Duration::from_millis(1)).await;
-            continue;
         }
+    });
 
-        let pkt = &buf[..n];
+    loop {
+        let pkt_data = match pkt_rx.recv().await {
+            Some(data) => data,
+            None => return Ok(()), // reader thread exited
+        };
+        let n = pkt_data.len();
+
+        let pkt = &pkt_data[..n];
 
         // Parse IPv4 header
         let ip_info = match packet::parse_ipv4(pkt) {
