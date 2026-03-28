@@ -455,7 +455,23 @@ fn create_android_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
         }
     }
 
-    tracing::info!(fd = fd, mtu = mtu, "Android TUN device ready (raw fd)");
+    // Test write a minimal valid IPv4 packet to verify the fd is writable.
+    // A 20-byte IPv4 header with no payload, sent to a non-routable address.
+    let test_pkt: [u8; 20] = [
+        0x45, 0x00, 0x00, 0x14, // version=4, IHL=5, total_len=20
+        0x00, 0x00, 0x40, 0x00, // id=0, flags=DF, offset=0
+        0x40, 0x06, 0x00, 0x00, // TTL=64, proto=TCP, checksum=0
+        0x0A, 0x00, 0x55, 0x01, // src=10.0.85.1
+        0x00, 0x00, 0x00, 0x00, // dst=0.0.0.0 (will be dropped)
+    ];
+    let test_n =
+        unsafe { libc::write(fd, test_pkt.as_ptr() as *const libc::c_void, test_pkt.len()) };
+    tracing::info!(
+        fd = fd,
+        test_write_rc = test_n,
+        mtu = mtu,
+        "Android TUN device ready (raw fd)"
+    );
 
     Ok(Box::new(RawFdTunDevice {
         fd,
