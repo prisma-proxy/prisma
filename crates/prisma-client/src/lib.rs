@@ -404,31 +404,35 @@ async fn run_inner(
     };
 
     // Optionally start TUN mode
-    let tun_handle = if config.tun.enabled {
+    // The route guard must live as long as TUN is active — dropping it cleans up
+    // all OS routing changes (added routes, interface IP, server bypass).
+    let (tun_handle, _tun_route_guard) = if config.tun.enabled {
         info!(device = %config.tun.device_name, mtu = config.tun.mtu, "Starting TUN mode");
         match tun::device::create_tun_device(
             &config.tun.device_name,
             config.tun.mtu,
+            &config.server_addr,
             &config.tun.include_routes,
             &config.tun.exclude_routes,
         ) {
-            Ok(device) => {
+            Ok((device, route_guard)) => {
                 let tun_ctx = ctx.clone();
                 let tun_filter = app_filter.clone();
-                Some(tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     if let Err(e) = tun::handler::run_tun_handler(device, tun_ctx, tun_filter).await
                     {
                         tracing::error!("TUN handler error: {}", e);
                     }
-                }))
+                });
+                (Some(handle), Some(route_guard))
             }
             Err(e) => {
                 tracing::error!("Failed to create TUN device: {}. TUN mode disabled.", e);
-                None
+                (None, None)
             }
         }
     } else {
-        None
+        (None, None)
     };
 
     // Collect all spawned task handles into the guard. When the guard is

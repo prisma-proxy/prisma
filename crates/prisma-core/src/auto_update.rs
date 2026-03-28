@@ -4,6 +4,9 @@ use sha2::{Digest, Sha256};
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RELEASES_API: &str = "https://api.github.com/repos/prisma-proxy/prisma/releases/latest";
+/// GUI releases live in a separate repo.
+pub const GUI_RELEASES_API: &str =
+    "https://api.github.com/repos/prisma-proxy/prisma-gui/releases/latest";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateInfo {
@@ -48,9 +51,22 @@ pub fn check() -> Result<Option<UpdateInfo>> {
 
 /// Check GitHub releases for a newer version, optionally via proxy.
 pub fn check_with_proxy(proxy_port: u16) -> Result<Option<UpdateInfo>> {
+    check_repo_with_proxy(RELEASES_API, None, proxy_port)
+}
+
+/// Check a specific GitHub repo's releases for a newer version.
+///
+/// `releases_url`: full GitHub API URL (e.g., `GUI_RELEASES_API`)
+/// `asset_hint`: optional substring to match in asset names. If `None`, uses
+///   the default `platform_asset_suffix()`.
+pub fn check_repo_with_proxy(
+    releases_url: &str,
+    asset_hint: Option<&str>,
+    proxy_port: u16,
+) -> Result<Option<UpdateInfo>> {
     let agent = build_agent(proxy_port)?;
     let resp: GithubRelease = agent
-        .get(RELEASES_API)
+        .get(releases_url)
         .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
         .call()?
         .body_mut()
@@ -61,16 +77,16 @@ pub fn check_with_proxy(proxy_port: u16) -> Result<Option<UpdateInfo>> {
     let remote = semver::Version::parse(remote_tag)?;
 
     if remote > current {
-        let target_suffix = platform_asset_suffix();
+        let suffix = asset_hint.unwrap_or_else(|| platform_asset_suffix());
         let url = resp
             .assets
             .iter()
-            .find(|a| a.name.contains(target_suffix))
+            .find(|a| a.name.contains(suffix))
             .map(|a| a.browser_download_url.clone())
             .unwrap_or_default();
 
         // Try to find the SHA256 checksums file and extract hash for our binary
-        let sha256 = extract_sha256_for_asset(&resp.assets, target_suffix, &agent);
+        let sha256 = extract_sha256_for_asset(&resp.assets, suffix, &agent);
 
         Ok(Some(UpdateInfo {
             version: resp.tag_name,

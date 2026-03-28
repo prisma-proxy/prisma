@@ -25,36 +25,58 @@ pub trait TunDevice: Send + 'static {
     fn mtu(&self) -> u16;
 }
 
-/// Create a TUN device with the given configuration.
+/// Create a TUN device with the given configuration and set up OS routing.
+///
+/// Returns the device and a routing guard. The guard must be kept alive for
+/// the duration of TUN operation — dropping it cleans up all route changes.
 pub fn create_tun_device(
     device_name: &str,
     mtu: u16,
-    _include_routes: &[String],
-    _exclude_routes: &[String],
-) -> Result<Box<dyn TunDevice>> {
+    server_addr: &str,
+    include_routes: &[String],
+    exclude_routes: &[String],
+) -> Result<(Box<dyn TunDevice>, super::routing::TunRouteGuard)> {
+    let device: Box<dyn TunDevice>;
+
     #[cfg(target_os = "windows")]
     {
-        create_windows_tun(device_name, mtu)
+        device = create_windows_tun(device_name, mtu)?;
     }
 
     #[cfg(target_os = "linux")]
     {
-        create_linux_tun(device_name, mtu)
+        device = create_linux_tun(device_name, mtu)?;
     }
 
     #[cfg(target_os = "macos")]
     {
-        create_macos_tun(device_name, mtu)
+        device = create_macos_tun(device_name, mtu)?;
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
-        let _ = (device_name, mtu);
-        Err(anyhow::anyhow!(
+        let _ = (
+            device_name,
+            mtu,
+            server_addr,
+            include_routes,
+            exclude_routes,
+        );
+        return Err(anyhow::anyhow!(
             "TUN mode is not supported on this platform. \
              Supported: Windows, Linux, macOS."
-        ))
+        ));
     }
+
+    // Set up OS routing (assign IP, add routes, exclude server endpoint)
+    let route_guard = super::routing::setup_tun_routing(
+        device.name(),
+        server_addr,
+        include_routes,
+        exclude_routes,
+    )?;
+
+    Ok((device, route_guard))
 }
 
 // =============================================================================

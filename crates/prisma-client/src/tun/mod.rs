@@ -16,6 +16,7 @@ pub use prisma_core::config::client::TunConfig;
 pub mod device;
 pub mod handler;
 pub mod process;
+pub mod routing;
 pub mod tcp_stack;
 
 /// IP packet header parsing utilities.
