@@ -448,6 +448,17 @@ fn create_android_tun(mtu: u16) -> Result<Box<dyn TunDevice>> {
     use std::os::fd::FromRawFd;
 
     let fd = wait_for_mobile_tun_fd("Android VpnService")?;
+
+    // Android VPN fd may be non-blocking — set to blocking mode
+    // to avoid EAGAIN spam in the read loop.
+    unsafe {
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        if flags >= 0 && (flags & libc::O_NONBLOCK) != 0 {
+            libc::fcntl(fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
+            tracing::debug!(fd = fd, "Set TUN fd to blocking mode");
+        }
+    }
+
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
     tracing::info!(fd = fd, mtu = mtu, "Android TUN device ready");
 
