@@ -38,17 +38,17 @@ pub async fn run_tun_handler(
     let mtu = device.mtu();
     info!(device = %device_name, mtu = mtu, "TUN handler starting");
 
-    let device = Arc::new(Mutex::new(device));
+    // Wrap device in Arc for shared access.
+    // TunDevice uses &self for both recv/send, so no mutex needed — the
+    // underlying fd I/O is thread-safe on Unix (atomic syscalls).
+    let device: Arc<Box<dyn TunDevice>> = Arc::from(device);
 
-    // Create the smoltcp TCP/IP stack
-    // Use 10.0.85.1 as the TUN interface IP (chosen to avoid conflicts)
     let stack = Arc::new(Mutex::new(TcpStack::new(Ipv4Addr::new(10, 0, 85, 1), mtu)));
 
-    // Track active tunnel tasks per destination
     let active_tunnels: Arc<Mutex<HashMap<SocketAddr, TunnelState>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    // Spawn the stack polling loop (processes smoltcp state and writes packets back to TUN)
+    // Spawn the stack polling loop (writes outbound packets to TUN)
     let poll_stack = stack.clone();
     let poll_device = device.clone();
     let poll_tunnels = active_tunnels.clone();
@@ -57,24 +57,21 @@ pub async fn run_tun_handler(
         stack_poll_loop(poll_stack, poll_device, poll_tunnels, poll_ctx).await;
     });
 
-    // Main loop: read packets from TUN device and feed them to the stack.
-    // TUN reads are blocking (especially on Android where the fd is blocking mode),
-    // so we use spawn_blocking to avoid blocking the tokio runtime thread.
+    // Read packets from TUN in a dedicated blocking thread.
+    // No mutex — recv(&self) on the fd is safe to call concurrently with send(&self).
     let read_device = device.clone();
     let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
     tokio::task::spawn_blocking(move || {
         let mut buf = vec![0u8; mtu as usize + 64];
-        let rt = tokio::runtime::Handle::current();
         loop {
-            let dev = rt.block_on(read_device.lock());
-            match dev.recv(&mut buf) {
+            match read_device.recv(&mut buf) {
                 Ok(0) => {
                     std::thread::sleep(std::time::Duration::from_millis(1));
                     continue;
                 }
                 Ok(n) => {
                     if pkt_tx.blocking_send(buf[..n].to_vec()).is_err() {
-                        break; // channel closed, handler shutting down
+                        break;
                     }
                 }
                 Err(e) => {
@@ -199,7 +196,7 @@ async fn relay_tun_udp(
     src: SocketAddrV4,
     dst: SocketAddrV4,
     payload: &[u8],
-    device: &Arc<Mutex<Box<dyn TunDevice>>>,
+    device: &Arc<Box<dyn TunDevice>>,
 ) {
     // Resolve fake IP to domain if in Fake DNS mode
     let domain = ctx.dns_resolver.lookup_fake_ip(*dst.ip()).await;
@@ -307,7 +304,7 @@ async fn relay_tun_udp(
                         src.port(),
                         resp_payload,
                     );
-                    let dev = device.lock().await;
+                    let dev = &**device;
                     if let Err(e) = dev.send(&response_pkt) {
                         warn!(error = %e, "TUN UDP: failed to send response");
                     }
@@ -341,7 +338,7 @@ enum TunnelState {
 /// outbound packets back to the TUN device.
 async fn stack_poll_loop(
     stack: Arc<Mutex<TcpStack>>,
-    device: Arc<Mutex<Box<dyn TunDevice>>>,
+    device: Arc<Box<dyn TunDevice>>,
     tunnels: Arc<Mutex<HashMap<SocketAddr, TunnelState>>>,
     ctx: ProxyContext,
 ) {
@@ -373,7 +370,7 @@ async fn stack_poll_loop(
 
         // Write outbound packets to TUN device (no stack lock held)
         if !out_packets.is_empty() {
-            let dev = device.lock().await;
+            let dev = &**device;
             for pkt in &out_packets {
                 if let Err(e) = dev.send(pkt) {
                     warn!(error = %e, "TUN write error");
@@ -479,7 +476,7 @@ async fn handle_tun_dns(
     dns_data: &[u8],
     src: SocketAddrV4,
     dst: SocketAddrV4,
-    device: &Arc<Mutex<Box<dyn TunDevice>>>,
+    device: &Arc<Box<dyn TunDevice>>,
 ) {
     use prisma_core::dns::DnsMode;
 
@@ -539,7 +536,7 @@ async fn handle_tun_dns(
         &dns_response,
     );
 
-    let dev = device.lock().await;
+    let dev = &**device;
     if let Err(e) = dev.send(&ip_packet) {
         warn!(error = %e, "Failed to send DNS response to TUN");
     }

@@ -10,7 +10,7 @@
 use anyhow::Result;
 
 /// A TUN device that can read and write IP packets.
-pub trait TunDevice: Send + 'static {
+pub trait TunDevice: Send + Sync + 'static {
     /// Read a single IP packet from the TUN device.
     /// Returns the number of bytes read.
     fn recv(&self, buf: &mut [u8]) -> Result<usize>;
