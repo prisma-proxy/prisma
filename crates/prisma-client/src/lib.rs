@@ -444,8 +444,14 @@ async fn run_inner(
                 (Some(handle), Some(route_guard))
             }
             Err(e) => {
-                tracing::error!("Failed to create TUN device: {}. TUN mode disabled.", e);
-                (None, None)
+                // TUN was explicitly enabled — this is a hard failure.
+                // Don't silently continue without TUN; the user expects VPN mode.
+                anyhow::bail!(
+                    "TUN device creation failed: {}. \
+                     Ensure wintun.dll is in the same directory as the executable \
+                     and the app is running as administrator.",
+                    e
+                );
             }
         }
     } else {
