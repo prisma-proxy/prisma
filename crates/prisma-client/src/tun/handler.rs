@@ -82,19 +82,27 @@ pub async fn run_tun_handler(
         }
     });
 
+    let mut pkt_count: u64 = 0;
     loop {
         let pkt_data = match pkt_rx.recv().await {
             Some(data) => data,
             None => return Ok(()), // reader thread exited
         };
         let n = pkt_data.len();
+        pkt_count += 1;
+        if pkt_count <= 5 || pkt_count % 100 == 0 {
+            info!(count = pkt_count, len = n, "TUN packet received");
+        }
 
         let pkt = &pkt_data[..n];
 
         // Parse IPv4 header
         let ip_info = match packet::parse_ipv4(pkt) {
             Some(info) => info,
-            None => continue,
+            None => {
+                debug!(len = n, "TUN: non-IPv4 packet, skipping");
+                continue;
+            }
         };
 
         // Per-app filter: check if this packet should be proxied
@@ -109,6 +117,15 @@ pub async fn run_tun_handler(
                     continue; // Skip this packet — it goes direct via OS routing
                 }
             }
+        }
+
+        if pkt_count <= 10 {
+            info!(
+                src = %ip_info.src, dst = %ip_info.dst,
+                proto = ip_info.protocol,
+                len = n,
+                "TUN packet: IPv4"
+            );
         }
 
         match ip_info.protocol {
