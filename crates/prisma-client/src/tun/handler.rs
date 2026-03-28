@@ -75,6 +75,13 @@ pub async fn run_tun_handler(
                     }
                 }
                 Err(e) => {
+                    // EBADF = fd closed (VPN service stopped). Exit the read loop.
+                    let is_badf = e.downcast_ref::<std::io::Error>()
+                        .map_or(false, |io| io.raw_os_error() == Some(9));
+                    if is_badf {
+                        tracing::warn!("TUN fd closed (EBADF) — stopping read loop");
+                        break;
+                    }
                     tracing::warn!(error = %e, "TUN read error");
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -168,24 +175,12 @@ pub async fn run_tun_handler(
                 // Poll to generate SYN-ACK response
                 let immediate_out = s.poll();
                 if !immediate_out.is_empty() {
-                    info!(count = immediate_out.len(), "smoltcp produced response packets");
                     let dev = &**device;
                     for out_pkt in &immediate_out {
-                        // Log IP header of first few response packets for debugging
-                        if pkt_count <= 5 && out_pkt.len() >= 20 {
-                            let src = std::net::Ipv4Addr::new(out_pkt[12], out_pkt[13], out_pkt[14], out_pkt[15]);
-                            let dst = std::net::Ipv4Addr::new(out_pkt[16], out_pkt[17], out_pkt[18], out_pkt[19]);
-                            info!(
-                                src_ip = %src, dst_ip = %dst, len = out_pkt.len(),
-                                "smoltcp response IP header"
-                            );
-                        }
-                        if let Err(e) = dev.send(out_pkt) {
-                            warn!(error = %e, "TUN write error");
+                        if let Err(_) = dev.send(out_pkt) {
+                            return Ok(()); // fd dead, exit handler
                         }
                     }
-                } else if pkt_count <= 10 {
-                    info!("smoltcp produced 0 packets (packet #{})", pkt_count);
                 }
             }
             PROTO_UDP => {
@@ -431,15 +426,14 @@ async fn stack_poll_loop(
 
         // Write outbound packets to TUN device (no stack lock held)
         if !out_packets.is_empty() {
-            info!(count = out_packets.len(), "smoltcp poll produced outbound packets");
             let dev = &**device;
             for pkt in &out_packets {
                 match dev.send(pkt) {
-                    Ok(n) => {
-                        info!(len = pkt.len(), written = n, "TUN write OK");
-                    }
+                    Ok(_) => {}
                     Err(e) => {
-                        warn!(error = %e, len = pkt.len(), "TUN write error");
+                        // EBADF (os error 9) = fd closed, VPN service stopped
+                        warn!(error = %e, "TUN write error — stopping poll loop");
+                        return;
                     }
                 }
             }
@@ -493,6 +487,17 @@ async fn relay_tun_tcp(
             port: dest.port(),
         }
     } else {
+        // Check if this is a stale fake DNS IP (in the 198.18.x range but no domain mapping).
+        // This happens when the browser cached a fake IP from a previous VPN session.
+        // Bail so the smoltcp socket closes (RST), forcing the browser to re-resolve DNS.
+        if let SocketAddr::V4(v4) = dest {
+            if ctx.dns_resolver.is_fake_ip(*v4.ip()).await {
+                anyhow::bail!(
+                    "Stale fake DNS IP {} — no domain mapping, sending RST",
+                    v4.ip()
+                );
+            }
+        }
         match dest {
             SocketAddr::V4(v4) => ProxyDestination {
                 address: ProxyAddress::Ipv4(*v4.ip()),
