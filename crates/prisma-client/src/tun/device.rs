@@ -136,11 +136,11 @@ fn create_windows_tun(device_name: &str, mtu: u16) -> Result<Box<dyn TunDevice>>
         )
     })?;
 
-    let adapter = match wintun::Adapter::open(&wintun, device_name) {
-        Ok(a) => a,
-        Err(_) => wintun::Adapter::create(&wintun, device_name, "PrismaVeil", None)
-            .map_err(|e| anyhow::anyhow!("Failed to create Wintun adapter: {}", e))?,
-    };
+    // Always create a fresh adapter. Adapter::open() logs a spurious ERR
+    // ("Element not found") when no adapter exists yet. create() is idempotent
+    // and replaces any existing adapter with the same name.
+    let adapter = wintun::Adapter::create(&wintun, device_name, "PrismaVeil", None)
+        .map_err(|e| anyhow::anyhow!("Failed to create Wintun adapter: {}", e))?;
 
     // Ring buffer capacity (must be power of 2, between 128KB and 64MB).
     // 4MB is a reasonable default for high-throughput proxying.
