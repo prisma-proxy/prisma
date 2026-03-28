@@ -64,16 +64,30 @@ pub fn check_repo_with_proxy(
     asset_hint: Option<&str>,
     proxy_port: u16,
 ) -> Result<Option<UpdateInfo>> {
+    check_repo_with_version(releases_url, asset_hint, proxy_port, CURRENT_VERSION)
+}
+
+/// Check a specific GitHub repo's releases for a newer version,
+/// using a custom current version string instead of the crate version.
+///
+/// Useful when the caller has its own version (e.g., the GUI app)
+/// that differs from prisma-core's compiled version.
+pub fn check_repo_with_version(
+    releases_url: &str,
+    asset_hint: Option<&str>,
+    proxy_port: u16,
+    current_version: &str,
+) -> Result<Option<UpdateInfo>> {
     let agent = build_agent(proxy_port)?;
     let resp: GithubRelease = agent
         .get(releases_url)
-        .header("User-Agent", &format!("prisma/{}", CURRENT_VERSION))
+        .header("User-Agent", &format!("prisma/{}", current_version))
         .call()?
         .body_mut()
         .read_json()?;
 
     let remote_tag = resp.tag_name.trim_start_matches('v');
-    let current = semver::Version::parse(CURRENT_VERSION)?;
+    let current = semver::Version::parse(current_version)?;
     let remote = semver::Version::parse(remote_tag)?;
 
     if remote > current {
