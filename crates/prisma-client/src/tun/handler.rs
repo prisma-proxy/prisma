@@ -130,25 +130,11 @@ pub async fn run_tun_handler(
 
         match ip_info.protocol {
             PROTO_TCP => {
-                // Feed TCP packets into the smoltcp stack
                 let mut s = stack.lock().await;
-                s.receive_packet(pkt);
 
-                // Immediately poll to generate SYN-ACK response
-                let immediate_out = s.poll();
-                if !immediate_out.is_empty() {
-                    info!(count = immediate_out.len(), "smoltcp immediate response after receive");
-                    let dev = &**device;
-                    for out_pkt in &immediate_out {
-                        if let Err(e) = dev.send(out_pkt) {
-                            warn!(error = %e, "TUN write error (immediate)");
-                        }
-                    }
-                } else if pkt_count <= 10 {
-                    info!("smoltcp produced 0 packets after receive+poll (packet #{})", pkt_count);
-                }
-
-                // Check if this is a new connection (SYN)
+                // Check if this is a new connection (SYN) — must create listening
+                // socket BEFORE feeding the packet, otherwise smoltcp drops the SYN
+                // because no socket exists to receive it.
                 let dest = match packet::tcp_dest(pkt) {
                     Some(d) => d,
                     None => continue,
@@ -168,11 +154,29 @@ pub async fn run_tun_handler(
                     } else {
                         dest.to_string()
                     };
-                    debug!(dest = %dest_str, "New TUN TCP connection");
+                    info!(dest = %dest_str, "New TUN TCP connection — creating listener before SYN");
 
-                    // Accept the connection in smoltcp
+                    // Create listener FIRST, then feed the SYN packet
                     s.accept_connection(dest, domain.clone());
                     entry.insert(TunnelState::Connecting);
+                }
+                drop(tunnels);
+
+                // NOW feed the packet (socket exists to receive SYN)
+                s.receive_packet(pkt);
+
+                // Poll to generate SYN-ACK response
+                let immediate_out = s.poll();
+                if !immediate_out.is_empty() {
+                    info!(count = immediate_out.len(), "smoltcp produced response packets");
+                    let dev = &**device;
+                    for out_pkt in &immediate_out {
+                        if let Err(e) = dev.send(out_pkt) {
+                            warn!(error = %e, "TUN write error");
+                        }
+                    }
+                } else if pkt_count <= 10 {
+                    info!("smoltcp produced 0 packets (packet #{})", pkt_count);
                 }
             }
             PROTO_UDP => {
