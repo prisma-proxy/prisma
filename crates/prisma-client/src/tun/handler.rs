@@ -418,10 +418,35 @@ async fn stack_poll_loop(
                 );
             }
 
-            // Cleanup closed sockets
-            let closed = s.cleanup_closed();
+            // Only cleanup sockets whose relay has finished (TunnelState::Closing).
+            // Do NOT cleanup sockets that still have active relays — the relay holds
+            // the SocketHandle and will panic if the socket is removed.
+            let closing_handles: Vec<smoltcp::iface::SocketHandle> = {
+                let tg = tunnels.try_lock();
+                if let Ok(tg) = tg {
+                    s.connection_handles()
+                        .into_iter()
+                        .filter(|h| {
+                            if !s.is_closed(*h) {
+                                return false;
+                            }
+                            // Only cleanup if the tunnel state is Closing or not tracked
+                            if let Some(conn) = s.get_connection(*h) {
+                                !matches!(tg.get(&conn.dest), Some(TunnelState::Connecting) | Some(TunnelState::Established))
+                            } else {
+                                true
+                            }
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            };
+            for h in &closing_handles {
+                s.close_socket(*h);
+            }
 
-            (out, establish, closed)
+            (out, establish, closing_handles)
         };
 
         // Write outbound packets to TUN device (no stack lock held)

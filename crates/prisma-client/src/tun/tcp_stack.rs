@@ -236,26 +236,45 @@ impl TcpStack {
         handle
     }
 
+    /// Check if a socket handle is valid (exists in the socket set).
+    pub fn has_socket(&self, handle: SocketHandle) -> bool {
+        self.connections.contains_key(&handle)
+    }
+
     /// Read data from a TCP socket (data received from the application via TUN).
+    /// Returns 0 if the socket no longer exists.
     pub fn read_from_socket(&mut self, handle: SocketHandle, buf: &mut [u8]) -> usize {
+        if !self.connections.contains_key(&handle) {
+            return 0;
+        }
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
         socket.recv_slice(buf).unwrap_or_default()
     }
 
     /// Write data to a TCP socket (data to be sent to the application via TUN).
+    /// Returns 0 if the socket no longer exists.
     pub fn write_to_socket(&mut self, handle: SocketHandle, data: &[u8]) -> usize {
+        if !self.connections.contains_key(&handle) {
+            return 0;
+        }
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
         socket.send_slice(data).unwrap_or_default()
     }
 
     /// Check if a TCP socket is in an established state.
     pub fn is_established(&self, handle: SocketHandle) -> bool {
+        if !self.connections.contains_key(&handle) {
+            return false;
+        }
         let socket = self.sockets.get::<tcp::Socket>(handle);
         socket.state() == TcpState::Established
     }
 
     /// Check if a TCP socket is closed or closing.
     pub fn is_closed(&self, handle: SocketHandle) -> bool {
+        if !self.connections.contains_key(&handle) {
+            return true;
+        }
         let socket = self.sockets.get::<tcp::Socket>(handle);
         matches!(socket.state(), TcpState::Closed | TcpState::TimeWait)
     }
