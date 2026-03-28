@@ -96,20 +96,30 @@ impl FecEncoder {
                 self.buffer[i] = Some(vec![0u8; self.shard_size]);
             }
 
-            // Encode parity
+            // Encode parity — all buffer slots must be populated at this point
             let mut shards: Vec<&mut [u8]> = self
                 .buffer
                 .iter_mut()
-                .map(|s| s.as_mut().unwrap().as_mut_slice())
+                .filter_map(|s| s.as_mut().map(|v| v.as_mut_slice()))
                 .collect();
-            self.rs.encode(&mut shards).expect("FEC encode failed");
+            if shards.len() != self.data_shards + self.parity_shards {
+                // Buffer is incomplete — skip this group
+                tracing::warn!("FEC encode: buffer incomplete, skipping group");
+                self.count = 0;
+                return None;
+            }
+            if self.rs.encode(&mut shards).is_err() {
+                tracing::warn!("FEC encode failed, skipping group");
+                self.count = 0;
+                return None;
+            }
 
             let group = FecGroup {
                 group_id: self.group_id,
                 data_shards: self.data_shards as u8,
                 parity_shards: self.parity_shards as u8,
                 shard_size: self.shard_size,
-                shards: self.buffer.iter_mut().map(|s| s.take().unwrap()).collect(),
+                shards: self.buffer.iter_mut().map(|s| s.take().unwrap_or_default()).collect(),
             };
 
             // Reset for next group (buffer slots already None from take())
@@ -235,12 +245,16 @@ impl FecDecoder {
 
             // Attempt reconstruction
             if self.rs.reconstruct(&mut buf.shards).is_ok() {
-                let mut group = self.groups.remove(&group_id).unwrap();
-                let data: Vec<Vec<u8>> = group.shards[..self.data_shards]
-                    .iter_mut()
-                    .map(|s| s.take().unwrap())
-                    .collect();
-                return Some(data);
+                if let Some(mut group) = self.groups.remove(&group_id) {
+                    let data: Vec<Vec<u8>> = group.shards[..self.data_shards]
+                        .iter_mut()
+                        .filter_map(|s| s.take())
+                        .collect();
+                    if data.len() == self.data_shards {
+                        return Some(data);
+                    }
+                    tracing::debug!("FEC decode: incomplete data shards after reconstruct");
+                }
             }
         }
 

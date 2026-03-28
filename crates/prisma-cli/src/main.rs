@@ -636,7 +636,30 @@ enum RoutesCmd {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    if let Err(e) = run().await {
+        let msg = format!("{:#}", e);
+        // Provide user-friendly hints for common errors
+        if msg.contains("No such file") || msg.contains("not found") {
+            eprintln!("Error: {msg}");
+            eprintln!("Hint: Run 'prisma init' to generate config files, or check the file path.");
+        } else if msg.contains("Permission denied") || msg.contains("access denied") {
+            eprintln!("Error: {msg}");
+            eprintln!("Hint: Try running with elevated privileges (sudo/admin).");
+        } else if msg.contains("Connection refused") || msg.contains("connect error") {
+            eprintln!("Error: {msg}");
+            eprintln!("Hint: Check that the server is running and the address is correct.");
+        } else if msg.contains("Address already in use") {
+            eprintln!("Error: {msg}");
+            eprintln!("Hint: Another process is using this port. Change the listen port or stop the other process.");
+        } else {
+            eprintln!("Error: {msg}");
+        }
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install default CryptoProvider");
