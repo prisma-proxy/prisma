@@ -456,8 +456,9 @@ async fn stack_poll_loop(
             let tunnels = tunnels.clone();
             let relay_device = device.clone();
             tokio::spawn(async move {
-                if let Err(e) = relay_tun_tcp(&ctx, dest, domain.as_deref(), handle, &stack, &relay_device).await {
-                    debug!(dest = %dest, error = %e, "TUN TCP relay error");
+                match relay_tun_tcp(&ctx, dest, domain.as_deref(), handle, &stack, &relay_device).await {
+                    Ok(()) => info!(dest = %dest, "TUN TCP relay completed normally"),
+                    Err(e) => warn!(dest = %dest, error = %e, "TUN TCP relay error"),
                 }
                 tunnels.lock().await.insert(dest, TunnelState::Closing);
                 let mut s = stack.lock().await;

@@ -257,13 +257,16 @@ where
                             }
                         }
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        info!("TUN relay: tunnel read error, ending session: {}", e);
+                        break;
+                    },
                 }
             }
         }
     }
 
-    debug!("TUN TCP relay session ended");
+    info!("TUN TCP relay session ended");
     Ok(())
 }
 
