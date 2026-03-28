@@ -119,7 +119,11 @@ impl FecEncoder {
                 data_shards: self.data_shards as u8,
                 parity_shards: self.parity_shards as u8,
                 shard_size: self.shard_size,
-                shards: self.buffer.iter_mut().map(|s| s.take().unwrap_or_default()).collect(),
+                shards: self
+                    .buffer
+                    .iter_mut()
+                    .map(|s| s.take().unwrap_or_default())
+                    .collect(),
             };
 
             // Reset for next group (buffer slots already None from take())

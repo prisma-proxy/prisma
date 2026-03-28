@@ -138,8 +138,7 @@ pub fn setup_tun_routing(
     }
 
     // Step 4: Add include routes through TUN
-    let use_default =
-        include_routes.is_empty() || include_routes.iter().any(|r| r == "0.0.0.0/0");
+    let use_default = include_routes.is_empty() || include_routes.iter().any(|r| r == "0.0.0.0/0");
 
     if use_default {
         // Split-route trick: 0.0.0.0/1 + 128.0.0.0/1 covers all IPs
@@ -262,11 +261,7 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "windows")]
-fn add_exclude_route(
-    cidr: &str,
-    original_gw: &Ipv4Addr,
-    guard: &mut TunRouteGuard,
-) -> Result<()> {
+fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
     let (network, mask) = cidr_to_network_mask(cidr)?;
 
     run_cmd(&[
@@ -399,11 +394,7 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "linux")]
-fn add_exclude_route(
-    cidr: &str,
-    original_gw: &Ipv4Addr,
-    guard: &mut TunRouteGuard,
-) -> Result<()> {
+fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
     run_cmd(&["ip", "route", "add", cidr, "via", &original_gw.to_string()])?;
 
     guard.actions.push(CleanupAction::RemoveRoute {
@@ -509,11 +500,7 @@ fn add_server_bypass(
 }
 
 #[cfg(target_os = "macos")]
-fn add_exclude_route(
-    cidr: &str,
-    original_gw: &Ipv4Addr,
-    guard: &mut TunRouteGuard,
-) -> Result<()> {
+fn add_exclude_route(cidr: &str, original_gw: &Ipv4Addr, guard: &mut TunRouteGuard) -> Result<()> {
     let (network, mask) = cidr_to_network_mask(cidr)?;
 
     run_cmd(&[
