@@ -148,7 +148,7 @@ macro_rules! cstr_to_str_opt {
 
 // Platform-specific modules are declared after the macros above so that
 // `ffi_catch!`, `cstr_to_str!`, and `cstr_to_str_opt!` are in textual scope.
-#[cfg(feature = "android")]
+#[cfg(target_os = "android")]
 mod android;
 #[cfg(target_os = "ios")]
 mod ios;
