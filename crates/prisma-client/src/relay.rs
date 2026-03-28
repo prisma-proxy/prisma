@@ -213,7 +213,10 @@ where
                 tunnel_read.read_exact(&mut len_buf).await?;
                 let frame_len = u16::from_be_bytes(len_buf) as usize;
                 if frame_len > MAX_FRAME_SIZE {
-                    return Err(anyhow::anyhow!("Frame too large"));
+                    return Err(anyhow::anyhow!(
+                        "Frame too large: len_bytes={:02x}{:02x} decoded={} max={}",
+                        len_buf[0], len_buf[1], frame_len, MAX_FRAME_SIZE
+                    ));
                 }
                 tunnel_read.read_exact(&mut frame_buf[..frame_len]).await?;
                 Ok::<_, anyhow::Error>(frame_len)
