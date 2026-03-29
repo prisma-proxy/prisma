@@ -161,123 +161,118 @@ pub async fn relay_tun_tcp_encrypted<R, W>(
     device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
 ) -> Result<()>
 where
-    R: tokio::io::AsyncRead + Unpin + Send,
-    W: tokio::io::AsyncWrite + Unpin + Send,
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+    W: tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
     let cipher: Arc<dyn prisma_core::crypto::aead::AeadCipher> = Arc::from(cipher);
     let padding_range = session_keys.padding_range;
-    // Extract v5 header key for AAD binding (None for v4 backward compat)
     let header_key = session_keys.header_key;
 
-    let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
-
-    let mut encoder = FrameEncoder::new();
-    let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
-    let mut frames_up: u64 = 0;
-    let mut frames_down: u64 = 0;
-
-    loop {
-        tokio::select! {
-            result = async {
-                let mut len_buf = [0u8; 2];
-                tunnel_read.read_exact(&mut len_buf).await?;
-                let frame_len = u16::from_be_bytes(len_buf) as usize;
-                if frame_len > MAX_FRAME_SIZE {
-                    return Err(anyhow::anyhow!(
-                        "Frame too large: len_bytes={:02x}{:02x} decoded={} max={}",
-                        len_buf[0], len_buf[1], frame_len, MAX_FRAME_SIZE
-                    ));
-                }
-                tunnel_read.read_exact(&mut frame_buf[..frame_len]).await?;
-                Ok::<_, anyhow::Error>(frame_len)
-            } => {
-                match result {
-                    Ok(frame_len) => {
-                        match FrameDecoder::unseal_data_frame_v5(
-                            &mut frame_buf[..frame_len],
-                            frame_len,
-                            cipher.as_ref(),
-                            header_key.as_ref(),
-                        ) {
-                            Ok((cmd, payload, _nonce)) => {
-                                match cmd {
-                                    CMD_DATA => {
-                                        frames_down += 1;
-                                        metrics.add_down(payload.len() as u64);
-                                        if frames_down <= 3 {
-                                            info!(frames_down, payload_len = payload.len(), "TUN relay: server data received");
-                                        }
-                                        let mut s = stack.lock().await;
-                                        let written = s.write_to_socket(handle, payload);
-                                        if written == 0 && !payload.is_empty() {
-                                            warn!(payload_len = payload.len(), "TUN relay: write_to_socket returned 0");
-                                        }
-                                        if let Some(ref dev) = device {
-                                            let out = s.poll();
-                                            if !out.is_empty() && frames_down <= 3 {
-                                                info!(packets = out.len(), "TUN relay: writing response to TUN");
-                                            }
-                                            drop(s);
-                                            for pkt in &out {
-                                                let _ = dev.send(pkt);
-                                            }
-                                        }
-                                    }
-                                    CMD_CLOSE => break,
-                                    _ => {}
-                                }
-                            }
-                            Err(e) => {
-                                warn!("TUN relay decrypt error: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        info!("TUN relay: tunnel read ended: {}", e);
-                        break;
-                    },
-                }
-            }
-
-            _ = interval.tick() => {
-                // Read data and check close state in a single lock acquisition
-                let (n, is_closed) = {
-                    let mut s = stack.lock().await;
-                    let n = s.read_from_socket(handle, encoder.payload_mut());
-                    let closed = s.is_closed(handle);
-                    (n, closed)
-                };
-                if n > 0 {
-                    frames_up += 1;
-                    metrics.add_up(n as u64);
-                    if frames_up <= 3 {
-                        info!(frames_up, bytes = n, "TUN relay: uploading client data");
-                    }
-                    let nonce = session_keys.next_client_nonce();
-                    match encoder.seal_data_frame_v5(
-                        cipher.as_ref(),
-                        &nonce,
-                        n,
-                        0,
-                        &padding_range,
-                        header_key.as_ref(),
-                    ) {
-                        Ok(wire) => {
-                            if tunnel_write.write_all(wire).await.is_err() { break; }
-                        }
-                        Err(e) => {
-                            warn!("TUN relay encrypt error: {}", e);
+    // === Upload task: smoltcp socket → encrypt → tunnel ===
+    let cipher_up = cipher.clone();
+    let stack_up = stack.clone();
+    let metrics_up = metrics.clone();
+    let upload = async move {
+        let mut encoder = FrameEncoder::new();
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
+        loop {
+            interval.tick().await;
+            let (n, is_closed) = {
+                let mut s = stack_up.lock().await;
+                let n = s.read_from_socket(handle, encoder.payload_mut());
+                let closed = s.is_closed(handle);
+                (n, closed)
+            };
+            if n > 0 {
+                metrics_up.add_up(n as u64);
+                let nonce = session_keys.next_client_nonce();
+                match encoder.seal_data_frame_v5(
+                    cipher_up.as_ref(),
+                    &nonce,
+                    n,
+                    0,
+                    &padding_range,
+                    header_key.as_ref(),
+                ) {
+                    Ok(wire) => {
+                        if tunnel_write.write_all(wire).await.is_err() {
                             break;
                         }
                     }
+                    Err(_) => break,
                 }
-                if is_closed { break; }
+            }
+            if is_closed {
+                break;
             }
         }
+    };
+
+    // === Download task: tunnel → decrypt → smoltcp socket → TUN ===
+    let stack_down = stack.clone();
+    let metrics_down = metrics;
+    let download = async move {
+        let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
+        loop {
+            let mut len_buf = [0u8; 2];
+            if tunnel_read.read_exact(&mut len_buf).await.is_err() {
+                break;
+            }
+            let frame_len = u16::from_be_bytes(len_buf) as usize;
+            if frame_len > MAX_FRAME_SIZE {
+                warn!(
+                    frame_len,
+                    "TUN relay: frame too large, stream likely corrupted"
+                );
+                break;
+            }
+            if tunnel_read
+                .read_exact(&mut frame_buf[..frame_len])
+                .await
+                .is_err()
+            {
+                break;
+            }
+
+            match FrameDecoder::unseal_data_frame_v5(
+                &mut frame_buf[..frame_len],
+                frame_len,
+                cipher.as_ref(),
+                header_key.as_ref(),
+            ) {
+                Ok((cmd, payload, _nonce)) => match cmd {
+                    CMD_DATA => {
+                        metrics_down.add_down(payload.len() as u64);
+                        let mut s = stack_down.lock().await;
+                        s.write_to_socket(handle, payload);
+                        // Poll and write to TUN immediately
+                        if let Some(ref dev) = device {
+                            let out = s.poll();
+                            drop(s);
+                            for pkt in &out {
+                                let _ = dev.send(pkt);
+                            }
+                        }
+                    }
+                    CMD_CLOSE => break,
+                    _ => {}
+                },
+                Err(e) => {
+                    warn!("TUN relay decrypt error: {}", e);
+                    break;
+                }
+            }
+        }
+    };
+
+    // Run both tasks concurrently — exactly like the SOCKS5 relay.
+    // When either task finishes, the other is cancelled.
+    tokio::select! {
+        _ = upload => {}
+        _ = download => {}
     }
 
-    info!(frames_up, frames_down, "TUN TCP relay session ended");
+    info!("TUN TCP relay session ended");
     Ok(())
 }
 
