@@ -195,14 +195,19 @@ where
                     header_key.as_ref(),
                 ) {
                     Ok(wire) => {
-                        if tunnel_write.write_all(wire).await.is_err() {
+                        if let Err(e) = tunnel_write.write_all(wire).await {
+                            info!("TUN relay upload: write error: {}", e);
                             break;
                         }
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        info!("TUN relay upload: encrypt error: {}", e);
+                        break;
+                    }
                 }
             }
             if is_closed {
+                info!("TUN relay upload: smoltcp socket closed");
                 break;
             }
         }
@@ -215,7 +220,8 @@ where
         let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
         loop {
             let mut len_buf = [0u8; 2];
-            if tunnel_read.read_exact(&mut len_buf).await.is_err() {
+            if let Err(e) = tunnel_read.read_exact(&mut len_buf).await {
+                info!("TUN relay download: tunnel EOF: {}", e);
                 break;
             }
             let frame_len = u16::from_be_bytes(len_buf) as usize;
@@ -265,11 +271,9 @@ where
         }
     };
 
-    // Run both tasks concurrently — exactly like the SOCKS5 relay.
-    // When either task finishes, the other is cancelled.
     tokio::select! {
-        _ = upload => {}
-        _ = download => {}
+        _ = upload => { info!("TUN relay: upload task exited first"); }
+        _ = download => { info!("TUN relay: download task exited first"); }
     }
 
     info!("TUN TCP relay session ended");
