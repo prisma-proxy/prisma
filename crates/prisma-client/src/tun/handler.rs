@@ -91,11 +91,21 @@ pub async fn run_tun_handler(
     });
 
     let mut pkt_count: u64 = 0;
+    let mut batch: Vec<Vec<u8>> = Vec::with_capacity(64);
     loop {
-        let pkt_data = match pkt_rx.recv().await {
+        // Wait for at least one packet
+        let first = match pkt_rx.recv().await {
             Some(data) => data,
-            None => return Ok(()), // reader thread exited
+            None => return Ok(()),
         };
+        batch.push(first);
+        // Drain all immediately available packets (non-blocking)
+        while let Ok(pkt) = pkt_rx.try_recv() {
+            batch.push(pkt);
+            if batch.len() >= 128 { break; } // cap batch size
+        }
+
+        for pkt_data in batch.drain(..) {
         let n = pkt_data.len();
         pkt_count += 1;
         if pkt_count <= 5 || pkt_count % 100 == 0 {
@@ -227,6 +237,7 @@ pub async fn run_tun_handler(
             }
             _ => {}
         }
+        } // end for pkt_data in batch
     }
 }
 
