@@ -283,9 +283,13 @@ async fn process_connections(
                 }
             }
             ConnectionPhase::Relaying { data_tx } => {
-                // Only read if the relay channel has capacity (prevents blocking)
+                // Relay exited — clean up immediately
+                if data_tx.is_closed() {
+                    to_remove.push(*dest);
+                    continue;
+                }
+                // Only read if relay channel has capacity
                 if data_tx.capacity() == 0 {
-                    // Channel full — skip this connection, retry next poll
                     continue;
                 }
                 let mut s = stack.lock().await;
@@ -298,13 +302,11 @@ async fn process_connections(
                     for pkt in &out {
                         let _ = device.send(pkt);
                     }
-                    // try_send is safe here because we checked capacity above
                     let _ = data_tx.try_send(buf[..n].to_vec());
                 } else {
                     drop(s);
                 }
-                // Only remove if channel is closed (relay exited) AND socket is closed
-                if data_tx.is_closed() || is_closed {
+                if is_closed {
                     to_remove.push(*dest);
                 }
             }

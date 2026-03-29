@@ -171,7 +171,7 @@ impl TcpStack {
 
         // Preallocate socket storage. Android creates many concurrent connections
         // (DNS-over-TLS, Google services, app traffic, etc.) so we need a large pool.
-        let socket_storage: Vec<smoltcp::iface::SocketStorage<'static>> = (0..512)
+        let socket_storage: Vec<smoltcp::iface::SocketStorage<'static>> = (0..2048)
             .map(|_| smoltcp::iface::SocketStorage::EMPTY)
             .collect();
         let sockets = SocketSet::new(socket_storage);
