@@ -283,7 +283,11 @@ async fn process_connections(
                 }
             }
             ConnectionPhase::Relaying { data_tx } => {
-                // Read ALL available data from smoltcp socket
+                // Only read if the relay channel has capacity (prevents blocking)
+                if data_tx.capacity() == 0 {
+                    // Channel full — skip this connection, retry next poll
+                    continue;
+                }
                 let mut s = stack.lock().await;
                 let mut buf = [0u8; 32768];
                 let n = s.read_from_socket(conn.handle, &mut buf);
@@ -294,15 +298,14 @@ async fn process_connections(
                     for pkt in &out {
                         let _ = device.send(pkt);
                     }
-                    // Use blocking send — never drop data (corrupts TLS)
-                    if data_tx.send(buf[..n].to_vec()).await.is_err() {
-                        to_remove.push(*dest);
-                    }
+                    // try_send is safe here because we checked capacity above
+                    let _ = data_tx.try_send(buf[..n].to_vec());
                 } else {
                     drop(s);
-                    if is_closed {
-                        to_remove.push(*dest);
-                    }
+                }
+                // Only remove if channel is closed (relay exited) AND socket is closed
+                if data_tx.is_closed() || is_closed {
+                    to_remove.push(*dest);
                 }
             }
             ConnectionPhase::Closing => {
