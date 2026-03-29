@@ -173,88 +173,11 @@ where
 
     let mut encoder = FrameEncoder::new();
     let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
+    let mut frames_up: u64 = 0;
+    let mut frames_down: u64 = 0;
 
-    // Phase 1: Wait for the server to confirm it's ready by sending the first frame.
-    // The server processes CMD_CONNECT, opens TCP to destination, then starts relaying.
-    // We must NOT send client data (TLS ClientHello) until the server is ready,
-    // otherwise the server receives data for a connection it hasn't opened yet.
-    //
-    // Meanwhile, buffer client data from smoltcp so it's not lost.
-    let mut pending_upload: Vec<Vec<u8>> = Vec::new();
-    let server_ready = loop {
-        tokio::select! {
-            biased;
-            result = async {
-                let mut len_buf = [0u8; 2];
-                tunnel_read.read_exact(&mut len_buf).await?;
-                let frame_len = u16::from_be_bytes(len_buf) as usize;
-                if frame_len > MAX_FRAME_SIZE {
-                    return Err(anyhow::anyhow!("First server frame too large: {}", frame_len));
-                }
-                tunnel_read.read_exact(&mut frame_buf[..frame_len]).await?;
-                Ok::<_, anyhow::Error>(frame_len)
-            } => {
-                match result {
-                    Ok(frame_len) => {
-                        // Server sent first frame — it's ready. Process this frame.
-                        match FrameDecoder::unseal_data_frame_v5(
-                            &mut frame_buf[..frame_len], frame_len,
-                            cipher.as_ref(), header_key.as_ref(),
-                        ) {
-                            Ok((cmd, payload, _)) => {
-                                if cmd == CMD_DATA && !payload.is_empty() {
-                                    metrics.add_down(payload.len() as u64);
-                                    let mut s = stack.lock().await;
-                                    s.write_to_socket(handle, payload);
-                                    if let Some(ref dev) = device {
-                                        let out = s.poll();
-                                        drop(s);
-                                        for pkt in &out { let _ = dev.send(pkt); }
-                                    }
-                                }
-                                if cmd == CMD_CLOSE { break false; }
-                            }
-                            Err(e) => { warn!("First frame decrypt error: {}", e); break false; }
-                        }
-                        break true;
-                    }
-                    Err(e) => { info!("Server closed before ready: {}", e); break false; }
-                }
-            }
-            _ = interval.tick() => {
-                // Buffer client data while waiting for server
-                let mut s = stack.lock().await;
-                let n = s.read_from_socket(handle, encoder.payload_mut());
-                if n > 0 {
-                    pending_upload.push(encoder.payload_mut()[..n].to_vec());
-                }
-                if s.is_closed(handle) { break false; }
-            }
-        }
-    };
-
-    if !server_ready {
-        info!("TUN relay: server not ready, aborting");
-        return Ok(());
-    }
-
-    // Send any buffered client data now that server is ready
-    for data in &pending_upload {
-        let nonce = session_keys.next_client_nonce();
-        encoder.payload_mut()[..data.len()].copy_from_slice(data);
-        if let Ok(wire) = encoder.seal_data_frame_v5(
-            cipher.as_ref(), &nonce, data.len(), 0, &padding_range, header_key.as_ref(),
-        ) {
-            metrics.add_up(data.len() as u64);
-            if tunnel_write.write_all(wire).await.is_err() { return Ok(()); }
-        }
-    }
-    drop(pending_upload);
-
-    // Phase 2: Bidirectional relay
     loop {
         tokio::select! {
-            biased;
             result = async {
                 let mut len_buf = [0u8; 2];
                 tunnel_read.read_exact(&mut len_buf).await?;
@@ -279,17 +202,21 @@ where
                             Ok((cmd, payload, _nonce)) => {
                                 match cmd {
                                     CMD_DATA => {
+                                        frames_down += 1;
                                         metrics.add_down(payload.len() as u64);
+                                        if frames_down <= 3 {
+                                            info!(frames_down, payload_len = payload.len(), "TUN relay: server data received");
+                                        }
                                         let mut s = stack.lock().await;
                                         let written = s.write_to_socket(handle, payload);
                                         if written == 0 && !payload.is_empty() {
-                                            tracing::warn!(
-                                                payload_len = payload.len(),
-                                                "TUN relay: write_to_socket returned 0"
-                                            );
+                                            warn!(payload_len = payload.len(), "TUN relay: write_to_socket returned 0");
                                         }
                                         if let Some(ref dev) = device {
                                             let out = s.poll();
+                                            if !out.is_empty() && frames_down <= 3 {
+                                                info!(packets = out.len(), "TUN relay: writing response to TUN");
+                                            }
                                             drop(s);
                                             for pkt in &out {
                                                 let _ = dev.send(pkt);
@@ -322,7 +249,11 @@ where
                     (n, closed)
                 };
                 if n > 0 {
+                    frames_up += 1;
                     metrics.add_up(n as u64);
+                    if frames_up <= 3 {
+                        info!(frames_up, bytes = n, "TUN relay: uploading client data");
+                    }
                     let nonce = session_keys.next_client_nonce();
                     match encoder.seal_data_frame_v5(
                         cipher.as_ref(),
@@ -346,7 +277,7 @@ where
         }
     }
 
-    info!("TUN TCP relay session ended");
+    info!(frames_up, frames_down, "TUN TCP relay session ended");
     Ok(())
 }
 
