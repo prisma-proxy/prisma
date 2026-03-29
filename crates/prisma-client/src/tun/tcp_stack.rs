@@ -167,13 +167,11 @@ impl TcpStack {
                 .ok();
         });
         iface.set_any_ip(true);
-        iface
-            .routes_mut()
-            .add_default_ipv4_route(local_smol)
-            .ok();
+        iface.routes_mut().add_default_ipv4_route(local_smol).ok();
 
-        // Preallocate socket storage for up to 64 concurrent connections
-        let socket_storage: Vec<smoltcp::iface::SocketStorage<'static>> = (0..64)
+        // Preallocate socket storage. Android creates many concurrent connections
+        // (DNS-over-TLS, Google services, app traffic, etc.) so we need a large pool.
+        let socket_storage: Vec<smoltcp::iface::SocketStorage<'static>> = (0..512)
             .map(|_| smoltcp::iface::SocketStorage::EMPTY)
             .collect();
         let sockets = SocketSet::new(socket_storage);
