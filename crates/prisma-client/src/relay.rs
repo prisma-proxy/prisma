@@ -174,7 +174,7 @@ where
     let metrics_up = metrics.clone();
     let upload = async move {
         let mut encoder = FrameEncoder::new();
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(1));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
         loop {
             interval.tick().await;
             let (n, is_closed) = {
@@ -284,7 +284,6 @@ where
     info!("TUN TCP relay session ended");
     Ok(())
 }
-
 
 /// Direct relay between local client and outbound connection (no encryption).
 /// Used when routing rules select "direct" action.

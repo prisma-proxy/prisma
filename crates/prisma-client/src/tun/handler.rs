@@ -60,7 +60,7 @@ pub async fn run_tun_handler(
     // Read packets from TUN in a dedicated blocking thread.
     // No mutex — recv(&self) on the fd is safe to call concurrently with send(&self).
     let read_device = device.clone();
-    let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
+    let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(512);
     tokio::task::spawn_blocking(move || {
         let mut buf = vec![0u8; mtu as usize + 64];
         loop {
@@ -76,7 +76,8 @@ pub async fn run_tun_handler(
                 }
                 Err(e) => {
                     // EBADF = fd closed (VPN service stopped). Exit the read loop.
-                    let is_badf = e.downcast_ref::<std::io::Error>()
+                    let is_badf = e
+                        .downcast_ref::<std::io::Error>()
                         .map_or(false, |io| io.raw_os_error() == Some(9));
                     if is_badf {
                         tracing::warn!("TUN fd closed (EBADF) — stopping read loop");
@@ -384,7 +385,7 @@ async fn stack_poll_loop(
     // The relay tasks handle most polling for active connections.
     // This loop handles: detecting new established connections, cleanup, and
     // writing SYN-ACK/ACK packets for connections without active relays yet.
-    let mut interval = tokio::time::interval(Duration::from_millis(2));
+    let mut interval = tokio::time::interval(Duration::from_millis(10));
 
     loop {
         interval.tick().await;
@@ -419,7 +420,10 @@ async fn stack_poll_loop(
                             }
                             // Only cleanup if the tunnel state is Closing or not tracked
                             if let Some(conn) = s.get_connection(*h) {
-                                !matches!(tg.get(&conn.dest), Some(TunnelState::Connecting) | Some(TunnelState::Established))
+                                !matches!(
+                                    tg.get(&conn.dest),
+                                    Some(TunnelState::Connecting) | Some(TunnelState::Established)
+                                )
                             } else {
                                 true
                             }
@@ -468,7 +472,9 @@ async fn stack_poll_loop(
             let tunnels = tunnels.clone();
             let relay_device = device.clone();
             tokio::spawn(async move {
-                match relay_tun_tcp(&ctx, dest, domain.as_deref(), handle, &stack, &relay_device).await {
+                match relay_tun_tcp(&ctx, dest, domain.as_deref(), handle, &stack, &relay_device)
+                    .await
+                {
                     Ok(()) => info!(dest = %dest, "TUN TCP relay completed normally"),
                     Err(e) => warn!(dest = %dest, error = %e, "TUN TCP relay error"),
                 }
