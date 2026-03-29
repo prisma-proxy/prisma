@@ -150,6 +150,10 @@ pub async fn relay(
 ///
 /// Reads data from the smoltcp socket, encrypts it, and sends through the tunnel.
 /// Reads encrypted data from the tunnel, decrypts it, and writes to the smoltcp socket.
+/// TUN TCP relay with notification-based upload.
+///
+/// Upload: receives data from the packet loop via `data_rx` channel — NO mutex polling.
+/// Download: reads from tunnel, writes to smoltcp, polls, writes to TUN.
 pub async fn relay_tun_tcp_encrypted<R, W>(
     handle: smoltcp::iface::SocketHandle,
     stack: Arc<tokio::sync::Mutex<crate::tun::tcp_stack::TcpStack>>,
@@ -159,6 +163,7 @@ pub async fn relay_tun_tcp_encrypted<R, W>(
     mut session_keys: prisma_core::protocol::types::SessionKeys,
     metrics: ClientMetrics,
     device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
+    data_rx: Option<tokio::sync::mpsc::Receiver<Vec<u8>>>,
 ) -> Result<()>
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
@@ -168,72 +173,59 @@ where
     let padding_range = session_keys.padding_range;
     let header_key = session_keys.header_key;
 
-    // === Upload task: smoltcp socket → encrypt → tunnel ===
+    // Upload task: receives data from packet loop via channel (no mutex polling!)
     let cipher_up = cipher.clone();
-    let stack_up = stack.clone();
     let metrics_up = metrics.clone();
     let upload = async move {
-        let mut encoder = FrameEncoder::new();
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
-        loop {
-            interval.tick().await;
-            let (n, is_closed) = {
-                let mut s = stack_up.lock().await;
-                let n = s.read_from_socket(handle, encoder.payload_mut());
-                let closed = s.is_closed(handle);
-                // If socket has data, also poll to generate ACKs
-                if n > 0 {
-                    let _ = s.poll();
-                }
-                (n, closed)
-            };
-            if n > 0 {
-                metrics_up.add_up(n as u64);
-                let nonce = session_keys.next_client_nonce();
-                match encoder.seal_data_frame_v5(
-                    cipher_up.as_ref(),
-                    &nonce,
-                    n,
-                    0,
-                    &padding_range,
-                    header_key.as_ref(),
-                ) {
-                    Ok(wire) => {
-                        if let Err(e) = tunnel_write.write_all(wire).await {
-                            info!("TUN relay upload: write error: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        info!("TUN relay upload: encrypt error: {}", e);
-                        break;
-                    }
-                }
+        let mut data_rx = match data_rx {
+            Some(rx) => rx,
+            None => {
+                // Fallback: no channel, just wait forever (download drives the relay)
+                std::future::pending::<()>().await;
+                return;
             }
-            if is_closed {
-                info!("TUN relay upload: smoltcp socket closed");
-                break;
+        };
+        let mut encoder = FrameEncoder::new();
+        loop {
+            match data_rx.recv().await {
+                Some(data) => {
+                    let n = data.len();
+                    encoder.payload_mut()[..n].copy_from_slice(&data);
+                    metrics_up.add_up(n as u64);
+                    let nonce = session_keys.next_client_nonce();
+                    match encoder.seal_data_frame_v5(
+                        cipher_up.as_ref(),
+                        &nonce,
+                        n,
+                        0,
+                        &padding_range,
+                        header_key.as_ref(),
+                    ) {
+                        Ok(wire) => {
+                            if tunnel_write.write_all(wire).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                None => break, // channel closed = socket closed
             }
         }
     };
 
-    // === Download task: tunnel → decrypt → smoltcp socket → TUN ===
+    // Download task: tunnel → decrypt → smoltcp socket → TUN
     let stack_down = stack.clone();
     let metrics_down = metrics;
     let download = async move {
         let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
         loop {
             let mut len_buf = [0u8; 2];
-            if let Err(e) = tunnel_read.read_exact(&mut len_buf).await {
-                info!("TUN relay download: tunnel EOF: {}", e);
+            if tunnel_read.read_exact(&mut len_buf).await.is_err() {
                 break;
             }
             let frame_len = u16::from_be_bytes(len_buf) as usize;
             if frame_len > MAX_FRAME_SIZE {
-                warn!(
-                    frame_len,
-                    "TUN relay: frame too large, stream likely corrupted"
-                );
                 break;
             }
             if tunnel_read
@@ -256,9 +248,8 @@ where
                         let out = {
                             let mut s = stack_down.lock().await;
                             s.write_to_socket(handle, payload);
-                            s.poll() // poll + release lock immediately
+                            s.poll()
                         };
-                        // Write to TUN outside the lock
                         if let Some(ref dev) = device {
                             for pkt in &out {
                                 let _ = dev.send(pkt);
@@ -268,20 +259,16 @@ where
                     CMD_CLOSE => break,
                     _ => {}
                 },
-                Err(e) => {
-                    warn!("TUN relay decrypt error: {}", e);
-                    break;
-                }
+                Err(_) => break,
             }
         }
     };
 
     tokio::select! {
-        _ = upload => { info!("TUN relay: upload task exited first"); }
-        _ = download => { info!("TUN relay: download task exited first"); }
+        _ = upload => {}
+        _ = download => {}
     }
 
-    info!("TUN TCP relay session ended");
     Ok(())
 }
 
