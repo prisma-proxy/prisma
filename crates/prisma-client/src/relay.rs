@@ -174,13 +174,17 @@ where
     let metrics_up = metrics.clone();
     let upload = async move {
         let mut encoder = FrameEncoder::new();
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(1));
         loop {
             interval.tick().await;
             let (n, is_closed) = {
                 let mut s = stack_up.lock().await;
                 let n = s.read_from_socket(handle, encoder.payload_mut());
                 let closed = s.is_closed(handle);
+                // If socket has data, also poll to generate ACKs
+                if n > 0 {
+                    let _ = s.poll();
+                }
                 (n, closed)
             };
             if n > 0 {
@@ -249,12 +253,13 @@ where
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
                         metrics_down.add_down(payload.len() as u64);
-                        let mut s = stack_down.lock().await;
-                        s.write_to_socket(handle, payload);
-                        // Poll and write to TUN immediately
+                        let out = {
+                            let mut s = stack_down.lock().await;
+                            s.write_to_socket(handle, payload);
+                            s.poll() // poll + release lock immediately
+                        };
+                        // Write to TUN outside the lock
                         if let Some(ref dev) = device {
-                            let out = s.poll();
-                            drop(s);
                             for pkt in &out {
                                 let _ = dev.send(pkt);
                             }

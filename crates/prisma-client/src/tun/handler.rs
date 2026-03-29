@@ -381,7 +381,10 @@ async fn stack_poll_loop(
     tunnels: Arc<Mutex<HashMap<SocketAddr, TunnelState>>>,
     ctx: ProxyContext,
 ) {
-    let mut interval = tokio::time::interval(Duration::from_millis(5));
+    // The relay tasks handle most polling for active connections.
+    // This loop handles: detecting new established connections, cleanup, and
+    // writing SYN-ACK/ACK packets for connections without active relays yet.
+    let mut interval = tokio::time::interval(Duration::from_millis(2));
 
     loop {
         interval.tick().await;
@@ -400,22 +403,6 @@ async fn stack_poll_loop(
                         establish.push((conn.dest, *handle, conn.domain.clone()));
                     }
                 }
-            }
-            // Log periodically to see if sockets exist and their states
-            static POLL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let pc = POLL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if pc == 100 || pc == 500 || pc == 1000 {
-                let states: Vec<String> = handles.iter().map(|h| {
-                    let state = s.socket_state(*h);
-                    format!("{:?}:{}", h, state)
-                }).collect();
-                info!(
-                    poll_count = pc,
-                    sockets = handles.len(),
-                    established = establish.len(),
-                    states = ?states,
-                    "stack_poll_loop status"
-                );
             }
 
             // Only cleanup sockets whose relay has finished (TunnelState::Closing).
