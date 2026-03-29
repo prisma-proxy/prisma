@@ -283,23 +283,26 @@ async fn process_connections(
                 }
             }
             ConnectionPhase::Relaying { data_tx } => {
-                // Read data from smoltcp socket and push to relay via channel
+                // Read ALL available data from smoltcp socket
                 let mut s = stack.lock().await;
-                let mut buf = [0u8; 16384];
+                let mut buf = [0u8; 32768];
                 let n = s.read_from_socket(conn.handle, &mut buf);
+                let is_closed = s.is_closed(conn.handle);
                 if n > 0 {
-                    // Also poll to generate ACKs
                     let out = s.poll();
                     drop(s);
                     for pkt in &out {
                         let _ = device.send(pkt);
                     }
-                    // Send data to relay — if channel full or closed, mark for cleanup
-                    if data_tx.try_send(buf[..n].to_vec()).is_err() {
+                    // Use blocking send — never drop data (corrupts TLS)
+                    if data_tx.send(buf[..n].to_vec()).await.is_err() {
                         to_remove.push(*dest);
                     }
-                } else if s.is_closed(conn.handle) {
-                    to_remove.push(*dest);
+                } else {
+                    drop(s);
+                    if is_closed {
+                        to_remove.push(*dest);
+                    }
                 }
             }
             ConnectionPhase::Closing => {
