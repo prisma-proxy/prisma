@@ -25,6 +25,7 @@ use crate::tun::tcp_stack::TcpStack;
 use crate::tunnel;
 
 /// Per-connection state tracked by the handler.
+#[allow(dead_code)]
 struct ConnectionState {
     handle: smoltcp::iface::SocketHandle,
     dest: SocketAddr,
@@ -32,6 +33,7 @@ struct ConnectionState {
     phase: ConnectionPhase,
 }
 
+#[allow(dead_code)]
 enum ConnectionPhase {
     /// TCP handshake in progress, waiting for ESTABLISHED.
     Handshaking,
@@ -93,8 +95,6 @@ pub async fn run_tun_handler(
     // Periodic poll timer for smoltcp (handles retransmissions, keepalives, etc.)
     let mut poll_interval = tokio::time::interval(Duration::from_millis(50));
 
-    let mut pkt_count: u64 = 0;
-
     loop {
         tokio::select! {
             // Process incoming TUN packets
@@ -115,10 +115,6 @@ pub async fn run_tun_handler(
 
                 for pkt_data in &batch {
                     let pkt = &pkt_data[..];
-                    pkt_count += 1;
-                    if pkt_count <= 5 || pkt_count % 100 == 0 {
-                        info!(count = pkt_count, len = pkt.len(), "TUN packet received");
-                    }
 
                     let ip_info = match packet::parse_ipv4(pkt) {
                         Some(info) => info,
@@ -359,7 +355,7 @@ async fn relay_tun_tcp_notify(
     handle: smoltcp::iface::SocketHandle,
     stack: &Arc<Mutex<TcpStack>>,
     device: &Arc<Box<dyn TunDevice>>,
-    mut data_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+    data_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
 ) -> Result<()> {
     let destination = if let Some(domain) = domain {
         ProxyDestination {
@@ -412,8 +408,14 @@ async fn relay_tun_tcp_notify(
             };
             let outbound = tokio::net::TcpStream::connect(&addr).await?;
             return relay::relay_tun_direct(
-                handle, stack.clone(), outbound, ctx.metrics.clone(), Some(device.clone()), data_rx,
-            ).await;
+                handle,
+                stack.clone(),
+                outbound,
+                ctx.metrics.clone(),
+                Some(device.clone()),
+                data_rx,
+            )
+            .await;
         }
         _ => {} // Proxy — fall through to tunnel
     }

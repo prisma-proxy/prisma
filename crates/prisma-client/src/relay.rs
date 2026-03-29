@@ -162,7 +162,7 @@ pub async fn relay_tun_tcp_encrypted<R, W>(
     cipher: Box<dyn prisma_core::crypto::aead::AeadCipher>,
     mut session_keys: prisma_core::protocol::types::SessionKeys,
     metrics: ClientMetrics,
-    device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
+    _device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
     data_rx: Option<tokio::sync::mpsc::Receiver<Vec<u8>>>,
 ) -> Result<()>
 where
@@ -245,16 +245,10 @@ where
                 Ok((cmd, payload, _nonce)) => match cmd {
                     CMD_DATA => {
                         metrics_down.add_down(payload.len() as u64);
-                        let out = {
-                            let mut s = stack_down.lock().await;
-                            s.write_to_socket(handle, payload);
-                            s.poll()
-                        };
-                        if let Some(ref dev) = device {
-                            for pkt in &out {
-                                let _ = dev.send(pkt);
-                            }
-                        }
+                        // Write to smoltcp socket — minimal lock time.
+                        // poll() is handled by the packet loop's periodic timer.
+                        let mut s = stack_down.lock().await;
+                        s.write_to_socket(handle, payload);
                     }
                     CMD_CLOSE => break,
                     _ => {}
@@ -279,7 +273,7 @@ pub async fn relay_tun_direct(
     stack: Arc<tokio::sync::Mutex<crate::tun::tcp_stack::TcpStack>>,
     outbound: tokio::net::TcpStream,
     metrics: ClientMetrics,
-    device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
+    _device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
     mut data_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
 ) -> Result<()> {
     let (mut out_read, mut out_write) = outbound.into_split();
@@ -310,16 +304,8 @@ pub async fn relay_tun_direct(
                 Ok(n) => n,
             };
             metrics.add_down(n as u64);
-            let out = {
-                let mut s = stack_down.lock().await;
-                s.write_to_socket(handle, &buf[..n]);
-                s.poll()
-            };
-            if let Some(ref dev) = device {
-                for pkt in &out {
-                    let _ = dev.send(pkt);
-                }
-            }
+            let mut s = stack_down.lock().await;
+            s.write_to_socket(handle, &buf[..n]);
         }
     };
 
