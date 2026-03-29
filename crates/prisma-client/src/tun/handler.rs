@@ -232,7 +232,7 @@ pub async fn run_tun_handler(
     }
 }
 
-/// Check all connections: start relays for newly established, push data to active relays, cleanup closed.
+/// Check all connections in a SINGLE mutex lock: start relays, push data, cleanup.
 async fn process_connections(
     connections: &mut HashMap<SocketAddr, ConnectionState>,
     stack: &Arc<Mutex<TcpStack>>,
@@ -240,89 +240,112 @@ async fn process_connections(
     ctx: &ProxyContext,
 ) {
     let mut to_remove: Vec<SocketAddr> = Vec::new();
+    let mut to_establish: Vec<(SocketAddr, smoltcp::iface::SocketHandle, Option<String>)> =
+        Vec::new();
+    let mut data_to_send: Vec<(SocketAddr, Vec<u8>)> = Vec::new();
 
-    for (dest, conn) in connections.iter_mut() {
-        match &conn.phase {
-            ConnectionPhase::Handshaking => {
-                let s = stack.lock().await;
-                if s.is_established(conn.handle) {
-                    drop(s);
-                    // Connection established — start relay with notification channel
-                    let (data_tx, data_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
+    // === Single lock: read all socket states and data ===
+    {
+        let mut s = stack.lock().await;
 
-                    let handle = conn.handle;
-                    let dest = *dest;
-                    let domain = conn.domain.clone();
-                    let ctx = ctx.clone();
-                    let stack = stack.clone();
-                    let relay_device = device.clone();
-
-                    tokio::spawn(async move {
-                        match relay_tun_tcp_notify(
-                            &ctx,
-                            dest,
-                            domain.as_deref(),
-                            handle,
-                            &stack,
-                            &relay_device,
-                            data_rx,
-                        )
-                        .await
-                        {
-                            Ok(()) => debug!(dest = %dest, "TUN relay completed"),
-                            Err(e) => debug!(dest = %dest, error = %e, "TUN relay error"),
-                        }
-                        // Cleanup socket
-                        let mut s = stack.lock().await;
-                        s.close_socket(handle);
-                    });
-
-                    conn.phase = ConnectionPhase::Relaying { data_tx };
-                } else if s.is_closed(conn.handle) {
-                    to_remove.push(*dest);
-                }
-            }
-            ConnectionPhase::Relaying { data_tx } => {
-                // Relay exited — clean up immediately
-                if data_tx.is_closed() {
-                    to_remove.push(*dest);
-                    continue;
-                }
-                // Only read if relay channel has capacity
-                if data_tx.capacity() == 0 {
-                    continue;
-                }
-                let mut s = stack.lock().await;
-                let mut buf = [0u8; 32768];
-                let n = s.read_from_socket(conn.handle, &mut buf);
-                let is_closed = s.is_closed(conn.handle);
-                if n > 0 {
-                    let out = s.poll();
-                    drop(s);
-                    for pkt in &out {
-                        let _ = device.send(pkt);
+        for (dest, conn) in connections.iter() {
+            match &conn.phase {
+                ConnectionPhase::Handshaking => {
+                    if s.is_established(conn.handle) {
+                        to_establish.push((*dest, conn.handle, conn.domain.clone()));
+                    } else if s.is_closed(conn.handle) {
+                        to_remove.push(*dest);
                     }
-                    let _ = data_tx.try_send(buf[..n].to_vec());
-                } else {
-                    drop(s);
                 }
-                if is_closed {
+                ConnectionPhase::Relaying { data_tx } => {
+                    if data_tx.is_closed() {
+                        to_remove.push(*dest);
+                        continue;
+                    }
+                    if data_tx.capacity() == 0 {
+                        continue; // channel full, skip
+                    }
+                    let mut buf = [0u8; 32768];
+                    let n = s.read_from_socket(conn.handle, &mut buf);
+                    if n > 0 {
+                        data_to_send.push((*dest, buf[..n].to_vec()));
+                    }
+                    if s.is_closed(conn.handle) {
+                        to_remove.push(*dest);
+                    }
+                }
+                ConnectionPhase::Closing => {
                     to_remove.push(*dest);
                 }
             }
-            ConnectionPhase::Closing => {
-                to_remove.push(*dest);
+        }
+
+        // Poll once for all connections
+        let out = s.poll();
+
+        // Close sockets for removed handshaking connections
+        for dest in &to_remove {
+            if let Some(conn) = connections.get(dest) {
+                if matches!(conn.phase, ConnectionPhase::Handshaking) {
+                    s.close_socket(conn.handle);
+                }
+            }
+        }
+
+        drop(s); // release lock
+
+        // Write outbound packets to TUN
+        for pkt in &out {
+            if device.send(pkt).is_err() {
+                return; // fd dead
             }
         }
     }
 
-    for dest in to_remove {
-        if let Some(conn) = connections.remove(&dest) {
-            if matches!(conn.phase, ConnectionPhase::Handshaking) {
-                let mut s = stack.lock().await;
-                s.close_socket(conn.handle);
+    // === No lock held: send data to relays ===
+    for (dest, data) in data_to_send {
+        if let Some(conn) = connections.get(&dest) {
+            if let ConnectionPhase::Relaying { data_tx } = &conn.phase {
+                let _ = data_tx.try_send(data);
             }
         }
+    }
+
+    // === No lock held: start new relays ===
+    for (dest, handle, domain) in to_establish {
+        let (data_tx, data_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
+
+        let relay_ctx = ctx.clone();
+        let relay_stack = stack.clone();
+        let relay_device = device.clone();
+
+        tokio::spawn(async move {
+            match relay_tun_tcp_notify(
+                &relay_ctx,
+                dest,
+                domain.as_deref(),
+                handle,
+                &relay_stack,
+                &relay_device,
+                data_rx,
+            )
+            .await
+            {
+                Ok(()) => {}
+                Err(e) => debug!(dest = %dest, error = %e, "TUN relay error"),
+            }
+            let mut s = relay_stack.lock().await;
+            s.close_socket(handle);
+        });
+
+        if let Some(conn) = connections.get_mut(&dest) {
+            conn.phase = ConnectionPhase::Relaying { data_tx };
+        }
+    }
+
+    // === Remove dead connections ===
+    for dest in to_remove {
+        connections.remove(&dest);
     }
 }
 
