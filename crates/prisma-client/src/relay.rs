@@ -169,22 +169,92 @@ where
     // Extract v5 header key for AAD binding (None for v4 backward compat)
     let header_key = session_keys.header_key;
 
-    // Poll interval for checking smoltcp socket state
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
-    // Skip the first immediate tick — give the server time to process CMD_CONNECT
-    // before we start uploading client data (TLS ClientHello).
-    interval.tick().await;
 
     let mut encoder = FrameEncoder::new();
     let mut frame_buf = CLIENT_BUFFER_POOL.acquire();
 
+    // Phase 1: Wait for the server to confirm it's ready by sending the first frame.
+    // The server processes CMD_CONNECT, opens TCP to destination, then starts relaying.
+    // We must NOT send client data (TLS ClientHello) until the server is ready,
+    // otherwise the server receives data for a connection it hasn't opened yet.
+    //
+    // Meanwhile, buffer client data from smoltcp so it's not lost.
+    let mut pending_upload: Vec<Vec<u8>> = Vec::new();
+    let server_ready = loop {
+        tokio::select! {
+            biased;
+            result = async {
+                let mut len_buf = [0u8; 2];
+                tunnel_read.read_exact(&mut len_buf).await?;
+                let frame_len = u16::from_be_bytes(len_buf) as usize;
+                if frame_len > MAX_FRAME_SIZE {
+                    return Err(anyhow::anyhow!("First server frame too large: {}", frame_len));
+                }
+                tunnel_read.read_exact(&mut frame_buf[..frame_len]).await?;
+                Ok::<_, anyhow::Error>(frame_len)
+            } => {
+                match result {
+                    Ok(frame_len) => {
+                        // Server sent first frame — it's ready. Process this frame.
+                        match FrameDecoder::unseal_data_frame_v5(
+                            &mut frame_buf[..frame_len], frame_len,
+                            cipher.as_ref(), header_key.as_ref(),
+                        ) {
+                            Ok((cmd, payload, _)) => {
+                                if cmd == CMD_DATA && !payload.is_empty() {
+                                    metrics.add_down(payload.len() as u64);
+                                    let mut s = stack.lock().await;
+                                    s.write_to_socket(handle, payload);
+                                    if let Some(ref dev) = device {
+                                        let out = s.poll();
+                                        drop(s);
+                                        for pkt in &out { let _ = dev.send(pkt); }
+                                    }
+                                }
+                                if cmd == CMD_CLOSE { break false; }
+                            }
+                            Err(e) => { warn!("First frame decrypt error: {}", e); break false; }
+                        }
+                        break true;
+                    }
+                    Err(e) => { info!("Server closed before ready: {}", e); break false; }
+                }
+            }
+            _ = interval.tick() => {
+                // Buffer client data while waiting for server
+                let mut s = stack.lock().await;
+                let n = s.read_from_socket(handle, encoder.payload_mut());
+                if n > 0 {
+                    pending_upload.push(encoder.payload_mut()[..n].to_vec());
+                }
+                if s.is_closed(handle) { break false; }
+            }
+        }
+    };
+
+    if !server_ready {
+        info!("TUN relay: server not ready, aborting");
+        return Ok(());
+    }
+
+    // Send any buffered client data now that server is ready
+    for data in &pending_upload {
+        let nonce = session_keys.next_client_nonce();
+        encoder.payload_mut()[..data.len()].copy_from_slice(data);
+        if let Ok(wire) = encoder.seal_data_frame_v5(
+            cipher.as_ref(), &nonce, data.len(), 0, &padding_range, header_key.as_ref(),
+        ) {
+            metrics.add_up(data.len() as u64);
+            if tunnel_write.write_all(wire).await.is_err() { return Ok(()); }
+        }
+    }
+    drop(pending_upload);
+
+    // Phase 2: Bidirectional relay
     loop {
         tokio::select! {
-            // Prioritize tunnel reads over uploads — ensures we don't
-            // flood the server before it's ready to relay.
             biased;
-
-            // Read encrypted data from tunnel → decrypt → write to smoltcp socket
             result = async {
                 let mut len_buf = [0u8; 2];
                 tunnel_read.read_exact(&mut len_buf).await?;
