@@ -385,6 +385,39 @@ async fn relay_tun_tcp_notify(
         }
     };
 
+    // Check routing rules
+    let route_domain = match &destination.address {
+        ProxyAddress::Domain(d) => Some(d.as_str()),
+        _ => None,
+    };
+    let route_ip = match &destination.address {
+        ProxyAddress::Ipv4(ip) => Some(std::net::IpAddr::V4(*ip)),
+        ProxyAddress::Ipv6(ip) => Some(std::net::IpAddr::V6(*ip)),
+        _ => None,
+    };
+    let action = ctx.router.route(route_domain, route_ip, destination.port);
+
+    match action {
+        prisma_core::router::RouteAction::Block => {
+            debug!(dest = %destination, "TUN routing: BLOCK — dropping connection");
+            return Ok(());
+        }
+        prisma_core::router::RouteAction::Direct => {
+            // Connect directly to the destination (bypass tunnel)
+            debug!(dest = %destination, "TUN routing: DIRECT — bypassing tunnel");
+            let addr = match &destination.address {
+                ProxyAddress::Domain(d) => format!("{}:{}", d, destination.port),
+                ProxyAddress::Ipv4(ip) => format!("{}:{}", ip, destination.port),
+                ProxyAddress::Ipv6(ip) => format!("[{}]:{}", ip, destination.port),
+            };
+            let outbound = tokio::net::TcpStream::connect(&addr).await?;
+            return relay::relay_tun_direct(
+                handle, stack.clone(), outbound, ctx.metrics.clone(), Some(device.clone()), data_rx,
+            ).await;
+        }
+        _ => {} // Proxy — fall through to tunnel
+    }
+
     // Establish tunnel to destination
     let transport = ctx.connect().await?;
     let tunnel_conn = tunnel::establish_tunnel(

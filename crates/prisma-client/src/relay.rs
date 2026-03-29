@@ -272,6 +272,64 @@ where
     Ok(())
 }
 
+/// TUN direct relay: bridges smoltcp socket ↔ direct TCP connection (no tunnel).
+/// Used when routing rules select "direct" action in TUN mode.
+pub async fn relay_tun_direct(
+    handle: smoltcp::iface::SocketHandle,
+    stack: Arc<tokio::sync::Mutex<crate::tun::tcp_stack::TcpStack>>,
+    outbound: tokio::net::TcpStream,
+    metrics: ClientMetrics,
+    device: Option<Arc<Box<dyn crate::tun::device::TunDevice>>>,
+    mut data_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+) -> Result<()> {
+    let (mut out_read, mut out_write) = outbound.into_split();
+
+    // Upload: smoltcp → direct TCP
+    let metrics_up = metrics.clone();
+    let upload = async move {
+        loop {
+            match data_rx.recv().await {
+                Some(data) => {
+                    metrics_up.add_up(data.len() as u64);
+                    if out_write.write_all(&data).await.is_err() {
+                        break;
+                    }
+                }
+                None => break,
+            }
+        }
+    };
+
+    // Download: direct TCP → smoltcp
+    let stack_down = stack.clone();
+    let download = async move {
+        let mut buf = vec![0u8; 32768];
+        loop {
+            let n = match out_read.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            metrics.add_down(n as u64);
+            let out = {
+                let mut s = stack_down.lock().await;
+                s.write_to_socket(handle, &buf[..n]);
+                s.poll()
+            };
+            if let Some(ref dev) = device {
+                for pkt in &out {
+                    let _ = dev.send(pkt);
+                }
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = upload => {}
+        _ = download => {}
+    }
+    Ok(())
+}
+
 /// Direct relay between local client and outbound connection (no encryption).
 /// Used when routing rules select "direct" action.
 pub async fn relay_direct(
