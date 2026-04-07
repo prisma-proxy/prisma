@@ -80,7 +80,7 @@ pub async fn run_tun_handler(
                 Err(e) => {
                     let is_badf = e
                         .downcast_ref::<std::io::Error>()
-                        .map_or(false, |io| io.raw_os_error() == Some(9));
+                        .is_some_and(|io| io.raw_os_error() == Some(9));
                     if is_badf {
                         tracing::warn!("TUN fd closed (EBADF) — stopping read loop");
                         break;
@@ -137,6 +137,7 @@ pub async fn run_tun_handler(
                             };
 
                             // Create listener for new connections BEFORE feeding the SYN
+                            #[allow(clippy::map_entry)] // async body prevents entry API usage
                             if !connections.contains_key(&dest) {
                                 let domain = if let SocketAddr::V4(v4) = dest {
                                     ctx.dns_resolver.lookup_fake_ip(*v4.ip()).await
@@ -202,7 +203,7 @@ pub async fn run_tun_handler(
                 let out = s.poll();
                 drop(s); // release lock before I/O
                 for pkt in &out {
-                    if let Err(_) = device.send(pkt) {
+                    if device.send(pkt).is_err() {
                         return Ok(()); // fd dead
                     }
                 }
@@ -218,7 +219,7 @@ pub async fn run_tun_handler(
                     s.poll()
                 };
                 for pkt in &out {
-                    if let Err(_) = device.send(pkt) {
+                    if device.send(pkt).is_err() {
                         return Ok(());
                     }
                 }

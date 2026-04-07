@@ -154,6 +154,7 @@ pub async fn relay(
 ///
 /// Upload: receives data from the packet loop via `data_rx` channel — NO mutex polling.
 /// Download: reads from tunnel, writes to smoltcp, polls, writes to TUN.
+#[allow(clippy::too_many_arguments)]
 pub async fn relay_tun_tcp_encrypted<R, W>(
     handle: smoltcp::iface::SocketHandle,
     stack: Arc<tokio::sync::Mutex<crate::tun::tcp_stack::TcpStack>>,
@@ -186,30 +187,25 @@ where
             }
         };
         let mut encoder = FrameEncoder::new();
-        loop {
-            match data_rx.recv().await {
-                Some(data) => {
-                    let n = data.len();
-                    encoder.payload_mut()[..n].copy_from_slice(&data);
-                    metrics_up.add_up(n as u64);
-                    let nonce = session_keys.next_client_nonce();
-                    match encoder.seal_data_frame_v5(
-                        cipher_up.as_ref(),
-                        &nonce,
-                        n,
-                        0,
-                        &padding_range,
-                        header_key.as_ref(),
-                    ) {
-                        Ok(wire) => {
-                            if tunnel_write.write_all(wire).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
+        while let Some(data) = data_rx.recv().await {
+            let n = data.len();
+            encoder.payload_mut()[..n].copy_from_slice(&data);
+            metrics_up.add_up(n as u64);
+            let nonce = session_keys.next_client_nonce();
+            match encoder.seal_data_frame_v5(
+                cipher_up.as_ref(),
+                &nonce,
+                n,
+                0,
+                &padding_range,
+                header_key.as_ref(),
+            ) {
+                Ok(wire) => {
+                    if tunnel_write.write_all(wire).await.is_err() {
+                        break;
                     }
                 }
-                None => break, // channel closed = socket closed
+                Err(_) => break,
             }
         }
     };
@@ -281,15 +277,10 @@ pub async fn relay_tun_direct(
     // Upload: smoltcp → direct TCP
     let metrics_up = metrics.clone();
     let upload = async move {
-        loop {
-            match data_rx.recv().await {
-                Some(data) => {
-                    metrics_up.add_up(data.len() as u64);
-                    if out_write.write_all(&data).await.is_err() {
-                        break;
-                    }
-                }
-                None => break,
+        while let Some(data) = data_rx.recv().await {
+            metrics_up.add_up(data.len() as u64);
+            if out_write.write_all(&data).await.is_err() {
+                break;
             }
         }
     };
