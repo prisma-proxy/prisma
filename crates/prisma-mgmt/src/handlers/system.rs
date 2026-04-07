@@ -151,11 +151,12 @@ pub async fn server_geo(State(state): State<MgmtState>) -> Json<Option<ServerGeo
         return Json(None);
     };
 
-    let Ok(city): Result<maxminddb::geoip2::City, _> = reader.lookup(ip) else {
-        return Json(None);
+    let city: maxminddb::geoip2::Country = match reader.lookup(ip).and_then(|r| r.decode()) {
+        Ok(Some(c)) => c,
+        _ => return Json(None),
     };
 
-    let country = city.country.and_then(|c| c.iso_code).map(|s| s.to_string());
+    let country = city.country.iso_code.map(|s| s.to_string());
 
     Json(country.map(|c| ServerGeoResponse { country: c }))
 }

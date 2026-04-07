@@ -49,17 +49,14 @@ pub(crate) fn lookup_geo(
     reader: &maxminddb::Reader<Vec<u8>>,
     ip: IpAddr,
 ) -> (Option<String>, Option<String>, Option<f64>, Option<f64>) {
-    let Ok(city): Result<maxminddb::geoip2::City, _> = reader.lookup(ip) else {
-        return (None, None, None, None);
+    let city: maxminddb::geoip2::City = match reader.lookup(ip).and_then(|r| r.decode()) {
+        Ok(Some(c)) => c,
+        _ => return (None, None, None, None),
     };
-    let country = city.country.and_then(|c| c.iso_code).map(|s| s.to_string());
-    let city_name = city
-        .city
-        .and_then(|c| c.names)
-        .and_then(|n| n.get("en").copied())
-        .map(|s| s.to_string());
-    let lat = city.location.as_ref().and_then(|l| l.latitude);
-    let lon = city.location.as_ref().and_then(|l| l.longitude);
+    let country = city.country.iso_code.map(|s| s.to_string());
+    let city_name = city.city.names.english.map(|s| s.to_string());
+    let lat = city.location.latitude;
+    let lon = city.location.longitude;
     (country, city_name, lat, lon)
 }
 

@@ -897,11 +897,11 @@ async fn check_routing_rules(
                             match maxminddb::Reader::open_readfile(path) {
                                 Ok(reader) => {
                                     let country: Option<String> = reader
-                                        .lookup::<maxminddb::geoip2::Country>(ip_addr)
+                                        .lookup(ip_addr)
+                                        .and_then(|r| r.decode::<maxminddb::geoip2::Country>())
                                         .ok()
-                                        .and_then(|c| {
-                                            c.country.and_then(|co| co.iso_code.map(String::from))
-                                        });
+                                        .flatten()
+                                        .and_then(|c| c.country.iso_code.map(String::from));
                                     country
                                         .as_deref()
                                         .map(|c| c.eq_ignore_ascii_case(code))
