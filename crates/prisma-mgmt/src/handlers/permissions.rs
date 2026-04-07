@@ -65,7 +65,7 @@ pub async fn update_permissions(
             client.permissions = Some(resolved);
         }
     }
-    state.persist_config().await;
+    // v14+: permissions stored in DB only, no TOML persistence
 
     Ok(StatusCode::OK)
 }

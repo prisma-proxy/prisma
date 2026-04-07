@@ -20,6 +20,16 @@ pub struct ServerContext {
     pub config_path: String,
     /// Session ticket key ring with automatic rotation for forward secrecy.
     pub ticket_key_ring: TicketKeyRing,
+    /// SQLite database handle (v14+ DB-first config). Shared with management API.
+    pub db: Option<prisma_mgmt::db::Db>,
+    /// Reloadable TLS config for the main server listener.
+    pub server_tls: Option<axum_server::tls_rustls::RustlsConfig>,
+    /// Reloadable TLS config for the management API listener.
+    pub mgmt_tls: Option<axum_server::tls_rustls::RustlsConfig>,
+    /// Reloadable TLS config for the CDN listener.
+    pub cdn_tls: Option<axum_server::tls_rustls::RustlsConfig>,
+    /// Data directory path (alongside config file).
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 impl Deref for ServerContext {

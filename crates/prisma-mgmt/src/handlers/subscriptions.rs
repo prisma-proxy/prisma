@@ -252,8 +252,7 @@ pub async fn redeem_code(
     db::increment_code_usage(database, rc.id);
 
     // Sync to config
-    state.sync_clients_to_config().await;
-    state.persist_config().await;
+    // v14+: clients stored in DB only, no TOML persistence
 
     Ok(Json(RedeemResponse {
         client_id: client_id.to_string(),
@@ -497,8 +496,7 @@ pub async fn redeem_invite(
     db::increment_invite_usage(database, inv.id);
 
     // Sync config
-    state.sync_clients_to_config().await;
-    state.persist_config().await;
+    // v14+: clients stored in DB only, no TOML persistence
 
     // Issue JWT using shared helper
     let jwt_secret = {

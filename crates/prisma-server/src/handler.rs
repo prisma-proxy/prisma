@@ -571,7 +571,7 @@ where
             }
 
             // Check routing rules
-            let (allowed, matched_rule_name) = check_routing_rules(state, dest).await;
+            let (allowed, matched_rule_name) = check_routing_rules(state, dest, &dns_cache).await;
             if !allowed {
                 warn!(dest = %dest, "Connection blocked by routing rule");
                 return Err(anyhow::anyhow!("Blocked by routing rule"));
@@ -613,33 +613,58 @@ where
             let has_limits = ctx.bandwidth.has_client(&client_id_str).await
                 || ctx.quotas.has_client(&client_id_str).await;
 
-            if has_limits {
-                relay::relay_encrypted_with_limits(
-                    tunnel_read,
-                    tunnel_write,
-                    outbound,
-                    cipher,
-                    session_keys,
-                    state.metrics.clone(),
-                    bytes_up,
-                    bytes_down,
-                    client_id_str,
-                    ctx.bandwidth.clone(),
-                    ctx.quotas.clone(),
-                )
-                .await
+            let timeout_secs = {
+                let cfg = state.config.read().await;
+                cfg.performance.connection_timeout_secs
+            };
+
+            let relay_fut = async {
+                if has_limits {
+                    relay::relay_encrypted_with_limits(
+                        tunnel_read,
+                        tunnel_write,
+                        outbound,
+                        cipher,
+                        session_keys,
+                        state.metrics.clone(),
+                        bytes_up,
+                        bytes_down,
+                        client_id_str,
+                        ctx.bandwidth.clone(),
+                        ctx.quotas.clone(),
+                    )
+                    .await
+                } else {
+                    relay::relay_encrypted(
+                        tunnel_read,
+                        tunnel_write,
+                        outbound,
+                        cipher,
+                        session_keys,
+                        state.metrics.clone(),
+                        bytes_up,
+                        bytes_down,
+                    )
+                    .await
+                }
+            };
+
+            // Enforce connection_timeout_secs (0 = no timeout)
+            if timeout_secs == 0 {
+                relay_fut.await
             } else {
-                relay::relay_encrypted(
-                    tunnel_read,
-                    tunnel_write,
-                    outbound,
-                    cipher,
-                    session_keys,
-                    state.metrics.clone(),
-                    bytes_up,
-                    bytes_down,
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(timeout_secs),
+                    relay_fut,
                 )
                 .await
+                {
+                    Ok(result) => result,
+                    Err(_) => {
+                        warn!(timeout_secs, "Connection timed out");
+                        Ok(())
+                    }
+                }
             }
         }
         Command::RegisterForward {
@@ -706,10 +731,20 @@ where
                     .await
                     {
                         Ok(Ok((n, _))) => buf[..n].to_vec(),
-                        _ => Vec::new(),
+                        Ok(Err(e)) => {
+                            warn!(query_id, error = %e, "DNS tunnel recv failed");
+                            Vec::new()
+                        }
+                        Err(_) => {
+                            warn!(query_id, upstream = %upstream, "DNS tunnel query timed out");
+                            Vec::new()
+                        }
                     }
                 }
-                Err(_) => Vec::new(),
+                Err(e) => {
+                    warn!(query_id, error = %e, "Failed to bind UDP socket for DNS tunnel query");
+                    Vec::new()
+                }
             };
             let mut session_keys = session_keys;
             let response_frame = DataFrame {
@@ -824,6 +859,7 @@ where
 async fn check_routing_rules(
     state: &ServerState,
     dest: &ProxyDestination,
+    dns_cache: &DnsCache,
 ) -> (bool, Option<String>) {
     let rules = state.routing_rules.read().await;
     if rules.is_empty() {
@@ -831,7 +867,7 @@ async fn check_routing_rules(
     }
 
     let mut sorted: Vec<_> = rules.iter().filter(|r| r.enabled).collect();
-    sorted.sort_by_key(|r| r.priority);
+    sorted.sort_by(|a, b| b.priority.cmp(&a.priority)); // Higher priority evaluated first
 
     for rule in sorted {
         let matches = match &rule.condition {
@@ -845,46 +881,54 @@ async fn check_routing_rules(
                 _ => false,
             },
             RuleCondition::IpCidr(cidr) => {
+                // Resolve destination to IP (handles both direct IPs and domains)
+                let resolved_ip: Option<std::net::IpAddr> = match &dest.address {
+                    ProxyAddress::Ipv4(ip) => Some(std::net::IpAddr::V4(*ip)),
+                    ProxyAddress::Ipv6(ip) => Some(std::net::IpAddr::V6(*ip)),
+                    ProxyAddress::Domain(d) => dns_cache
+                        .resolve(d)
+                        .await
+                        .ok()
+                        .and_then(|addrs| addrs.into_iter().next()),
+                };
+
                 if let Some(code) = cidr.strip_prefix("geoip:") {
-                    // Look up destination IP in MMDB for GeoIP matching
-                    match &dest.address {
-                        ProxyAddress::Ipv4(ip) => {
-                            let cfg = state.config.read().await;
-                            if let Some(path) = cfg.routing.geoip_path.as_deref() {
-                                match maxminddb::Reader::open_readfile(path) {
-                                    Ok(reader) => {
-                                        let ip_addr = std::net::IpAddr::V4(*ip);
-                                        let country: Option<String> = reader
-                                            .lookup::<maxminddb::geoip2::Country>(ip_addr)
-                                            .ok()
-                                            .and_then(|c| {
-                                                c.country
-                                                    .and_then(|co| co.iso_code.map(String::from))
-                                            });
-                                        country
-                                            .as_deref()
-                                            .map(|c| c.eq_ignore_ascii_case(code))
-                                            .unwrap_or(false)
-                                    }
-                                    Err(e) => {
-                                        debug!(
-                                            rule = %rule.name,
-                                            error = %e,
-                                            "GeoIP rule skipped (MMDB open failed)"
-                                        );
-                                        false
-                                    }
+                    // GeoIP: look up resolved IP in MMDB and compare country code
+                    if let Some(ip_addr) = resolved_ip {
+                        let cfg = state.config.read().await;
+                        if let Some(path) = cfg.routing.geoip_path.as_deref() {
+                            match maxminddb::Reader::open_readfile(path) {
+                                Ok(reader) => {
+                                    let country: Option<String> = reader
+                                        .lookup::<maxminddb::geoip2::Country>(ip_addr)
+                                        .ok()
+                                        .and_then(|c| {
+                                            c.country.and_then(|co| co.iso_code.map(String::from))
+                                        });
+                                    country
+                                        .as_deref()
+                                        .map(|c| c.eq_ignore_ascii_case(code))
+                                        .unwrap_or(false)
                                 }
-                            } else {
-                                debug!(
-                                    rule = %rule.name,
-                                    code,
-                                    "GeoIP rule skipped (no geoip_path configured)"
-                                );
-                                false
+                                Err(e) => {
+                                    debug!(
+                                        rule = %rule.name,
+                                        error = %e,
+                                        "GeoIP rule skipped (MMDB open failed)"
+                                    );
+                                    false
+                                }
                             }
+                        } else {
+                            debug!(
+                                rule = %rule.name,
+                                code,
+                                "GeoIP rule skipped (no geoip_path configured)"
+                            );
+                            false
                         }
-                        _ => false,
+                    } else {
+                        false
                     }
                 } else if let Some(category) = cidr.strip_prefix("geosite:") {
                     debug!(
@@ -894,8 +938,10 @@ async fn check_routing_rules(
                     );
                     false
                 } else {
-                    match &dest.address {
-                        ProxyAddress::Ipv4(ip) => cidr_match_v4(cidr, *ip),
+                    // CIDR matching against resolved IP
+                    match resolved_ip {
+                        Some(std::net::IpAddr::V4(ip)) => cidr_match_v4(cidr, ip),
+                        Some(std::net::IpAddr::V6(ip)) => cidr_match_v6(cidr, ip),
                         _ => false,
                     }
                 }
@@ -905,10 +951,7 @@ async fn check_routing_rules(
         };
 
         if matches {
-            let allowed = matches!(
-                rule.action,
-                RuleAction::Allow | RuleAction::Direct | RuleAction::Unknown
-            );
+            let allowed = !matches!(rule.action, RuleAction::Block | RuleAction::Reject);
             return (allowed, Some(rule.name.clone()));
         }
     }
@@ -935,4 +978,11 @@ fn cidr_match_v4(cidr: &str, ip: std::net::Ipv4Addr) -> bool {
         return false;
     };
     (u32::from(ip) & mask) == network
+}
+
+fn cidr_match_v6(cidr: &str, ip: std::net::Ipv6Addr) -> bool {
+    let Some((network, mask)) = prisma_core::router::parse_cidr_v6(cidr) else {
+        return false;
+    };
+    (u128::from(ip) & mask) == network
 }

@@ -40,6 +40,84 @@ pub async fn reload_config(State(state): State<MgmtState>) -> impl IntoResponse 
 
     info!(path = %config_path, "API-triggered config reload");
 
+    // v14+ DB-first reload: read config from DB instead of TOML
+    if state.db.is_some() {
+        // Try loading slim TOML for listen addresses
+        if let Ok(toml_config) = prisma_core::config::load_toml_server_config(&config_path) {
+            if toml_config.config_version >= 14 {
+                let db = state.require_db().unwrap();
+                let sections = crate::db::list_config_sections(db);
+                let new_config = prisma_core::config::server::ServerConfig::from_toml_and_db(
+                    &toml_config,
+                    &sections,
+                );
+
+                let mut changes: Vec<String> = Vec::new();
+
+                // Reload clients from DB
+                let db_clients = crate::db::clients_as_authorized(db);
+                if let Ok(new_auth) = AuthStoreInner::from_config(&db_clients) {
+                    let old_count = state.auth_store.read().await.clients.len();
+                    let new_count = new_auth.clients.len();
+                    if old_count != new_count {
+                        changes.push(format!("Updated clients: {} -> {}", old_count, new_count));
+                    }
+                    *state.auth_store.write().await = new_auth;
+                }
+
+                // Reload routing rules from DB
+                let db_rules = crate::db::list_routing_rules(db);
+                {
+                    let mut rules = state.routing_rules.write().await;
+                    let old_count = rules.len();
+                    *rules = db_rules;
+                    if old_count != rules.len() {
+                        changes.push(format!(
+                            "Updated routing rules: {} -> {}",
+                            old_count,
+                            rules.len()
+                        ));
+                    }
+                }
+
+                // Update config snapshot
+                {
+                    let mut cfg = state.config.write().await;
+                    *cfg = new_config;
+                }
+
+                let message = if changes.is_empty() {
+                    "Configuration reloaded from DB — no changes detected".to_string()
+                } else {
+                    format!(
+                        "Configuration reloaded from DB ({} change{})",
+                        changes.len(),
+                        if changes.len() == 1 { "" } else { "s" }
+                    )
+                };
+
+                state
+                    .state
+                    .broadcast_reload_event(prisma_core::state::ReloadEvent {
+                        timestamp: chrono::Utc::now(),
+                        success: true,
+                        message: message.clone(),
+                        changes: changes.clone(),
+                    });
+
+                return (
+                    StatusCode::OK,
+                    Json(ReloadResponse {
+                        success: true,
+                        message,
+                        changes,
+                    }),
+                );
+            }
+        }
+    }
+
+    // Legacy TOML reload path
     // Parse and validate the new config
     let new_config = match load_server_config(&config_path) {
         Ok(cfg) => cfg,

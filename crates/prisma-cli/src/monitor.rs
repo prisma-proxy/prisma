@@ -179,12 +179,14 @@ pub async fn run_monitor(
     mgmt_url: Option<String>,
     token: Option<String>,
     _config: Option<String>,
+    insecure: bool,
 ) -> Result<()> {
     // Resolve the management API client
     let client = api_client::ApiClient::resolve(
         mgmt_url.as_deref(),
         token.as_deref(),
         false, // not JSON mode
+        insecure,
     )?;
 
     // Set up terminal

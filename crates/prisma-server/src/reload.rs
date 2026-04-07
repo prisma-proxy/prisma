@@ -280,6 +280,152 @@ async fn update_routing_rules(
     changes
 }
 
+/// Reload configuration from the SQLite database (v14+ DB-first config).
+///
+/// Reads all config sections from DB, assembles a full ServerConfig,
+/// and applies changes to the live state. Used by SIGHUP handler and
+/// the management API reload endpoint when running in v14+ mode.
+pub async fn reload_from_db(ctx: &ServerContext) -> Result<String> {
+    let db = ctx
+        .db
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No database available for DB-first reload"))?;
+
+    info!("Reloading configuration from database");
+
+    // Load current slim TOML for listen addresses
+    let toml_config = prisma_core::config::load_toml_server_config(&ctx.config_path)
+        .map_err(|e| anyhow::anyhow!("Failed to load TOML config: {}", e))?;
+
+    // Load all sections from DB
+    let sections = prisma_mgmt::db::list_config_sections(db);
+
+    // Assemble full config
+    let new_config =
+        prisma_core::config::server::ServerConfig::from_toml_and_db(&toml_config, &sections);
+
+    // Load clients from DB to rebuild auth store
+    let db_clients = prisma_mgmt::db::clients_as_authorized(db);
+
+    let mut changes: Vec<String> = Vec::new();
+
+    // Update auth store from DB clients
+    if !db_clients.is_empty() {
+        let new_auth = match prisma_core::state::AuthStoreInner::from_config(&db_clients) {
+            Ok(inner) => inner,
+            Err(e) => {
+                warn!(error = %e, "Failed to parse DB clients, keeping old auth store");
+                return Ok(format!("WARNING: client update skipped: {}", e));
+            }
+        };
+
+        let old_count = {
+            let old = ctx.state.auth_store.read().await;
+            old.clients.len()
+        };
+        let new_count = new_auth.clients.len();
+
+        if old_count != new_count {
+            changes.push(format!("Updated clients: {} -> {}", old_count, new_count));
+        }
+
+        {
+            let mut store = ctx.state.auth_store.write().await;
+            *store = new_auth;
+        }
+
+        // Rebuild bandwidth/quota from DB clients
+        for client in &db_clients {
+            let upload_bps = client
+                .bandwidth_up
+                .as_deref()
+                .and_then(parse_bandwidth)
+                .unwrap_or(0);
+            let download_bps = client
+                .bandwidth_down
+                .as_deref()
+                .and_then(parse_bandwidth)
+                .unwrap_or(0);
+
+            if upload_bps > 0 || download_bps > 0 {
+                ctx.bandwidth
+                    .set_limit(
+                        &client.id,
+                        &BandwidthLimit {
+                            upload_bps,
+                            download_bps,
+                        },
+                    )
+                    .await;
+            }
+
+            if let Some(quota_str) = &client.quota {
+                if let Some(quota_bytes) = parse_quota(quota_str) {
+                    ctx.quotas.set_quota(&client.id, quota_bytes).await;
+                }
+            }
+        }
+    }
+
+    // Update routing rules from DB
+    let db_rules = prisma_mgmt::db::list_routing_rules(db);
+    if !db_rules.is_empty() {
+        let mut rules = ctx.state.routing_rules.write().await;
+        let old_count = rules.len();
+        *rules = db_rules;
+        let new_count = rules.len();
+        if old_count != new_count {
+            changes.push(format!(
+                "Updated routing rules: {} -> {}",
+                old_count, new_count
+            ));
+        }
+    }
+
+    // Update config snapshot
+    {
+        let mut cfg = ctx.state.config.write().await;
+        if cfg.padding.min != new_config.padding.min || cfg.padding.max != new_config.padding.max {
+            changes.push(format!(
+                "Updated padding: {}-{} -> {}-{}",
+                cfg.padding.min, cfg.padding.max, new_config.padding.min, new_config.padding.max
+            ));
+        }
+        if cfg.dns_upstream != new_config.dns_upstream {
+            changes.push(format!(
+                "Updated DNS upstream: {} -> {}",
+                cfg.dns_upstream, new_config.dns_upstream
+            ));
+        }
+        *cfg = new_config;
+    }
+
+    let message = if changes.is_empty() {
+        "Configuration reloaded from DB — no changes detected".to_string()
+    } else {
+        for change in &changes {
+            info!(change = %change, "DB config reload");
+        }
+        format!(
+            "Configuration reloaded from DB ({} change{}): {}",
+            changes.len(),
+            if changes.len() == 1 { "" } else { "s" },
+            changes.join("; ")
+        )
+    };
+
+    // Broadcast reload event
+    ctx.state
+        .broadcast_reload_event(prisma_core::state::ReloadEvent {
+            timestamp: chrono::Utc::now(),
+            success: true,
+            message: message.clone(),
+            changes,
+        });
+
+    Ok(message)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

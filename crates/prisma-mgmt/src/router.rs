@@ -12,8 +12,9 @@ use prisma_core::config::server::ManagementApiConfig;
 
 use crate::auth::{auth_middleware, AuthToken, JwtSecret};
 use crate::handlers::{
-    acls, alerts, backup, bandwidth, client_metrics, clients, config, connections, forwards,
-    health, permissions, prometheus_export, reload, routes, settings, subscriptions, system, users,
+    acls, alerts, backup, bandwidth, certificates, client_metrics, clients, config, connections,
+    forwards, health, permissions, prometheus_export, reload, routes, server_config, settings,
+    subscriptions, system, users,
 };
 use crate::ws::{connections as ws_connections, logs, metrics, reload as ws_reload};
 use crate::MgmtState;
@@ -109,6 +110,21 @@ pub fn build_router(config: ManagementApiConfig, state: MgmtState) -> Router {
             post(backup::restore_backup),
         )
         .route("/api/config/backups/{name}/diff", get(backup::diff_backup))
+        // Config sections (v14+ DB-first)
+        .route("/api/config/sections", get(server_config::list_sections))
+        .route(
+            "/api/config/sections/{section}",
+            get(server_config::get_section).put(server_config::update_section),
+        )
+        // Certificates
+        .route(
+            "/api/certificates",
+            get(certificates::list).post(certificates::upload),
+        )
+        .route(
+            "/api/certificates/{name}",
+            get(certificates::get_info).delete(certificates::remove),
+        )
         // Forwards
         .route(
             "/api/forwards",

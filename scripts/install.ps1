@@ -1,9 +1,14 @@
 # Prisma installer for Windows (PowerShell)
-# Usage:
+#
+# Quick install:
 #   irm https://raw.githubusercontent.com/prisma-proxy/prisma/master/scripts/install.ps1 | iex
+#
+# Install + initialize:
 #   .\install.ps1 -Setup
-#   .\install.ps1 -Version v0.2.1
-#   .\install.ps1 -Uninstall
+#
+# The -Setup flag creates a minimal server.toml, generates a self-signed TLS
+# certificate, and downloads the web console. All further configuration happens
+# through the web console (admin account, clients, routing, certificates).
 param(
     [switch]$Setup,
     [switch]$Uninstall,
@@ -26,7 +31,7 @@ function Show-Usage {
 Usage: install.ps1 [OPTIONS]
 
 Options:
-  -Setup            Generate credentials, TLS certificate, and example configs
+  -Setup            Initialize config, TLS cert, and download web console
   -Version VER      Install a specific version (e.g., v0.2.1). Default: latest
   -Dir DIR          Install directory (or set PRISMA_INSTALL_DIR)
   -ConfigDir DIR    Config output directory for -Setup (or set PRISMA_CONFIG_DIR)
@@ -184,7 +189,7 @@ if ($UserPath -notlike "*$InstallDir*") {
 Write-Info "Prisma installed successfully"
 try { & $OutPath --version } catch {}
 
-# Optional setup
+# Optional setup — initialize minimal config + download web console
 if ($Setup) {
     $SetupDir = if ($ConfigDir -ne "") { $ConfigDir }
                 elseif ($env:PRISMA_CONFIG_DIR) { $env:PRISMA_CONFIG_DIR }
@@ -193,47 +198,28 @@ if ($Setup) {
     Write-Host ""
     Write-Info "Running initial setup in $SetupDir"
 
-    Write-Info "Generating client credentials..."
-    & $OutPath gen-key | Out-File (Join-Path $SetupDir ".prisma-credentials") -Encoding utf8
-
-    Write-Info "Generating TLS certificate..."
-    & $OutPath gen-cert --output "$SetupDir" --cn prisma-server
-
-    $ServerToml = Join-Path $SetupDir "server.toml"
-    if (-not (Test-Path $ServerToml)) {
-        try {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$Repo/master/server.example.toml" -OutFile $ServerToml -UseBasicParsing
-            Write-Info "Created server.toml from example"
-        } catch {
-            Write-Warn "Could not download server.example.toml"
-        }
-    } else {
-        Write-Info "server.toml already exists, skipping"
-    }
-
-    $ClientToml = Join-Path $SetupDir "client.toml"
-    if (-not (Test-Path $ClientToml)) {
-        try {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$Repo/master/client.example.toml" -OutFile $ClientToml -UseBasicParsing
-            Write-Info "Created client.toml from example"
-        } catch {
-            Write-Warn "Could not download client.example.toml"
-        }
-    } else {
-        Write-Info "client.toml already exists, skipping"
-    }
+    Push-Location $SetupDir
+    & $OutPath init --console --server-only
+    Pop-Location
 
     Write-Host ""
-    Write-Host "Setup complete!" -ForegroundColor Green
-    Write-Host "  Credentials: $(Join-Path $SetupDir '.prisma-credentials')"
-    Write-Host "  TLS cert:    $(Join-Path $SetupDir 'prisma-cert.pem')"
-    Write-Host "  TLS key:     $(Join-Path $SetupDir 'prisma-key.pem')"
+    Write-Info "Setup complete! Next steps:"
     Write-Host ""
-    Write-Host "Next steps:"
-    Write-Host "  1. Edit server.toml - paste the client ID and auth secret from .prisma-credentials"
-    Write-Host "  2. Edit client.toml - set server_addr and paste the same credentials"
-    Write-Host "  3. Run: prisma server -c server.toml"
-    Write-Host "  4. Run: prisma client -c client.toml"
+    Write-Host "  1. Start the server:"
+    Write-Host "     prisma server -c server.toml" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  2. Open the web console to complete setup:"
+    Write-Host "     https://your-server-ip:443" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  3. The setup wizard will guide you through:"
+    Write-Host "     - Creating an admin account"
+    Write-Host "     - Adding your first client"
+    Write-Host "     - Configuring routing rules"
+    Write-Host "     - Uploading TLS certificates"
+    Write-Host ""
+} else {
+    Write-Host ""
+    Write-Info "Run 'prisma init --console' to initialize server config"
+    Write-Info "Or re-run this script with -Setup"
+    Write-Host ""
 }
-
-Write-Host ""

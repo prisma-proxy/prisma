@@ -167,6 +167,15 @@ fn build_cdn_router(
         };
         let mgmt = prisma_mgmt::router::build_router(config.management_api.clone(), mgmt_state);
         app = app.nest(&cdn.management_api_path, mgmt);
+
+        // Mount console static assets at CDN root so /_next/* paths resolve
+        // when the console HTML is served from a nested subpath like /prisma-mgmt/.
+        if let Some(ref console_dir) = config.management_api.console_dir {
+            let next_static = std::path::PathBuf::from(console_dir).join("_next");
+            if next_static.exists() {
+                app = app.nest_service("/_next", ServeDir::new(next_static));
+            }
+        }
     }
 
     // 5. Cover traffic (fallback — lowest priority)

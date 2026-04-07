@@ -16,7 +16,7 @@ use prisma_core::config::server::{
 };
 
 /// Current schema version.  Increment when adding migrations.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 // ───────────────────────────── Public types ─────────────────────────────
 
@@ -91,6 +91,11 @@ fn apply_up_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
             conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [2])?;
             info!("Applied SQLite migration v2 (up)");
         }
+        3 => {
+            conn.execute_batch(include_str!("db_migrations/v3.sql"))?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [3])?;
+            info!("Applied SQLite migration v3 (up) — database-first configuration");
+        }
         other => {
             warn!(version = other, "No up migration found for version");
         }
@@ -108,6 +113,10 @@ fn apply_down_migration(conn: &Connection, version: i64) -> anyhow::Result<()> {
         2 => {
             conn.execute_batch(include_str!("db_migrations/v2_down.sql"))?;
             info!("Applied SQLite migration v2 (down)");
+        }
+        3 => {
+            conn.execute_batch(include_str!("db_migrations/v3_down.sql"))?;
+            info!("Applied SQLite migration v3 (down)");
         }
         other => {
             warn!(
@@ -1127,6 +1136,10 @@ pub fn dump_sql(db: &Mutex<Connection>) -> String {
         "settings",
         "subscription_plans",
         "schema_version",
+        // v3 tables (v14 DB-first config)
+        "server_config",
+        "certificates",
+        "acls",
     ];
     let mut out = String::new();
     for table in tables {
@@ -1204,6 +1217,7 @@ fn serialize_action(action: &RuleAction) -> String {
         RuleAction::Allow | RuleAction::Unknown => "Allow".into(),
         RuleAction::Direct => "Direct".into(),
         RuleAction::Block => "Block".into(),
+        RuleAction::Reject => "Reject".into(),
     }
 }
 
@@ -1212,6 +1226,7 @@ fn deserialize_action(s: &str) -> RuleAction {
         "Allow" => RuleAction::Allow,
         "Direct" => RuleAction::Direct,
         "Block" => RuleAction::Block,
+        "Reject" => RuleAction::Reject,
         _ => RuleAction::Allow,
     }
 }
@@ -1262,4 +1277,194 @@ pub fn session_expiry_hours(db: Option<&Db>) -> i64 {
     } else {
         24
     }
+}
+
+// ─────────────────────── Server config section helpers ─────────────────────
+
+/// Get a single config section JSON blob from the server_config table.
+pub fn get_config_section(db: &Mutex<Connection>, section: &str) -> Option<String> {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.query_row(
+        "SELECT config FROM server_config WHERE section = ?1",
+        [section],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+/// List all config sections with their JSON blobs.
+pub fn list_config_sections(db: &Mutex<Connection>) -> Vec<(String, String)> {
+    let conn = db.lock().expect("db lock poisoned");
+    let mut stmt = conn
+        .prepare("SELECT section, config FROM server_config ORDER BY section")
+        .expect("prepare server_config query");
+    stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query server_config")
+        .filter_map(|r| r.ok())
+        .collect()
+}
+
+/// Insert or update a config section JSON blob.
+pub fn set_config_section(db: &Mutex<Connection>, section: &str, config_json: &str) {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.execute(
+        "INSERT INTO server_config (section, config, updated_at) VALUES (?1, ?2, datetime('now'))
+         ON CONFLICT(section) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at",
+        params![section, config_json],
+    )
+    .ok();
+}
+
+/// Delete a config section.
+pub fn delete_config_section(db: &Mutex<Connection>, section: &str) -> bool {
+    let conn = db.lock().expect("db lock poisoned");
+    let rows = conn
+        .execute("DELETE FROM server_config WHERE section = ?1", [section])
+        .unwrap_or(0);
+    rows > 0
+}
+
+// ─────────────────────── Certificate helpers ──────────────────────────────
+
+#[derive(Clone, serde::Serialize)]
+pub struct DbCertificate {
+    pub name: String,
+    pub cert_path: String,
+    pub key_path: String,
+    pub uploaded_at: String,
+    pub fingerprint: Option<String>,
+    pub not_after: Option<String>,
+}
+
+/// Get certificate metadata by name.
+pub fn get_certificate(db: &Mutex<Connection>, name: &str) -> Option<DbCertificate> {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.query_row(
+        "SELECT name, cert_path, key_path, uploaded_at, fingerprint, not_after FROM certificates WHERE name = ?1",
+        [name],
+        |row| {
+            Ok(DbCertificate {
+                name: row.get(0)?,
+                cert_path: row.get(1)?,
+                key_path: row.get(2)?,
+                uploaded_at: row.get(3)?,
+                fingerprint: row.get(4)?,
+                not_after: row.get(5)?,
+            })
+        },
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+/// List all certificates.
+pub fn list_certificates(db: &Mutex<Connection>) -> Vec<DbCertificate> {
+    let conn = db.lock().expect("db lock poisoned");
+    let mut stmt = conn
+        .prepare("SELECT name, cert_path, key_path, uploaded_at, fingerprint, not_after FROM certificates ORDER BY name")
+        .expect("prepare certificates query");
+    stmt.query_map([], |row| {
+        Ok(DbCertificate {
+            name: row.get(0)?,
+            cert_path: row.get(1)?,
+            key_path: row.get(2)?,
+            uploaded_at: row.get(3)?,
+            fingerprint: row.get(4)?,
+            not_after: row.get(5)?,
+        })
+    })
+    .expect("query certificates")
+    .filter_map(|r| r.ok())
+    .collect()
+}
+
+/// Insert or update a certificate record.
+pub fn set_certificate(db: &Mutex<Connection>, cert: &DbCertificate) {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.execute(
+        "INSERT INTO certificates (name, cert_path, key_path, uploaded_at, fingerprint, not_after)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(name) DO UPDATE SET cert_path = excluded.cert_path, key_path = excluded.key_path,
+         uploaded_at = excluded.uploaded_at, fingerprint = excluded.fingerprint, not_after = excluded.not_after",
+        params![
+            cert.name,
+            cert.cert_path,
+            cert.key_path,
+            cert.uploaded_at,
+            cert.fingerprint,
+            cert.not_after,
+        ],
+    )
+    .ok();
+}
+
+/// Delete a certificate record.
+pub fn delete_certificate(db: &Mutex<Connection>, name: &str) -> bool {
+    let conn = db.lock().expect("db lock poisoned");
+    let rows = conn
+        .execute("DELETE FROM certificates WHERE name = ?1", [name])
+        .unwrap_or(0);
+    rows > 0
+}
+
+// ─────────────────────── ACL helpers (per-client) ─────────────────────────
+
+/// Get ACL rules JSON for a specific client.
+pub fn get_acl(db: &Mutex<Connection>, client_id: &str) -> Option<String> {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.query_row(
+        "SELECT rules FROM acls WHERE client_id = ?1",
+        [client_id],
+        |r| r.get(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+/// List all ACL entries as (client_id, rules_json).
+pub fn list_acls(db: &Mutex<Connection>) -> Vec<(String, String)> {
+    let conn = db.lock().expect("db lock poisoned");
+    let mut stmt = conn
+        .prepare("SELECT client_id, rules FROM acls ORDER BY client_id")
+        .expect("prepare acls query");
+    stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query acls")
+        .filter_map(|r| r.ok())
+        .collect()
+}
+
+/// Insert or update ACL rules for a client.
+pub fn set_acl(db: &Mutex<Connection>, client_id: &str, rules_json: &str) {
+    let conn = db.lock().expect("db lock poisoned");
+    conn.execute(
+        "INSERT INTO acls (client_id, rules, updated_at) VALUES (?1, ?2, datetime('now'))
+         ON CONFLICT(client_id) DO UPDATE SET rules = excluded.rules, updated_at = excluded.updated_at",
+        params![client_id, rules_json],
+    )
+    .ok();
+}
+
+/// Delete ACL rules for a client.
+pub fn delete_acl(db: &Mutex<Connection>, client_id: &str) -> bool {
+    let conn = db.lock().expect("db lock poisoned");
+    let rows = conn
+        .execute("DELETE FROM acls WHERE client_id = ?1", [client_id])
+        .unwrap_or(0);
+    rows > 0
+}
+
+/// Seed the server_config table with config sections from a FullServerConfig.
+/// Used during v13→v14 migration and first-run setup.
+pub fn seed_config_sections_from_full(db: &Mutex<Connection>, sections: &[(String, String)]) {
+    for (section, json) in sections {
+        set_config_section(db, section, json);
+    }
+    info!(
+        count = sections.len(),
+        "Seeded server_config sections into DB"
+    );
 }

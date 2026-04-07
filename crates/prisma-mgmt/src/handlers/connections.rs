@@ -280,7 +280,7 @@ pub async fn download_all_data(State(state): State<MgmtState>) -> Json<Vec<DataD
         cfg.routing.geoip_path = Some("./data/GeoLite2-City.mmdb".into());
         cfg.routing.geosite_path = Some("./data/geosite.dat".into());
     }
-    state.persist_config().await;
+    // v14+: config stored in DB only, no TOML persistence
 
     Json(results)
 }
@@ -374,7 +374,7 @@ pub async fn download_geoip(State(state): State<MgmtState>) -> impl IntoResponse
     }
 
     // 6. Persist config to disk
-    state.persist_config().await;
+    // v14+: config stored in DB only, no TOML persistence
 
     // 7. Return success
     (
@@ -474,7 +474,7 @@ pub async fn download_geosite(State(state): State<MgmtState>) -> impl IntoRespon
     }
 
     // 6. Persist config to disk
-    state.persist_config().await;
+    // v14+: config stored in DB only, no TOML persistence
 
     // 7. Return success
     (

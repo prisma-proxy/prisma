@@ -64,9 +64,7 @@ impl MgmtState {
     }
 
     /// Persist the current in-memory ServerConfig to the TOML file.
-    /// Uses a merge-based approach: known fields from the struct are overlaid onto
-    /// the raw TOML table, preserving any unknown fields from future config versions.
-    /// No-op if `config_path` is not set (e.g., running without a config file).
+    /// **Deprecated in v14+**: config is stored in DB, not TOML. Kept for backup/restore.
     pub async fn persist_config(&self) {
         let Some(ref path) = self.config_path else {
             return;
@@ -122,6 +120,7 @@ impl MgmtState {
     }
 
     /// Sync the in-memory routing rules back to `ServerConfig.management_rules`.
+    /// **Deprecated in v14+**: rules are in DB only. Kept for legacy compatibility.
     pub async fn sync_rules_to_config(&self) {
         let rules = self.state.routing_rules.read().await;
         let mut cfg = self.state.config.write().await;
@@ -129,7 +128,7 @@ impl MgmtState {
     }
 
     /// Sync the in-memory `auth_store` back to `ServerConfig.authorized_clients`.
-    /// Preserves bandwidth/quota/permissions fields that only exist in the config.
+    /// **Deprecated in v14+**: clients are in DB only. Kept for legacy compatibility.
     pub async fn sync_clients_to_config(&self) {
         let store = self.state.auth_store.read().await;
         let mut cfg = self.state.config.write().await;
@@ -202,25 +201,27 @@ fn spawn_periodic_backup(state: MgmtState) {
 /// when `tls_enabled` is false but a `tls` section is present, and provides a
 /// clear error when `tls_enabled` is true but no certificate is configured.
 pub async fn serve(config: ManagementApiConfig, mut state: MgmtState) -> Result<()> {
-    // Initialize SQLite database alongside the config file
-    if let Some(ref config_path) = state.config_path {
-        let db_path = config_path.with_extension("db");
-        match db::init_db(&db_path) {
-            Ok(database) => {
-                // Migrate existing TOML data into SQLite on first run
-                {
-                    let cfg = state.config.read().await;
-                    db::migrate_from_config(
-                        &database,
-                        &cfg.management_api.users,
-                        &cfg.authorized_clients,
-                        &cfg.management_rules,
-                    );
+    // Initialize SQLite database if not already provided (v14+ passes DB from server startup)
+    if state.db.is_none() {
+        if let Some(ref config_path) = state.config_path {
+            let db_path = config_path.with_extension("db");
+            match db::init_db(&db_path) {
+                Ok(database) => {
+                    // Migrate existing TOML data into SQLite on first run
+                    {
+                        let cfg = state.config.read().await;
+                        db::migrate_from_config(
+                            &database,
+                            &cfg.management_api.users,
+                            &cfg.authorized_clients,
+                            &cfg.management_rules,
+                        );
+                    }
+                    state.db = Some(database);
                 }
-                state.db = Some(database);
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to initialize SQLite database; continuing without DB");
+                Err(e) => {
+                    tracing::error!(error = %e, "Failed to initialize SQLite database; continuing without DB");
+                }
             }
         }
     }

@@ -114,8 +114,7 @@ pub async fn create(
     }
 
     // Persist to config file
-    state.sync_clients_to_config().await;
-    state.persist_config().await;
+    // v14+: clients stored in DB only, no TOML persistence
 
     Ok(Json(CreateClientResponse {
         id,
@@ -160,8 +159,7 @@ pub async fn update(
             );
         }
 
-        state.sync_clients_to_config().await;
-        state.persist_config().await;
+        // v14+: clients stored in DB only, no TOML persistence
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -180,8 +178,7 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
             db::delete_client(database, &id.to_string());
         }
 
-        state.sync_clients_to_config().await;
-        state.persist_config().await;
+        // v14+: clients stored in DB only, no TOML persistence
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

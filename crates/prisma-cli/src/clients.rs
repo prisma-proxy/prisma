@@ -87,12 +87,6 @@ pub fn create(client: &ApiClient, name: Option<&str>) -> Result<()> {
     println!("Name:        {}", cname);
     println!("Auth Secret: {}", secret);
     println!();
-    println!("# Add to server.toml:");
-    println!("[[authorized_clients]]");
-    println!("id = \"{}\"", id);
-    println!("auth_secret = \"{}\"", secret);
-    println!("name = \"{}\"", cname);
-    println!();
     println!("# Add to client.toml:");
     println!("[identity]");
     println!("client_id = \"{}\"", id);

@@ -16,6 +16,7 @@ mod profile_wizard;
 mod routes;
 mod status;
 mod subscription;
+mod ui;
 mod validate;
 
 use std::path::{Path, PathBuf};
@@ -51,6 +52,10 @@ pub struct Cli {
     /// Management API auth token (overrides env PRISMA_MGMT_TOKEN and auto-detect)
     #[arg(long, global = true, env = "PRISMA_MGMT_TOKEN")]
     mgmt_token: Option<String>,
+
+    /// Skip TLS certificate verification for management API connections
+    #[arg(long, global = true)]
+    insecure: bool,
 
     // --- Hidden daemon-internal flags ---
     /// Internal: indicates this process is a daemon child (do not use directly)
@@ -118,7 +123,7 @@ enum Commands {
         #[arg(long)]
         token: Option<String>,
         /// Port to serve the console on
-        #[arg(long, default_value = "9091")]
+        #[arg(long, default_value = "443")]
         port: u16,
         /// Address to bind the console server to
         #[arg(long, default_value = "0.0.0.0")]
@@ -162,17 +167,17 @@ enum Commands {
         #[arg(long, default_value = "prisma-server")]
         cn: String,
     },
-    /// Generate annotated config files with auto-generated keys
+    /// Generate minimal v14 config files (DB-first architecture)
     Init {
-        /// Include CDN section pre-configured
-        #[arg(long)]
-        cdn: bool,
         /// Generate only server config
         #[arg(long)]
         server_only: bool,
         /// Generate only client config
         #[arg(long)]
         client_only: bool,
+        /// Download console dashboard and configure console_dir
+        #[arg(long)]
+        console: bool,
         /// Overwrite existing files
         #[arg(long)]
         force: bool,
@@ -669,6 +674,7 @@ async fn run() -> anyhow::Result<()> {
     let global_verbose = cli.verbose;
     let global_mgmt_url = cli.mgmt_url;
     let global_mgmt_token = cli.mgmt_token;
+    let global_insecure = cli.insecure;
     let is_daemon_child = cli._daemon_child;
     let daemon_pid_file = cli._pid_file;
 
@@ -821,7 +827,7 @@ async fn run() -> anyhow::Result<()> {
                         let token = token
                             .or_else(|| std::env::var("PRISMA_MGMT_TOKEN").ok())
                             .or_else(|| {
-                                api_client::ApiClient::resolve(None, None, false)
+                                api_client::ApiClient::resolve(None, None, false, global_insecure)
                                     .ok()
                                     .and_then(|c| {
                                         let t = c.token();
@@ -834,10 +840,10 @@ async fn run() -> anyhow::Result<()> {
                             });
                         // Auto-detect mgmt URL from server.toml if not provided
                         let mgmt_url = mgmt_url.unwrap_or_else(|| {
-                            api_client::ApiClient::resolve(None, None, false)
+                            api_client::ApiClient::resolve(None, None, false, global_insecure)
                                 .ok()
                                 .map(|c| c.base_url().to_string())
-                                .unwrap_or_else(|| "http://127.0.0.1:9090".to_string())
+                                .unwrap_or_else(|| "https://127.0.0.1:443".to_string())
                         });
                         if global_verbose {
                             eprintln!(
@@ -869,12 +875,12 @@ async fn run() -> anyhow::Result<()> {
             gen_cert(&output, &cn)?;
         }
         Commands::Init {
-            cdn,
             server_only,
             client_only,
+            console,
             force,
         } => {
-            init::run_init(cdn, server_only, client_only, force)?;
+            init::run_init(false, server_only, client_only, console, force).await?;
         }
         Commands::Validate { config, client } => {
             let config_type = if client { "client" } else { "server" };
@@ -889,6 +895,7 @@ async fn run() -> anyhow::Result<()> {
                 mgmt_url.or_else(|| global_mgmt_url.clone()),
                 token.or_else(|| global_mgmt_token.clone()),
                 config,
+                global_insecure,
             )
             .await?;
         }
@@ -897,6 +904,7 @@ async fn run() -> anyhow::Result<()> {
                 url.as_deref().or(global_mgmt_url.as_deref()),
                 token.as_deref().or(global_mgmt_token.as_deref()),
                 global_json,
+                global_insecure,
             )?;
             status::run_status(&client)?;
         }
@@ -920,6 +928,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             match cmd {
                 ClientsCmd::List => clients::list(&client)?,
@@ -938,6 +947,7 @@ async fn run() -> anyhow::Result<()> {
                         mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
                         token.as_deref().or(global_mgmt_token.as_deref()),
                         global_json,
+                        global_insecure,
                     )?;
                     clients::batch_create(&api, count, &prefix)?;
                 }
@@ -950,6 +960,7 @@ async fn run() -> anyhow::Result<()> {
                         mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
                         token.as_deref().or(global_mgmt_token.as_deref()),
                         global_json,
+                        global_insecure,
                     )?;
                     clients::export(&api, &output)?;
                 }
@@ -962,6 +973,7 @@ async fn run() -> anyhow::Result<()> {
                         mgmt_url.as_deref().or(global_mgmt_url.as_deref()),
                         token.as_deref().or(global_mgmt_token.as_deref()),
                         global_json,
+                        global_insecure,
                     )?;
                     clients::import(&api, &file)?;
                 }
@@ -972,11 +984,12 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             match cmd {
                 ConnectionsCmd::List => connections::list(&client)?,
                 ConnectionsCmd::Disconnect { id } => connections::disconnect(&client, &id)?,
-                ConnectionsCmd::Watch { interval } => connections::watch(&client, interval)?,
+                ConnectionsCmd::Watch { interval } => connections::watch(&client, interval).await?,
             }
         }
         Commands::Metrics {
@@ -990,6 +1003,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             if system {
                 metrics::system(&client)?;
@@ -1006,6 +1020,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             match cmd {
                 BandwidthCmd::Summary => bandwidth::summary(&client)?,
@@ -1023,6 +1038,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             match cmd {
                 ConfigCmd::Get => config_ops::get_config(&client)?,
@@ -1042,6 +1058,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             match cmd {
                 RoutesCmd::List => routes::list(&client)?,
@@ -1074,6 +1091,7 @@ async fn run() -> anyhow::Result<()> {
                 global_mgmt_url.as_deref(),
                 global_mgmt_token.as_deref(),
                 global_json,
+                global_insecure,
             )?;
             logs::stream(&client, level.as_deref(), lines).await?;
         }
@@ -1298,11 +1316,9 @@ fn gen_key(json: bool) {
     println!("Client ID:   {}", client_id);
     println!("Auth Secret: {}", secret_hex);
     println!();
-    println!("# Add to server.toml:");
-    println!("[[authorized_clients]]");
-    println!("id = \"{}\"", client_id);
-    println!("auth_secret = \"{}\"", secret_hex);
-    println!("name = \"my-client\"");
+    println!("# Register on the server:");
+    println!("#   prisma clients create --name my-client");
+    println!("# or use the web console.");
     println!();
     println!("# Add to client.toml:");
     println!("[identity]");
@@ -1725,6 +1741,7 @@ fn strip_inline_markdown(s: &str) -> String {
 }
 
 fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
+    use colored::Colorize;
     use prisma_core::auto_update;
 
     // 1. Check for updates
@@ -1737,12 +1754,12 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
                     serde_json::json!({"up_to_date": true, "version": VERSION})
                 );
             } else {
-                println!("Already up to date (v{})", VERSION);
+                ui::success(&format!("Already up to date (v{})", VERSION));
             }
             return;
         }
         Err(e) => {
-            eprintln!("Failed to check for updates: {}", e);
+            ui::error(&format!("Failed to check for updates: {}", e));
             std::process::exit(1);
         }
     };
@@ -1757,7 +1774,11 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
             return;
         }
     } else {
-        println!("Update available: v{} -> {}", VERSION, info.version);
+        ui::info(&format!(
+            "Update available: v{} -> {}",
+            VERSION,
+            info.version.green().bold()
+        ));
         if !info.changelog.is_empty() {
             println!("\nChangelog:\n{}", strip_markdown(&info.changelog));
         }
@@ -1767,7 +1788,7 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
     }
 
     if info.url.is_empty() {
-        eprintln!("No download URL found for this platform.");
+        ui::error("No download URL found for this platform.");
         std::process::exit(1);
     }
 
@@ -1785,22 +1806,36 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
     }
 
     // 4. Download (with SHA256 verification when available)
-    eprintln!("Downloading {}...", info.url);
+    ui::info("Downloading update...");
+    ui::detail(&format!("Source: {}", info.url));
     let bytes = if let Some(ref sha256) = info.sha256 {
-        eprintln!("Verifying SHA256: {}...", &sha256[..12]);
-        match auto_update::download_and_verify(&info.url, sha256) {
-            Ok(b) => b,
+        ui::detail(&format!("SHA256: {}...", &sha256[..12]));
+        match auto_update::download_and_verify_with_progress(
+            &info.url,
+            sha256,
+            0,
+            ui::print_progress,
+        ) {
+            Ok(b) => {
+                ui::clear_progress();
+                b
+            }
             Err(e) => {
-                eprintln!("Download or verification failed: {}", e);
+                ui::clear_progress();
+                ui::error(&format!("Download or verification failed: {}", e));
                 std::process::exit(1);
             }
         }
     } else {
-        eprintln!("Warning: no SHA256 checksum available, downloading without verification");
-        match auto_update::download(&info.url) {
-            Ok(b) => b,
+        ui::warn("No SHA256 checksum available, downloading without verification");
+        match auto_update::download_with_progress(&info.url, 0, ui::print_progress) {
+            Ok(b) => {
+                ui::clear_progress();
+                b
+            }
             Err(e) => {
-                eprintln!("Download failed: {}", e);
+                ui::clear_progress();
+                ui::error(&format!("Download failed: {}", e));
                 std::process::exit(1);
             }
         }
@@ -1809,13 +1844,13 @@ fn cmd_update(check_only: bool, skip_confirm: bool, json: bool) {
     // 5. Replace current binary
     match auto_update::self_replace(&bytes) {
         Ok(()) => {
-            println!(
+            ui::success(&format!(
                 "Updated to {}. Restart to use the new version.",
-                info.version
-            );
+                info.version.green()
+            ));
         }
         Err(e) => {
-            eprintln!("Failed to replace binary: {}", e);
+            ui::error(&format!("Failed to replace binary: {}", e));
             std::process::exit(1);
         }
     }

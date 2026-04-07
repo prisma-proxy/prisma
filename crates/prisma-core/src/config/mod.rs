@@ -95,6 +95,28 @@ pub fn load_server_config_with_raw(
     Ok((server_config, raw_toml))
 }
 
+/// Load the minimal v14+ TOML config (listen addresses + management API).
+/// Used when DB-first configuration is active.
+pub fn load_toml_server_config(path: &str) -> Result<server::TomlServerConfig, ConfigError> {
+    let raw = std::fs::read_to_string(path)
+        .or_else(|_| {
+            let with_ext = format!("{path}.toml");
+            std::fs::read_to_string(with_ext)
+        })
+        .map_err(|e| ConfigError::ParseError(format!("Cannot read config file: {e}")))?;
+
+    let config: server::TomlServerConfig =
+        toml::from_str(&raw).map_err(|e| ConfigError::ParseError(e.to_string()))?;
+
+    if config.listen_addr.is_empty() {
+        return Err(ConfigError::ValidationFailed(
+            "listen_addr must not be empty".into(),
+        ));
+    }
+
+    Ok(config)
+}
+
 /// Load client config from file path with layered overrides.
 pub fn load_client_config(path: &str) -> Result<client::ClientConfig, ConfigError> {
     let builder = config::Config::builder()

@@ -566,8 +566,8 @@ pub async fn patch_config(
         cfg.public_address = if addr.is_empty() { None } else { Some(addr) };
     }
 
-    drop(cfg); // Release write lock before disk I/O
-    state.persist_config().await;
+    drop(cfg); // Release write lock
+               // v14+: config stored in DB only, no TOML persistence
 
     Ok(StatusCode::OK)
 }

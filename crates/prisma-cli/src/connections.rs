@@ -23,7 +23,7 @@ pub fn disconnect(client: &ApiClient, id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn watch(client: &ApiClient, interval: u64) -> Result<()> {
+pub async fn watch(client: &ApiClient, interval: u64) -> Result<()> {
     loop {
         // Clear screen
         print!("\x1b[2J\x1b[H");
@@ -41,7 +41,7 @@ pub fn watch(client: &ApiClient, interval: u64) -> Result<()> {
             print_connections(&data);
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(interval));
+        tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
     }
 }
 

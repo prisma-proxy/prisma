@@ -91,25 +91,25 @@ fn test_mgmt_listen_addr_from_toml() {
 
 #[test]
 fn test_mgmt_listen_addr_default_when_omitted() {
-    // When [management_api] is not in the TOML, default should be 127.0.0.1:9090
+    // When [management_api] is not in the TOML, default should be 0.0.0.0:443
     let config = load_server_config(&fixture("valid_server")).unwrap();
-    assert_eq!(config.management_api.listen_addr, "127.0.0.1:9090");
+    assert_eq!(config.management_api.listen_addr, "0.0.0.0:443");
     assert!(!config.management_api.enabled);
 }
 
 #[test]
-fn test_mgmt_tls_defaults_to_disabled() {
-    // When [management_api] exists but tls_enabled is not set, it should default to false.
-    // This is critical: if tls_enabled defaults to true, the mgmt API silently serves
-    // HTTPS (inheriting the server cert), making HTTP access from the public network fail.
+fn test_mgmt_tls_defaults_to_enabled() {
+    // When [management_api] exists but tls_enabled is not set, it should default to true.
+    // The mgmt API serves HTTPS by default, inheriting the server's TLS cert.
+    // Set tls_enabled = false explicitly to serve plain HTTP (e.g., behind a reverse proxy).
     let config = load_server_config(&fixture("valid_server_mgmt")).unwrap();
     assert!(
-        !config.management_api.tls_enabled,
-        "tls_enabled must default to false so the API serves HTTP out of the box"
+        config.management_api.tls_enabled,
+        "tls_enabled must default to true so the API serves HTTPS in production"
     );
     assert!(
         config.management_api.tls.is_none(),
-        "tls must be None when tls_enabled is false and no [management_api.tls] is set"
+        "tls must be None when no [management_api.tls] is set (inherits from server [tls])"
     );
 }
 
@@ -124,5 +124,5 @@ fn test_mgmt_addr_survives_clone() {
         "listen_addr must survive clone"
     );
     assert!(cloned.enabled);
-    assert!(!cloned.tls_enabled);
+    assert!(cloned.tls_enabled);
 }

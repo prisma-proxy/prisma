@@ -84,9 +84,305 @@ pub struct ServerConfig {
     pub management_rules: Vec<RoutingRule>,
 }
 
+/// Alias for the full runtime config type (v14+).
+pub type FullServerConfig = ServerConfig;
+
 /// Current config schema version.
 fn default_config_version() -> u32 {
-    13
+    14
+}
+
+/// Minimal TOML-only config for v14+.
+/// Everything else lives in SQLite `server_config` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TomlServerConfig {
+    #[serde(default = "default_config_version")]
+    pub config_version: u32,
+    #[serde(default = "default_listen_addr")]
+    pub listen_addr: String,
+    #[serde(default = "default_listen_addr")]
+    pub quic_listen_addr: String,
+    #[serde(default)]
+    pub management_api: TomlManagementApiConfig,
+}
+
+/// Slim management API config for v14+ TOML.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TomlManagementApiConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_mgmt_listen_addr")]
+    pub listen_addr: String,
+}
+
+impl Default for TomlManagementApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            listen_addr: default_mgmt_listen_addr(),
+        }
+    }
+}
+
+fn default_listen_addr() -> String {
+    "0.0.0.0:8443".into()
+}
+
+/// Known config section names for the server_config DB table.
+pub const CONFIG_SECTIONS: &[&str] = &[
+    "logging",
+    "performance",
+    "port_forwarding",
+    "camouflage",
+    "cdn",
+    "padding",
+    "congestion",
+    "port_hopping",
+    "dns_upstream",
+    "prisma_tls",
+    "traffic_shaping",
+    "anti_rtt",
+    "routing",
+    "wireguard",
+    "fallback",
+    "ssh",
+    "misc",
+];
+
+/// Miscellaneous config fields grouped into a single DB section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiscConfig {
+    #[serde(default)]
+    pub allow_transport_only_cipher: bool,
+    #[serde(default = "default_shutdown_drain_timeout")]
+    pub shutdown_drain_timeout_secs: u64,
+    #[serde(default)]
+    pub config_watch: bool,
+    #[serde(default = "default_ticket_rotation_hours")]
+    pub ticket_rotation_hours: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_address: Option<String>,
+}
+
+impl Default for MiscConfig {
+    fn default() -> Self {
+        Self {
+            allow_transport_only_cipher: false,
+            shutdown_drain_timeout_secs: default_shutdown_drain_timeout(),
+            config_watch: false,
+            ticket_rotation_hours: default_ticket_rotation_hours(),
+            public_address: None,
+        }
+    }
+}
+
+/// Wrapper for dns_upstream stored as a JSON object in DB.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsUpstreamConfig {
+    #[serde(default = "default_dns_upstream")]
+    pub value: String,
+}
+
+impl Default for DnsUpstreamConfig {
+    fn default() -> Self {
+        Self {
+            value: default_dns_upstream(),
+        }
+    }
+}
+
+impl ServerConfig {
+    /// Build a full ServerConfig from slim TOML config + DB section JSON blobs.
+    /// Missing sections get their defaults.
+    pub fn from_toml_and_db(toml: &TomlServerConfig, sections: &[(String, String)]) -> Self {
+        let mut cfg = Self::default_with_toml(toml);
+
+        for (section, json) in sections {
+            match section.as_str() {
+                "logging" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.logging = v;
+                    }
+                }
+                "performance" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.performance = v;
+                    }
+                }
+                "port_forwarding" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.port_forwarding = v;
+                    }
+                }
+                "camouflage" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.camouflage = v;
+                    }
+                }
+                "cdn" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.cdn = v;
+                    }
+                }
+                "padding" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.padding = v;
+                    }
+                }
+                "congestion" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.congestion = v;
+                    }
+                }
+                "port_hopping" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.port_hopping = v;
+                    }
+                }
+                "dns_upstream" => {
+                    if let Ok(v) = serde_json::from_str::<DnsUpstreamConfig>(json) {
+                        cfg.dns_upstream = v.value;
+                    }
+                }
+                "prisma_tls" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.prisma_tls = v;
+                    }
+                }
+                "traffic_shaping" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.traffic_shaping = v;
+                    }
+                }
+                "anti_rtt" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.anti_rtt = v;
+                    }
+                }
+                "routing" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.routing = v;
+                    }
+                }
+                "wireguard" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.wireguard = v;
+                    }
+                }
+                "fallback" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.fallback = v;
+                    }
+                }
+                "ssh" => {
+                    if let Ok(v) = serde_json::from_str(json) {
+                        cfg.ssh = v;
+                    }
+                }
+                "misc" => {
+                    if let Ok(v) = serde_json::from_str::<MiscConfig>(json) {
+                        cfg.allow_transport_only_cipher = v.allow_transport_only_cipher;
+                        cfg.shutdown_drain_timeout_secs = v.shutdown_drain_timeout_secs;
+                        cfg.config_watch = v.config_watch;
+                        cfg.ticket_rotation_hours = v.ticket_rotation_hours;
+                        cfg.public_address = v.public_address;
+                    }
+                }
+                _ => {
+                    tracing::debug!(section, "Unknown config section in DB, skipping");
+                }
+            }
+        }
+
+        cfg
+    }
+
+    /// Create a ServerConfig with defaults, inheriting TOML-only fields.
+    fn default_with_toml(toml: &TomlServerConfig) -> Self {
+        Self {
+            config_version: toml.config_version,
+            listen_addr: toml.listen_addr.clone(),
+            quic_listen_addr: toml.quic_listen_addr.clone(),
+            tls: None,
+            authorized_clients: Vec::new(),
+            logging: LoggingConfig::default(),
+            performance: PerformanceConfig::default(),
+            port_forwarding: PortForwardingConfig::default(),
+            management_api: ManagementApiConfig {
+                enabled: toml.management_api.enabled,
+                listen_addr: toml.management_api.listen_addr.clone(),
+                ..ManagementApiConfig::default()
+            },
+            camouflage: CamouflageConfig::default(),
+            cdn: CdnConfig::default(),
+            padding: PaddingConfig::default(),
+            congestion: super::client::CongestionConfig::default(),
+            port_hopping: crate::port_hop::PortHoppingConfig::default(),
+            dns_upstream: default_dns_upstream(),
+            prisma_tls: PrismaTlsConfig::default(),
+            traffic_shaping: crate::traffic_shaping::TrafficShapingConfig::default(),
+            allow_transport_only_cipher: false,
+            anti_rtt: AntiRttConfig::default(),
+            routing: router::RoutingConfig::default(),
+            wireguard: crate::wireguard::WireGuardServerConfig::default(),
+            acls: std::collections::HashMap::new(),
+            fallback: FallbackConfig::default(),
+            shutdown_drain_timeout_secs: default_shutdown_drain_timeout(),
+            config_watch: false,
+            ssh: SshServerConfig::default(),
+            ticket_rotation_hours: default_ticket_rotation_hours(),
+            public_address: None,
+            management_rules: Vec::new(),
+        }
+    }
+
+    /// Serialize all DB-managed sections to (section_name, json) pairs.
+    /// Used for seeding DB from a full config (v13→v14 migration).
+    pub fn to_db_sections(&self) -> Vec<(String, String)> {
+        let mut sections = Vec::new();
+
+        fn push<T: Serialize>(sections: &mut Vec<(String, String)>, name: &str, value: &T) {
+            if let Ok(json) = serde_json::to_string(value) {
+                sections.push((name.to_string(), json));
+            }
+        }
+
+        push(&mut sections, "logging", &self.logging);
+        push(&mut sections, "performance", &self.performance);
+        push(&mut sections, "port_forwarding", &self.port_forwarding);
+        push(&mut sections, "camouflage", &self.camouflage);
+        push(&mut sections, "cdn", &self.cdn);
+        push(&mut sections, "padding", &self.padding);
+        push(&mut sections, "congestion", &self.congestion);
+        push(&mut sections, "port_hopping", &self.port_hopping);
+        push(
+            &mut sections,
+            "dns_upstream",
+            &DnsUpstreamConfig {
+                value: self.dns_upstream.clone(),
+            },
+        );
+        push(&mut sections, "prisma_tls", &self.prisma_tls);
+        push(&mut sections, "traffic_shaping", &self.traffic_shaping);
+        push(&mut sections, "anti_rtt", &self.anti_rtt);
+        push(&mut sections, "routing", &self.routing);
+        push(&mut sections, "wireguard", &self.wireguard);
+        push(&mut sections, "fallback", &self.fallback);
+        push(&mut sections, "ssh", &self.ssh);
+        push(
+            &mut sections,
+            "misc",
+            &MiscConfig {
+                allow_transport_only_cipher: self.allow_transport_only_cipher,
+                shutdown_drain_timeout_secs: self.shutdown_drain_timeout_secs,
+                config_watch: self.config_watch,
+                ticket_rotation_hours: self.ticket_rotation_hours,
+                public_address: self.public_address.clone(),
+            },
+        );
+
+        sections
+    }
 }
 
 fn default_dns_upstream() -> String {
@@ -312,13 +608,13 @@ pub struct ManagementApiConfig {
     pub console_dir: Option<String>,
     /// TLS configuration for the management API.
     /// If omitted and `tls_enabled = true`, inherits from the server's top-level
-    /// `[tls]` section automatically. By default TLS is **disabled** on the
-    /// management API so it serves plain HTTP; set `tls_enabled = true` to opt in.
+    /// `[tls]` section automatically.
     pub tls: Option<TlsConfig>,
     /// Enable TLS on the management API. When true and no `[management_api.tls]`
     /// is provided, the server's top-level `[tls]` cert is inherited.
-    /// Defaults to `false` so the API is accessible via HTTP out of the box.
-    #[serde(default)]
+    /// Defaults to `true` so the API is served over HTTPS in production.
+    /// Set to `false` to serve plain HTTP (e.g., behind a local reverse proxy).
+    #[serde(default = "default_true")]
     pub tls_enabled: bool,
     /// Periodic auto-backup interval in minutes (0 = disabled, event-driven only).
     #[serde(default)]
@@ -340,7 +636,7 @@ impl Default for ManagementApiConfig {
             cors_origins: Vec::new(),
             console_dir: None,
             tls: None,
-            tls_enabled: false,
+            tls_enabled: true,
             auto_backup_interval_mins: 0,
             users: Vec::new(),
             jwt_secret: default_jwt_secret(),
@@ -427,6 +723,8 @@ pub enum RuleAction {
     Allow,
     Direct,
     Block,
+    /// Reject — functionally identical to Block for server-side enforcement.
+    Reject,
     /// Unknown action from a future config version — treated as Allow (default).
     #[serde(other)]
     Unknown,
@@ -691,7 +989,7 @@ fn default_true() -> bool {
 }
 
 fn default_mgmt_listen_addr() -> String {
-    "127.0.0.1:9090".into()
+    "0.0.0.0:443".into()
 }
 
 fn default_port_range_start() -> u16 {

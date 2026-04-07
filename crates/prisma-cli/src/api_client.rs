@@ -11,7 +11,7 @@ pub struct ApiClient {
 
 impl ApiClient {
     /// Resolve API client from flags > env vars > server.toml auto-detect.
-    pub fn resolve(flag_url: Option<&str>, flag_token: Option<&str>, json: bool) -> Result<Self> {
+    pub fn resolve(flag_url: Option<&str>, flag_token: Option<&str>, json: bool, insecure: bool) -> Result<Self> {
         let (url, token) = match (flag_url, flag_token) {
             (Some(u), Some(t)) => (u.to_string(), t.to_string()),
             (Some(u), None) => {
@@ -42,14 +42,14 @@ impl ApiClient {
             }
         };
 
-        let tls = ureq::tls::TlsConfig::builder()
-            .disable_verification(true)
-            .build();
-
-        let agent = ureq::Agent::config_builder()
-            .tls_config(tls)
-            .build()
-            .new_agent();
+        let mut config = ureq::Agent::config_builder();
+        if insecure {
+            let tls = ureq::tls::TlsConfig::builder()
+                .disable_verification(true)
+                .build();
+            config = config.tls_config(tls);
+        }
+        let agent = config.build().new_agent();
 
         Ok(Self {
             url: url.trim_end_matches('/').to_string(),

@@ -155,11 +155,8 @@ pub async fn setup_status(State(state): State<MgmtState>) -> Json<serde_json::Va
     let has_admin = if let Some(ref database) = state.db {
         db::has_admin(database)
     } else {
-        let cfg = state.config.read().await;
-        cfg.management_api
-            .users
-            .iter()
-            .any(|u| u.role == UserRole::Admin)
+        // No DB available — treat as needing setup
+        false
     };
     Json(serde_json::json!({
         "needs_setup": !has_admin
@@ -184,43 +181,38 @@ pub async fn setup_init(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Hash password before acquiring any lock
-    let hash = db::hash_password(req.password.clone()).await?;
+    let database = state.require_db()?;
 
     // Check admin doesn't already exist
-    if let Some(ref database) = state.db {
-        if db::has_admin(database) {
-            return Err(StatusCode::CONFLICT);
-        }
-        let user = UserConfig {
-            username: req.username.clone(),
-            password_hash: hash.clone(),
-            role: UserRole::Admin,
-            enabled: true,
-        };
-        db::insert_user(database, &user).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if db::has_admin(database) {
+        return Err(StatusCode::CONFLICT);
     }
 
-    // Also update the TOML config for backwards compatibility
+    // Hash password before inserting
+    let hash = db::hash_password(req.password.clone()).await?;
+
+    let user = UserConfig {
+        username: req.username.clone(),
+        password_hash: hash,
+        role: UserRole::Admin,
+        enabled: true,
+    };
+    db::insert_user(database, &user).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Seed default config sections into DB if this is the first setup
+    // (ensures all sections exist for the config section API)
     {
-        let mut cfg = state.config.write().await;
-        if cfg
-            .management_api
-            .users
-            .iter()
-            .any(|u| u.role == UserRole::Admin)
-        {
-            // Already exists in config, skip
-        } else {
-            cfg.management_api.users.push(UserConfig {
-                username: req.username.clone(),
-                password_hash: hash,
-                role: UserRole::Admin,
-                enabled: true,
-            });
+        let existing = db::list_config_sections(database);
+        if existing.is_empty() {
+            let cfg = state.config.read().await;
+            let sections = cfg.to_db_sections();
+            db::seed_config_sections_from_full(database, &sections);
+            tracing::info!(
+                "Seeded {} default config sections on first setup",
+                sections.len()
+            );
         }
     }
-    state.persist_config().await;
 
     let jwt_secret = {
         let cfg = state.config.read().await;
@@ -309,21 +301,8 @@ pub async fn register(
         enabled: true,
     };
 
-    if let Some(ref database) = state.db {
-        db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-
-    // Also keep TOML in sync
-    {
-        let mut cfg = state.config.write().await;
-        cfg.management_api.users.push(UserConfig {
-            username: req.username.clone(),
-            password_hash: hash,
-            role: default_role,
-            enabled: true,
-        });
-    }
-    state.persist_config().await;
+    let database = state.require_db()?;
+    db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((
         StatusCode::CREATED,
@@ -425,20 +404,8 @@ pub async fn create_user(
         enabled: true,
     };
 
-    if let Some(ref database) = state.db {
-        db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-
-    {
-        let mut cfg = state.config.write().await;
-        cfg.management_api.users.push(UserConfig {
-            username: req.username.clone(),
-            password_hash: hash,
-            role,
-            enabled: true,
-        });
-    }
-    state.persist_config().await;
+    let database = state.require_db()?;
+    db::insert_user(database, &user_config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((
         StatusCode::CREATED,
@@ -462,38 +429,19 @@ pub async fn update_user(
 ) -> Result<Json<UserPublic>, StatusCode> {
     require_admin(&user)?;
 
-    if let Some(ref database) = state.db {
-        if !db::update_user_role_enabled(database, &username, req.role, req.enabled) {
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let database = state.require_db()?;
+    if !db::update_user_role_enabled(database, &username, req.role, req.enabled) {
+        return Err(StatusCode::NOT_FOUND);
     }
 
-    // Sync to TOML
-    let mut cfg = state.config.write().await;
-    let target = cfg
-        .management_api
-        .users
-        .iter_mut()
-        .find(|u| u.username == username)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    // Read back the updated user from DB
+    let updated = db::get_user(database, &username).ok_or(StatusCode::NOT_FOUND)?;
 
-    if let Some(role) = req.role {
-        target.role = role;
-    }
-    if let Some(enabled) = req.enabled {
-        target.enabled = enabled;
-    }
-
-    let result = UserPublic {
-        username: target.username.clone(),
-        role: target.role.to_string(),
-        enabled: Some(target.enabled),
-    };
-    drop(cfg);
-
-    state.persist_config().await;
-
-    Ok(Json(result))
+    Ok(Json(UserPublic {
+        username: updated.username,
+        role: updated.role.to_string(),
+        enabled: Some(updated.enabled),
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -512,23 +460,10 @@ pub async fn delete_user(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    if let Some(ref database) = state.db {
-        if !db::delete_user(database, &username) {
-            return Err(StatusCode::NOT_FOUND);
-        }
-    }
-
-    let mut cfg = state.config.write().await;
-    let before = cfg.management_api.users.len();
-    cfg.management_api.users.retain(|u| u.username != username);
-    let removed = cfg.management_api.users.len() < before;
-    drop(cfg);
-
-    if !removed && state.db.is_none() {
+    let database = state.require_db()?;
+    if !db::delete_user(database, &username) {
         return Err(StatusCode::NOT_FOUND);
     }
-
-    state.persist_config().await;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -565,23 +500,8 @@ pub async fn change_password(
     // Hash new password
     let new_hash = db::hash_password(req.new_password).await?;
 
-    if let Some(ref database) = state.db {
-        db::update_user_password(database, &user.username, &new_hash);
-    }
-
-    // Sync to TOML
-    {
-        let mut cfg = state.config.write().await;
-        if let Some(target) = cfg
-            .management_api
-            .users
-            .iter_mut()
-            .find(|u| u.username == user.username)
-        {
-            target.password_hash = new_hash;
-        }
-    }
-    state.persist_config().await;
+    let database = state.require_db()?;
+    db::update_user_password(database, &user.username, &new_hash);
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -81,7 +81,9 @@ impl ProxyContext {
                 Ok(stream) => return Ok(stream),
                 Err(e) => {
                     if attempt < MAX_RETRIES {
-                        let backoff = std::time::Duration::from_millis(1000 * 2u64.pow(attempt));
+                        let base_ms = 1000 * 2u64.pow(attempt);
+                        let jitter = (rand::random::<u64>() % (base_ms / 2)) - (base_ms / 4);
+                        let backoff = std::time::Duration::from_millis(base_ms.wrapping_add(jitter));
                         warn!(
                             attempt = attempt + 1,
                             max = MAX_RETRIES + 1,
@@ -96,7 +98,7 @@ impl ProxyContext {
             }
         }
 
-        Err(last_err.unwrap())
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("connection failed with no error captured")))
     }
 
     /// Single connection attempt using the configured transport.

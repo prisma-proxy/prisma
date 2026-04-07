@@ -47,16 +47,41 @@ fn validate_server(path: &str) -> Result<()> {
     // 1. Read the file
     let _raw = read_config_file(path)?;
 
-    // 2. Parse through prisma-core (which includes structural + semantic validation)
-    let config = match prisma_core::config::load_server_config(path) {
-        Ok(c) => c,
-        Err(e) => {
+    // 2. Try v14 slim TOML first, then fall back to full TOML parse
+    let config = match prisma_core::config::load_toml_server_config(path) {
+        Ok(toml_cfg) if toml_cfg.config_version >= 14 => {
+            println!("  {} v14 DB-first config detected", "OK".green().bold());
+            println!("  {} listen_addr = {}", "  ".dimmed(), toml_cfg.listen_addr);
             println!(
-                "  {} {}",
-                "Error:".red().bold(),
-                format_config_error(&e.to_string())
+                "  {} quic_listen_addr = {}",
+                "  ".dimmed(),
+                toml_cfg.quic_listen_addr
             );
-            return Err(anyhow::anyhow!("Config validation failed"));
+            println!(
+                "  {} management_api.listen_addr = {}",
+                "  ".dimmed(),
+                toml_cfg.management_api.listen_addr
+            );
+            println!();
+            println!(
+                "  {} TOML is valid. Full config is in SQLite.",
+                "OK".green().bold()
+            );
+            return Ok(());
+        }
+        _ => {
+            // Legacy full TOML parse
+            match prisma_core::config::load_server_config(path) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!(
+                        "  {} {}",
+                        "Error:".red().bold(),
+                        format_config_error(&e.to_string())
+                    );
+                    return Err(anyhow::anyhow!("Config validation failed"));
+                }
+            }
         }
     };
 

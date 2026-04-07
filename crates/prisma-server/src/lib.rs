@@ -6,6 +6,7 @@ pub mod forward;
 pub mod grpc_stream;
 pub mod handler;
 pub mod listener;
+pub mod migrate;
 pub mod mux_handler;
 pub mod outbound;
 pub mod relay;
@@ -24,7 +25,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use prisma_core::cache::DnsCache;
-use prisma_core::config::load_server_config;
 use prisma_core::config::server::RoutingRule;
 use prisma_core::crypto::kdf::derive_ticket_key;
 use prisma_core::crypto::ticket_key_ring::TicketKeyRing;
@@ -40,8 +40,10 @@ use crate::bandwidth::quota::{parse_quota, QuotaStore};
 use crate::state::ServerContext;
 
 pub async fn run(config_path: &str) -> Result<()> {
-    let config = load_server_config(config_path)
-        .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
+    let config_path_buf = std::path::PathBuf::from(config_path);
+
+    // Determine config version to decide startup path
+    let config = load_config(config_path, &config_path_buf)?;
 
     // Print startup banner before logging init — always visible regardless of log level
     print_startup_banner(&config, config_path);
@@ -56,6 +58,40 @@ pub async fn run(config_path: &str) -> Result<()> {
         &config.logging.format,
         log_tx.clone(),
     );
+
+    // Initialize data directory (alongside config file)
+    let data_dir = config_path_buf
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join("data");
+    std::fs::create_dir_all(data_dir.join("certs")).ok();
+
+    // Initialize SQLite database early (v14+ DB-first config)
+    let db_path = data_dir.join("server.db");
+    let db = match prisma_mgmt::db::init_db(&db_path) {
+        Ok(database) => {
+            // Migrate existing TOML data into SQLite on first run
+            prisma_mgmt::db::migrate_from_config(
+                &database,
+                &config.management_api.users,
+                &config.authorized_clients,
+                &config.management_rules,
+            );
+
+            // v13 → v14 migration: seed DB config sections from full TOML
+            if let Err(e) =
+                migrate::migrate_v13_to_v14(&config, &config_path_buf, &data_dir, &database)
+            {
+                tracing::warn!(error = %e, "v13→v14 migration failed (non-fatal)");
+            }
+
+            Some(database)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to initialize SQLite database; continuing without DB");
+            None
+        }
+    };
 
     let auth_inner = AuthStoreInner::from_config(&config.authorized_clients)?;
     let state = ServerState::new(&config, auth_inner, log_tx, metrics_tx);
@@ -156,6 +192,11 @@ pub async fn run(config_path: &str) -> Result<()> {
         quotas,
         config_path: config_path.to_string(),
         ticket_key_ring,
+        db: db.clone(),
+        server_tls: None,
+        mgmt_tls: None,
+        cdn_tls: None,
+        data_dir: Some(data_dir),
     };
 
     // Start metrics ticker (1s snapshots)
@@ -192,6 +233,7 @@ pub async fn run(config_path: &str) -> Result<()> {
     #[cfg(unix)]
     {
         let reload_ctx = ctx.clone();
+        let is_v14 = config.config_version >= 14;
         tokio::spawn(async move {
             use tokio::signal::unix::{signal, SignalKind};
             let mut sighup =
@@ -199,7 +241,12 @@ pub async fn run(config_path: &str) -> Result<()> {
             loop {
                 sighup.recv().await;
                 info!("Received SIGHUP, triggering config reload");
-                match reload::reload_config(&reload_ctx.config_path, &reload_ctx).await {
+                let result = if is_v14 && reload_ctx.db.is_some() {
+                    reload::reload_from_db(&reload_ctx).await
+                } else {
+                    reload::reload_config(&reload_ctx.config_path, &reload_ctx).await
+                };
+                match result {
                     Ok(summary) => info!(summary = %summary, "Config reload complete"),
                     Err(e) => tracing::error!(error = %e, "Config reload failed"),
                 }
@@ -233,7 +280,6 @@ pub async fn run(config_path: &str) -> Result<()> {
         }
 
         // Load alert config from {config_dir}/alerts.json if it exists
-        let config_path_buf = std::path::PathBuf::from(config_path);
         let alert_config = {
             let alerts_path = config_path_buf
                 .parent()
@@ -256,9 +302,9 @@ pub async fn run(config_path: &str) -> Result<()> {
             state: state.clone(),
             bandwidth: Some(ctx.bandwidth.clone()),
             quotas: Some(ctx.quotas.clone()),
-            config_path: Some(config_path_buf),
+            config_path: Some(config_path_buf.clone()),
             alert_config: std::sync::Arc::new(tokio::sync::RwLock::new(alert_config)),
-            db: None,
+            db: db.clone(),
             raw_config_toml: std::sync::Arc::new(tokio::sync::RwLock::new(raw_toml)),
         };
 
@@ -371,6 +417,52 @@ pub async fn run(config_path: &str) -> Result<()> {
     futures_util::future::join_all(listener_handles).await;
 
     Ok(())
+}
+
+/// Load config, supporting both v14+ (slim TOML + DB) and legacy (full TOML) formats.
+fn load_config(
+    config_path: &str,
+    config_path_buf: &std::path::Path,
+) -> Result<prisma_core::config::server::ServerConfig> {
+    // Try loading as v14+ slim TOML first
+    match prisma_core::config::load_toml_server_config(config_path) {
+        Ok(toml_config) if toml_config.config_version >= 14 => {
+            // v14+: Load sections from DB
+            let db_path = config_path_buf
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("data")
+                .join("server.db");
+            if db_path.exists() {
+                let db = prisma_mgmt::db::init_db(&db_path)?;
+                let sections = prisma_mgmt::db::list_config_sections(&db);
+                let config = prisma_core::config::server::ServerConfig::from_toml_and_db(
+                    &toml_config,
+                    &sections,
+                );
+                info!(
+                    version = config.config_version,
+                    sections = sections.len(),
+                    "Loaded v14 DB-first configuration"
+                );
+                return Ok(config);
+            }
+            // DB doesn't exist yet (first run) — use defaults
+            let config =
+                prisma_core::config::server::ServerConfig::from_toml_and_db(&toml_config, &[]);
+            info!(
+                version = config.config_version,
+                "Loaded v14 config (first run, DB will be seeded)"
+            );
+            Ok(config)
+        }
+        _ => {
+            // Legacy v13 or slim parse failed — load full TOML
+            let config = prisma_core::config::load_server_config(config_path)
+                .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
+            Ok(config)
+        }
+    }
 }
 
 fn print_startup_banner(config: &prisma_core::config::server::ServerConfig, config_path: &str) {

@@ -39,7 +39,8 @@ pub fn validate_server_config(config: &ServerConfig) -> Result<(), ConfigError> 
         ));
     }
 
-    if config.authorized_clients.is_empty() {
+    // v14+ uses DB-first config; clients are in SQLite, not TOML.
+    if config.config_version < 14 && config.authorized_clients.is_empty() {
         return Err(ConfigError::ValidationFailed(
             "at least one authorized client must be configured".into(),
         ));

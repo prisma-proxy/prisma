@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -51,8 +51,7 @@ pub async fn create(
 
     let json = Json(rule.clone());
     state.routing_rules.write().await.push(rule);
-    state.sync_rules_to_config().await;
-    state.persist_config().await;
+    // v14+: routing rules stored in DB only, no TOML persistence
     Ok(json)
 }
 
@@ -88,8 +87,7 @@ pub async fn update(
         if let Some(ref database) = state.db {
             db::update_routing_rule(database, &rule);
         }
-        state.sync_rules_to_config().await;
-        state.persist_config().await;
+        // v14+: routing rules stored in DB only, no TOML persistence
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -108,8 +106,7 @@ pub async fn remove(State(state): State<MgmtState>, Path(id): Path<Uuid>) -> Sta
         if let Some(ref database) = state.db {
             db::delete_routing_rule(database, &id);
         }
-        state.sync_rules_to_config().await;
-        state.persist_config().await;
+        // v14+: routing rules stored in DB only, no TOML persistence
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -149,10 +146,10 @@ pub async fn test_rules(
 
     let rules = state.routing_rules.read().await;
     let mut sorted: Vec<_> = rules.iter().filter(|r| r.enabled).collect();
-    sorted.sort_by_key(|r| r.priority);
+    sorted.sort_by(|a, b| b.priority.cmp(&a.priority)); // Higher priority evaluated first
 
-    // Determine if query is an IP address
-    let ip: Option<Ipv4Addr> = query.parse().ok();
+    // Determine if query is an IP address (support both IPv4 and IPv6)
+    let ip: Option<IpAddr> = query.parse().ok();
 
     for rule in sorted {
         let matches = match &rule.condition {
@@ -177,8 +174,7 @@ pub async fn test_rules(
                     if let Some(ip) = ip {
                         let cfg = state.config.read().await;
                         if let Some(reader) = connections::open_mmdb(&cfg) {
-                            let (country, _, _, _) =
-                                connections::lookup_geo(&reader, IpAddr::V4(ip));
+                            let (country, _, _, _) = connections::lookup_geo(&reader, ip);
                             country
                                 .as_deref()
                                 .is_some_and(|c| c.eq_ignore_ascii_case(target_country))
@@ -193,10 +189,23 @@ pub async fn test_rules(
                     // Cannot be tested locally without loading the full geosite database
                     false
                 } else if let Some(ip) = ip {
-                    if let Some((network, mask)) = prisma_core::router::parse_cidr_v4(cidr) {
-                        (u32::from(ip) & mask) == network
-                    } else {
-                        false
+                    match ip {
+                        IpAddr::V4(v4) => {
+                            if let Some((network, mask)) = prisma_core::router::parse_cidr_v4(cidr)
+                            {
+                                (u32::from(v4) & mask) == network
+                            } else {
+                                false
+                            }
+                        }
+                        IpAddr::V6(v6) => {
+                            if let Some((network, mask)) = prisma_core::router::parse_cidr_v6(cidr)
+                            {
+                                (u128::from(v6) & mask) == network
+                            } else {
+                                false
+                            }
+                        }
                     }
                 } else {
                     false
@@ -216,7 +225,7 @@ pub async fn test_rules(
             let action_str = match rule.action {
                 RuleAction::Allow | RuleAction::Unknown => "PROXY",
                 RuleAction::Direct => "DIRECT",
-                RuleAction::Block => "REJECT",
+                RuleAction::Block | RuleAction::Reject => "REJECT",
             };
             let cond_type = match &rule.condition {
                 RuleCondition::DomainExact(_) => "DOMAIN",

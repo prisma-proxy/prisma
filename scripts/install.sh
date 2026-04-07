@@ -1,9 +1,15 @@
 #!/bin/bash
 # Prisma installer for Linux, macOS, and FreeBSD
-# Usage:
+#
+# Quick install:
 #   curl -fsSL https://raw.githubusercontent.com/prisma-proxy/prisma/master/scripts/install.sh | bash
+#
+# Install + initialize:
 #   curl -fsSL https://raw.githubusercontent.com/prisma-proxy/prisma/master/scripts/install.sh | bash -s -- --setup
-#   curl -fsSL https://raw.githubusercontent.com/prisma-proxy/prisma/master/scripts/install.sh | bash -s -- --version v0.2.1
+#
+# The --setup flag creates a minimal server.toml, generates a self-signed TLS
+# certificate, and downloads the web console. All further configuration (admin
+# account, clients, routing, transport) happens through the web console.
 set -euo pipefail
 
 REPO="prisma-proxy/prisma"
@@ -36,7 +42,7 @@ usage() {
 Usage: install.sh [OPTIONS]
 
 Options:
-  --setup            Generate credentials, TLS certificate, and example configs
+  --setup            Initialize config, TLS cert, and download web console
   --version VER      Install a specific version (e.g., v0.2.1). Default: latest
   --dir DIR          Install directory (or set PRISMA_INSTALL_DIR)
   --config-dir DIR   Config output directory for --setup (or set PRISMA_CONFIG_DIR)
@@ -54,7 +60,7 @@ Examples:
   # Install latest release
   curl -fsSL https://raw.githubusercontent.com/$REPO/master/scripts/install.sh | bash
 
-  # Install + auto-generate all config
+  # Install + initialize (recommended for new servers)
   curl -fsSL https://raw.githubusercontent.com/$REPO/master/scripts/install.sh | bash -s -- --setup
 
   # Install specific version to custom directory
@@ -273,7 +279,7 @@ do_install() {
     "$target" --version 2>/dev/null || true
 }
 
-# Generate credentials, TLS certs, and example configs
+# Initialize minimal config + download web console via `prisma init`
 do_setup() {
     local config_dir="${PRISMA_CONFIG_DIR:-$(pwd)}"
     local prisma="${INSTALL_DIR}/${BINARY}"
@@ -281,47 +287,39 @@ do_setup() {
     echo ""
     info "Running initial setup in ${BOLD}${config_dir}${NC}"
 
-    info "Generating client credentials..."
-    "$prisma" gen-key > "${config_dir}/.prisma-credentials"
-
-    info "Generating TLS certificate..."
-    "$prisma" gen-cert --output "${config_dir}" --cn prisma-server
-
-    if [ ! -f "${config_dir}/server.toml" ]; then
-        if download "https://raw.githubusercontent.com/${REPO}/master/server.example.toml" "${config_dir}/server.toml" 2>/dev/null; then
-            info "Created server.toml from example"
-        fi
-    else
-        info "server.toml already exists, skipping"
-    fi
-
-    if [ ! -f "${config_dir}/client.toml" ]; then
-        if download "https://raw.githubusercontent.com/${REPO}/master/client.example.toml" "${config_dir}/client.toml" 2>/dev/null; then
-            info "Created client.toml from example"
-        fi
-    else
-        info "client.toml already exists, skipping"
-    fi
+    cd "$config_dir"
+    "$prisma" init --console --server-only
 
     echo ""
-    echo -e "${BOLD}Setup complete!${NC}"
-    echo "  Credentials: ${config_dir}/.prisma-credentials"
-    echo "  TLS cert:    ${config_dir}/prisma-cert.pem"
-    echo "  TLS key:     ${config_dir}/prisma-key.pem"
+    info "Setup complete! Next steps:"
     echo ""
-    echo "Next steps:"
-    echo "  1. Edit server.toml — paste the client ID and auth secret from .prisma-credentials"
-    echo "  2. Edit client.toml — set server_addr and paste the same credentials"
-    echo "  3. Run: prisma server -c server.toml"
-    echo "  4. Run: prisma client -c client.toml"
+    echo "  1. Start the server:"
+    echo "     ${BOLD}prisma server -c server.toml${NC}"
+    echo ""
+    echo "  2. Open the web console to complete setup:"
+    echo "     ${BOLD}https://your-server-ip:443${NC}"
+    echo ""
+    echo "  3. The setup wizard will guide you through:"
+    echo "     - Creating an admin account"
+    echo "     - Adding your first client"
+    echo "     - Configuring routing rules"
+    echo "     - Uploading TLS certificates"
+    echo ""
 }
 
 # Main
 main() {
     [ "$UNINSTALL" = true ] && do_uninstall
     do_install
-    [ "$SETUP" = true ] && do_setup
-    echo ""
+
+    if [ "$SETUP" = true ]; then
+        do_setup
+    else
+        echo ""
+        info "Run ${BOLD}prisma init --console${NC} to initialize server config"
+        info "Or re-run this script with ${BOLD}--setup${NC}"
+        echo ""
+    fi
 }
 
 main
