@@ -83,7 +83,8 @@ impl ProxyContext {
                     if attempt < MAX_RETRIES {
                         let base_ms = 1000 * 2u64.pow(attempt);
                         let jitter = (rand::random::<u64>() % (base_ms / 2)) - (base_ms / 4);
-                        let backoff = std::time::Duration::from_millis(base_ms.wrapping_add(jitter));
+                        let backoff =
+                            std::time::Duration::from_millis(base_ms.wrapping_add(jitter));
                         warn!(
                             attempt = attempt + 1,
                             max = MAX_RETRIES + 1,

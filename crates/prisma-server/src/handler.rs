@@ -653,11 +653,8 @@ where
             if timeout_secs == 0 {
                 relay_fut.await
             } else {
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(timeout_secs),
-                    relay_fut,
-                )
-                .await
+                match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), relay_fut)
+                    .await
                 {
                     Ok(result) => result,
                     Err(_) => {

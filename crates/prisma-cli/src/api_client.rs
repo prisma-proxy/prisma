@@ -11,7 +11,12 @@ pub struct ApiClient {
 
 impl ApiClient {
     /// Resolve API client from flags > env vars > server.toml auto-detect.
-    pub fn resolve(flag_url: Option<&str>, flag_token: Option<&str>, json: bool, insecure: bool) -> Result<Self> {
+    pub fn resolve(
+        flag_url: Option<&str>,
+        flag_token: Option<&str>,
+        json: bool,
+        insecure: bool,
+    ) -> Result<Self> {
         let (url, token) = match (flag_url, flag_token) {
             (Some(u), Some(t)) => (u.to_string(), t.to_string()),
             (Some(u), None) => {
